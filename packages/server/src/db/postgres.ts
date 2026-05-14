@@ -11,44 +11,6 @@ const PG_DATABASE = 'squadboard';
 
 let pg: EmbeddedPostgres | null = null;
 
-/**
- * Returns true when the thrown value is the embedded-postgres "init script
- * exited with code 127" sentinel — which means the postgres binary could not
- * be loaded due to missing shared libraries (e.g. libpq.so.5, libicuuc.so.60
- * on linux/arm64).  The library throws a plain string, not an Error.
- */
-function isEmbeddedBinaryFailure(err: unknown): boolean {
-  const msg = typeof err === 'string' ? err : err instanceof Error ? err.message : '';
-  return msg.includes('exited with code 127');
-}
-
-/**
- * Attempts to connect to a Postgres instance that is already running on the
- * given host/port.  Returns true if the connection succeeds, false otherwise.
- */
-async function isPostgresReachable(
-  host: string,
-  port: number,
-  user: string,
-  password: string,
-): Promise<boolean> {
-  const client = new Client({
-    host,
-    port,
-    user,
-    password,
-    database: 'postgres',
-    connectionTimeoutMillis: 2_000,
-  });
-  try {
-    await client.connect();
-    await client.end();
-    return true;
-  } catch {
-    return false;
-  }
-}
-
 export async function startEmbeddedPostgres(): Promise<string> {
   const startMs = Date.now();
   console.log(
@@ -56,61 +18,28 @@ export async function startEmbeddedPostgres(): Promise<string> {
       `port=${PG_PORT} dataDir=${DATA_DIR}`,
   );
 
-  // ── Path 1: explicit DATABASE_URL overrides everything ──────────────────
+  // DATABASE_URL overrides embedded postgres entirely (useful for CI / production).
   const envUrl = process.env['DATABASE_URL'];
   if (envUrl) {
-    console.log('[postgres] DATABASE_URL set — skipping embedded postgres, using provided connection');
+    console.log('[postgres] DATABASE_URL set — using provided connection');
     return envUrl;
   }
 
-  // ── Path 2: try the embedded binary ─────────────────────────────────────
-  try {
-    pg = new EmbeddedPostgres({
-      databaseDir: DATA_DIR,
-      user: PG_USER,
-      password: PG_PASSWORD,
-      port: PG_PORT,
-      persistent: true,
-    });
+  pg = new EmbeddedPostgres({
+    databaseDir: DATA_DIR,
+    user: PG_USER,
+    password: PG_PASSWORD,
+    port: PG_PORT,
+    persistent: true,
+  });
 
-    await pg.initialise();
-    await pg.start();
-    await ensureDatabase();
+  await pg.initialise();
+  await pg.start();
+  await ensureDatabase();
 
-    const elapsed = Date.now() - startMs;
-    console.log(`[postgres] started in ${elapsed}ms`);
-    return getConnectionString();
-  } catch (err: unknown) {
-    if (!isEmbeddedBinaryFailure(err)) {
-      // Real unexpected error — surface it immediately.
-      throw err;
-    }
-    pg = null;
-    console.warn(
-      `[postgres] embedded-postgres binary cannot run on ${process.platform}/${process.arch} ` +
-        '(init script exited 127 — likely missing libpq.so.5 or libicuuc.so.60). ' +
-        'Falling back to system Postgres…',
-    );
-  }
-
-  // ── Path 3: embedded binary unavailable — check if Postgres is already
-  //    running on our configured port ───────────────────────────────────────
-  const reachable = await isPostgresReachable('localhost', PG_PORT, PG_USER, PG_PASSWORD);
-  if (reachable) {
-    console.log(`[postgres] found existing Postgres on port ${PG_PORT}, using it`);
-    await ensureDatabase();
-    return getConnectionString();
-  }
-
-  // ── Path 4: nothing works — emit a clear, actionable error ───────────────
-  throw new Error(
-    `[postgres] embedded-postgres is not available for ${process.platform}/${process.arch} ` +
-      '(missing system shared libraries libpq.so.5 and/or libicuuc.so.60).\n\n' +
-      'To run Squadboard on linux/arm64, choose one of:\n' +
-      '  • Set DATABASE_URL=postgresql://<user>:<pass>@localhost:5432/squadboard\n' +
-      '    and ensure Postgres is running (e.g. sudo apt install postgresql)\n' +
-      `  • Or start Postgres manually on port ${PG_PORT} with user "${PG_USER}" / password "${PG_PASSWORD}"`,
-  );
+  const elapsed = Date.now() - startMs;
+  console.log(`[postgres] started in ${elapsed}ms`);
+  return getConnectionString();
 }
 
 /**
