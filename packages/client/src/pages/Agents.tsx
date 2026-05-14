@@ -34,10 +34,9 @@ function TestRoutingPanel({ projectId }: { projectId: string }) {
     setResult(null)
     try {
       const labelList = labels.split(',').map((l) => l.trim()).filter(Boolean)
-      const qs = new URLSearchParams({ title: title.trim() })
-      labelList.forEach((l) => qs.append('label', l))
       const data = await apiFetch<RouteTestResult>(
-        `/api/projects/${projectId}/routing/test?${qs.toString()}`
+        `/api/projects/${projectId}/routing/test`,
+        { method: 'POST', body: JSON.stringify({ title: title.trim(), labels: labelList }) }
       )
       setResult(data)
     } catch (e: unknown) {
