@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { tokens } from '@fluentui/react-components'
 
 export interface RoutingBadgeProps {
   ruleSummary: string // e.g., "Matched: label:bug → hockney"
@@ -45,12 +46,12 @@ export function RoutingBadge({ ruleSummary }: RoutingBadgeProps) {
             left: '50%',
             transform: 'translateX(-50%)',
             marginBottom: '4px',
-            background: '#161b22',
-            border: '1px solid #30363d',
+            background: tokens.colorNeutralBackground1,
+            border: `1px solid ${tokens.colorNeutralStroke1}`,
             borderRadius: '6px',
             padding: '5px 8px',
             fontSize: '11px',
-            color: '#e6edf3',
+            color: tokens.colorNeutralForeground1,
             whiteSpace: 'nowrap',
             zIndex: 100,
             boxShadow: '0 4px 12px rgba(0,0,0,0.5)',

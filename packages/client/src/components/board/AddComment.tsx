@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { tokens } from '@fluentui/react-components'
 import { useAddComment } from '../../api/comments.ts'
 
 interface AddCommentProps {
@@ -28,18 +29,18 @@ export default function AddComment({ projectId, issueId }: AddCommentProps) {
         rows={3}
         style={{
           width: '100%',
-          background: '#0d1117',
-          border: '1px solid #30363d',
+          background: tokens.colorNeutralBackground1,
+          border: `1px solid ${tokens.colorNeutralStroke1}`,
           borderRadius: '6px',
-          color: '#e6edf3',
+          color: tokens.colorNeutralForeground1,
           padding: '8px 10px',
           resize: 'vertical',
           fontSize: '13px',
           lineHeight: '1.5',
           outline: 'none',
         }}
-        onFocus={(e) => { e.currentTarget.style.borderColor = '#388bfd' }}
-        onBlur={(e) => { e.currentTarget.style.borderColor = '#30363d' }}
+        onFocus={(e) => { e.currentTarget.style.borderColor = tokens.colorBrandBackground }}
+        onBlur={(e) => { e.currentTarget.style.borderColor = tokens.colorNeutralStroke1 }}
       />
       <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
         <button
@@ -49,7 +50,7 @@ export default function AddComment({ projectId, issueId }: AddCommentProps) {
             background: '#238636',
             border: '1px solid #2ea043',
             borderRadius: '6px',
-            color: '#e6edf3',
+            color: '#ffffff',
             padding: '5px 16px',
             fontSize: '13px',
             fontWeight: 500,

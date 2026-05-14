@@ -1,4 +1,5 @@
 import { type ColumnId } from '../../api/issues.ts'
+import { tokens } from '@fluentui/react-components'
 
 interface BulkActionBarProps {
   selectedCount: number
@@ -29,42 +30,42 @@ export default function BulkActionBar({ selectedCount, onMove, onArchive, onClea
         display: 'flex',
         alignItems: 'center',
         gap: '8px',
-        background: '#21262d',
-        border: '1px solid #388bfd',
+        background: tokens.colorNeutralBackground2,
+        border: `1px solid ${tokens.colorBrandBackground}`,
         borderRadius: '8px',
         padding: '10px 16px',
         boxShadow: '0 4px 16px rgba(0,0,0,0.6)',
       }}
     >
-      <span style={{ fontSize: '13px', fontWeight: 500, color: '#e6edf3', marginRight: '4px' }}>
+      <span style={{ fontSize: '13px', fontWeight: 500, color: tokens.colorNeutralForeground1, marginRight: '4px' }}>
         {selectedCount} selected
       </span>
 
-      <span style={{ color: '#30363d', marginRight: '4px' }}>|</span>
+      <span style={{ color: tokens.colorNeutralStroke1, marginRight: '4px' }}>|</span>
 
-      <span style={{ fontSize: '12px', color: '#8b949e' }}>Move to:</span>
+      <span style={{ fontSize: '12px', color: tokens.colorNeutralForeground2 }}>Move to:</span>
 
       {COLUMNS.map((col) => (
         <button
           key={col.id}
           onClick={() => onMove(col.id)}
           style={{
-            background: '#0d1117',
-            border: '1px solid #30363d',
+            background: tokens.colorNeutralBackground1,
+            border: `1px solid ${tokens.colorNeutralStroke1}`,
             borderRadius: '6px',
-            color: '#e6edf3',
+            color: tokens.colorNeutralForeground1,
             padding: '4px 10px',
             fontSize: '12px',
             cursor: 'pointer',
           }}
-          onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.borderColor = '#388bfd' }}
-          onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.borderColor = '#30363d' }}
+          onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.borderColor = tokens.colorBrandBackground }}
+          onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.borderColor = tokens.colorNeutralStroke1 }}
         >
           {col.label}
         </button>
       ))}
 
-      <span style={{ color: '#30363d', margin: '0 4px' }}>|</span>
+      <span style={{ color: tokens.colorNeutralStroke1, margin: '0 4px' }}>|</span>
 
       <button
         onClick={onArchive}
@@ -86,7 +87,7 @@ export default function BulkActionBar({ selectedCount, onMove, onArchive, onClea
         style={{
           background: 'none',
           border: 'none',
-          color: '#8b949e',
+          color: tokens.colorNeutralForeground2,
           fontSize: '18px',
           cursor: 'pointer',
           padding: '0 4px',

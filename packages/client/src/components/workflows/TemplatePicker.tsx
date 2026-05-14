@@ -1,129 +1,95 @@
 import { useWorkflowTemplates } from '../../api/workflows.ts'
+import {
+  Dialog,
+  DialogSurface,
+  DialogTitle,
+  DialogBody,
+  DialogContent,
+  DialogActions,
+  Button,
+  Caption1,
+  makeStyles,
+  tokens,
+} from '@fluentui/react-components'
 
 interface TemplatePickerProps {
   onSelect: (yamlContent: string, name: string) => void
   onClose: () => void
 }
 
+const useStyles = makeStyles({
+  templateCard: {
+    background: tokens.colorNeutralBackground2,
+    border: `1px solid ${tokens.colorNeutralStroke2}`,
+    borderRadius: tokens.borderRadiusMedium,
+    padding: `${tokens.spacingVerticalM} ${tokens.spacingHorizontalM}`,
+    display: 'flex',
+    flexDirection: 'column',
+    gap: tokens.spacingVerticalXS,
+  },
+  templateHeader: {
+    display: 'flex',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    gap: tokens.spacingHorizontalM,
+  },
+})
+
 export default function TemplatePicker({ onSelect, onClose }: TemplatePickerProps) {
   const { data: templates, isLoading, isError } = useWorkflowTemplates()
+  const styles = useStyles()
 
   function handleSelect(slug: string, name: string) {
-    // Load the template YAML from the API (the full template object carries yaml from the list endpoint
-    // or we fallback to a sensible stub so the editor is pre-populated).
     const yamlStub = buildStubYaml(slug, name)
     onSelect(yamlStub, name)
     onClose()
   }
 
   return (
-    /* Backdrop */
-    <div
-      onClick={onClose}
-      style={{
-        position: 'fixed',
-        inset: 0,
-        background: 'rgba(0,0,0,0.6)',
-        zIndex: 200,
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-      }}
-    >
-      {/* Modal */}
-      <div
-        onClick={(e) => e.stopPropagation()}
-        style={{
-          background: '#161b22',
-          border: '1px solid #30363d',
-          borderRadius: '8px',
-          width: '480px',
-          maxHeight: '520px',
-          display: 'flex',
-          flexDirection: 'column',
-          overflow: 'hidden',
-        }}
-      >
-        {/* Header */}
-        <div
-          style={{
-            padding: '16px 20px',
-            borderBottom: '1px solid #30363d',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-          }}
-        >
-          <span style={{ fontWeight: 600, fontSize: '14px', color: '#e6edf3' }}>Use a template</span>
-          <button
-            onClick={onClose}
-            style={{
-              background: 'none',
-              border: 'none',
-              color: '#8b949e',
-              fontSize: '16px',
-              cursor: 'pointer',
-              lineHeight: 1,
-            }}
-          >
-            ✕
-          </button>
-        </div>
-
-        {/* Body */}
-        <div style={{ flex: 1, overflow: 'auto', padding: '12px 20px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
-          {isLoading && (
-            <p style={{ color: '#8b949e', fontSize: '13px' }}>Loading templates…</p>
-          )}
-          {isError && (
-            <p style={{ color: '#f85149', fontSize: '13px' }}>Failed to load templates.</p>
-          )}
-          {!isLoading && !isError && templates && templates.length === 0 && (
-            <p style={{ color: '#8b949e', fontSize: '13px' }}>No templates available.</p>
-          )}
-          {templates?.map((tpl) => (
-            <div
-              key={tpl.slug}
-              style={{
-                background: '#0d1117',
-                border: '1px solid #30363d',
-                borderRadius: '6px',
-                padding: '14px 16px',
-                display: 'flex',
-                flexDirection: 'column',
-                gap: '6px',
-              }}
-            >
-              <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '12px' }}>
-                <div>
-                  <span style={{ fontWeight: 600, fontSize: '13px', color: '#e6edf3' }}>{tpl.name}</span>
-                  {tpl.description && (
-                    <p style={{ fontSize: '12px', color: '#8b949e', marginTop: '4px' }}>{tpl.description}</p>
-                  )}
+    <Dialog open onOpenChange={(_, data) => { if (!data.open) onClose() }}>
+      <DialogSurface style={{ maxWidth: '520px', width: '100%' }}>
+        <DialogBody>
+          <DialogTitle>Use a template</DialogTitle>
+          <DialogContent>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', paddingTop: '8px', maxHeight: '400px', overflowY: 'auto' }}>
+              {isLoading && (
+                <Caption1 style={{ color: tokens.colorNeutralForeground3 }}>Loading templates…</Caption1>
+              )}
+              {isError && (
+                <Caption1 style={{ color: tokens.colorPaletteRedForeground1 }}>Failed to load templates.</Caption1>
+              )}
+              {!isLoading && !isError && templates && templates.length === 0 && (
+                <Caption1 style={{ color: tokens.colorNeutralForeground3 }}>No templates available.</Caption1>
+              )}
+              {templates?.map((tpl) => (
+                <div key={tpl.slug} className={styles.templateCard}>
+                  <div className={styles.templateHeader}>
+                    <div>
+                      <span style={{ fontWeight: 600, fontSize: '13px' }}>{tpl.name}</span>
+                      {tpl.description && (
+                        <Caption1 style={{ display: 'block', color: tokens.colorNeutralForeground3, marginTop: '4px' }}>
+                          {tpl.description}
+                        </Caption1>
+                      )}
+                    </div>
+                    <Button
+                      appearance="primary"
+                      size="small"
+                      onClick={() => handleSelect(tpl.slug, tpl.name)}
+                    >
+                      Use this template
+                    </Button>
+                  </div>
                 </div>
-                <button
-                  onClick={() => handleSelect(tpl.slug, tpl.name)}
-                  style={{
-                    flexShrink: 0,
-                    background: '#388bfd',
-                    color: '#fff',
-                    border: 'none',
-                    borderRadius: '4px',
-                    padding: '5px 12px',
-                    fontSize: '12px',
-                    fontWeight: 500,
-                    cursor: 'pointer',
-                    whiteSpace: 'nowrap',
-                  }}
-                >
-                  Use this template
-                </button>
-              </div>
+              ))}
             </div>
-          ))}
-        </div>
-      </div>
-    </div>
+          </DialogContent>
+          <DialogActions>
+            <Button appearance="secondary" onClick={onClose}>Cancel</Button>
+          </DialogActions>
+        </DialogBody>
+      </DialogSurface>
+    </Dialog>
   )
 }
 

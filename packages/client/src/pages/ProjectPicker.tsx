@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router'
-import { Button } from '@fluentui/react-components'
+import { Button, Title3, Body1, Dialog, DialogSurface, DialogBody, DialogTitle, DialogContent, DialogActions, tokens } from '@fluentui/react-components'
 import { Folder20Regular } from '@fluentui/react-icons'
 import { useProjects } from '../api/projects.ts'
 import { useDiscoverSquad, useRegisterSquad, useInitSquad, useCreateSquad } from '../api/squad.ts'
@@ -19,9 +19,9 @@ export default function ProjectPicker() {
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '24px' }}>
         <div>
           <h1 style={{ fontSize: '20px', fontWeight: 600, color: 'var(--text)' }}>Projects</h1>
-          <p style={{ color: 'var(--text-muted)', marginTop: '4px' }}>
+          <Body1 style={{ color: 'var(--text-muted)', marginTop: '4px', display: 'block' }}>
             Select a project to open its board, or connect a new .squad/ directory.
-          </p>
+          </Body1>
         </div>
         <Button
           appearance="primary"
@@ -88,25 +88,14 @@ function EmptyState({ onDiscover }: { onDiscover: () => void }) {
       }}
     >
       <div style={{ fontSize: '32px', marginBottom: '16px' }}><Folder20Regular style={{ fontSize: '32px', width: '32px', height: '32px' }} /></div>
-      <h2 style={{ fontSize: '16px', fontWeight: 600, marginBottom: '8px' }}>No projects yet</h2>
-      <p style={{ color: 'var(--text-muted)', maxWidth: '320px', marginBottom: '24px' }}>
+      <Title3 as="h2" style={{ marginBottom: '8px', display: 'block' }}>No projects yet</Title3>
+      <Body1 style={{ color: 'var(--text-muted)', maxWidth: '320px', marginBottom: '24px', display: 'block' }}>
         Connect a <code style={{ fontFamily: 'monospace', color: 'var(--accent)' }}>.squad/</code>{' '}
         directory to get started. Squadboard will discover your agents and workflows automatically.
-      </p>
-      <button
-        onClick={onDiscover}
-        style={{
-          background: 'var(--accent)',
-          color: '#fff',
-          border: 'none',
-          borderRadius: 'var(--radius)',
-          padding: '10px 20px',
-          fontWeight: 500,
-          fontSize: '14px',
-        }}
-      >
+      </Body1>
+      <Button appearance="primary" onClick={onDiscover}>
         Discover .squad/ directories
-      </button>
+      </Button>
     </div>
   )
 }
@@ -119,98 +108,59 @@ function DiscoveryModal({
   onCreated: (id: string) => void
 }) {
   const [activeTab, setActiveTab] = useState<'discover' | 'connect' | 'create'>('discover')
+  const tabLabels = { discover: 'Discover', connect: 'Connect existing', create: 'Create new' } as const
 
   return (
-    <div
-      style={{
-        position: 'fixed',
-        inset: 0,
-        background: 'rgba(0,0,0,0.6)',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        zIndex: 50,
-      }}
-      onClick={(e) => { if (e.target === e.currentTarget) onClose() }}
-    >
-      <div
-        style={{
-          background: 'var(--surface)',
-          border: '1px solid var(--border)',
-          borderRadius: 'var(--radius)',
-          width: '560px',
-          maxWidth: '90vw',
-          maxHeight: '80vh',
-          display: 'flex',
-          flexDirection: 'column',
-        }}
-      >
-        {/* Header */}
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            padding: '16px 20px',
-            borderBottom: '1px solid var(--border)',
-          }}
-        >
-          <h2 style={{ fontSize: '16px', fontWeight: 600 }}>Add Project</h2>
-          <button
-            onClick={onClose}
-            style={{ background: 'none', border: 'none', color: 'var(--text-muted)', fontSize: '18px', lineHeight: 1 }}
-          >
-            ✕
-          </button>
-        </div>
+    <Dialog open onOpenChange={(_, data) => { if (!data.open) onClose() }}>
+      <DialogSurface style={{ maxWidth: '560px', width: '100%', maxHeight: '80vh' }}>
+        <DialogBody style={{ maxHeight: 'inherit', display: 'flex', flexDirection: 'column' }}>
+          <DialogTitle>Add Project</DialogTitle>
+          <DialogContent style={{ display: 'flex', flexDirection: 'column', gap: 0, overflow: 'hidden' }}>
+            {/* Tab bar */}
+            <div
+              style={{
+                display: 'flex',
+                borderBottom: '1px solid var(--border)',
+                marginBottom: '16px',
+              }}
+            >
+              {(['discover', 'connect', 'create'] as const).map((tab) => {
+                const isActive = activeTab === tab
+                return (
+                  <button
+                    key={tab}
+                    onClick={() => setActiveTab(tab)}
+                    style={{
+                      background: 'none',
+                      border: 'none',
+                      borderBottom: isActive ? `2px solid ${tokens.colorBrandForeground1}` : '2px solid transparent',
+                      padding: '8px 14px',
+                      fontSize: '13px',
+                      fontWeight: isActive ? 600 : 400,
+                      color: isActive ? tokens.colorBrandForeground1 : tokens.colorNeutralForeground3,
+                      cursor: 'pointer',
+                      marginBottom: '-1px',
+                    }}
+                  >
+                    {tabLabels[tab]}
+                  </button>
+                )
+              })}
+            </div>
 
-        {/* Tab bar */}
-        <div
-          style={{
-            display: 'flex',
-            borderBottom: '1px solid var(--border)',
-            padding: '0 20px',
-          }}
-        >
-          {(['discover', 'connect', 'create'] as const).map((tab) => {
-            const labels = { discover: 'Discover', connect: 'Connect existing', create: 'Create new' }
-            const isActive = activeTab === tab
-            return (
-              <button
-                key={tab}
-                onClick={() => setActiveTab(tab)}
-                style={{
-                  background: 'none',
-                  border: 'none',
-                  borderBottom: isActive ? '2px solid var(--accent)' : '2px solid transparent',
-                  padding: '10px 14px',
-                  fontSize: '13px',
-                  fontWeight: isActive ? 600 : 400,
-                  color: isActive ? 'var(--accent)' : 'var(--text-muted)',
-                  cursor: 'pointer',
-                  marginBottom: '-1px',
-                }}
-              >
-                {labels[tab]}
-              </button>
-            )
-          })}
-        </div>
-
-        {/* Tab body */}
-        <div style={{ padding: '20px', overflowY: 'auto', flex: 1 }}>
-          {activeTab === 'discover' && (
-            <DiscoverTab onCreated={onCreated} />
-          )}
-          {activeTab === 'connect' && (
-            <ConnectTab onCreated={onCreated} />
-          )}
-          {activeTab === 'create' && (
-            <CreateTab onCreated={onCreated} />
-          )}
-        </div>
-      </div>
-    </div>
+            {/* Tab body */}
+            <div style={{ overflowY: 'auto', flex: 1 }}>
+              {activeTab === 'discover' && <DiscoverTab onCreated={onCreated} />}
+              {activeTab === 'connect' && <ConnectTab onCreated={onCreated} />}
+              {activeTab === 'create' && <CreateTab onCreated={onCreated} />}
+            </div>
+          </DialogContent>
+          <DialogActions>
+            <Button appearance="secondary" onClick={onClose}>Close</Button>
+          </DialogActions>
+        </DialogBody>
+      </DialogSurface>
+    </Dialog>
   )
 }
 

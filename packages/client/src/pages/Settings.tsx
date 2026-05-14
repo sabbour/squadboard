@@ -17,8 +17,8 @@ const SECTIONS: { id: Section; label: string; icon: React.ReactNode }[] = [
 function SectionHeader({ title, sub }: { title: string; sub?: string }) {
   return (
     <div style={{ marginBottom: '16px' }}>
-      <h2 style={{ fontSize: '15px', fontWeight: 600, color: '#e6edf3', margin: 0 }}>{title}</h2>
-      {sub && <p style={{ fontSize: '12px', color: '#8b949e', margin: '4px 0 0' }}>{sub}</p>}
+      <h2 style={{ fontSize: '15px', fontWeight: 600, color: 'var(--text)', margin: 0 }}>{title}</h2>
+      {sub && <p style={{ fontSize: '12px', color: 'var(--text-muted)', margin: '4px 0 0' }}>{sub}</p>}
     </div>
   )
 }
@@ -153,7 +153,7 @@ function BudgetSection({ projectId }: { projectId: string }) {
         {error && (
           <p style={{ fontSize: '11px', color: '#f85149', margin: '6px 0 0' }}>{error}</p>
         )}
-        <p style={{ fontSize: '11px', color: '#484f58', margin: '6px 0 0' }}>
+        <p style={{ fontSize: '11px', color: 'var(--text-muted)', margin: '6px 0 0' }}>
           Set to 0 to disable budget alerts.
         </p>
       </div>
@@ -182,7 +182,7 @@ export default function Settings() {
     borderRadius: '6px',
     cursor: 'pointer',
     background: active ? 'rgba(56,139,253,0.1)' : 'transparent',
-    color: active ? '#e6edf3' : '#8b949e',
+    color: active ? 'var(--text)' : 'var(--text-muted)',
     fontWeight: active ? 500 : 400,
     fontSize: '13px',
     border: 'none',
@@ -249,8 +249,8 @@ export default function Settings() {
               <SectionHeader title="General" sub="Basic project settings." />
               <div
                 style={{
-                  background: '#0d1117',
-                  border: '1px solid #30363d',
+                  background: 'var(--surface)',
+                  border: '1px solid var(--border)',
                   borderRadius: '8px',
                   padding: '14px 16px',
                   display: 'flex',
@@ -259,12 +259,12 @@ export default function Settings() {
                   maxWidth: '480px',
                 }}
               >
-                <label style={{ fontSize: '11px', color: '#8b949e', textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: 600 }}>
+                <label style={{ fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: 600 }}>
                   Project name
                 </label>
-                <p style={{ fontSize: '15px', fontWeight: 600, color: '#e6edf3', margin: 0 }}>{project.name}</p>
-                <p style={{ fontSize: '11px', color: '#484f58', margin: '4px 0 0' }}>
-                  Squad path: <code style={{ fontFamily: 'monospace', color: '#8b949e' }}>{project.squadPath}</code>
+                <p style={{ fontSize: '15px', fontWeight: 600, color: 'var(--text)', margin: 0 }}>{project.name}</p>
+                <p style={{ fontSize: '11px', color: 'var(--text-muted)', margin: '4px 0 0' }}>
+                  Squad path: <code style={{ fontFamily: 'monospace', color: 'var(--text-muted)' }}>{project.squadPath}</code>
                 </p>
               </div>
             </>

@@ -1,6 +1,15 @@
 import { type RoutingLogEntry } from '../../api/routing.ts'
 import { RoutingTierBadge } from './RoutingTierBadge.tsx'
 import { formatDistanceToNow } from 'date-fns'
+import {
+  Table,
+  TableHeader,
+  TableHeaderCell,
+  TableBody,
+  TableRow,
+  TableCell,
+  TableCellLayout,
+} from '@fluentui/react-components'
 
 const TIER_ROW_BG: Record<string, string> = {
   T1: 'rgba(88,166,255,0.04)',

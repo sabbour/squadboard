@@ -1,5 +1,6 @@
 import { Draggable } from '@hello-pangea/dnd'
 import { useState } from 'react'
+import { tokens } from '@fluentui/react-components'
 import { type Issue } from '../../api/issues.ts'
 import { useIssueRuns } from '../../api/runs.ts'
 import LabelBadge from '../LabelBadge.tsx'
@@ -36,8 +37,8 @@ export default function IssueCard({ issue, index, projectId, isSelected, onSelec
           onMouseEnter={() => setHovered(true)}
           onMouseLeave={() => setHovered(false)}
           style={{
-            background: '#21262d',
-            border: `1px solid ${isSelected ? '#388bfd' : snapshot.isDragging ? '#388bfd' : hovered ? '#388bfd' : '#30363d'}`,
+            background: tokens.colorNeutralBackground1,
+            border: `1px solid ${isSelected ? tokens.colorBrandBackground : snapshot.isDragging ? tokens.colorBrandBackground : hovered ? tokens.colorBrandBackground : tokens.colorNeutralStroke1}`,
             borderRadius: '6px',
             padding: '12px',
             boxShadow: snapshot.isDragging ? '0 4px 12px rgba(0,0,0,0.6)' : '0 1px 3px rgba(0,0,0,0.4)',
@@ -76,7 +77,7 @@ export default function IssueCard({ issue, index, projectId, isSelected, onSelec
               style={{
                 fontSize: '13px',
                 fontWeight: 500,
-                color: '#e6edf3',
+                color: tokens.colorNeutralForeground1,
                 lineHeight: '1.4',
                 marginBottom: issue.labels.length > 0 ? '8px' : '0',
               }}
@@ -124,7 +125,7 @@ export default function IssueCard({ issue, index, projectId, isSelected, onSelec
                       alignItems: 'center',
                       gap: '3px',
                       fontSize: '11px',
-                      color: '#8b949e',
+                      color: tokens.colorNeutralForeground2,
                     }}
                   >
                     💬 {issue.commentCount}

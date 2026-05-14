@@ -2,6 +2,7 @@
 // Portal-based, no third-party library — plain CSS fixed-position div.
 
 import { useEffect, useState } from 'react'
+import { tokens } from '@fluentui/react-components'
 import { createPortal } from 'react-dom'
 import { Warning20Regular } from '@fluentui/react-icons'
 
@@ -38,7 +39,7 @@ export default function ConflictToast({ onReload, onDismiss, autoCloseMs = 10_00
         display: 'flex',
         alignItems: 'center',
         gap: '12px',
-        background: '#1c2128',
+        background: tokens.colorNeutralBackground2,
         border: '1px solid #e36209',
         borderLeft: '4px solid #e36209',
         borderRadius: '8px',
@@ -52,10 +53,10 @@ export default function ConflictToast({ onReload, onDismiss, autoCloseMs = 10_00
       <span style={{ flexShrink: 0, display: 'flex', color: '#e36209' }} aria-hidden><Warning20Regular /></span>
 
       <div style={{ flex: 1, minWidth: 0 }}>
-        <p style={{ fontSize: '13px', fontWeight: 600, color: '#e6edf3', margin: 0 }}>
+        <p style={{ fontSize: '13px', fontWeight: 600, color: tokens.colorNeutralForeground1, margin: 0 }}>
           Conflict detected
         </p>
-        <p style={{ fontSize: '12px', color: '#8b949e', margin: '2px 0 0' }}>
+        <p style={{ fontSize: '12px', color: tokens.colorNeutralForeground2, margin: '2px 0 0' }}>
           Another user updated this issue. Refreshing…
         </p>
       </div>
@@ -82,7 +83,7 @@ export default function ConflictToast({ onReload, onDismiss, autoCloseMs = 10_00
           style={{
             background: 'transparent',
             border: 'none',
-            color: '#8b949e',
+            color: tokens.colorNeutralForeground2,
             fontSize: '16px',
             cursor: 'pointer',
             lineHeight: 1,

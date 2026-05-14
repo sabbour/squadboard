@@ -1,4 +1,5 @@
 import { useComments } from '../../api/comments.ts'
+import { tokens } from '@fluentui/react-components'
 import Avatar from '../Avatar.tsx'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
@@ -13,11 +14,11 @@ export default function CommentList({ projectId, issueId }: CommentListProps) {
   const { data: comments, isLoading } = useComments(projectId, issueId)
 
   if (isLoading) {
-    return <p style={{ color: '#8b949e', fontSize: '12px' }}>Loading comments…</p>
+    return <p style={{ color: tokens.colorNeutralForeground2, fontSize: '12px' }}>Loading comments…</p>
   }
 
   if (!comments || comments.length === 0) {
-    return <p style={{ color: '#8b949e', fontSize: '12px' }}>No comments yet.</p>
+    return <p style={{ color: tokens.colorNeutralForeground2, fontSize: '12px' }}>No comments yet.</p>
   }
 
   return (
@@ -27,20 +28,20 @@ export default function CommentList({ projectId, issueId }: CommentListProps) {
           <Avatar name={comment.authorName} avatarUrl={comment.authorAvatarUrl} size={28} />
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px', marginBottom: '4px' }}>
-              <span style={{ fontSize: '13px', fontWeight: 600, color: '#e6edf3' }}>
+              <span style={{ fontSize: '13px', fontWeight: 600, color: tokens.colorNeutralForeground1 }}>
                 {comment.authorName}
               </span>
-              <span style={{ fontSize: '11px', color: '#8b949e' }}>
+              <span style={{ fontSize: '11px', color: tokens.colorNeutralForeground2 }}>
                 {formatDistanceToNow(new Date(comment.createdAt), { addSuffix: true })}
               </span>
             </div>
             <div
               style={{
                 fontSize: '13px',
-                color: '#e6edf3',
+                color: tokens.colorNeutralForeground1,
                 lineHeight: '1.5',
-                background: '#0d1117',
-                border: '1px solid #30363d',
+                background: tokens.colorNeutralBackground2,
+                border: `1px solid ${tokens.colorNeutralStroke1}`,
                 borderRadius: '6px',
                 padding: '10px 12px',
               }}

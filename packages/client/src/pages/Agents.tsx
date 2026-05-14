@@ -47,10 +47,10 @@ function TestRoutingPanel({ projectId }: { projectId: string }) {
   }
 
   const inputStyle: React.CSSProperties = {
-    background: '#0d1117',
-    border: '1px solid #30363d',
+    background: 'var(--surface)',
+    border: '1px solid var(--border)',
     borderRadius: 'var(--radius)',
-    color: '#e6edf3',
+    color: 'var(--text)',
     padding: '6px 10px',
     fontSize: '13px',
     outline: 'none',
@@ -62,7 +62,7 @@ function TestRoutingPanel({ projectId }: { projectId: string }) {
     <div
       style={{
         margin: '24px 0 0',
-        border: '1px solid #30363d',
+        border: '1px solid var(--border)',
         borderRadius: 'var(--radius)',
         overflow: 'hidden',
       }}
@@ -72,10 +72,10 @@ function TestRoutingPanel({ projectId }: { projectId: string }) {
         onClick={() => setOpen((o) => !o)}
         style={{
           width: '100%',
-          background: '#161b22',
+          background: 'var(--bg)',
           border: 'none',
-          borderBottom: open ? '1px solid #30363d' : 'none',
-          color: '#e6edf3',
+          borderBottom: open ? '1px solid var(--border)' : 'none',
+          color: 'var(--text)',
           padding: '10px 16px',
           fontSize: '13px',
           fontWeight: 600,
@@ -86,14 +86,14 @@ function TestRoutingPanel({ projectId }: { projectId: string }) {
           textAlign: 'left',
         }}
       >
-        <span style={{ fontSize: '11px', color: '#8b949e' }}>{open ? '▾' : '▸'}</span>
+        <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{open ? '▾' : '▸'}</span>
         🧪 Test Routing
       </button>
 
       {open && (
-        <div style={{ padding: '16px', background: '#0d1117', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+        <div style={{ padding: '16px', background: 'var(--surface)', display: 'flex', flexDirection: 'column', gap: '10px' }}>
           <div>
-            <label style={{ fontSize: '11px', color: '#8b949e', display: 'block', marginBottom: '4px' }}>
+            <label style={{ fontSize: '11px', color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>
               Issue title
             </label>
             <input
@@ -105,7 +105,7 @@ function TestRoutingPanel({ projectId }: { projectId: string }) {
             />
           </div>
           <div>
-            <label style={{ fontSize: '11px', color: '#8b949e', display: 'block', marginBottom: '4px' }}>
+            <label style={{ fontSize: '11px', color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>
               Labels (comma-separated)
             </label>
             <input
@@ -122,10 +122,10 @@ function TestRoutingPanel({ projectId }: { projectId: string }) {
             disabled={loading || !title.trim()}
             style={{
               alignSelf: 'flex-start',
-              background: loading ? '#21262d' : '#1f6feb',
+              background: loading ? 'rgba(0,0,0,0.05)' : '#1f6feb',
               border: '1px solid #388bfd',
               borderRadius: 'var(--radius)',
-              color: '#e6edf3',
+              color: loading ? 'var(--text-muted)' : '#fff',
               padding: '6px 14px',
               fontSize: '13px',
               fontWeight: 500,
@@ -148,9 +148,9 @@ function TestRoutingPanel({ projectId }: { projectId: string }) {
                 padding: '10px 14px',
                 borderRadius: 'var(--radius)',
                 background: result.matched ? 'rgba(46,160,67,0.1)' : 'rgba(139,148,158,0.1)',
-                border: `1px solid ${result.matched ? 'rgba(46,160,67,0.3)' : '#30363d'}`,
+                border: `1px solid ${result.matched ? 'rgba(46,160,67,0.3)' : 'var(--border)'}`,
                 fontSize: '13px',
-                color: '#e6edf3',
+                color: 'var(--text)',
               }}
             >
               {result.matched ? (
@@ -192,7 +192,7 @@ export default function Agents() {
     background: 'none',
     border: 'none',
     borderBottom: `2px solid ${active ? '#388bfd' : 'transparent'}`,
-    color: active ? '#e6edf3' : '#8b949e',
+    color: active ? 'var(--text)' : 'var(--text-muted)',
     padding: '6px 14px',
     fontSize: '13px',
     fontWeight: active ? 600 : 400,
@@ -241,10 +241,10 @@ export default function Agents() {
                 display: 'flex',
                 alignItems: 'center',
                 gap: '6px',
-                background: '#21262d',
-                border: '1px solid #30363d',
+                background: 'var(--bg)',
+                border: '1px solid var(--border)',
                 borderRadius: 'var(--radius)',
-                color: '#e6edf3',
+                color: 'var(--text)',
                 padding: '6px 12px',
                 fontSize: '12px',
                 cursor: refreshKeywords.isPending ? 'not-allowed' : 'pointer',

@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { tokens } from '@fluentui/react-components'
 import { type Issue } from '../../api/issues.ts'
 import { useLabels } from '../../api/labels.ts'
 import { useIssueRuns } from '../../api/runs.ts'
@@ -78,15 +79,15 @@ export default function CardDetail({ projectId, issue, onClose }: CardDetailProp
           width: '480px',
           maxWidth: '100vw',
           height: '100%',
-          background: '#161b22',
-          borderLeft: '1px solid #30363d',
+          background: tokens.colorNeutralBackground1,
+          borderLeft: `1px solid ${tokens.colorNeutralStroke1}`,
           display: 'flex',
           flexDirection: 'column',
           overflowY: 'auto',
         }}
       >
         {/* Panel header */}
-        <div style={{ borderBottom: '1px solid #30363d', flexShrink: 0 }}>
+        <div style={{ borderBottom: `1px solid ${tokens.colorNeutralStroke1}`, flexShrink: 0 }}>
           {/* Top bar: column badge + close */}
           <div
             style={{
@@ -99,9 +100,9 @@ export default function CardDetail({ projectId, issue, onClose }: CardDetailProp
             <span
               style={{
                 fontSize: '11px',
-                color: '#8b949e',
-                background: '#21262d',
-                border: '1px solid #30363d',
+                color: tokens.colorNeutralForeground2,
+                background: tokens.colorNeutralBackground3,
+                border: `1px solid ${tokens.colorNeutralStroke1}`,
                 borderRadius: '4px',
                 padding: '2px 8px',
               }}
@@ -113,14 +114,14 @@ export default function CardDetail({ projectId, issue, onClose }: CardDetailProp
               style={{
                 background: 'none',
                 border: 'none',
-                color: '#8b949e',
+                color: tokens.colorNeutralForeground2,
                 fontSize: '18px',
                 cursor: 'pointer',
                 padding: '2px 6px',
                 borderRadius: '4px',
               }}
-              onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.color = '#e6edf3' }}
-              onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.color = '#8b949e' }}
+              onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.color = tokens.colorNeutralForeground1 }}
+              onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.color = tokens.colorNeutralForeground2 }}
             >
               ✕
             </button>
@@ -135,8 +136,8 @@ export default function CardDetail({ projectId, issue, onClose }: CardDetailProp
                 style={{
                   background: 'none',
                   border: 'none',
-                  borderBottom: `2px solid ${activeTab === tab ? '#388bfd' : 'transparent'}`,
-                  color: activeTab === tab ? '#e6edf3' : '#8b949e',
+                  borderBottom: `2px solid ${activeTab === tab ? tokens.colorBrandBackground : 'transparent'}`,
+                  color: activeTab === tab ? tokens.colorNeutralForeground1 : tokens.colorNeutralForeground2,
                   padding: '6px 12px',
                   fontSize: '12px',
                   fontWeight: activeTab === tab ? 600 : 400,
@@ -159,7 +160,7 @@ export default function CardDetail({ projectId, issue, onClose }: CardDetailProp
           {activeTab === 'overview' && (
             <>
               {/* Title */}
-              <h2 style={{ fontSize: '16px', fontWeight: 600, color: '#e6edf3', lineHeight: '1.4' }}>
+              <h2 style={{ fontSize: '16px', fontWeight: 600, color: tokens.colorNeutralForeground1, lineHeight: '1.4' }}>
                 {issue.title}
               </h2>
 
@@ -168,10 +169,10 @@ export default function CardDetail({ projectId, issue, onClose }: CardDetailProp
                 {issue.assignee && (
                   <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                     <Avatar name={issue.assignee.name} avatarUrl={issue.assignee.avatarUrl} size={20} />
-                    <span style={{ fontSize: '12px', color: '#8b949e' }}>{issue.assignee.name}</span>
+                    <span style={{ fontSize: '12px', color: tokens.colorNeutralForeground2 }}>{issue.assignee.name}</span>
                   </div>
                 )}
-                <span style={{ fontSize: '12px', color: '#8b949e' }}>
+                <span style={{ fontSize: '12px', color: tokens.colorNeutralForeground2 }}>
                   {formatDistanceToNow(new Date(issue.createdAt), { addSuffix: true })}
                 </span>
               </div>
@@ -179,7 +180,7 @@ export default function CardDetail({ projectId, issue, onClose }: CardDetailProp
               {/* Labels */}
               {issue.labels.length > 0 && (
                 <div>
-                  <p style={{ fontSize: '11px', color: '#8b949e', marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                  <p style={{ fontSize: '11px', color: tokens.colorNeutralForeground2, marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                     Labels
                   </p>
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
@@ -193,7 +194,7 @@ export default function CardDetail({ projectId, issue, onClose }: CardDetailProp
               {/* Available labels picker */}
               {labels && labels.length > 0 && (
                 <div>
-                  <p style={{ fontSize: '11px', color: '#8b949e', marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                  <p style={{ fontSize: '11px', color: tokens.colorNeutralForeground2, marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                     All Labels
                   </p>
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
@@ -207,17 +208,17 @@ export default function CardDetail({ projectId, issue, onClose }: CardDetailProp
               {/* Body / description */}
               {issue.body && (
                 <div>
-                  <p style={{ fontSize: '11px', color: '#8b949e', marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                  <p style={{ fontSize: '11px', color: tokens.colorNeutralForeground2, marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                     Description
                   </p>
                   <div
                     style={{
-                      background: '#0d1117',
-                      border: '1px solid #30363d',
+                      background: tokens.colorNeutralBackground2,
+                      border: `1px solid ${tokens.colorNeutralStroke1}`,
                       borderRadius: '6px',
                       padding: '12px',
                       fontSize: '13px',
-                      color: '#e6edf3',
+                      color: tokens.colorNeutralForeground1,
                       lineHeight: '1.6',
                       whiteSpace: 'pre-wrap',
                     }}
@@ -230,7 +231,7 @@ export default function CardDetail({ projectId, issue, onClose }: CardDetailProp
               {/* Active run output panel */}
               {activeRun && (
                 <div>
-                  <p style={{ fontSize: '11px', color: '#8b949e', marginBottom: '8px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                  <p style={{ fontSize: '11px', color: tokens.colorNeutralForeground2, marginBottom: '8px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                     Active Run
                   </p>
                   <RunOutputPanel
@@ -244,14 +245,14 @@ export default function CardDetail({ projectId, issue, onClose }: CardDetailProp
               {/* Workflow section */}
               <div>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
-                  <p style={{ fontSize: '11px', color: '#8b949e', textTransform: 'uppercase', letterSpacing: '0.05em', margin: 0 }}>
+                  <p style={{ fontSize: '11px', color: tokens.colorNeutralForeground2, textTransform: 'uppercase', letterSpacing: '0.05em', margin: 0 }}>
                     Workflow
                   </p>
                   <button
                     onClick={() => setShowAttachModal(true)}
                     style={{
                       fontSize: '11px',
-                      color: '#388bfd',
+                      color: tokens.colorBrandBackground,
                       background: 'none',
                       border: 'none',
                       cursor: 'pointer',
@@ -265,8 +266,8 @@ export default function CardDetail({ projectId, issue, onClose }: CardDetailProp
                 {issue.attachedWorkflowId ? (
                   <div
                     style={{
-                      background: '#0d1117',
-                      border: '1px solid #30363d',
+                      background: tokens.colorNeutralBackground2,
+                      border: `1px solid ${tokens.colorNeutralStroke1}`,
                       borderRadius: '6px',
                       padding: '10px 12px',
                       display: 'flex',
@@ -275,11 +276,11 @@ export default function CardDetail({ projectId, issue, onClose }: CardDetailProp
                     }}
                   >
                     <div>
-                      <p style={{ fontSize: '13px', color: '#e6edf3', margin: 0, fontWeight: 500 }}>
+                      <p style={{ fontSize: '13px', color: tokens.colorNeutralForeground1, margin: 0, fontWeight: 500 }}>
                         ⚙ {issue.attachedWorkflowName ?? 'Workflow'}
                       </p>
                       {workflowRun && (
-                        <p style={{ fontSize: '11px', color: '#8b949e', margin: '2px 0 0' }}>
+                        <p style={{ fontSize: '11px', color: tokens.colorNeutralForeground2, margin: '2px 0 0' }}>
                           Status: {workflowRun.status} · Step {(workflowRun.currentStepIndex ?? 0) + 1}
                         </p>
                       )}
@@ -291,8 +292,8 @@ export default function CardDetail({ projectId, issue, onClose }: CardDetailProp
                         disabled={startWorkflow.isPending}
                         style={{
                           padding: '4px 10px',
-                          background: startWorkflow.isPending ? '#21262d' : '#238636',
-                          color: '#e6edf3',
+                          background: startWorkflow.isPending ? tokens.colorNeutralBackground3 : '#238636',
+                          color: tokens.colorNeutralForeground1,
                           border: 'none',
                           borderRadius: '6px',
                           fontSize: '12px',
@@ -305,7 +306,7 @@ export default function CardDetail({ projectId, issue, onClose }: CardDetailProp
                     )}
                   </div>
                 ) : (
-                  <p style={{ fontSize: '12px', color: '#8b949e' }}>No workflow attached.</p>
+                  <p style={{ fontSize: '12px', color: tokens.colorNeutralForeground2 }}>No workflow attached.</p>
                 )}
 
                 {/* Review panels for approve steps */}
@@ -315,8 +316,8 @@ export default function CardDetail({ projectId, issue, onClose }: CardDetailProp
                       <div
                         key={group.stepRunId}
                         style={{
-                          background: '#0d1117',
-                          border: '1px solid #30363d',
+                          background: tokens.colorNeutralBackground2,
+                          border: `1px solid ${tokens.colorNeutralStroke1}`,
                           borderRadius: '6px',
                           padding: '12px',
                         }}
@@ -338,7 +339,7 @@ export default function CardDetail({ projectId, issue, onClose }: CardDetailProp
 
               {/* Comments */}
               <div>
-                <p style={{ fontSize: '11px', color: '#8b949e', marginBottom: '12px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                <p style={{ fontSize: '11px', color: tokens.colorNeutralForeground2, marginBottom: '12px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                   Comments
                 </p>
                 <CommentList projectId={projectId} issueId={issue.id} />

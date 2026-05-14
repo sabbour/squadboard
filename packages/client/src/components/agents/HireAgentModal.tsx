@@ -1,5 +1,19 @@
 import { useState } from 'react'
 import { useCreateAgent } from '../../api/agents.ts'
+import {
+  Dialog,
+  DialogSurface,
+  DialogTitle,
+  DialogBody,
+  DialogContent,
+  DialogActions,
+  Button,
+  Field,
+  Input,
+  Select,
+  makeStyles,
+  tokens,
+} from '@fluentui/react-components'
 
 interface HireAgentModalProps {
   projectId: string
@@ -15,12 +29,30 @@ const MODELS = [
 
 const KEBAB_RE = /^[a-z][a-z0-9-]*$/
 
+const useStyles = makeStyles({
+  tagList: {
+    display: 'flex',
+    flexWrap: 'wrap',
+    gap: '4px',
+    marginTop: tokens.spacingVerticalXS,
+  },
+  tag: {
+    fontSize: '11px',
+    padding: '2px 8px',
+    borderRadius: '12px',
+    background: tokens.colorBrandBackground2,
+    color: tokens.colorBrandForeground1,
+    border: `1px solid ${tokens.colorBrandStroke2}`,
+  },
+})
+
 export default function HireAgentModal({ projectId, onClose }: HireAgentModalProps) {
   const [name, setName] = useState('')
   const [role, setRole] = useState('')
   const [model, setModel] = useState('auto')
   const [expertiseInput, setExpertiseInput] = useState('')
   const [nameError, setNameError] = useState('')
+  const styles = useStyles()
 
   const createAgent = useCreateAgent(projectId)
 
@@ -61,222 +93,84 @@ export default function HireAgentModal({ projectId, onClose }: HireAgentModalPro
     )
   }
 
+  const canSubmit = Boolean(name) && Boolean(role.trim()) && !nameError && !createAgent.isPending
+
   return (
-    <div
-      onClick={(e) => { if (e.target === e.currentTarget) onClose() }}
-      style={{
-        position: 'fixed',
-        inset: 0,
-        zIndex: 300,
-        background: 'rgba(0,0,0,0.6)',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        padding: '24px',
-      }}
-    >
-      <div
-        style={{
-          background: '#161b22',
-          border: '1px solid #30363d',
-          borderRadius: '8px',
-          width: '100%',
-          maxWidth: '480px',
-          display: 'flex',
-          flexDirection: 'column',
-          maxHeight: '90vh',
-          overflow: 'hidden',
-        }}
-      >
-        {/* Header */}
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            padding: '16px 20px',
-            borderBottom: '1px solid #30363d',
-          }}
-        >
-          <h2 style={{ fontSize: '15px', fontWeight: 600, color: '#e6edf3' }}>Hire Agent</h2>
-          <button
-            onClick={onClose}
-            style={{ background: 'none', border: 'none', color: '#8b949e', fontSize: '18px', cursor: 'pointer' }}
-          >
-            ✕
-          </button>
-        </div>
-
-        {/* Form */}
-        <form
-          onSubmit={handleSubmit}
-          style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '16px', overflowY: 'auto' }}
-        >
-          {/* Name */}
-          <div>
-            <label style={labelStyle}>
-              Name <span style={{ color: '#f85149' }}>*</span>
-              <span style={{ fontWeight: 400, color: '#8b949e', marginLeft: '6px' }}>(kebab-case)</span>
-            </label>
-            <input
-              autoFocus
-              type="text"
-              value={name}
-              onChange={handleNameChange}
-              placeholder="e.g. design-lead"
-              required
-              style={{
-                ...inputStyle,
-                borderColor: nameError ? '#f85149' : '#30363d',
-              }}
-              onFocus={(e) => { e.currentTarget.style.borderColor = nameError ? '#f85149' : '#388bfd' }}
-              onBlur={(e) => { e.currentTarget.style.borderColor = nameError ? '#f85149' : '#30363d'; validateName(name) }}
-            />
-            {nameError && (
-              <p style={{ fontSize: '11px', color: '#f85149', marginTop: '4px' }}>{nameError}</p>
-            )}
-          </div>
-
-          {/* Role */}
-          <div>
-            <label style={labelStyle}>
-              Role <span style={{ color: '#f85149' }}>*</span>
-            </label>
-            <input
-              type="text"
-              value={role}
-              onChange={(e) => setRole(e.target.value)}
-              placeholder="e.g. Frontend Developer"
-              required
-              style={inputStyle}
-              onFocus={(e) => { e.currentTarget.style.borderColor = '#388bfd' }}
-              onBlur={(e) => { e.currentTarget.style.borderColor = '#30363d' }}
-            />
-          </div>
-
-          {/* Model */}
-          <div>
-            <label style={labelStyle}>Model</label>
-            <select
-              value={model}
-              onChange={(e) => setModel(e.target.value)}
-              style={{
-                background: '#0d1117',
-                border: '1px solid #30363d',
-                borderRadius: '6px',
-                color: '#e6edf3',
-                padding: '7px 10px',
-                fontSize: '13px',
-                cursor: 'pointer',
-                outline: 'none',
-                width: '100%',
-              }}
+    <Dialog open onOpenChange={(_, data) => { if (!data.open) onClose() }}>
+      <DialogSurface style={{ maxWidth: '480px', width: '100%' }}>
+        <DialogBody>
+          <DialogTitle>Hire Agent</DialogTitle>
+          <DialogContent>
+            <form
+              id="hire-agent-form"
+              onSubmit={handleSubmit}
+              style={{ display: 'flex', flexDirection: 'column', gap: '16px', paddingTop: '8px' }}
             >
-              {MODELS.map((m) => (
-                <option key={m.value} value={m.value}>
-                  {m.label}
-                </option>
-              ))}
-            </select>
-          </div>
+              <Field
+                label={<>Name <span style={{ color: tokens.colorPaletteRedForeground1 }}>*</span> <span style={{ fontWeight: 400, color: tokens.colorNeutralForeground4 }}>(kebab-case)</span></>}
+                validationMessage={nameError || undefined}
+                validationState={nameError ? 'error' : 'none'}
+              >
+                <Input
+                  autoFocus
+                  value={name}
+                  onChange={handleNameChange}
+                  placeholder="e.g. design-lead"
+                  onBlur={() => validateName(name)}
+                />
+              </Field>
 
-          {/* Expertise */}
-          <div>
-            <label style={labelStyle}>
-              Expertise <span style={{ fontWeight: 400, color: '#8b949e' }}>(comma-separated tags)</span>
-            </label>
-            <input
-              type="text"
-              value={expertiseInput}
-              onChange={(e) => setExpertiseInput(e.target.value)}
-              placeholder="e.g. React, TypeScript, CSS"
-              style={inputStyle}
-              onFocus={(e) => { e.currentTarget.style.borderColor = '#388bfd' }}
-              onBlur={(e) => { e.currentTarget.style.borderColor = '#30363d' }}
-            />
-            {expertiseInput && (
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', marginTop: '8px' }}>
-                {expertiseInput.split(',').map((tag) => tag.trim()).filter(Boolean).map((tag) => (
-                  <span
-                    key={tag}
-                    style={{
-                      fontSize: '11px',
-                      padding: '2px 8px',
-                      borderRadius: '12px',
-                      background: 'rgba(56,139,253,0.12)',
-                      color: '#79c0ff',
-                      border: '1px solid rgba(56,139,253,0.25)',
-                    }}
-                  >
-                    {tag}
-                  </span>
-                ))}
-              </div>
-            )}
-          </div>
+              <Field label={<>Role <span style={{ color: tokens.colorPaletteRedForeground1 }}>*</span></>}>
+                <Input
+                  value={role}
+                  onChange={(e) => setRole(e.target.value)}
+                  placeholder="e.g. Frontend Developer"
+                />
+              </Field>
 
-          {/* Actions */}
-          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', paddingTop: '4px' }}>
-            <button
-              type="button"
-              onClick={onClose}
-              style={{
-                background: 'none',
-                border: '1px solid #30363d',
-                borderRadius: '6px',
-                color: '#e6edf3',
-                padding: '6px 16px',
-                fontSize: '13px',
-                cursor: 'pointer',
-              }}
-            >
-              Cancel
-            </button>
-            <button
+              <Field label="Model">
+                <Select value={model} onChange={(e) => setModel(e.target.value)}>
+                  {MODELS.map((m) => (
+                    <option key={m.value} value={m.value}>{m.label}</option>
+                  ))}
+                </Select>
+              </Field>
+
+              <Field label={<>Expertise <span style={{ fontWeight: 400, color: tokens.colorNeutralForeground4 }}>(comma-separated tags)</span></>}>
+                <Input
+                  value={expertiseInput}
+                  onChange={(e) => setExpertiseInput(e.target.value)}
+                  placeholder="e.g. React, TypeScript, CSS"
+                />
+                {expertiseInput && (
+                  <div className={styles.tagList}>
+                    {expertiseInput.split(',').map((tag) => tag.trim()).filter(Boolean).map((tag) => (
+                      <span key={tag} className={styles.tag}>{tag}</span>
+                    ))}
+                  </div>
+                )}
+              </Field>
+
+              {createAgent.isError && (
+                <p style={{ fontSize: '12px', color: tokens.colorPaletteRedForeground1, margin: 0 }}>
+                  Failed to hire agent. Please try again.
+                </p>
+              )}
+            </form>
+          </DialogContent>
+          <DialogActions>
+            <Button appearance="secondary" onClick={onClose}>Cancel</Button>
+            <Button
+              appearance="primary"
               type="submit"
-              disabled={!name || !role.trim() || Boolean(nameError) || createAgent.isPending}
-              style={{
-                background: '#238636',
-                border: '1px solid #2ea043',
-                borderRadius: '6px',
-                color: '#e6edf3',
-                padding: '6px 16px',
-                fontSize: '13px',
-                fontWeight: 500,
-                cursor: !name || !role.trim() || Boolean(nameError) || createAgent.isPending ? 'not-allowed' : 'pointer',
-                opacity: !name || !role.trim() || Boolean(nameError) || createAgent.isPending ? 0.6 : 1,
-              }}
+              form="hire-agent-form"
+              disabled={!canSubmit}
             >
               {createAgent.isPending ? 'Hiring…' : 'Hire Agent'}
-            </button>
-          </div>
-
-          {createAgent.isError && (
-            <p style={{ fontSize: '12px', color: '#f85149', textAlign: 'center' }}>
-              Failed to hire agent. Please try again.
-            </p>
-          )}
-        </form>
-      </div>
-    </div>
+            </Button>
+          </DialogActions>
+        </DialogBody>
+      </DialogSurface>
+    </Dialog>
   )
-}
-
-const labelStyle: React.CSSProperties = {
-  fontSize: '12px',
-  color: '#8b949e',
-  display: 'block',
-  marginBottom: '6px',
-  fontWeight: 600,
-}
-
-const inputStyle: React.CSSProperties = {
-  width: '100%',
-  background: '#0d1117',
-  border: '1px solid #30363d',
-  borderRadius: '6px',
-  color: '#e6edf3',
-  padding: '8px 10px',
-  fontSize: '13px',
-  outline: 'none',
 }

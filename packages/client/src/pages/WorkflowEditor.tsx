@@ -190,7 +190,7 @@ export default function WorkflowEditor() {
   }
 
   if (!isNew && isLoading) {
-    return <div style={{ padding: '32px', color: '#8b949e' }}>Loading workflow…</div>
+    return <div style={{ padding: '32px', color: 'var(--text-muted)' }}>Loading workflow…</div>
   }
 
   const monoFont = "'Cascadia Code', 'Fira Code', 'JetBrains Mono', 'Menlo', monospace"
@@ -205,9 +205,9 @@ export default function WorkflowEditor() {
           alignItems: 'center',
           gap: '12px',
           padding: '12px 20px',
-          borderBottom: '1px solid #30363d',
+          borderBottom: '1px solid var(--border)',
           flexShrink: 0,
-          background: '#161b22',
+          background: 'var(--bg)',
         }}
       >
         <button
@@ -234,7 +234,7 @@ export default function WorkflowEditor() {
             background: 'none',
             border: 'none',
             borderBottom: '1px solid transparent',
-            color: '#e6edf3',
+            color: 'var(--text)',
             fontSize: '15px',
             fontWeight: 600,
             outline: 'none',
@@ -246,14 +246,14 @@ export default function WorkflowEditor() {
           onBlur={(e) => (e.currentTarget.style.borderBottomColor = 'transparent')}
         />
 
-        <span style={{ color: '#30363d', fontSize: '16px' }}>|</span>
+        <span style={{ color: 'var(--border)', fontSize: '16px' }}>|</span>
 
         {/* Template picker */}
         <button
           onClick={() => setShowTemplatePicker(true)}
           style={{
             background: 'none',
-            border: '1px solid #30363d',
+            border: '1px solid var(--border)',
             borderRadius: '5px',
             color: '#8b949e',
             fontSize: '12px',
@@ -281,7 +281,7 @@ export default function WorkflowEditor() {
           onClick={handleSave}
           disabled={saving}
           style={{
-            background: saving ? '#21262d' : '#388bfd',
+            background: saving ? 'rgba(0,0,0,0.05)' : '#388bfd',
             color: '#fff',
             border: 'none',
             borderRadius: '5px',

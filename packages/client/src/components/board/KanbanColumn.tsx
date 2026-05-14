@@ -1,4 +1,5 @@
 import { Droppable } from '@hello-pangea/dnd'
+import { tokens } from '@fluentui/react-components'
 import { type Issue, type ColumnId } from '../../api/issues.ts'
 import IssueCard from './IssueCard.tsx'
 
@@ -30,7 +31,7 @@ export default function KanbanColumn({
         flexDirection: 'column',
         width: '280px',
         flexShrink: 0,
-        background: '#161b22',
+        background: tokens.colorNeutralBackground2,
         borderRadius: '8px',
         overflow: 'hidden',
       }}
@@ -42,18 +43,18 @@ export default function KanbanColumn({
           alignItems: 'center',
           justifyContent: 'space-between',
           padding: '10px 12px',
-          background: '#0d1117',
-          borderBottom: '1px solid #30363d',
+          background: tokens.colorNeutralBackground3,
+          borderBottom: `1px solid ${tokens.colorNeutralStroke1}`,
         }}
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <span style={{ fontSize: '13px', fontWeight: 600, color: '#e6edf3' }}>{label}</span>
+          <span style={{ fontSize: '13px', fontWeight: 600, color: tokens.colorNeutralForeground1 }}>{label}</span>
           <span
             style={{
               fontSize: '11px',
-              color: '#8b949e',
-              background: '#21262d',
-              border: '1px solid #30363d',
+              color: tokens.colorNeutralForeground2,
+              background: tokens.colorNeutralBackground4,
+              border: `1px solid ${tokens.colorNeutralStroke1}`,
               borderRadius: '10px',
               padding: '0 6px',
               lineHeight: '18px',
@@ -69,7 +70,7 @@ export default function KanbanColumn({
           style={{
             background: 'none',
             border: 'none',
-            color: '#8b949e',
+            color: tokens.colorNeutralForeground2,
             fontSize: '18px',
             lineHeight: 1,
             padding: '0 2px',
@@ -78,8 +79,8 @@ export default function KanbanColumn({
             display: 'flex',
             alignItems: 'center',
           }}
-          onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.color = '#388bfd' }}
-          onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.color = '#8b949e' }}
+          onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.color = tokens.colorBrandBackground }}
+          onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.color = tokens.colorNeutralForeground2 }}
         >
           +
         </button>
@@ -105,11 +106,11 @@ export default function KanbanColumn({
             {issues.length === 0 && !snapshot.isDraggingOver && (
               <div
                 style={{
-                  border: '1px dashed #30363d',
+                  border: `1px dashed ${tokens.colorNeutralStroke1}`,
                   borderRadius: '6px',
                   padding: '16px',
                   textAlign: 'center',
-                  color: '#8b949e',
+                  color: tokens.colorNeutralForeground2,
                   fontSize: '12px',
                   flex: 1,
                 }}

@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { tokens } from '@fluentui/react-components'
 import { useCreateIssue, type ColumnId } from '../../api/issues.ts'
 import { useLabels } from '../../api/labels.ts'
 import LabelBadge from '../LabelBadge.tsx'
@@ -58,8 +59,8 @@ export default function CreateIssueModal({ projectId, defaultColumn, onClose }: 
     >
       <div
         style={{
-          background: '#161b22',
-          border: '1px solid #30363d',
+          background: tokens.colorNeutralBackground1,
+          border: `1px solid ${tokens.colorNeutralStroke1}`,
           borderRadius: '8px',
           width: '100%',
           maxWidth: '520px',
@@ -76,13 +77,13 @@ export default function CreateIssueModal({ projectId, defaultColumn, onClose }: 
             alignItems: 'center',
             justifyContent: 'space-between',
             padding: '16px 20px',
-            borderBottom: '1px solid #30363d',
+            borderBottom: `1px solid ${tokens.colorNeutralStroke1}`,
           }}
         >
-          <h2 style={{ fontSize: '15px', fontWeight: 600, color: '#e6edf3' }}>New Issue</h2>
+          <h2 style={{ fontSize: '15px', fontWeight: 600, color: tokens.colorNeutralForeground1 }}>New Issue</h2>
           <button
             onClick={onClose}
-            style={{ background: 'none', border: 'none', color: '#8b949e', fontSize: '18px', cursor: 'pointer' }}
+            style={{ background: 'none', border: 'none', color: tokens.colorNeutralForeground2, fontSize: '18px', cursor: 'pointer' }}
           >
             ✕
           </button>
@@ -92,7 +93,7 @@ export default function CreateIssueModal({ projectId, defaultColumn, onClose }: 
         <form onSubmit={handleSubmit} style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '14px', overflowY: 'auto' }}>
           {/* Title */}
           <div>
-            <label style={{ fontSize: '12px', color: '#8b949e', display: 'block', marginBottom: '6px' }}>
+            <label style={{ fontSize: '12px', color: tokens.colorNeutralForeground2, display: 'block', marginBottom: '6px' }}>
               Title <span style={{ color: '#f85149' }}>*</span>
             </label>
             <input
@@ -104,22 +105,22 @@ export default function CreateIssueModal({ projectId, defaultColumn, onClose }: 
               required
               style={{
                 width: '100%',
-                background: '#0d1117',
-                border: '1px solid #30363d',
+                background: tokens.colorNeutralBackground1,
+                border: `1px solid ${tokens.colorNeutralStroke1}`,
                 borderRadius: '6px',
-                color: '#e6edf3',
+                color: tokens.colorNeutralForeground1,
                 padding: '8px 10px',
                 fontSize: '13px',
                 outline: 'none',
               }}
-              onFocus={(e) => { e.currentTarget.style.borderColor = '#388bfd' }}
-              onBlur={(e) => { e.currentTarget.style.borderColor = '#30363d' }}
+              onFocus={(e) => { e.currentTarget.style.borderColor = tokens.colorBrandBackground }}
+              onBlur={(e) => { e.currentTarget.style.borderColor = tokens.colorNeutralStroke1 }}
             />
           </div>
 
           {/* Body (markdown) */}
           <div>
-            <label style={{ fontSize: '12px', color: '#8b949e', display: 'block', marginBottom: '6px' }}>
+            <label style={{ fontSize: '12px', color: tokens.colorNeutralForeground2, display: 'block', marginBottom: '6px' }}>
               Description <span style={{ fontSize: '11px' }}>(Markdown)</span>
             </label>
             <textarea
@@ -129,34 +130,34 @@ export default function CreateIssueModal({ projectId, defaultColumn, onClose }: 
               rows={4}
               style={{
                 width: '100%',
-                background: '#0d1117',
-                border: '1px solid #30363d',
+                background: tokens.colorNeutralBackground1,
+                border: `1px solid ${tokens.colorNeutralStroke1}`,
                 borderRadius: '6px',
-                color: '#e6edf3',
+                color: tokens.colorNeutralForeground1,
                 padding: '8px 10px',
                 fontSize: '13px',
                 resize: 'vertical',
                 outline: 'none',
                 lineHeight: '1.5',
               }}
-              onFocus={(e) => { e.currentTarget.style.borderColor = '#388bfd' }}
-              onBlur={(e) => { e.currentTarget.style.borderColor = '#30363d' }}
+              onFocus={(e) => { e.currentTarget.style.borderColor = tokens.colorBrandBackground }}
+              onBlur={(e) => { e.currentTarget.style.borderColor = tokens.colorNeutralStroke1 }}
             />
           </div>
 
           {/* Column picker */}
           <div>
-            <label style={{ fontSize: '12px', color: '#8b949e', display: 'block', marginBottom: '6px' }}>
+            <label style={{ fontSize: '12px', color: tokens.colorNeutralForeground2, display: 'block', marginBottom: '6px' }}>
               Column
             </label>
             <select
               value={column}
               onChange={(e) => setColumn(e.target.value as ColumnId)}
               style={{
-                background: '#0d1117',
-                border: '1px solid #30363d',
+                background: tokens.colorNeutralBackground1,
+                border: `1px solid ${tokens.colorNeutralStroke1}`,
                 borderRadius: '6px',
-                color: '#e6edf3',
+                color: tokens.colorNeutralForeground1,
                 padding: '6px 10px',
                 fontSize: '13px',
                 cursor: 'pointer',
@@ -172,7 +173,7 @@ export default function CreateIssueModal({ projectId, defaultColumn, onClose }: 
           {/* Labels */}
           {labels && labels.length > 0 && (
             <div>
-              <label style={{ fontSize: '12px', color: '#8b949e', display: 'block', marginBottom: '6px' }}>
+              <label style={{ fontSize: '12px', color: tokens.colorNeutralForeground2, display: 'block', marginBottom: '6px' }}>
                 Labels
               </label>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
@@ -204,9 +205,9 @@ export default function CreateIssueModal({ projectId, defaultColumn, onClose }: 
               onClick={onClose}
               style={{
                 background: 'none',
-                border: '1px solid #30363d',
+                border: `1px solid ${tokens.colorNeutralStroke1}`,
                 borderRadius: '6px',
-                color: '#e6edf3',
+                color: tokens.colorNeutralForeground1,
                 padding: '6px 16px',
                 fontSize: '13px',
                 cursor: 'pointer',
@@ -221,7 +222,7 @@ export default function CreateIssueModal({ projectId, defaultColumn, onClose }: 
                 background: '#238636',
                 border: '1px solid #2ea043',
                 borderRadius: '6px',
-                color: '#e6edf3',
+                color: '#ffffff',
                 padding: '6px 16px',
                 fontSize: '13px',
                 fontWeight: 500,

@@ -1,4 +1,5 @@
 import { useState, useRef } from 'react'
+import { tokens } from '@fluentui/react-components'
 import { useLabels } from '../../api/labels.ts'
 import LabelBadge from '../LabelBadge.tsx'
 import { Search20Regular } from '@fluentui/react-icons'
@@ -29,7 +30,7 @@ export default function FilterBar({
         alignItems: 'center',
         gap: '10px',
         padding: '10px 24px',
-        borderBottom: '1px solid #30363d',
+        borderBottom: `1px solid ${tokens.colorNeutralStroke1}`,
         flexWrap: 'wrap',
         flexShrink: 0,
       }}
@@ -42,7 +43,7 @@ export default function FilterBar({
             left: '8px',
             top: '50%',
             transform: 'translateY(-50%)',
-            color: '#8b949e',
+            color: tokens.colorNeutralForeground2,
             display: 'flex',
             pointerEvents: 'none',
           }}
@@ -58,10 +59,10 @@ export default function FilterBar({
           onFocus={() => setFocused(true)}
           onBlur={() => setFocused(false)}
           style={{
-            background: '#0d1117',
-            border: `1px solid ${focused ? '#388bfd' : '#30363d'}`,
+            background: tokens.colorNeutralBackground1,
+            border: `1px solid ${focused ? tokens.colorBrandBackground : tokens.colorNeutralStroke1}`,
             borderRadius: '6px',
-            color: '#e6edf3',
+            color: tokens.colorNeutralForeground1,
             padding: '6px 10px 6px 32px',
             fontSize: '13px',
             width: '220px',
@@ -79,7 +80,7 @@ export default function FilterBar({
               transform: 'translateY(-50%)',
               background: 'none',
               border: 'none',
-              color: '#8b949e',
+              color: tokens.colorNeutralForeground2,
               cursor: 'pointer',
               fontSize: '12px',
               padding: 0,
@@ -93,15 +94,15 @@ export default function FilterBar({
       {/* Label filter chips */}
       {labels && labels.length > 0 && (
         <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
-          <span style={{ fontSize: '12px', color: '#8b949e' }}>Labels:</span>
+          <span style={{ fontSize: '12px', color: tokens.colorNeutralForeground2 }}>Labels:</span>
           {activeLabelId && (
             <button
               onClick={() => onLabelChange(undefined)}
               style={{
                 background: 'none',
-                border: '1px solid #30363d',
+                border: `1px solid ${tokens.colorNeutralStroke1}`,
                 borderRadius: '12px',
-                color: '#8b949e',
+                color: tokens.colorNeutralForeground2,
                 padding: '2px 8px',
                 fontSize: '11px',
                 cursor: 'pointer',
