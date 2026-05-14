@@ -44,3 +44,6 @@ PRD Appendix A — the Coordinator's regex routing is fine for one-shot use; its
 
 ### 2026-05-14
 Demo 1 SDK surface: squad-discovery.ts scans filesystem for .squad/ dirs (home + common dev dirs, depth 3). Validates by checking team.md exists. project-squad.ts links projects to squad dirs. Discovery API: GET /api/squad/discover, validate, register.
+
+### 2026-05-14
+Demo 3 SDK: CharterCompiler parses charter.md (name, role, model, expertise, reviewer authority). agent-sync.ts syncs .squad/agents/ to DB, hash-based change detection. Hire flow creates charter.md + history.md on disk atomically.

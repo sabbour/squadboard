@@ -120,6 +120,16 @@ Existing roles unchanged: McManus (Lead Architect), Keyser (Frontend Dev), Fenst
 - CreateIssueModal, CommentList (react-markdown + remark-gfm), AddComment
 **Owner:** Keyser (frontend)
 
+### 2026-05-14: Agent sync strategy (Demo 3)
+**By:** Kobayashi
+**What:** File-on-disk is source of truth. DB is a sync mirror (upsert on hash change). Hire creates files first, then DB row. Disable = status='disabled' in DB, file untouched. Charter changes detected via md5 hash. chokidar watches for live reload.
+**Rationale:** Ensures agent state persists cleanly across server restarts and team collaboration — no divergence between filesystem and database.
+
+### 2026-05-14: Agents UI pattern (Demo 3)
+**By:** Keyser
+**What:** Agents page uses grid layout (not list). Two sections: Active + Disabled. AgentDetailPanel is 520px slide-over (wider than board's 480px for charter editing). Charter editing is raw textarea (no Monaco in Demo 3 — Monaco lands in Demo 11). HireAgentModal validates kebab-case name.
+**Rationale:** Grid scales better for scanning agents; dual sections clarify state at a glance. Wider panel accommodates charter editing; raw textarea keeps Demo 3 lean.
+
 ## Governance
 
 - All meaningful changes require team consensus
