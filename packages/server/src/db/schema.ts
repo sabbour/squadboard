@@ -92,7 +92,8 @@ export type NewLabel = typeof labels.$inferInsert;
 // Engine data layer — Demo 4 / Demo 5
 // ---------------------------------------------------------------------------
 
-export const runStatusEnum = pgEnum('run_status', ['pending', 'running', 'completed', 'failed', 'cancelled']);
+// Demo 10 adds 'splitting' (fan_out in progress) and 'waiting_children' (fan_out waiting for children)
+export const runStatusEnum = pgEnum('run_status', ['pending', 'running', 'completed', 'failed', 'cancelled', 'splitting', 'waiting_children']);
 export const workspaceStrategyEnum = pgEnum('workspace_strategy', ['scratch', 'dir', 'worktree']);
 
 // Invariant 1: routing desugars to issue_runs with kind='agent_run'.
@@ -139,6 +140,12 @@ export const workflowRuns = pgTable('workflow_runs', {
   currentStepIndex: integer('current_step_index').default(0),
   // Demo 9: peer review blocking policy ('first' | 'majority' | 'all') — default GitHub semantics
   requestChangesPolicy: text('request_changes_policy').default('first'),
+  // Demo 10: fan_out / child workflow support (Invariant 5)
+  parentWorkflowRunId: text('parent_workflow_run_id'),   // UUID stored as text (self-referential)
+  childWorkflowRunIds: jsonb('child_workflow_run_ids').default('[]'), // string[]
+  pinnedAgentRevisions: text('pinned_agent_revisions'),  // JSON: {agentName: charterHash}; inherited from parent
+  variables: jsonb('variables').default('{}'),            // propagated from parent on fan_out
+  inlineStepsJson: text('inline_steps_json'),            // JSON: WorkflowStep[] for fan_out child workflows
   createdAt: timestamp('created_at').notNull().defaultNow(),
   updatedAt: timestamp('updated_at').notNull().defaultNow(),
 });
@@ -162,6 +169,11 @@ export const stepRuns = pgTable('step_runs', {
   reviewDecision: text('review_decision'),     // 'approve' | 'request_changes'
   reviewComment: text('review_comment'),
   reviewSuggestions: jsonb('review_suggestions'), // string[]
+  // Demo 10: fan_out step support (Invariant 5)
+  splitTargets: jsonb('split_targets'),          // resolved split targets (SplitTarget[])
+  output: text('output'),                        // step output; fan_out merges children outputs here
+  stepConfig: jsonb('step_config'),              // inline step config for fan_out child steps (WorkflowStep)
+  resolvedAgentId: text('resolved_agent_id'),    // pre-resolved agent UUID for agent_run in fan_out children
   createdAt: timestamp('created_at').notNull().defaultNow(),
   updatedAt: timestamp('updated_at').notNull().defaultNow(),
 });
@@ -295,3 +307,39 @@ export const routingLog = pgTable('routing_log', {
 
 export type RoutingLog = typeof routingLog.$inferSelect;
 export type NewRoutingLog = typeof routingLog.$inferInsert;
+
+// ---------------------------------------------------------------------------
+// Demo 10 — Fan-Out + Handoff (Invariant 5)
+// ---------------------------------------------------------------------------
+
+/**
+ * issue_links: records the parent→child relationship created by fan_out materialisation.
+ * One row per child issue per fan_out invocation.
+ */
+export const issueLinks = pgTable('issue_links', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  parentIssueId: uuid('parent_issue_id').notNull().references(() => issues.id, { onDelete: 'cascade' }),
+  childIssueId: uuid('child_issue_id').notNull().references(() => issues.id, { onDelete: 'cascade' }),
+  linkType: text('link_type').notNull().default('fan_out'), // 'fan_out' | 'handoff'
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+});
+
+export type IssueLink = typeof issueLinks.$inferSelect;
+export type NewIssueLink = typeof issueLinks.$inferInsert;
+
+/**
+ * handoff_context: stores variables, message, and split-target info propagated
+ * from parent to each child during fan_out materialization or a handoff step.
+ */
+export const handoffContext = pgTable('handoff_context', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  workflowRunId: uuid('workflow_run_id').notNull().references(() => workflowRuns.id, { onDelete: 'cascade' }),
+  stepRunId: uuid('step_run_id').notNull().references(() => stepRuns.id, { onDelete: 'cascade' }),
+  targetIssueId: uuid('target_issue_id').references(() => issues.id, { onDelete: 'set null' }),
+  // Serialised context: includes splitTarget info, inherited variables, handoff message
+  contextJson: jsonb('context_json').notNull().default('{}'),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+});
+
+export type HandoffContext = typeof handoffContext.$inferSelect;
+export type NewHandoffContext = typeof handoffContext.$inferInsert;

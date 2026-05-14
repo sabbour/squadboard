@@ -1,5 +1,5 @@
 /**
- * workflow-runner.ts — YAML workflow execution engine (Demo 6)
+ * workflow-runner.ts — YAML workflow execution engine (Demo 6 / Demo 10)
  *
  * Advances workflow_runs step by step. Steps desugar to issue_runs (Invariant 1).
  * The stepper still picks up resulting issue_runs via FOR UPDATE SKIP LOCKED (Invariant 2).
@@ -7,16 +7,18 @@
  * Step types:
  *   route      → resolveRoute() → create issue_run kind='agent_run'
  *   agent_run  → issue_run already exists; poll for completion
- *   approve    → stub for Demo 9 (creates a pending record)
+ *   approve    → peer review gate (Demo 9)
+ *   fan_out    → materializeFanOut() → waiting_children → checkFanOutCompletion()
+ *   handoff    → create agent_run issueRun for target agent; complete immediately
  *
  * pinnedAgentRevisions: snapshotted per step at step start (open question #1 resolution).
  */
 
-import { eq, and } from 'drizzle-orm';
+import { eq, and, sql } from 'drizzle-orm';
 import { getDb, schema } from '../db/index.js';
 import { resolveRoute } from './router.js';
 import { parseWorkflowYaml } from '../services/workflow-parser.js';
-import type { WorkflowStep } from '../services/workflow-parser.js';
+import type { WorkflowStep, FanOutStep, HandoffStep } from '../services/workflow-parser.js';
 import {
   createPeerReviewRuns,
   collectReviewDecisions,
@@ -26,6 +28,7 @@ import {
   recordApproval,
 } from './peer-reviewer.js';
 import type { RequestChangesPolicy } from './peer-reviewer.js';
+import { materializeFanOut, checkFanOutCompletion } from './fan-out.js';
 
 // ---------------------------------------------------------------------------
 // createWorkflowRun
@@ -62,7 +65,9 @@ export async function createWorkflowRun(
 
   // Derive requestChangesPolicy from the first approve step (or default 'first')
   const approveStep = definition.steps.find((s) => s.type === 'approve');
-  const requestChangesPolicy = approveStep?.request_changes_policy ?? 'first';
+  const requestChangesPolicy = approveStep?.type === 'approve'
+    ? (approveStep.request_changes_policy ?? 'first')
+    : 'first';
 
   // INSERT workflow_run
   const [wfRun] = await db
@@ -121,7 +126,7 @@ export async function advanceWorkflowRun(workflowRunId: string): Promise<void> {
     .where(eq(workflowRuns.id, workflowRunId))
     .limit(1);
 
-  if (!wfRun || wfRun.status === 'completed' || wfRun.status === 'failed') return;
+  if (!wfRun || wfRun.status === 'completed' || wfRun.status === 'failed' || wfRun.status === 'cancelled') return;
 
   const currentIndex = wfRun.currentStepIndex ?? 0;
 
@@ -142,7 +147,8 @@ export async function advanceWorkflowRun(workflowRunId: string): Promise<void> {
     return;
   }
 
-  // Load the workflow YAML for this step's context
+  // Load step definition from either the workflow version YAML or inline steps JSON
+  // (inline steps are set on fan_out child workflow_runs that have no workflowVersionId)
   let definition;
   if (wfRun.workflowVersionId) {
     const [wv] = await db
@@ -153,9 +159,24 @@ export async function advanceWorkflowRun(workflowRunId: string): Promise<void> {
     if (wv) {
       definition = await parseWorkflowYaml(wv.yamlContent);
     }
+  } else if (wfRun.inlineStepsJson) {
+    try {
+      const inlineSteps = JSON.parse(wfRun.inlineStepsJson) as WorkflowStep[];
+      definition = { name: 'inline', steps: inlineSteps };
+    } catch {
+      console.error(`[workflow-runner] failed to parse inlineStepsJson for workflow_run ${workflowRunId}`);
+    }
   }
 
-  const stepDef = definition?.steps[currentIndex];
+  // For inline child steps, also check the step_run's stepConfig as fallback
+  let stepDef = definition?.steps[currentIndex];
+  if (!stepDef && currentStep.stepConfig) {
+    try {
+      stepDef = JSON.parse(currentStep.stepConfig as string) as WorkflowStep;
+    } catch {
+      // ignore parse errors
+    }
+  }
 
   // --- Dispatch based on step type ---
   switch (currentStep.stepType) {
@@ -169,6 +190,14 @@ export async function advanceWorkflowRun(workflowRunId: string): Promise<void> {
 
     case 'approve':
       await handleApproveStep(wfRun, currentStep, stepDef as WorkflowStep | undefined);
+      break;
+
+    case 'fan_out':
+      await handleFanOutStep(wfRun, currentStep, stepDef as FanOutStep | undefined);
+      break;
+
+    case 'handoff':
+      await handleHandoffStep(wfRun, currentStep, stepDef as HandoffStep | undefined);
       break;
 
     default:
@@ -286,8 +315,36 @@ async function handleAgentRunStep(
     return;
   }
 
+  // If no issueRunId yet, check if we have a resolvedAgentId (fan_out child path)
   if (!stepRun.issueRunId) {
-    // No issue_run yet — wait for route step to create one (or direct creation)
+    if (stepRun.resolvedAgentId) {
+      // Fan-out child: create issueRun directly from the pre-resolved agent
+      const [newRun] = await db
+        .insert(issueRuns)
+        .values({
+          issueId: wfRun.issueId,
+          agentId: stepRun.resolvedAgentId,
+          kind: 'agent_run',
+          status: 'pending',
+        })
+        .returning({ id: issueRuns.id });
+
+      await db
+        .update(stepRuns)
+        .set({ issueRunId: newRun.id, status: 'running', updatedAt: new Date() })
+        .where(eq(stepRuns.id, stepRun.id));
+
+      await db
+        .update(schema.workflowRuns)
+        .set({ status: 'running', updatedAt: new Date() })
+        .where(eq(schema.workflowRuns.id, wfRun.id));
+
+      console.log(
+        `[workflow-runner] fan-out child agent_run: created issue_run ${newRun.id} ` +
+        `for workflow_run ${wfRun.id}`,
+      );
+    }
+    // No issueRunId and no resolvedAgentId — wait for route step to create one
     return;
   }
 
@@ -335,9 +392,11 @@ async function handleApproveStep(
   }
 
   const policy: RequestChangesPolicy = (wfRun.requestChangesPolicy as RequestChangesPolicy) ?? 'first';
-  const approverNames: string[] = stepDef?.approvers ?? [];
-  const quorum = stepDef?.quorum;
-  const excludeAuthor = stepDef?.exclude_author ?? false;
+  // Narrow to ApproveStep fields (approvers/quorum/exclude_author only exist on approve steps)
+  const approveStepDef = stepDef?.type === 'approve' ? stepDef : undefined;
+  const approverNames: string[] = approveStepDef?.approvers ?? [];
+  const quorum = approveStepDef?.quorum;
+  const excludeAuthor = approveStepDef?.exclude_author ?? false;
 
   // -----------------------------------------------------------------------
   // Phase A: First tick — spin up peer_review issueRuns for each reviewer.
@@ -480,6 +539,237 @@ async function handleApproveStep(
       await advanceToNextStep(wfRun.id, wfRun.currentStepIndex ?? 0);
     }
   }
+}
+
+// ---------------------------------------------------------------------------
+// handleFanOutStep — Demo 10 Invariant 5
+// ---------------------------------------------------------------------------
+
+async function handleFanOutStep(
+  wfRun: typeof schema.workflowRuns.$inferSelect,
+  stepRun: typeof schema.stepRuns.$inferSelect,
+  stepDef: FanOutStep | undefined,
+): Promise<void> {
+  const db = getDb();
+  const { stepRuns, workflowRuns, issues } = schema;
+
+  if (!stepDef) {
+    console.error(`[workflow-runner] fan_out step ${stepRun.stepIndex} missing step definition`);
+    return;
+  }
+
+  // ── Phase A: First tick — materialize child workflow_runs ─────────────────
+  if (stepRun.status === 'pending') {
+    const [issue] = await db
+      .select()
+      .from(issues)
+      .where(eq(issues.id, wfRun.issueId))
+      .limit(1);
+
+    if (!issue) {
+      console.error(`[workflow-runner] fan_out: issue ${wfRun.issueId} not found`);
+      return;
+    }
+
+    try {
+      const childIds = await materializeFanOut(
+        wfRun.id,
+        stepRun.id,
+        stepDef,
+        issue,
+        db,
+      );
+
+      // Mark parent stepRun as waiting_children (transaction already set 'splitting',
+      // but post-COMMIT we advance to 'waiting_children')
+      await db
+        .update(stepRuns)
+        .set({
+          status: 'waiting_children',
+          splitTargets: JSON.stringify(childIds) as unknown as typeof stepRun.splitTargets,
+          updatedAt: new Date(),
+        })
+        .where(eq(stepRuns.id, stepRun.id));
+
+      await db
+        .update(workflowRuns)
+        .set({ status: 'running', updatedAt: new Date() })
+        .where(eq(workflowRuns.id, wfRun.id));
+
+      console.log(
+        `[workflow-runner] fan_out step ${stepRun.stepIndex} spawned ${childIds.length} children ` +
+        `for workflow_run ${wfRun.id}`,
+      );
+    } catch (err: unknown) {
+      console.error(`[workflow-runner] fan_out materialization failed:`, err);
+      await db
+        .update(stepRuns)
+        .set({ status: 'failed', updatedAt: new Date() })
+        .where(eq(stepRuns.id, stepRun.id));
+      await db
+        .update(workflowRuns)
+        .set({ status: 'failed', updatedAt: new Date() })
+        .where(eq(workflowRuns.id, wfRun.id));
+    }
+    return;
+  }
+
+  // ── Phase B: Subsequent ticks — poll children via merge gate ─────────────
+  if (stepRun.status === 'waiting_children') {
+    const mergeStrategy = stepDef.merge_strategy ?? 'all';
+    const onChildFailure = stepDef.on_child_failure ?? 'fail_fast';
+
+    const { done, failed, results } = await checkFanOutCompletion(
+      wfRun.id,
+      mergeStrategy,
+      onChildFailure,
+      db,
+    );
+
+    if (!done) return; // children still running — wait for next tick
+
+    if (failed) {
+      console.warn(
+        `[workflow-runner] fan_out step ${stepRun.stepIndex} failed: a child failed ` +
+        `and on_child_failure='fail_fast'`,
+      );
+      await db
+        .update(stepRuns)
+        .set({ status: 'failed', updatedAt: new Date() })
+        .where(eq(stepRuns.id, stepRun.id));
+      await db
+        .update(workflowRuns)
+        .set({ status: 'failed', updatedAt: new Date() })
+        .where(eq(workflowRuns.id, wfRun.id));
+      return;
+    }
+
+    // Merge child outputs into this step_run's output field
+    const mergedOutput = JSON.stringify(
+      results.map((r) => ({ workflowRunId: r.workflowRunId, status: r.status, output: r.output })),
+      null,
+      2,
+    );
+
+    await db
+      .update(stepRuns)
+      .set({ status: 'completed', output: mergedOutput, updatedAt: new Date() })
+      .where(eq(stepRuns.id, stepRun.id));
+
+    console.log(
+      `[workflow-runner] fan_out step ${stepRun.stepIndex} completed (${results.length} children, ` +
+      `strategy=${mergeStrategy})`,
+    );
+
+    await advanceToNextStep(wfRun.id, wfRun.currentStepIndex ?? 0);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// handleHandoffStep — Demo 10 fire-and-forget transfer
+// ---------------------------------------------------------------------------
+
+async function handleHandoffStep(
+  wfRun: typeof schema.workflowRuns.$inferSelect,
+  stepRun: typeof schema.stepRuns.$inferSelect,
+  stepDef: HandoffStep | undefined,
+): Promise<void> {
+  const db = getDb();
+  const { stepRuns, workflowRuns, issueRuns, issues, agents } = schema;
+
+  if (stepRun.status === 'completed') {
+    await advanceToNextStep(wfRun.id, wfRun.currentStepIndex ?? 0);
+    return;
+  }
+
+  if (!stepDef) {
+    console.error(`[workflow-runner] handoff step ${stepRun.stepIndex} missing step definition`);
+    return;
+  }
+
+  const [issue] = await db
+    .select()
+    .from(issues)
+    .where(eq(issues.id, wfRun.issueId))
+    .limit(1);
+  if (!issue) return;
+
+  // Resolve target agent by name
+  const [targetAgent] = await db
+    .select()
+    .from(agents)
+    .where(and(eq(agents.projectId, issue.projectId), eq(agents.name, stepDef.to)))
+    .limit(1);
+
+  if (!targetAgent) {
+    console.error(`[workflow-runner] handoff step: agent '${stepDef.to}' not found`);
+    // Fail gracefully — skip the handoff but don't block the workflow
+    await db
+      .update(stepRuns)
+      .set({ status: 'completed', updatedAt: new Date() })
+      .where(eq(stepRuns.id, stepRun.id));
+    await advanceToNextStep(wfRun.id, wfRun.currentStepIndex ?? 0);
+    return;
+  }
+
+  // Gather prior step output for inputContext
+  const priorIndex = (wfRun.currentStepIndex ?? 0) - 1;
+  let priorOutput = '';
+  if (priorIndex >= 0) {
+    const priorStepRows = await db
+      .select({ issueRunId: stepRuns.issueRunId })
+      .from(stepRuns)
+      .where(and(eq(stepRuns.workflowRunId, wfRun.id), eq(stepRuns.stepIndex, priorIndex)))
+      .limit(1);
+    if (priorStepRows[0]?.issueRunId) {
+      const [priorRun] = await db
+        .select({ output: issueRuns.output })
+        .from(issueRuns)
+        .where(eq(issueRuns.id, priorStepRows[0].issueRunId))
+        .limit(1);
+      priorOutput = priorRun?.output ?? '';
+    }
+  }
+
+  const inputContext = stepDef.message
+    ? `## Handoff Message\n\n${stepDef.message}\n\n---\n\n${priorOutput}`
+    : priorOutput;
+
+  // Create a new issueRun for the target agent (Invariant 1: kind='agent_run')
+  const [newRun] = await db
+    .insert(issueRuns)
+    .values({
+      issueId: wfRun.issueId,
+      agentId: targetAgent.id,
+      kind: 'agent_run',
+      status: 'pending',
+      inputContext: inputContext || null,
+    })
+    .returning({ id: issueRuns.id });
+
+  // Update issue assignee to target agent
+  await db
+    .update(issues)
+    .set({ assigneeId: targetAgent.id, updatedAt: new Date() })
+    .where(eq(issues.id, wfRun.issueId));
+
+  // Mark handoff step completed immediately (fire-and-forget; stepper picks up the new run)
+  await db
+    .update(stepRuns)
+    .set({ issueRunId: newRun.id, status: 'completed', updatedAt: new Date() })
+    .where(eq(stepRuns.id, stepRun.id));
+
+  await db
+    .update(workflowRuns)
+    .set({ status: 'running', updatedAt: new Date() })
+    .where(eq(workflowRuns.id, wfRun.id));
+
+  console.log(
+    `[workflow-runner] handoff step ${stepRun.stepIndex} → agent '${stepDef.to}' ` +
+    `(issue_run ${newRun.id}); workflow advancing`,
+  );
+
+  await advanceToNextStep(wfRun.id, wfRun.currentStepIndex ?? 0);
 }
 
 // ---------------------------------------------------------------------------
@@ -641,5 +931,46 @@ async function advanceToNextStep(workflowRunId: string, currentIndex: number): P
       .set({ status: 'completed', updatedAt: new Date() })
       .where(eq(workflowRuns.id, workflowRunId));
     console.log(`[workflow-runner] workflow_run ${workflowRunId} completed`);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// tickWorkflowAdvancement — called by dispatcher on every tick (Demo 10)
+// ---------------------------------------------------------------------------
+
+/**
+ * Advance all non-terminal workflow_runs by one step.
+ *
+ * This is the entry point the dispatcher calls every tick to drive workflow
+ * execution. All active (pending | running) workflow_runs are ticked.
+ * Fan-out waiting_children status is handled inside advanceWorkflowRun via
+ * handleFanOutStep Phase B.
+ *
+ * Invariant 2 compliance: this function does NOT touch issue_runs status.
+ * Only the stepper (claimAndRun) does that.
+ */
+export async function tickWorkflowAdvancement(): Promise<void> {
+  const db = getDb();
+
+  // Find all active workflow_runs (including children waiting for their first step)
+  const activeRuns = await db.execute(sql`
+    SELECT id FROM workflow_runs
+    WHERE status NOT IN ('completed', 'failed', 'cancelled')
+    ORDER BY created_at
+  `);
+
+  const runIds = (activeRuns.rows as Array<{ id: string }>).map((r) => r.id);
+  if (runIds.length === 0) return;
+
+  if (process.env.LOG_LEVEL === 'debug') {
+    console.debug(`[workflow-runner] ticking ${runIds.length} active workflow_run(s)`);
+  }
+
+  for (const runId of runIds) {
+    try {
+      await advanceWorkflowRun(runId);
+    } catch (err: unknown) {
+      console.error(`[workflow-runner] error advancing workflow_run ${runId}:`, err);
+    }
   }
 }

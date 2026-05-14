@@ -21,6 +21,17 @@ export async function initDb(connectionString: string): Promise<void> {
 }
 
 /**
+ * Returns the raw pg Pool (for raw-SQL transactions that Drizzle can't handle).
+ * Throws if called before `initDb()`.
+ */
+export function getPool(): Pool {
+  if (!_pool) {
+    throw new Error('DB not initialised — call initDb() first');
+  }
+  return _pool;
+}
+
+/**
  * Returns the initialised Drizzle DB instance.
  * Throws if called before `initDb()`.
  */
@@ -298,6 +309,53 @@ async function bootstrapSchema(): Promise<void> {
       body                TEXT,
       suggestions         JSONB,
       created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+
+    -- Demo 10: Fan-Out + Handoff (Invariant 5)
+
+    -- Extend run_status enum with fan_out lifecycle values
+    DO $$ BEGIN
+      ALTER TYPE run_status ADD VALUE IF NOT EXISTS 'splitting';
+    EXCEPTION WHEN duplicate_object THEN NULL;
+    END $$;
+
+    DO $$ BEGIN
+      ALTER TYPE run_status ADD VALUE IF NOT EXISTS 'waiting_children';
+    EXCEPTION WHEN duplicate_object THEN NULL;
+    END $$;
+
+    -- Fan-out columns on workflow_runs (parent/child relationships)
+    ALTER TABLE workflow_runs
+      ADD COLUMN IF NOT EXISTS parent_workflow_run_id TEXT,
+      ADD COLUMN IF NOT EXISTS child_workflow_run_ids JSONB DEFAULT '[]',
+      ADD COLUMN IF NOT EXISTS pinned_agent_revisions TEXT,
+      ADD COLUMN IF NOT EXISTS variables              JSONB DEFAULT '{}',
+      ADD COLUMN IF NOT EXISTS inline_steps_json      TEXT;
+
+    -- Fan-out columns on step_runs
+    ALTER TABLE step_runs
+      ADD COLUMN IF NOT EXISTS split_targets     JSONB,
+      ADD COLUMN IF NOT EXISTS output            TEXT,
+      ADD COLUMN IF NOT EXISTS step_config       JSONB,
+      ADD COLUMN IF NOT EXISTS resolved_agent_id TEXT;
+
+    -- issue_links: parent→child issue relationships (fan_out and handoff)
+    CREATE TABLE IF NOT EXISTS issue_links (
+      id               UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+      parent_issue_id  UUID        NOT NULL REFERENCES issues(id) ON DELETE CASCADE,
+      child_issue_id   UUID        NOT NULL REFERENCES issues(id) ON DELETE CASCADE,
+      link_type        TEXT        NOT NULL DEFAULT 'fan_out',
+      created_at       TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+
+    -- handoff_context: variables and message propagated during fan_out / handoff
+    CREATE TABLE IF NOT EXISTS handoff_context (
+      id               UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+      workflow_run_id  UUID        NOT NULL REFERENCES workflow_runs(id) ON DELETE CASCADE,
+      step_run_id      UUID        NOT NULL REFERENCES step_runs(id) ON DELETE CASCADE,
+      target_issue_id  UUID        REFERENCES issues(id) ON DELETE SET NULL,
+      context_json     JSONB       NOT NULL DEFAULT '{}',
+      created_at       TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
   `);
 

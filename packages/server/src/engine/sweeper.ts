@@ -123,6 +123,9 @@ export async function sweepExpiredStepLeases(db: DrizzleDb): Promise<number> {
  * This catches cases where all step_runs completed/failed but the parent was
  * never finalized (e.g., mid-run crash during finalisation).
  *
+ * Note: step_runs in 'splitting' or 'waiting_children' state are active — they
+ * keep the parent workflow alive while fan_out children are in flight.
+ *
  * @returns number of workflow_runs marked failed
  */
 export async function sweepOrphanedWorkflowRuns(db: DrizzleDb): Promise<number> {
@@ -135,7 +138,7 @@ export async function sweepOrphanedWorkflowRuns(db: DrizzleDb): Promise<number> 
       AND NOT EXISTS (
         SELECT 1 FROM step_runs sr
         WHERE sr.workflow_run_id = wr.id
-          AND sr.status IN ('pending', 'running')
+          AND sr.status IN ('pending', 'running', 'splitting', 'waiting_children')
       )
   `);
   const count = (result as unknown as { rowCount: number | null }).rowCount ?? 0;

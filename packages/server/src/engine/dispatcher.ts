@@ -1,6 +1,7 @@
 import { getDb } from '../db/index.js';
 import { sweepExpiredLeases, sweepOrphanedRuns, sweepExpiredStepLeases, sweepOrphanedWorkflowRuns } from './sweeper.js';
 import { claimAndRun } from './stepper.js';
+import { tickWorkflowAdvancement } from './workflow-runner.js';
 
 const TICK_INTERVAL_MS = 5_000;
 const TICK_JITTER_MS = 500; // ±500ms jitter to avoid thundering herd on multi-instance deploys
@@ -73,7 +74,10 @@ export class Dispatcher {
     // 4. Fail workflow_runs whose steps all finished but run was never finalized
     await sweepOrphanedWorkflowRuns(db);
 
-    // 5. Stepper: claim one pending issue_run and execute it
+    // 5. Advance active workflow_runs (fan_out completion, step transitions, etc.)
+    await tickWorkflowAdvancement();
+
+    // 6. Stepper: claim one pending issue_run and execute it
     await claimAndRun(db);
   }
 }
