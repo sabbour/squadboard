@@ -382,6 +382,13 @@ async function bootstrapSchema(): Promise<void> {
     ALTER TABLE comments
       ADD COLUMN IF NOT EXISTS github_comment_id TEXT;
 
+    -- GitHub App auth fields on projects (null github_auth_type = PAT for backward compat)
+    ALTER TABLE projects
+      ADD COLUMN IF NOT EXISTS github_auth_type            TEXT,
+      ADD COLUMN IF NOT EXISTS github_app_id               TEXT,
+      ADD COLUMN IF NOT EXISTS github_app_installation_id  TEXT,
+      ADD COLUMN IF NOT EXISTS github_app_private_key      TEXT;
+
     -- github_sync_log: audit trail for every sync operation
     CREATE TABLE IF NOT EXISTS github_sync_log (
       id           UUID        PRIMARY KEY DEFAULT gen_random_uuid(),

@@ -52,3 +52,16 @@ Demo 5 routing tier 1: router.ts loads rules from .squad/routing.md via Kobayash
 
 ### 2026-05-14 — Demo 5 routing tier 1 deepdive
 Demo 5 engine completion: routing_rules table caches parsed rules (3-table format: label, keyword, catchall). POST /reload refreshes cache. GET /rules surfaces active rules. POST /test validates match logic. resolveRoute matches label→keyword→catchall priority, returns null for escalation tiers. createRoutedRun inserts issue_run with kind='agent_run' + routing context. Auto-route hook on POST /issues applies resolveRoute (non-fatal on miss).
+
+### 2026-05-14 — Demo 6 workflow engine
+Demo 6 workflow engine: YAML parser (js-yaml), WorkflowDefinition (route/agent_run/approve steps), output schema validation (ajv, Invariant 4), workflow-runner (advanceWorkflowRun, createWorkflowRun). pinnedAgentRevisions snapshotted per step at step start. workflowVersions are immutable (each update creates new version). Approval stub for Demo 9.
+
+## Learnings
+
+### 2026-05-14 — GitHub App auth fields (github-app-schema todo)
+
+- Added 4 new columns to the `projects` table in `schema.ts`: `githubAuthType`, `githubAppId`, `githubAppInstallationId`, `githubAppPrivateKey`.
+- Corresponding `ALTER TABLE projects ADD COLUMN IF NOT EXISTS` migrations appended to `bootstrapSchema()` in `db/index.ts`, placed after the Demo 15 GitHub Sync block and before the `github_sync_log` CREATE TABLE.
+- `githubAuthType` is nullable TEXT (not an enum) so no `DO $$ BEGIN ALTER TYPE ... END $$` dance is needed — 'pat' vs 'app' is validated at the app layer, not the DB layer.
+- `githubAppPrivateKey` is stored plaintext TEXT in the hacking phase; a secrets manager integration (Vault, AWS SM) is deferred to prod hardening.
+- No routes, API handlers, or client files were touched — schema-only step per task scope.

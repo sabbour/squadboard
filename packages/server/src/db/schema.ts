@@ -13,6 +13,11 @@ export const projects = pgTable('projects', {
   githubOwner: text('github_owner'),            // GitHub org or user
   githubRepo: text('github_repo'),              // GitHub repository name
   githubSyncLastAt: timestamp('github_sync_last_at'), // timestamp of last successful pull
+  // GitHub App auth (follow-up to Demo 15 PAT auth — null means PAT for backward compat)
+  githubAuthType: text('github_auth_type'),            // 'pat' | 'app' — null treated as 'pat'
+  githubAppId: text('github_app_id'),                  // numeric GitHub App ID as string
+  githubAppInstallationId: text('github_app_installation_id'), // installation ID for this repo
+  githubAppPrivateKey: text('github_app_private_key'), // PEM private key, plaintext (hacking phase)
   createdAt: timestamp('created_at').notNull().defaultNow(),
   updatedAt: timestamp('updated_at').notNull().defaultNow(),
 });
