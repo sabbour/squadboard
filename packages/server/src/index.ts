@@ -1,4 +1,5 @@
 import express from 'express';
+import { createServer } from 'node:http';
 import { existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
@@ -15,6 +16,8 @@ import routingRouter from './routes/routing.js';
 import { workflowsRouter, issueWorkflowRouter, workflowRunsRouter, stepRunsRouter } from './routes/workflows.js';
 import costsRouter from './routes/costs.js';
 import { dispatcher } from './engine/dispatcher.js';
+import { initWebSocketServer } from './realtime/ws-server.js';
+import { listPresence } from './realtime/presence.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -53,6 +56,12 @@ async function main(): Promise<void> {
   app.use('/api/workflow-runs', workflowRunsRouter);
   app.use('/api/step-runs', stepRunsRouter);
 
+  // Demo 12: presence REST endpoint (GET /api/projects/:id/presence)
+  app.get('/api/projects/:id/presence', (req, res) => {
+    const presence = listPresence(req.params.id);
+    res.json(presence);
+  });
+
   if (existsSync(CLIENT_DIST)) {
     app.use(express.static(CLIENT_DIST));
     // SPA fallback — let the React router handle unknown paths
@@ -70,7 +79,11 @@ async function main(): Promise<void> {
     });
   }
 
-  const server = app.listen(PORT, () => {
+  // Demo 12: wrap Express app in a raw HTTP server so WS can share port 3000
+  const httpServer = createServer(app);
+  initWebSocketServer(httpServer);
+
+  const server = httpServer.listen(PORT, () => {
     const elapsed = Date.now() - startMs;
     console.log(
       `[squadboard] ready in ${elapsed}ms → http://localhost:${PORT}`,

@@ -2,6 +2,7 @@ import { Router } from 'express';
 import type { Request, Response } from 'express';
 import { eq, and } from 'drizzle-orm';
 import { getDb, schema } from '../db/index.js';
+import { eventBus } from '../realtime/event-bus.js';
 
 // ---------------------------------------------------------------------------
 // Two routers:
@@ -49,6 +50,17 @@ issueRunsRouter.post('/', async (req: Request, res: Response) => {
         workspaceStrategy: workspaceStrategy ?? 'scratch',
       })
       .returning();
+
+    // Resolve projectId for WS fan-out
+    const [issueRow] = await db
+      .select({ projectId: schema.issues.projectId })
+      .from(schema.issues)
+      .where(eq(schema.issues.id, issueId))
+      .limit(1);
+
+    if (issueRow) {
+      eventBus.emitRunEvent('run.started', issueRow.projectId, { run });
+    }
 
     res.status(201).json(run);
   } catch (err) {
@@ -133,6 +145,17 @@ projectRunsRouter.post('/:runId/cancel', async (req: Request, res: Response) => 
       })
       .where(eq(schema.issueRuns.id, runId))
       .returning();
+
+    // Resolve projectId for WS fan-out
+    const [issueRow] = await db
+      .select({ projectId: schema.issues.projectId })
+      .from(schema.issues)
+      .where(eq(schema.issues.id, updated.issueId))
+      .limit(1);
+
+    if (issueRow) {
+      eventBus.emitRunEvent('run.completed', issueRow.projectId, { run: updated });
+    }
 
     res.json(updated);
   } catch (err) {

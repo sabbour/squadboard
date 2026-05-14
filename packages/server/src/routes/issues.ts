@@ -2,9 +2,10 @@ import { Router } from 'express';
 import type { Request, Response } from 'express';
 import * as issuesService from '../services/issues.js';
 import type { ColumnStatus } from '../services/issues.js';
-import { eq } from 'drizzle-orm';
+import { and, eq, sql } from 'drizzle-orm';
 import { getDb, schema } from '../db/index.js';
 import { resolveRoute, createRoutedRun } from '../engine/router.js';
+import { eventBus } from '../realtime/event-bus.js';
 
 const router = Router({ mergeParams: true });
 
@@ -91,6 +92,7 @@ router.post('/', async (req: Request, res: Response) => {
     }
 
     res.status(201).json({ ...created, autoRoutedTo });
+    eventBus.emitIssueEvent('issue.created', projectId, { issue: created });
   } catch (err) {
     handleError(res, err);
   }
@@ -138,17 +140,64 @@ router.get('/:id', async (req: Request, res: Response) => {
 router.patch('/:id', async (req: Request, res: Response) => {
   try {
     const { projectId, id } = req.params;
-    const { title, body, status, assigneeId } = req.body as {
+    const { title, body, status, assigneeId, version } = req.body as {
       title?: string;
       body?: string;
       status?: ColumnStatus;
       assigneeId?: string | null;
+      version?: number;
     };
+
+    // Optimistic concurrency check (OQ #6): if client sends `version`, enforce it.
+    if (version !== undefined) {
+      const db = getDb();
+      const { issues } = schema;
+
+      const patch: Record<string, unknown> = { updatedAt: new Date(), version: sql`${issues.version} + 1` };
+      if (title !== undefined) patch.title = title.trim();
+      if (body !== undefined) patch.body = body;
+      if (status !== undefined) patch.status = status;
+      if ('assigneeId' in req.body) patch.assigneeId = assigneeId ?? null;
+
+      const [updated] = await db
+        .update(issues)
+        .set(patch)
+        .where(and(
+          eq(issues.id, id),
+          eq(issues.projectId, projectId),
+          eq(issues.version, version),
+          eq(issues.archived, 0),
+        ))
+        .returning();
+
+      if (!updated) {
+        // Either not found or version mismatch — distinguish for client
+        const [current] = await db
+          .select({ version: issues.version })
+          .from(issues)
+          .where(and(eq(issues.id, id), eq(issues.projectId, projectId)))
+          .limit(1);
+
+        if (!current) {
+          res.status(404).json({ error: 'Issue not found' });
+          return;
+        }
+        res.status(409).json({ error: 'conflict', currentVersion: current.version });
+        return;
+      }
+
+      eventBus.emitIssueEvent('issue.updated', projectId, { issue: updated });
+      res.json(updated);
+      return;
+    }
+
+    // No version provided — legacy path, no concurrency check
     const updated = await issuesService.updateIssue(projectId, id, { title, body, status, assigneeId });
     if (!updated) {
       res.status(404).json({ error: 'Issue not found' });
       return;
     }
+    eventBus.emitIssueEvent('issue.updated', projectId, { issue: updated });
     res.json(updated);
   } catch (err) {
     handleError(res, err);
@@ -164,6 +213,7 @@ router.delete('/:id', async (req: Request, res: Response) => {
       res.status(404).json({ error: 'Issue not found' });
       return;
     }
+    eventBus.emitIssueEvent('issue.deleted', projectId, { issueId: id });
     res.json(archived);
   } catch (err) {
     handleError(res, err);
@@ -184,6 +234,12 @@ router.patch('/:id/move', async (req: Request, res: Response) => {
       res.status(404).json({ error: 'Issue not found' });
       return;
     }
+    eventBus.emitIssueEvent('issue.moved', projectId, {
+      issueId: id,
+      fromStatus: moved.status !== status ? moved.status : status, // status already updated
+      toStatus: status,
+      position: moved.position,
+    });
     res.json(moved);
   } catch (err) {
     handleError(res, err);

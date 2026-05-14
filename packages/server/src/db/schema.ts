@@ -55,6 +55,8 @@ export const issues = pgTable('issues', {
   assigneeId: uuid('assignee_id'), // references agents.id later
   position: integer('position').notNull().default(0),
   archived: integer('archived').notNull().default(0), // 0 = active, 1 = archived (soft delete)
+  /** Optimistic concurrency token (Demo 12 / OQ #6). Incremented on every PATCH. */
+  version: integer('version').notNull().default(1),
   createdAt: timestamp('created_at').notNull().defaultNow(),
   updatedAt: timestamp('updated_at').notNull().defaultNow(),
 });

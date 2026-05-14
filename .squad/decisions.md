@@ -197,3 +197,18 @@ Existing roles unchanged: McManus (Lead Architect), Keyser (Frontend Dev), Fenst
 - Document architectural decisions here
 - Keep history focused on work, decisions focused on direction
 - The five engine invariants above are non-negotiable without an explicit decision entry overriding them
+
+### Demo 12 open question #6 resolution: Optimistic concurrency for concurrent issue edits
+**By:** Verbal (Real-time / WebSocket Dev)
+**What:** Concurrent edit conflicts on issues are resolved using an **optimistic concurrency token** — a `version INTEGER NOT NULL DEFAULT 1` column on the `issues` table.
+**Protocol:**
+- Every `GET /api/projects/:projectId/issues/:id` response includes `version`.
+- `PATCH /api/projects/:projectId/issues/:id` — if the request body includes `version`, the update is conditional: `WHERE id = ? AND version = ?`. If zero rows are updated (mismatch), the server returns `409 { error: 'conflict', currentVersion: N }`. The client must re-fetch and re-apply its edit.
+- On every successful PATCH the server increments `version` atomically: `SET version = version + 1`.
+- If `version` is omitted from PATCH, the legacy path runs (no concurrency check) — backward compatible.
+**Why optimistic (not pessimistic):**
+- Lock-free reads; no deadlock risk.
+- Conflicts are rare on a kanban board; rejecting and re-fetching is cheap.
+- Works across multiple tabs without server-side session state.
+**Implementation:** `routes/issues.ts` PATCH handler; `db/schema.ts` + `db/index.ts` migration.
+**Owner:** Verbal.

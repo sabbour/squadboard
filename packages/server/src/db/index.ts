@@ -357,6 +357,10 @@ async function bootstrapSchema(): Promise<void> {
       context_json     JSONB       NOT NULL DEFAULT '{}',
       created_at       TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
+
+    -- Demo 12: Optimistic concurrency token on issues (OQ #6)
+    ALTER TABLE issues
+      ADD COLUMN IF NOT EXISTS version INTEGER NOT NULL DEFAULT 1;
   `);
 
   console.log('[db] schema bootstrapped');
