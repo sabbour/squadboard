@@ -72,7 +72,7 @@ function highlightYaml(raw: string): string {
   s = s.replace(/(^(\s*)-\s+type\s*:\s*)(route|agent_run|approve)/gm,
     (_, pre, _indent, kw) => {
       const colors: Record<string, string> = { route: '#388bfd', agent_run: '#3fb950', approve: '#f0883e' }
-      return `<span style="color:#8b949e">${pre}</span><span style="color:${colors[kw] ?? '#e6edf3'}">${kw}</span>`
+      return `<span style="color:#8b949e">${pre}</span><span style="color:${colors[kw] ?? '#1f2328'}">${kw}</span>`
     })
   s = s.replace(/(^\s*(?:name|steps|label|agent|description)\s*:)/gm,
     (m) => `<span style="color:#d29922">${m}</span>`)
@@ -308,7 +308,7 @@ export default function WorkflowEditor() {
         <div
           style={{
             width: '50%',
-            borderRight: '1px solid #30363d',
+            borderRight: '1px solid var(--border)',
             display: 'flex',
             flexDirection: 'column',
             position: 'relative',
@@ -318,13 +318,13 @@ export default function WorkflowEditor() {
           <div
             style={{
               padding: '8px 12px',
-              borderBottom: '1px solid #21262d',
+              borderBottom: '1px solid var(--border)',
               fontSize: '11px',
-              color: '#484f58',
+              color: 'var(--text-muted)',
               fontWeight: 600,
               textTransform: 'uppercase',
               letterSpacing: '0.05em',
-              background: '#0d1117',
+              background: 'var(--bg)',
               flexShrink: 0,
             }}
           >
@@ -345,8 +345,8 @@ export default function WorkflowEditor() {
                 fontFamily: monoFont,
                 fontSize: '13px',
                 lineHeight: '1.6',
-                color: '#e6edf3',
-                background: '#0d1117',
+                color: 'var(--text)',
+                background: 'var(--surface)',
                 overflow: 'hidden',
                 whiteSpace: 'pre',
                 pointerEvents: 'none',
@@ -363,8 +363,8 @@ export default function WorkflowEditor() {
                 top: 0,
                 bottom: 0,
                 width: '40px',
-                background: '#0d1117',
-                borderRight: '1px solid #21262d',
+                background: 'var(--bg)',
+                borderRight: '1px solid var(--border)',
                 display: 'flex',
                 flexDirection: 'column',
                 alignItems: 'flex-end',
@@ -380,7 +380,7 @@ export default function WorkflowEditor() {
                   style={{
                     fontSize: '11px',
                     lineHeight: '1.6',
-                    color: '#484f58',
+                    color: 'var(--text-muted)',
                     fontFamily: monoFont,
                     userSelect: 'none',
                     height: '20.8px',
@@ -410,7 +410,7 @@ export default function WorkflowEditor() {
                 fontSize: '13px',
                 lineHeight: '1.6',
                 color: 'transparent',
-                caretColor: '#e6edf3',
+                caretColor: 'var(--text)',
                 background: 'transparent',
                 border: 'none',
                 outline: 'none',
@@ -431,20 +431,20 @@ export default function WorkflowEditor() {
             width: '50%',
             display: 'flex',
             flexDirection: 'column',
-            background: '#0d1117',
+            background: 'var(--bg)',
             overflow: 'hidden',
           }}
         >
           <div
             style={{
               padding: '8px 12px',
-              borderBottom: '1px solid #21262d',
+              borderBottom: '1px solid var(--border)',
               fontSize: '11px',
-              color: '#484f58',
+              color: 'var(--text-muted)',
               fontWeight: 600,
               textTransform: 'uppercase',
               letterSpacing: '0.05em',
-              background: '#0d1117',
+              background: 'var(--bg)',
               flexShrink: 0,
             }}
           >

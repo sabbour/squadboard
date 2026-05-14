@@ -75,8 +75,8 @@ export default function AgentDetailPanel({ projectId, agent, onClose }: AgentDet
           width: '520px',
           maxWidth: '100vw',
           height: '100%',
-          background: '#161b22',
-          borderLeft: '1px solid #30363d',
+          background: 'var(--surface)',
+          borderLeft: '1px solid var(--border)',
           display: 'flex',
           flexDirection: 'column',
           overflowY: 'hidden',
@@ -86,11 +86,7 @@ export default function AgentDetailPanel({ projectId, agent, onClose }: AgentDet
         <div
           style={{
             padding: '16px 20px',
-            borderBottom: '1px solid #30363d',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '12px',
-            flexShrink: 0,
+            borderBottom: '1px solid var(--border)',
           }}
         >
           {/* Avatar */}

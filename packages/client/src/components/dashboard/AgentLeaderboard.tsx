@@ -1,4 +1,13 @@
 import type { AgentStat } from '../../api/analytics.ts'
+import {
+  Table,
+  TableHeader,
+  TableHeaderCell,
+  TableBody,
+  TableRow,
+  TableCell,
+  TableCellLayout,
+} from '@fluentui/react-components'
 
 interface Props {
   agents: AgentStat[]
@@ -52,66 +61,45 @@ export default function AgentLeaderboard({ agents }: Props) {
 
   return (
     <div style={{ overflowX: 'auto' }}>
-      <table
-        style={{
-          width: '100%',
-          borderCollapse: 'collapse',
-          fontSize: '13px',
-          color: 'var(--text)',
-        }}
-      >
-        <thead>
-          <tr style={{ borderBottom: '1px solid var(--border)', color: 'var(--text-muted)' }}>
+      <Table size="medium">
+        <TableHeader>
+          <TableRow>
             {['#', 'Agent', 'Runs this week', 'Success rate', 'Avg cost', 'Avg duration'].map((h) => (
-              <th
+              <TableHeaderCell
                 key={h}
-                style={{
-                  padding: '8px 12px',
-                  textAlign: h === '#' || h === 'Agent' ? 'left' : 'right',
-                  fontWeight: 500,
-                  fontSize: '11px',
-                  textTransform: 'uppercase',
-                  letterSpacing: '0.04em',
-                  whiteSpace: 'nowrap',
-                }}
+                style={{ textAlign: h === '#' || h === 'Agent' ? 'left' : 'right' }}
               >
                 {h}
-              </th>
+              </TableHeaderCell>
             ))}
-          </tr>
-        </thead>
-        <tbody>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
           {sorted.map((agent, idx) => (
-            <tr
-              key={agent.id}
-              style={{
-                borderBottom: '1px solid var(--border)',
-                background: idx % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.02)',
-              }}
-            >
-              <td style={{ padding: '10px 12px', color: 'var(--text-muted)', width: '32px' }}>
-                {idx + 1}
-              </td>
-              <td style={{ padding: '10px 12px', fontWeight: 500 }}>{agent.name}</td>
-              <td style={{ padding: '10px 12px', textAlign: 'right' }}>
+            <TableRow key={agent.id}>
+              <TableCell style={{ width: '32px', color: 'var(--text-muted)' }}>{idx + 1}</TableCell>
+              <TableCell>
+                <TableCellLayout style={{ fontWeight: 500 }}>{agent.name}</TableCellLayout>
+              </TableCell>
+              <TableCell style={{ textAlign: 'right' }}>
                 <strong>{agent.runsThisWeek}</strong>
                 <span style={{ color: 'var(--text-muted)', marginLeft: '4px' }}>
                   / {agent.runsTotal} total
                 </span>
-              </td>
-              <td style={{ padding: '10px 12px', textAlign: 'right' }}>
+              </TableCell>
+              <TableCell style={{ textAlign: 'right' }}>
                 <SuccessBadge rate={agent.successRate} />
-              </td>
-              <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'monospace' }}>
+              </TableCell>
+              <TableCell style={{ textAlign: 'right', fontFamily: 'monospace' }}>
                 {fmtCost(agent.avgCostUsd)}
-              </td>
-              <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'monospace' }}>
+              </TableCell>
+              <TableCell style={{ textAlign: 'right', fontFamily: 'monospace' }}>
                 {fmt(agent.avgDurationMs)}
-              </td>
-            </tr>
+              </TableCell>
+            </TableRow>
           ))}
-        </tbody>
-      </table>
+        </TableBody>
+      </Table>
     </div>
   )
 }

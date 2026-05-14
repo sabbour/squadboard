@@ -56,9 +56,40 @@
 - Replaced all emoji usage across 12 source files with named Fluent icon components.
 - Committed to main: `feat(client): Fluent UI icons + Phase 2 atomic component upgrades`.
 
-## Learnings
+## 2026-05-14 — Remove hardcoded dark hex colors (board light theme fix)
 
-**Icons used:**
+**What was found:**
+- **12 board components** had hardcoded GitHub-dark palette values in inline `style=` props:
+  - `KanbanColumn.tsx`: `#161b22` (column bg), `#0d1117` (header bg), `#21262d` + `#30363d` (badge, borders)
+  - `IssueCard.tsx`: `#21262d` (card bg), `#30363d` (border), `#e6edf3` + `#8b949e` (text)
+  - `FilterBar.tsx`: `#0d1117` (input bg), `#30363d` (border), `#8b949e` (icon/text)
+  - `CardDetail.tsx`: `#161b22` (panel bg), all dark hex throughout
+  - `BulkActionBar.tsx`: `#21262d` (float bar bg), `#0d1117` (button bg), `#30363d` (dividers)
+  - `AddComment.tsx`, `CommentList.tsx`: `#0d1117` (textarea/comment bg), `#30363d` (borders)
+  - `CreateIssueModal.tsx`: `#161b22` (modal bg), `#0d1117` (inputs)
+  - `WorkflowBadge.tsx`, `RoutingBadge.tsx`: `#161b22` + `#30363d` in hover tooltips
+  - `ConflictToast.tsx`: `#1c2128` (toast bg)
+  - `PresenceBar.tsx`: wrong CSS variable fallbacks (`#0d1117`, `#161b22`, `#30363d`)
+- `globals.css` was already light — not the culprit
+- `ProjectPicker.tsx` had missing Fluent UI component imports (`Dialog*`, `Title3`, `Body1`, `tokens`) left from a prior session
+
+**Fix pattern:**
+- Added `import { tokens } from '@fluentui/react-components'` to each board component file
+- Replaced dark hex values with Fluent tokens:
+  - `#161b22` → `tokens.colorNeutralBackground2`
+  - `#0d1117` (darkest bg) → `tokens.colorNeutralBackground1` (inputs/cards) or `tokens.colorNeutralBackground3` (headers)
+  - `#21262d` → `tokens.colorNeutralBackground3` (badges/indicators) or `tokens.colorNeutralBackground1` (cards)
+  - `#30363d` → `tokens.colorNeutralStroke1`
+  - `#e6edf3`, `#c9d1d9` → `tokens.colorNeutralForeground1`
+  - `#8b949e` → `tokens.colorNeutralForeground2`
+  - `#388bfd` (hover/focus) → `tokens.colorBrandBackground`
+  - `#1c2128` (toast) → `tokens.colorNeutralBackground2`
+- Semantic/status colors kept as-is: `#238636` (green submit), `#f85149` (error red), `#e36209` (warning orange)
+- Label badge arbitrary hex colors untouched (user-supplied data, permanent exception)
+- PresenceBar CSS var fallbacks updated to match globals.css light values (`#f6f8fa`, `#ffffff`, `#d0d7de`)
+- Commit: `e0d54d7c` on main
+
+
 - Sidebar nav (24px): `Home24Regular`, `Grid24Regular`, `ClipboardTaskListLtr24Regular`, `Bot24Regular`, `ArrowSync24Regular`, `Money24Regular`, `Settings24Regular`
 - Review actions/badges: `CheckmarkCircle20Regular`, `ArrowSync20Regular`, `Chat20Regular`, `DismissCircle20Regular`, `Clock20Regular`
 - Toolbar/inline: `Search20Regular`, `Play20Regular`, `Warning20Regular`, `ClipboardPaste20Regular`, `Checkmark20Regular`, `Folder20Regular`
