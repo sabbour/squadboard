@@ -107,6 +107,33 @@ export function useWorkflowRun(projectId: string, issueId: string) {
 }
 
 // ---------------------------------------------------------------------------
+// Single workflow (for editor)
+// ---------------------------------------------------------------------------
+
+export function useWorkflow(projectId: string, workflowId: string) {
+  return useQuery<Workflow>({
+    queryKey: ['workflows', projectId, workflowId],
+    queryFn: () => apiFetch<Workflow>(`/api/projects/${projectId}/workflows/${workflowId}`),
+    enabled: Boolean(projectId) && Boolean(workflowId),
+  })
+}
+
+export function useUpdateWorkflow(projectId: string) {
+  const queryClient = useQueryClient()
+  return useMutation<Workflow, Error, { workflowId: string; name?: string; yamlContent?: string }>({
+    mutationFn: ({ workflowId, ...body }) =>
+      apiFetch<Workflow>(`/api/projects/${projectId}/workflows/${workflowId}`, {
+        method: 'PATCH',
+        body: JSON.stringify(body),
+      }),
+    onSuccess: (wf) => {
+      void queryClient.invalidateQueries({ queryKey: ['workflows', projectId] })
+      void queryClient.invalidateQueries({ queryKey: ['workflows', projectId, wf.id] })
+    },
+  })
+}
+
+// ---------------------------------------------------------------------------
 // Bundled templates
 // ---------------------------------------------------------------------------
 

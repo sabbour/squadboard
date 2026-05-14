@@ -1,9 +1,10 @@
 import { Outlet, NavLink, useParams } from 'react-router'
 
 const NAV_ITEMS = [
-  { label: 'Board', to: 'board', enabled: true },
-  { label: 'Agents', to: 'agents', enabled: true },
-  { label: 'Workflows', to: 'workflows', enabled: false },
+  { label: 'Board', to: 'board', icon: '📋', enabled: true },
+  { label: 'Agents', to: 'agents', icon: '🤖', enabled: true },
+  { label: 'Workflows', to: 'workflows', icon: '⚙', enabled: true },
+  { label: 'Costs', to: 'costs', icon: '💰', enabled: true },
 ]
 
 export default function Layout() {
@@ -111,6 +112,7 @@ export default function Layout() {
                       borderLeft: isActive ? '2px solid var(--accent)' : '2px solid transparent',
                     })}
                   >
+                    {item.icon && <span>{item.icon}</span>}
                     {item.label}
                   </NavLink>
                 )

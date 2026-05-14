@@ -1,26 +1,52 @@
 interface CostDisplayProps {
   costUsd?: string
+  /** Total tokens (legacy — used when split is unavailable) */
   costTokens?: number
+  /** Tokens consumed (input/prompt) */
+  tokensIn?: number
+  /** Tokens generated (output/completion) */
+  tokensOut?: number
+  /** Model name shown in tooltip */
+  model?: string
 }
 
-export default function CostDisplay({ costUsd, costTokens }: CostDisplayProps) {
-  if (!costUsd && !costTokens) return null
+function fmtK(n: number): string {
+  if (n >= 1000) return `${(n / 1000).toFixed(1)}k`
+  return String(n)
+}
 
-  const parts: string[] = []
-  if (costUsd) parts.push(`$${parseFloat(costUsd).toFixed(3)}`)
-  if (costTokens) parts.push(`${costTokens.toLocaleString()} tokens`)
+export default function CostDisplay({ costUsd, costTokens, tokensIn, tokensOut, model }: CostDisplayProps) {
+  if (!costUsd && !costTokens && !tokensIn && !tokensOut) return null
+
+  const usdLabel = costUsd ? `$${parseFloat(costUsd).toFixed(4)}` : null
+
+  // Prefer split token counts; fall back to combined costTokens
+  const tokenLabel = (() => {
+    if (tokensIn != null && tokensOut != null) return `${fmtK(tokensIn)} in / ${fmtK(tokensOut)} out`
+    if (costTokens) return `${fmtK(costTokens)} tok`
+    return null
+  })()
+
+  const tooltip = [model, usdLabel, tokenLabel].filter(Boolean).join(' · ')
 
   return (
     <span
+      title={tooltip}
       style={{
         fontSize: '11px',
         color: '#8b949e',
         display: 'inline-flex',
         alignItems: 'center',
         gap: '4px',
+        cursor: 'default',
       }}
     >
-      {parts.join(' · ')}
+      {usdLabel && <span>{usdLabel}</span>}
+      {tokenLabel && (
+        <span style={{ color: '#484f58' }}>
+          ({tokenLabel})
+        </span>
+      )}
     </span>
   )
 }
