@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useParams } from 'react-router'
 import { useAgents, type Agent } from '../api/agents.ts'
 import { apiFetch } from '../api/client.ts'
-import { useRoutingLog, useRoutingStats, useRefreshKeywords, type TestRoutingResult } from '../api/routing.ts'
+import { useRoutingLog, useRoutingStats, useRefreshKeywords } from '../api/routing.ts'
 import AgentGrid from '../components/agents/AgentGrid.tsx'
 import AgentDetailPanel from '../components/agents/AgentDetailPanel.tsx'
 import HireAgentModal from '../components/agents/HireAgentModal.tsx'
@@ -13,10 +13,13 @@ import { ArrowSync20Regular, Bot20Regular, ArrowSwap20Regular } from '@fluentui/
 import { Subtitle1 } from '@fluentui/react-components'
 
 interface RouteTestResult {
-  agentName: string | null
-  ruleSummary: string | null
   matched: boolean
-  tier?: TestRoutingResult['tier']
+  agentName: string | null
+  matchedRule: string | null
+  tier?: string
+  agentId?: string | null
+  score?: number | null
+  reasoning?: string | null
 }
 
 function TestRoutingPanel({ projectId }: { projectId: string }) {
@@ -160,9 +163,9 @@ function TestRoutingPanel({ projectId }: { projectId: string }) {
                     <span style={{ fontWeight: 600 }}>{result.agentName}</span>
                     {result.tier && <RoutingTierBadge tier={result.tier} showLabel />}
                   </div>
-                  {result.ruleSummary && (
+                  {result.matchedRule && (
                     <div style={{ marginTop: '4px', fontSize: '11px', color: 'var(--text-muted)' }}>
-                      {result.ruleSummary}
+                      {result.matchedRule}
                     </div>
                   )}
                 </>

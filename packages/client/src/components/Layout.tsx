@@ -1,4 +1,6 @@
+import { useState, useEffect } from 'react'
 import { Outlet, useParams, useNavigate, useLocation } from 'react-router'
+import { apiFetch } from '../api/client.ts'
 import squadboardLogo from '../assets/squadboard-horizontal.svg'
 import {
   NavDrawer,
@@ -37,7 +39,8 @@ const useStyles = makeStyles({
     minWidth: 0,
     display: 'flex',
     flexDirection: 'column',
-    overflow: 'hidden',
+    overflow: 'auto',
+    height: 0,
   },
   navDrawer: {
     borderRight: `1px solid ${tokens.colorNeutralStroke1}`,
@@ -46,6 +49,15 @@ const useStyles = makeStyles({
       flexDirection: 'column',
       height: '100%',
     },
+  },
+  projectName: {
+    padding: '4px 12px 8px',
+    fontWeight: 700,
+    fontSize: '14px',
+    color: tokens.colorNeutralForeground1,
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
   },
 })
 
@@ -62,6 +74,15 @@ export default function Layout() {
   const navigate = useNavigate()
   const location = useLocation()
   const styles = useStyles()
+
+  const [projectName, setProjectName] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (!id) { setProjectName(null); return }
+    apiFetch<{ id: string; name: string; path: string }>(`/api/projects/${id}`)
+      .then((p) => setProjectName(p.name))
+      .catch(() => setProjectName(null))
+  }, [id])
 
   function getSelectedValue(): string {
     if (location.pathname === '/' || location.pathname === '') return 'projects'
@@ -95,7 +116,7 @@ export default function Layout() {
       >
         {/* Logo / wordmark */}
         <div className={styles.sidebarLogo}>
-          <img src={squadboardLogo} alt="Squadboard" style={{ height: '32px', display: 'block' }} />
+          <img src={squadboardLogo} alt="Squadboard" style={{ height: '44px', display: 'block' }} />
         </div>
 
         <NavDrawerBody>
@@ -106,6 +127,9 @@ export default function Layout() {
           {id && (
             <>
               <NavSectionHeader>PROJECT</NavSectionHeader>
+              {projectName && (
+                <div className={styles.projectName}>{projectName}</div>
+              )}
               {PROJECT_NAV_ITEMS.map((item) => (
                 <NavItem key={item.segment} icon={item.icon} value={item.segment}>
                   {item.label}

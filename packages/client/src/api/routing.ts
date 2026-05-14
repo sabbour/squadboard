@@ -32,8 +32,10 @@ export interface TestRoutingResult {
   matched: boolean
   tier?: RoutingTier
   agentName?: string | null
-  ruleSummary?: string | null
-  score?: number
+  agentId?: string | null
+  matchedRule?: string | null
+  score?: number | null
+  reasoning?: string | null
 }
 
 // ---------------------------------------------------------------------------
@@ -60,11 +62,11 @@ export function useRoutingStats(projectId: string) {
 
 export function useTestRouting(projectId: string) {
   return useMutation<TestRoutingResult, Error, { title: string; labels?: string[] }>({
-    mutationFn: ({ title, labels = [] }) => {
-      const qs = new URLSearchParams({ title })
-      labels.forEach((l) => qs.append('label', l))
-      return apiFetch<TestRoutingResult>(`/api/projects/${projectId}/routing/test?${qs.toString()}`)
-    },
+    mutationFn: ({ title, labels = [] }) =>
+      apiFetch<TestRoutingResult>(`/api/projects/${projectId}/routing/test`, {
+        method: 'POST',
+        body: JSON.stringify({ title, labels }),
+      }),
   })
 }
 

@@ -1,7 +1,7 @@
 import { type RoutingTier } from '../../api/routing.ts'
 
 interface RoutingTierBadgeProps {
-  tier: RoutingTier
+  tier: string
   showLabel?: boolean
 }
 
@@ -30,7 +30,8 @@ const TIER_CONFIG: Record<RoutingTier, { label: string; sublabel: string; color:
 }
 
 export function RoutingTierBadge({ tier, showLabel = false }: RoutingTierBadgeProps) {
-  const cfg = TIER_CONFIG[tier]
+  const cfg = TIER_CONFIG[tier as RoutingTier]
+  if (!cfg) return null
 
   return (
     <span
