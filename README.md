@@ -97,7 +97,7 @@ Use the Squadboard CLI to launch the server or integrate with AI agents:
 # Start the server and open the UI (equivalent to `pnpm run dev`)
 squadboard init
 
-# Start the MCP server for Claude Desktop / Cursor
+# Start the MCP server (stdio transport for VS Code and GitHub Copilot CLI)
 squadboard mcp
 ```
 
@@ -107,42 +107,46 @@ npx @sabbour/squadboard init
 npx @sabbour/squadboard mcp
 ```
 
-### MCP Integration (Claude Desktop / Cursor)
+### MCP Integration
 
-To connect Squadboard with Claude Desktop or Cursor:
+Squadboard exposes tools via Model Context Protocol (MCP) over stdio. Connect from either VS Code (with MCP extension) or GitHub Copilot CLI.
 
-1. Run the MCP server to see the config:
-   ```bash
-   squadboard mcp
-   ```
+#### Visual Studio Code
 
-2. You'll see the MCP server config. Copy it and add to your MCP host's config file:
+1. Install the [MCP extension](https://marketplace.visualstudio.com/items?itemName=cline.cline) for VS Code.
 
-   **Claude Desktop** (`~/Library/Application Support/Claude/claude_desktop_config.json`):
+2. Add Squadboard to `.vscode/mcp.json` (project-level, commit to repo):
    ```json
    {
-     "mcpServers": {
+     "servers": {
        "squadboard": {
-         "command": "squadboard",
-         "args": ["mcp"]
+         "type": "stdio",
+         "command": "node",
+         "args": ["packages/cli/dist/index.js", "mcp"]
        }
      }
    }
    ```
+   > Adjust the path to `packages/cli/dist/index.js` relative to your workspace root.
 
-   **Cursor** (check Cursor docs for config location):
+3. Reload VS Code. Squadboard tools are now available in the assistant.
+
+#### GitHub Copilot CLI
+
+1. Add Squadboard to `~/.copilot/mcp-config.json`:
    ```json
    {
      "mcpServers": {
        "squadboard": {
-         "command": "squadboard",
-         "args": ["mcp"]
+         "command": "node",
+         "args": ["path/to/packages/cli/dist/index.js", "mcp"]
        }
      }
    }
    ```
+   > Replace `path/to/packages/cli/dist/index.js` with the absolute path to your Squadboard repository.
 
-3. Restart your MCP host (Claude Desktop / Cursor). Squadboard tools are now available to agents.
+2. Restart the GitHub Copilot CLI. Squadboard tools are now available to agents.
 
 ### GitHub Sync (Optional)
 
