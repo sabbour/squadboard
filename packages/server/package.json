@@ -13,7 +13,7 @@
     "db:studio": "drizzle-kit studio"
   },
   "dependencies": {
-    "@copilot-extensions/preview-sdk": "^5.0.1",
+    "@bradygaster/squad-sdk": "0.9.4",
     "@modelcontextprotocol/sdk": "^1.29.0",
     "@types/ws": "^8.18.1",
     "ajv": "^8.17.1",
