@@ -1,9 +1,10 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
+import { eq } from 'drizzle-orm';
 import { SquadContext, TeamMember } from '../types/squad.js';
 import { parseTeamRoster, validateSquadDir } from './squad-discovery.js';
-
-// TODO: import { db } from '../db/index.js' once Hockney creates it
+import { getDb } from '../db/index.js';
+import { projects } from '../db/schema.js';
 
 /**
  * Link a project to its .squad/ directory.
@@ -19,15 +20,12 @@ export async function linkProjectToSquad(projectId: string, squadPath: string): 
     );
   }
 
-  // TODO: once db is available:
-  // await db
-  //   .update(projects)
-  //   .set({ squadPath })
-  //   .where(eq(projects.id, projectId));
-  //
-  // For now we persist the link in a local JSON sidecar so the service
-  // is usable before Hockney's schema lands.
-  await persistLinkSidecar(projectId, squadPath);
+  try {
+    await getDb().update(projects).set({ path: squadPath }).where(eq(projects.id, projectId));
+  } catch (dbErr) {
+    console.warn('[project-squad] DB update failed, falling back to sidecar:', dbErr);
+    await persistLinkSidecar(projectId, squadPath);
+  }
 }
 
 /**
@@ -74,9 +72,17 @@ async function persistLinkSidecar(projectId: string, squadPath: string): Promise
 }
 
 async function resolveSquadPath(projectId: string): Promise<string | null> {
-  // TODO: once DB lands, query projects table first:
-  // const row = await db.select().from(projects).where(eq(projects.id, projectId)).limit(1);
-  // if (row[0]?.squadPath) return row[0].squadPath;
+  try {
+    const db = getDb();
+    const rows = await db
+      .select({ squadPath: projects.path })
+      .from(projects)
+      .where(eq(projects.id, projectId))
+      .limit(1);
+    if (rows[0]?.squadPath) return rows[0].squadPath;
+  } catch {
+    // DB unavailable — fall through to sidecar
+  }
 
   const links = await loadSidecar();
   return links[projectId] ?? null;

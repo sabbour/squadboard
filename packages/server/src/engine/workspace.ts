@@ -1,5 +1,6 @@
 import os from 'node:os';
 import path from 'node:path';
+import { execSync } from 'node:child_process';
 import { mkdir, rm } from 'node:fs/promises';
 
 export type WorkspaceStrategy = 'scratch' | 'dir' | 'worktree';
@@ -9,7 +10,7 @@ export type WorkspaceStrategy = 'scratch' | 'dir' | 'worktree';
  *
  * scratch  → OS temp dir   : <tmpdir>/squadboard-run-<id>
  * dir      → home dir      : ~/.squadboard/workspaces/<id>
- * worktree → git worktree  : stubbed for Demo 4
+ * worktree → git worktree  : <repoParent>/<repoName>-run-<issueRunId>
  */
 export async function resolveWorkspace(
   issueRunId: string,
@@ -20,6 +21,7 @@ export async function resolveWorkspace(
   switch (strategy) {
     case 'scratch':
       workspacePath = path.join(os.tmpdir(), `squadboard-run-${issueRunId}`);
+      await mkdir(workspacePath, { recursive: true });
       break;
 
     case 'dir':
@@ -29,36 +31,62 @@ export async function resolveWorkspace(
         'workspaces',
         issueRunId,
       );
+      await mkdir(workspacePath, { recursive: true });
       break;
 
-    case 'worktree':
-      // Stubbed for Demo 4 — git worktree materialisation arrives in Demo 10.
-      workspacePath = path.join(
-        os.homedir(),
-        '.squadboard',
-        'worktrees',
-        issueRunId,
-      );
+    case 'worktree': {
+      const repoRoot = execSync('git rev-parse --show-toplevel', {
+        stdio: 'pipe',
+        encoding: 'utf-8',
+      }).trim();
+      const repoParent = path.dirname(repoRoot);
+      const repoName = path.basename(repoRoot);
+      workspacePath = path.join(repoParent, `${repoName}-run-${issueRunId}`);
+      const branch = `squadboard/run-${issueRunId}`;
+      try {
+        execSync(`git worktree add ${workspacePath} -b ${branch} HEAD`, {
+          stdio: 'pipe',
+          cwd: repoRoot,
+        });
+      } catch (err: unknown) {
+        const stderr = err instanceof Error && 'stderr' in err
+          ? String((err as NodeJS.ErrnoException & { stderr?: Buffer }).stderr)
+          : '';
+        if (!stderr.includes('already exists')) {
+          throw err;
+        }
+        // Worktree already exists — reuse it.
+      }
       break;
+    }
 
     default:
       throw new Error(`Unknown workspace strategy: ${strategy as string}`);
   }
 
-  await mkdir(workspacePath, { recursive: true });
   return workspacePath;
 }
 
 /**
  * Remove the workspace directory after a run finishes.
- * For 'worktree', removal is a no-op until Demo 10 implements the real teardown.
+ * For 'worktree', runs `git worktree remove --force` and deletes the branch.
  */
 export async function cleanupWorkspace(
   workspacePath: string,
   strategy: WorkspaceStrategy,
 ): Promise<void> {
   if (strategy === 'worktree') {
-    // Stub: real git worktree remove lands in Demo 10.
+    const runId = path.basename(workspacePath).replace(/^.*-run-/, '');
+    try {
+      execSync(`git worktree remove --force ${workspacePath}`, { stdio: 'pipe' });
+    } catch (err) {
+      console.warn(`[workspace] git worktree remove failed for ${workspacePath}:`, err);
+    }
+    try {
+      execSync(`git branch -d squadboard/run-${runId}`, { stdio: 'pipe' });
+    } catch (err) {
+      console.warn(`[workspace] git branch -d failed for squadboard/run-${runId}:`, err);
+    }
     return;
   }
   await rm(workspacePath, { recursive: true, force: true });
