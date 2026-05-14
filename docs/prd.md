@@ -6,9 +6,9 @@
 
 ## 1. Vision
 
-Developers using multiple Squad agents today lack a durable orchestration layer. Work is tracked in heads, Notion, or GitHub Issues kept manually in sync. Handoffs are text-matched and sometimes missed. Parallel fan-outs silently drop children. Engine crashes lose in-flight state. Cost is a monthly surprise.
+Running multiple Squad agents today means tracking work in heads, Notion, or GitHub Issues and keeping them manually in sync. Handoffs are text-matched and sometimes missed. Parallel fan-outs silently drop children. Engine crashes lose in-flight state. Cost is a monthly surprise.
 
-Squadboard gives you a board for visibility, a workflow engine for determinism, and a Live ops view for awareness — local-first by default, GitHub at the seams when you ship.
+Squadboard gives you a board for visibility, a workflow engine for determinism, and a Live ops view for real-time awareness — local-first by default, GitHub at the seams when you ship.
 
 ---
 
@@ -28,12 +28,12 @@ If you have one agent and one task at a time, `squad chat` is the right tool. Th
 
 | # | Capability | Key detail |
 |---|-----------|------------|
-| 1 | Project onboarding | `npx @sabbour/squadboard init` → embedded Postgres, `.squad/` discovery, multi-project |
+| 1 | Project onboarding | `npx @sabbour/squadboard init` — embedded Postgres, `.squad/` discovery, multi-project |
 | 2 | Kanban board | Five columns, drag-drop, comments (markdown + mermaid), labels, filters, bulk actions |
 | 3 | Agent management | Discover from `.squad/agents/`, hire, edit, disable — file-on-disk as source of truth |
 | 4 | Isolated workspaces | Scratch / dir / worktree per run; parallel agents never collide |
 | 5 | Deterministic workflows | YAML-defined steps, versioned, composable; engine is sole spawner |
-| 6 | Routing pipeline | Tier 1 (deterministic rules) → Tier 2 (matchRoute) → Tier 3 (specifier agent) → human triage |
+| 6 | Routing pipeline | Tier 1 (rules) → Tier 2 (matchRoute) → Tier 3 (specifier agent) → human triage |
 | 7 | Crash recovery | Lease + heartbeat, sweepers, declarative retry, no in-flight state loss |
 | 8 | Peer review + approvals | N-of-M quorum, 4-verb cycle, threaded audit trail, reviewer lockout |
 | 9 | Fan-out + subtrees | Atomic child materialization, subtree pause/resume, progress pills |
@@ -102,9 +102,9 @@ Squadboard ships vertical slices, not horizontal phases. Every demo is installab
 
 ## 7. Architecture at a glance
 
-Single Node.js process running Express v5. The browser (React 19 SPA) talks HTTP + WebSocket to the engine. The engine owns Postgres (embedded locally, hosted in cloud). Agent runs execute as `runWorker` subprocesses — each owns its workspace, writes heartbeats directly to the DB, and emits final output via MCP. The dispatcher ticks every ~5s (sweep, wake, advance); the stepper claims work via `FOR UPDATE SKIP LOCKED` and is the sole spawner. See [deep design §6.1](../research/squad-web-design-v4.md#61-topology-in-one-picture) for the topology diagram.
+Single Node.js process running Express v5. The browser (React 19 SPA) talks HTTP + WebSocket to the engine. The engine owns Postgres (embedded locally, hosted in cloud). Agent runs execute as `runWorker` subprocesses — each owns its workspace, writes heartbeats directly to the DB, and emits final output via MCP. The dispatcher ticks every ~5s (sweep, wake, advance); the stepper claims work via `FOR UPDATE SKIP LOCKED` and is the sole spawner. [Full topology](../research/squad-web-design-v4.md#61-topology-in-one-picture) in the deep design.
 
-**Key architectural decision:** We bypass `SquadCoordinator` and call `SquadClient.createSession()` directly. The Coordinator's parallel fan-out and ad-hoc handoffs are what Squadboard exists to replace with deterministic, durable orchestration. See [decisions.md — Bypass SquadCoordinator](../.squad/decisions.md).
+**Key architectural decision:** We bypass `SquadCoordinator` and call `SquadClient.createSession()` directly. The Coordinator's parallel fan-out and ad-hoc handoffs are what Squadboard exists to replace with deterministic, durable orchestration. [See decisions.md](../.squad/decisions.md).
 
 ---
 
@@ -113,7 +113,7 @@ Single Node.js process running Express v5. The browser (React 19 SPA) talks HTTP
 | Layer | Choice |
 |-------|--------|
 | Runtime | Node.js + Express v5 |
-| Database | **Postgres** — embedded (`embedded-postgres` ~50MB) local, hosted cloud. Same Drizzle schema everywhere. *SQLite was considered and rejected.* See [decisions.md — Postgres-not-SQLite](../.squad/decisions.md). |
+| Database | **Postgres** — embedded (`embedded-postgres` ~50MB) locally, hosted in cloud. Same Drizzle schema everywhere. SQLite was considered and rejected. [See decisions.md](../.squad/decisions.md). |
 | ORM | Drizzle ORM |
 | Frontend | React 19 + Vite (SPA) |
 | Real-time | WebSocket (project-scoped, `since-id` reconnect cursor) |
@@ -190,4 +190,4 @@ Every detail of how Squadboard works — schema, step catalogue, SDK wiring, wor
 
 **→ [`squad-web-design-v4.md`](../research/squad-web-design-v4.md)**
 
-This PRD is the executive view. The deep design is the implementation spec. When the PRD says "how" — look there.
+This PRD is the executive view. The deep design is the implementation spec.

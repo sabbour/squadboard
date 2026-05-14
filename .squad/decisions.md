@@ -54,6 +54,11 @@ Existing roles unchanged: McManus (Lead Architect), Keyser (Frontend Dev), Fenst
 **What:** We are in **hacking phase**. (1) Local git only. (2) Use worktrees per issue (`squad/{issue-number}-{slug}` branch). (3) No PRs. (4) Merge frequently into `main` locally. (5) Reviewer rejections (Kujan/Redfoot) happen inline on branch before merge, not via PR. Standard PR workflow resumes when user says "exit hacking phase".
 **Why:** User directive — explicit team operating mode for current development phase.
 
+### 2026-05-14: PRD copy pass approved
+**By:** Redfoot
+**What:** Copy pass on `docs/prd.md` complete and ✅ approved. 12,331 → 12,195 bytes (5 surgical edits). Tightened vision with active problem statement; simplified scope table grammar; improved architecture signal-to-noise; polished tech-stack links; removed instructional trailer. The 5 engine invariants verified paste-locked against `decisions.md`. 14-section structure intact. No follow-up issues flagged. Treat as final for hacking phase.
+**Owner:** Redfoot (reject authority on user-facing copy).
+
 ## Governance
 
 - All meaningful changes require team consensus

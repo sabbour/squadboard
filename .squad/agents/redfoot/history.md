@@ -44,4 +44,5 @@ Major doc cuts:
 ## Learnings
 
 - **2026-05-14 PRD Copy Pass (tagged):** Tagged to perform copy pass on `docs/prd.md` (voice/clarity, no content changes — the five invariants are paste-locked and canonical).
+- **2026-05-14 PRD Copy Pass (completed):** Completed copy pass on `docs/prd.md`. 5 surgical edits, ~1% shrink (12,331 → 12,195 bytes), no content changes. Tightened vision, simplified scope/architecture, polished tech-stack links, removed instructional trailer. ✅ Approved as publish-ready for hacking phase.
 
