@@ -2,6 +2,7 @@ import EmbeddedPostgres from 'embedded-postgres';
 import { Client } from 'pg';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
+import { existsSync, readFileSync, rmSync } from 'node:fs';
 
 const DATA_DIR = join(homedir(), '.squadboard', 'data');
 const PG_PORT = 54_321;
@@ -33,7 +34,31 @@ export async function startEmbeddedPostgres(): Promise<string> {
     persistent: true,
   });
 
-  await pg.initialise();
+  // Only initialise (run initdb) when the data directory doesn't exist yet.
+  // On subsequent starts the cluster is already on disk — just start it.
+  if (!existsSync(DATA_DIR)) {
+    await pg.initialise();
+  } else {
+    // If postmaster.pid exists and the PID is alive, postgres is already running
+    // (e.g. tsx-watch restarted mid-session). Reuse the existing instance.
+    const pidFile = join(DATA_DIR, 'postmaster.pid');
+    if (existsSync(pidFile)) {
+      const livePid = parseInt(readFileSync(pidFile, 'utf8').split('\n')[0] ?? '0', 10);
+      if (livePid > 0) {
+        let alive = false;
+        try { process.kill(livePid, 0); alive = true; } catch { /* not running */ }
+        if (alive) {
+          console.log(`[postgres] already running (pid ${livePid}), reusing`);
+          await ensureDatabase();
+          const elapsed = Date.now() - startMs;
+          console.log(`[postgres] attached in ${elapsed}ms`);
+          return getConnectionString();
+        }
+        // Stale PID file — remove it so pg_ctl can start fresh.
+        rmSync(pidFile);
+      }
+    }
+  }
   await pg.start();
   await ensureDatabase();
 
