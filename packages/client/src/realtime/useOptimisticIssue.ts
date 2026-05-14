@@ -1,4 +1,4 @@
-// Demo 12 — wraps issue update mutation with optimistic update + version tracking.
+// Wraps issue update mutation with optimistic update + version tracking.
 // On 409 conflict: reverts optimistic change, shows ConflictToast, and refetches.
 
 import { useState, useCallback } from 'react'

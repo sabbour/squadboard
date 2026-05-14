@@ -1,4 +1,4 @@
-// Demo 12 — connects the singleton WsClient to TanStack Query cache.
+// Connects the singleton WsClient to TanStack Query cache.
 // Keeps all issue/run/workflow data live without polling.
 
 import { useEffect, useState } from 'react'

@@ -293,16 +293,8 @@ export default function WorkflowEditor() {
 
         <span
           style={{
-            fontSize: '11px',
-            background: '#0d1117',
-            border: '1px solid #30363d',
-            borderRadius: '4px',
-            padding: '3px 8px',
-            color: '#8b949e',
           }}
         >
-          Demo 11
-        </span>
       </div>
 
       {/* Split pane body */}

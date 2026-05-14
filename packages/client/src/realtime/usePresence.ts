@@ -1,4 +1,4 @@
-// Demo 12 — tracks which users are currently viewing the project.
+// Tracks which users are currently viewing the project.
 // Fetches initial snapshot from REST, then keeps it live via WS events.
 
 import { useCallback, useEffect, useRef, useState } from 'react'

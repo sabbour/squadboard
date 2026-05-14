@@ -31,7 +31,7 @@ export default function EmptyBoard() {
           color: 'var(--text)',
         }}
       >
-        Board coming in Demo 2
+        No issues yet — create one to get started.
       </h2>
 
       <p
@@ -41,8 +41,7 @@ export default function EmptyBoard() {
           lineHeight: 1.6,
         }}
       >
-        Drag-and-drop kanban columns, card creation, and agent assignment are all arriving in Demo 2.
-        The project is connected and ready to go.
+        Drag cards between columns, create issues, and assign agents.
       </p>
 
       <div

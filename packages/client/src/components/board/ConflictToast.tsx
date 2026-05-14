@@ -1,4 +1,4 @@
-// Demo 12 — 409 optimistic-concurrency conflict toast.
+// 409 optimistic-concurrency conflict toast.
 // Portal-based, no third-party library — plain CSS fixed-position div.
 
 import { useEffect, useState } from 'react'

@@ -1,4 +1,4 @@
-// Demo 12 — shows connected users with avatar initials + cursor tooltip.
+// Shows connected users with avatar initials + cursor tooltip.
 
 import { type PresenceUser } from '../../realtime/usePresence.ts'
 import { type ConnectionState } from '../../realtime/ws-client.ts'

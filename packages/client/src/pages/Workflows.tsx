@@ -44,16 +44,8 @@ export default function Workflows() {
         <span
           style={{
             marginLeft: 'auto',
-            fontSize: '11px',
-            background: 'var(--surface)',
-            border: '1px solid var(--border)',
-            borderRadius: '4px',
-            padding: '3px 8px',
-            color: 'var(--text-muted)',
           }}
         >
-          Demo 11
-        </span>
       </div>
 
       {/* Workflow list */}

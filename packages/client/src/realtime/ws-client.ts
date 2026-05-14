@@ -1,4 +1,4 @@
-// Singleton WebSocket client for Demo 12 — Multi-User + Live Ops
+// Singleton WebSocket client — Multi-User + Live Ops
 // Connects to the Squadboard server and fans out typed events to subscribers.
 
 const WS_BASE = (() => {

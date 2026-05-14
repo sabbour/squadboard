@@ -111,19 +111,6 @@ export default function Board() {
             {project.squadPath}
           </p>
         </div>
-        <span
-          style={{
-            fontSize: '11px',
-            background: 'var(--surface)',
-            border: '1px solid var(--border)',
-            borderRadius: '4px',
-            padding: '3px 8px',
-            color: 'var(--text-muted)',
-          }}
-        >
-          Demo 12
-        </span>
-
         {/* Live presence avatars + connection dot */}
         <PresenceBar
           users={presenceList}
