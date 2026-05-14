@@ -42,6 +42,9 @@ PRD Appendix A — the Coordinator's regex routing is fine for one-shot use; its
 
 <!-- Append learnings below -->
 
+### 2026-05-14 — squadboard-chore extension
+Created `.github/extensions/squadboard-chore/extension.mjs` to productize the chore workflow alongside add-feature and report-bug. Chores are housekeeping tasks (deps, refactors, config, CI, tooling, perf, type fixes) that are NOT bugs, NOT features, and need NO docs update (Redfoot excluded). Single-specialist routing via COMPONENT_OWNER map (20 component keys). Tool params: required `title`+`description`, optional `component` enum, `effort` enum (trivial/small/medium/large), `implementation_notes`. Writes spec to `docs/chores/{choreId}.md` and inbox note to `.squad/decisions/inbox/{choreId}.md`. Returns direct assignment prompt to the owning specialist — no Ralph fan-out, no Kujan regression test required.
+
 ### 2026-05-14
 Demo 1 SDK surface: squad-discovery.ts scans filesystem for .squad/ dirs (home + common dev dirs, depth 3). Validates by checking team.md exists. project-squad.ts links projects to squad dirs. Discovery API: GET /api/squad/discover, validate, register.
 
@@ -56,6 +59,15 @@ Demo 5: routing-compiler.ts parses .squad/routing.md tables into RoutingRule[] (
 
 ### 2026-05-14
 Demo 6 HookPipeline: register hooks by HookPoint (pre-run/output-validation/post-run/on-error), run in sequence, stop on first failure. Output validation hook registered at startup (Invariant 4). bundled simple.yaml template: route→agent_run→approve with output_schema.
+
+### 2026-05-14 — SDK real invocation (squad-client.ts rewrite)
+
+Replaced the `@sabbour/squad-sdk` stub entirely. `squad-client.ts` now:
+1. Reads the charter from disk using `charterPath`.
+2. Tries `llm` CLI (Simon Willison's tool, `pip install llm`) via `child_process.execFile` — supports many LLM backends via plugins, cost $0 for local.
+3. Falls back to `ollama run llama3` if `llm` is absent.
+4. Falls back to a structured **offline briefing** (full charter + task markdown) when no backend is reachable — zero-token, cost $0.000, honest label.
+No `@sabbour/squad-sdk` import remains. `[stub output — real SDK integration in production]` string is gone from both `squad-client.ts` and `bridge.ts`. The `executeAgentRunStub` export in `bridge.ts` now produces a useful forced-stub briefing (for tests) without any placeholder text. Committed as `a2b826e`.
 
 ### 2026-05-14 — Demo 5 routing compiler deepdive
 Demo 5 routing compiler: parseRoutingFile reads .squad/routing.md 3-table format (label/keyword/catchall rows). matchRule(issue) walks priority order, returns first match or null for escalation. RoutingBadge.tsx renders ⚡ Auto pill on auto-routed issue cards (shows matched rule label on hover). Agents page routing test panel: input issue title + labels, output resolved assignee. Non-fatal on parse errors (logs + continues).
