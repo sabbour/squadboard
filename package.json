@@ -7,7 +7,7 @@
   "type": "module",
   "scripts": {
     "build": "pnpm -r build",
-    "dev": "pnpm --filter @sabbour/squadboard-server dev",
+    "dev": "pnpm --filter @sabbour/squadboard-server --filter @sabbour/squadboard-client run dev",
     "start": "pnpm --filter @sabbour/squadboard-cli start"
   },
   "engines": {
