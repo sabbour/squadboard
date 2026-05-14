@@ -180,6 +180,43 @@ async function bootstrapSchema(): Promise<void> {
       raw_rule    TEXT        NOT NULL,
       loaded_at   TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
+
+    -- Demo 6: YAML workflow definitions (immutable versioned snapshots)
+    CREATE TABLE IF NOT EXISTS workflows (
+      id          UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+      project_id  UUID        NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+      name        TEXT        NOT NULL,
+      slug        TEXT        NOT NULL,
+      description TEXT,
+      created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      CONSTRAINT workflows_project_slug_unique UNIQUE (project_id, slug)
+    );
+
+    CREATE TABLE IF NOT EXISTS workflow_versions (
+      id                      UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+      workflow_id             UUID        NOT NULL REFERENCES workflows(id) ON DELETE CASCADE,
+      version                 INTEGER     NOT NULL,
+      yaml_content            TEXT        NOT NULL,
+      json_schema             TEXT,
+      pinned_agent_revisions  TEXT,
+      is_active               BOOLEAN     NOT NULL DEFAULT TRUE,
+      created_at              TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      CONSTRAINT workflow_versions_workflow_version_unique UNIQUE (workflow_id, version)
+    );
+
+    CREATE TABLE IF NOT EXISTS issue_workflows (
+      issue_id            UUID        PRIMARY KEY REFERENCES issues(id) ON DELETE CASCADE,
+      workflow_version_id UUID        NOT NULL REFERENCES workflow_versions(id),
+      attached_at         TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+
+    -- Demo 6 additions to existing tables
+    ALTER TABLE workflow_runs
+      ADD COLUMN IF NOT EXISTS workflow_version_id UUID REFERENCES workflow_versions(id);
+
+    ALTER TABLE step_runs
+      ADD COLUMN IF NOT EXISTS pinned_agent_revisions TEXT;
   `);
 
   console.log('[db] schema bootstrapped');

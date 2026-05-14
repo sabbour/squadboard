@@ -3,12 +3,14 @@ import { type Issue } from '../../api/issues.ts'
 import { useLabels } from '../../api/labels.ts'
 import { useIssueRuns } from '../../api/runs.ts'
 import { useAgents } from '../../api/agents.ts'
+import { useWorkflowRun, useStartWorkflow } from '../../api/workflows.ts'
 import LabelBadge from '../LabelBadge.tsx'
 import Avatar from '../Avatar.tsx'
 import CommentList from './CommentList.tsx'
 import AddComment from './AddComment.tsx'
 import RunOutputPanel from '../runs/RunOutputPanel.tsx'
 import RunHistory from '../runs/RunHistory.tsx'
+import { AttachWorkflowModal } from '../workflows/AttachWorkflowModal.tsx'
 import { formatDistanceToNow } from 'date-fns'
 
 interface CardDetailProps {
@@ -22,9 +24,12 @@ type Tab = 'overview' | 'runs'
 export default function CardDetail({ projectId, issue, onClose }: CardDetailProps) {
   const panelRef = useRef<HTMLDivElement>(null)
   const [activeTab, setActiveTab] = useState<Tab>('overview')
+  const [showAttachModal, setShowAttachModal] = useState(false)
   const { data: labels } = useLabels(projectId)
   const { data: runs } = useIssueRuns(projectId, issue.id)
   const { data: agents } = useAgents(projectId)
+  const { data: workflowRun } = useWorkflowRun(projectId, issue.id)
+  const startWorkflow = useStartWorkflow(projectId, issue.id)
 
   const activeRun = runs?.find((r) => r.status === 'running' || r.status === 'pending')
 
@@ -231,6 +236,82 @@ export default function CardDetail({ projectId, issue, onClose }: CardDetailProp
                     agent={agents?.find((a) => a.id === activeRun.agentId)}
                   />
                 </div>
+              )}
+
+              {/* Workflow section */}
+              <div>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
+                  <p style={{ fontSize: '11px', color: '#8b949e', textTransform: 'uppercase', letterSpacing: '0.05em', margin: 0 }}>
+                    Workflow
+                  </p>
+                  <button
+                    onClick={() => setShowAttachModal(true)}
+                    style={{
+                      fontSize: '11px',
+                      color: '#388bfd',
+                      background: 'none',
+                      border: 'none',
+                      cursor: 'pointer',
+                      padding: 0,
+                    }}
+                  >
+                    {issue.attachedWorkflowId ? 'Change' : '+ Attach'}
+                  </button>
+                </div>
+
+                {issue.attachedWorkflowId ? (
+                  <div
+                    style={{
+                      background: '#0d1117',
+                      border: '1px solid #30363d',
+                      borderRadius: '6px',
+                      padding: '10px 12px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                    }}
+                  >
+                    <div>
+                      <p style={{ fontSize: '13px', color: '#e6edf3', margin: 0, fontWeight: 500 }}>
+                        ⚙ {issue.attachedWorkflowName ?? 'Workflow'}
+                      </p>
+                      {workflowRun && (
+                        <p style={{ fontSize: '11px', color: '#8b949e', margin: '2px 0 0' }}>
+                          Status: {workflowRun.status} · Step {(workflowRun.currentStepIndex ?? 0) + 1}
+                        </p>
+                      )}
+                    </div>
+                    {/* Start button — only if attached but no run yet */}
+                    {!workflowRun && (
+                      <button
+                        onClick={() => { void startWorkflow.mutateAsync() }}
+                        disabled={startWorkflow.isPending}
+                        style={{
+                          padding: '4px 10px',
+                          background: startWorkflow.isPending ? '#21262d' : '#238636',
+                          color: '#e6edf3',
+                          border: 'none',
+                          borderRadius: '6px',
+                          fontSize: '12px',
+                          cursor: startWorkflow.isPending ? 'default' : 'pointer',
+                          opacity: startWorkflow.isPending ? 0.5 : 1,
+                        }}
+                      >
+                        Start Workflow
+                      </button>
+                    )}
+                  </div>
+                ) : (
+                  <p style={{ fontSize: '12px', color: '#8b949e' }}>No workflow attached.</p>
+                )}
+              </div>
+
+              {showAttachModal && (
+                <AttachWorkflowModal
+                  projectId={projectId}
+                  issueId={issue.id}
+                  onClose={() => setShowAttachModal(false)}
+                />
               )}
 
               {/* Comments */}

@@ -8,6 +8,7 @@ import RunButton from '../runs/RunButton.tsx'
 import RunStatusBadge from '../runs/RunStatusBadge.tsx'
 import CostDisplay from '../runs/CostDisplay.tsx'
 import { RoutingBadge } from './RoutingBadge.tsx'
+import { WorkflowBadge } from './WorkflowBadge.tsx'
 
 interface IssueCardProps {
   issue: Issue
@@ -99,6 +100,9 @@ export default function IssueCard({ issue, index, projectId, isSelected, onSelec
                 )}
                 {issue.routingRuleSummary && (
                   <RoutingBadge ruleSummary={issue.routingRuleSummary} />
+                )}
+                {issue.attachedWorkflowName && (
+                  <WorkflowBadge workflowName={issue.attachedWorkflowName} />
                 )}
                 {activeRun && <RunStatusBadge status={activeRun.status} />}
                 {!activeRun && lastRun?.status === 'completed' && (

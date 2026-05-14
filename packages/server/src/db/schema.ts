@@ -1,4 +1,4 @@
-import { pgTable, uuid, text, timestamp, integer, pgEnum, primaryKey } from 'drizzle-orm/pg-core';
+import { pgTable, uuid, text, timestamp, integer, boolean, pgEnum, primaryKey } from 'drizzle-orm/pg-core';
 
 export const agentStatusEnum = pgEnum('agent_status', ['active', 'disabled', 'retired']);
 
@@ -120,6 +120,7 @@ export const issueRuns = pgTable('issue_runs', {
 export const workflowRuns = pgTable('workflow_runs', {
   id: uuid('id').primaryKey().defaultRandom(),
   issueId: uuid('issue_id').notNull().references(() => issues.id),
+  workflowVersionId: uuid('workflow_version_id'), // set when a versioned workflow drives this run
   status: runStatusEnum('status').notNull().default('pending'),
   currentStepIndex: integer('current_step_index').default(0),
   createdAt: timestamp('created_at').notNull().defaultNow(),
@@ -133,6 +134,7 @@ export const stepRuns = pgTable('step_runs', {
   stepIndex: integer('step_index').notNull(),
   stepType: text('step_type').notNull(),
   status: runStatusEnum('status').notNull().default('pending'),
+  pinnedAgentRevisions: text('pinned_agent_revisions'), // JSON: {agentName: charterHash}; snapshotted at step start
   createdAt: timestamp('created_at').notNull().defaultNow(),
   updatedAt: timestamp('updated_at').notNull().defaultNow(),
 });
@@ -162,3 +164,43 @@ export const routingRules = pgTable('routing_rules', {
 
 export type RoutingRule = typeof routingRules.$inferSelect;
 export type NewRoutingRule = typeof routingRules.$inferInsert;
+
+// ---------------------------------------------------------------------------
+// YAML Workflow definitions — Demo 6
+// ---------------------------------------------------------------------------
+
+export const workflows = pgTable('workflows', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  projectId: uuid('project_id').notNull().references(() => projects.id, { onDelete: 'cascade' }),
+  name: text('name').notNull(),
+  slug: text('slug').notNull(),         // kebab-case identifier
+  description: text('description'),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+  updatedAt: timestamp('updated_at').notNull().defaultNow(),
+});
+
+// Immutable versioned snapshots; updates create a new version row.
+export const workflowVersions = pgTable('workflow_versions', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  workflowId: uuid('workflow_id').notNull().references(() => workflows.id, { onDelete: 'cascade' }),
+  version: integer('version').notNull(),     // monotonic, starting at 1
+  yamlContent: text('yaml_content').notNull(),
+  jsonSchema: text('json_schema'),           // parsed JSON Schema for output validation (Invariant 4)
+  pinnedAgentRevisions: text('pinned_agent_revisions'), // JSON: {agentName: charterHash}
+  isActive: boolean('is_active').notNull().default(true),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+});
+
+// Links an issue to the active workflow version it runs under.
+export const issueWorkflows = pgTable('issue_workflows', {
+  issueId: uuid('issue_id').primaryKey().references(() => issues.id, { onDelete: 'cascade' }),
+  workflowVersionId: uuid('workflow_version_id').notNull().references(() => workflowVersions.id),
+  attachedAt: timestamp('attached_at').notNull().defaultNow(),
+});
+
+export type Workflow = typeof workflows.$inferSelect;
+export type NewWorkflow = typeof workflows.$inferInsert;
+export type WorkflowVersion = typeof workflowVersions.$inferSelect;
+export type NewWorkflowVersion = typeof workflowVersions.$inferInsert;
+export type IssueWorkflow = typeof issueWorkflows.$inferSelect;
+export type NewIssueWorkflow = typeof issueWorkflows.$inferInsert;

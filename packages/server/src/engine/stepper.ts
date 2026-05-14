@@ -2,6 +2,7 @@ import { sql, eq } from 'drizzle-orm';
 import { getDb, schema, type DrizzleDb } from '../db/index.js';
 import { resolveWorkspace } from './workspace.js';
 import { executeAgentRun } from '../sdk/bridge.js';
+import { recordRunCompletion } from '../services/output-validator.js';
 
 const LEASE_TTL_SECONDS = 90;
 const HEARTBEAT_INTERVAL_MS = 30_000;
@@ -90,6 +91,9 @@ export async function runWorker(issueRunId: string): Promise<void> {
     return;
   }
 
+  // Resolve the workflow version attached to this issue (for Invariant 4)
+  const workflowVersionId = await resolveWorkflowVersionId(db, run.issueId);
+
   // --- Resolve workspace ---
   let workspacePath: string;
   try {
@@ -134,19 +138,23 @@ export async function runWorker(issueRunId: string): Promise<void> {
     clearInterval(heartbeatTimer);
 
     if (result.success) {
+      // Persist cost fields first (recordRunCompletion handles status + output)
       await db
         .update(issueRuns)
         .set({
-          status: 'completed',
-          output: result.output,
           costTokens: result.tokensUsed ?? 0,
           costUsd: result.costUsd ?? '0',
-          completedAt: new Date(),
-          leaseExpiresAt: null,
-          heartbeatAt: null,
           updatedAt: new Date(),
         })
         .where(eq(issueRuns.id, issueRunId));
+
+      // Invariant 4: validate output schema (if attached) BEFORE marking completed.
+      // recordRunCompletion fires after sendAndWait, before run is finalised.
+      await recordRunCompletion(
+        issueRunId,
+        result.output ?? '',
+        workflowVersionId,
+      );
     } else {
       await markFailed(db, issueRunId, result.errorMessage ?? 'Agent run failed');
     }
@@ -176,4 +184,21 @@ async function markFailed(
       updatedAt: new Date(),
     })
     .where(eq(schema.issueRuns.id, issueRunId));
+}
+
+/**
+ * Look up the workflow version attached to an issue (if any).
+ * Used to pass workflowVersionId to recordRunCompletion for Invariant 4.
+ */
+async function resolveWorkflowVersionId(
+  db: DrizzleDb,
+  issueId: string,
+): Promise<string | null> {
+  const { issueWorkflows } = schema;
+  const rows = await db
+    .select({ workflowVersionId: issueWorkflows.workflowVersionId })
+    .from(issueWorkflows)
+    .where(eq(issueWorkflows.issueId, issueId))
+    .limit(1);
+  return rows[0]?.workflowVersionId ?? null;
 }

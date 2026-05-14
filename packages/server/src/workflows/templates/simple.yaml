@@ -1,0 +1,33 @@
+# Simple Review Workflow
+# A three-step workflow: auto-route → agent run → manual approve
+name: "Simple Review"
+description: "Route an issue to the right agent, let them work, then approve the result."
+output_schema:
+  type: object
+  properties:
+    summary:
+      type: string
+      description: "A brief summary of what was done"
+    result:
+      type: string
+      enum: [approved, rejected, needs_changes]
+      description: "The outcome of the agent's work"
+    notes:
+      type: string
+      description: "Optional notes for the approver"
+  required: [summary, result]
+steps:
+  - type: route
+    description: "Auto-assign to the right agent based on routing rules"
+  - type: agent_run
+    description: "Execute the assigned agent's work"
+    prompt: |
+      Review this issue carefully and complete the requested work.
+      Return your response as JSON matching this schema:
+      - summary: what you did (string)
+      - result: approved | rejected | needs_changes
+      - notes: any notes for the approver (optional string)
+  - type: approve
+    description: "Human or lead agent reviews and approves"
+    approvers: [lead]
+    timeout: 24h
