@@ -1,6 +1,29 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { apiFetch } from './client.ts'
 
+export interface InitSquadInput {
+  path: string
+  projectName?: string
+}
+
+export interface InitSquadResult {
+  projectId: string
+  projectName: string
+  squadPath: string
+}
+
+export interface CreateSquadInput {
+  parentPath: string
+  projectName: string
+}
+
+export interface CreateSquadResult {
+  projectId: string
+  projectName: string
+  squadPath: string
+  projectPath: string
+}
+
 export interface SquadDirectory {
   path: string
   name: string
@@ -43,6 +66,34 @@ export function useRegisterSquad() {
         projectName: r.data.name,
         squadPath: r.data.squadPath,
       })),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['projects'] })
+    },
+  })
+}
+
+export function useInitSquad() {
+  const queryClient = useQueryClient()
+  return useMutation<InitSquadResult, Error, InitSquadInput>({
+    mutationFn: (input) =>
+      apiFetch<{ ok: boolean; data: InitSquadResult }>('/api/squad/init', {
+        method: 'POST',
+        body: JSON.stringify(input),
+      }).then((r) => r.data),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['projects'] })
+    },
+  })
+}
+
+export function useCreateSquad() {
+  const queryClient = useQueryClient()
+  return useMutation<CreateSquadResult, Error, CreateSquadInput>({
+    mutationFn: (input) =>
+      apiFetch<{ ok: boolean; data: CreateSquadResult }>('/api/squad/create', {
+        method: 'POST',
+        body: JSON.stringify(input),
+      }).then((r) => r.data),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['projects'] })
     },
