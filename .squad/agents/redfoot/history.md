@@ -43,4 +43,5 @@ Major doc cuts:
 
 ## Learnings
 
-<!-- Append learnings below -->
+- **2026-05-14 PRD Copy Pass (tagged):** Tagged to perform copy pass on `docs/prd.md` (voice/clarity, no content changes — the five invariants are paste-locked and canonical).
+

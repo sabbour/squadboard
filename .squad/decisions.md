@@ -44,6 +44,16 @@ Existing roles unchanged: McManus (Lead Architect), Keyser (Frontend Dev), Fenst
 **Why:** Same SQL across local + cloud is worth more than a smaller binary. SQLite was considered and rejected.
 **Owner:** Hockney.
 
+### 2026-05-14: PRD canonicalization
+**By:** McManus (Lead Architect)
+**What:** `docs/prd.md` (~12KB) is the canonical PRD for Squadboard. The research doc (`squad-web-design-v4.md`, 90KB) is the deep design appendix — implementation spec only. The five engine invariants are pasted verbatim into PRD §5. Roadmap = one-line-per-demo only. Verbal listed under re-roled title (Real-time / WebSocket Dev, not Interaction Dev).
+**Next:** Redfoot to copy-pass for voice/clarity on `docs/prd.md`. Deep design file to be moved into repo proper (separate routing).
+
+### 2026-05-14: Hacking phase workflow
+**By:** Ahmed Sabbour (via Copilot)
+**What:** We are in **hacking phase**. (1) Local git only. (2) Use worktrees per issue (`squad/{issue-number}-{slug}` branch). (3) No PRs. (4) Merge frequently into `main` locally. (5) Reviewer rejections (Kujan/Redfoot) happen inline on branch before merge, not via PR. Standard PR workflow resumes when user says "exit hacking phase".
+**Why:** User directive — explicit team operating mode for current development phase.
+
 ## Governance
 
 - All meaningful changes require team consensus

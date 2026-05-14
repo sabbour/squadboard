@@ -1,0 +1,12 @@
+# Scribe — History
+
+## Core Context
+
+- **Project:** A web design project (v4 iteration) for the Squad product site
+- **Role:** Session Logger
+- **Joined:** 2026-05-14T08:12:50.176Z
+
+## Learnings
+
+- **2026-05-14 Inbox Merge:** Merged 2 decisions into decisions.md: (1) PRD canonicalization (McManus) — `docs/prd.md` is canonical, research doc is deep design appendix; (2) Hacking-phase workflow (user) — local git only, worktrees per issue, no PRs, merge frequently to main. Updated team history files + committed.
+
