@@ -158,3 +158,34 @@
 - Build verified: `tsc -b && vite build` passes clean, 0 TS errors.
 
 Commit: `46b7ce6a`
+
+## [2026-05-14] Dark Mode Color Sweep — Phase 2 (Continuation)
+
+Completed the comprehensive dark mode color sweep across all remaining files.
+
+### Files Updated
+- `packages/client/src/styles/globals.css` — removed dark defaults from `body`
+- `packages/client/src/pages/Settings.tsx` — all dark hex → CSS vars; budget card; progress bar; save button states
+- `packages/client/src/pages/Agents.tsx` — input styles; tabs; test routing panel; routing stats/log section labels
+- `packages/client/src/pages/WorkflowEditor.tsx` — header; YAML editor; syntax highlight fallback colors (HTML inline style strings updated to light equivalents)
+- `packages/client/src/components/agents/AgentDetailPanel.tsx` — panel bg; borders; close button hover; text colors
+- `packages/client/src/components/agents/CharterEditor.tsx` — textarea bg; save button text color
+- `packages/client/src/components/costs/CostDashboard.tsx` — MTD card; table wrappers; BudgetBar; progress tracks
+- `packages/client/src/components/costs/CostDisplay.tsx` — inline cost/token text colors
+- `packages/client/src/components/reviews/ReviewPanel.tsx` — all event card colors; button states; suggestion list; timestamp
+- `packages/client/src/components/routing/RoutingLogTable.tsx` — table border; th styles; cell colors (uses Fluent Table)
+- `packages/client/src/components/routing/RoutingStatsPanel.tsx` — TierBar track; legend text; StatCard sub text
+- `packages/client/src/components/runs/RunButton.tsx` — dropdown trigger/popup; cancel button; agent list item text
+- `packages/client/src/components/runs/RunHistory.tsx` — run row button bg/border; duration/chevron text
+- `packages/client/src/components/settings/McpConfigPanel.tsx` — copy button; accordion header/content; config pre; tool items; project footer
+- `packages/client/src/components/workflows/WorkflowList.tsx` — toolbar border; empty state; table cell colors
+- `packages/client/src/components/workflows/WorkflowStepFlow.tsx` — SVG arrows (stroke/fill); inactive box fill; label text fill
+
+### Intentional Exceptions (Kept Dark)
+- `RunOutputPanel.tsx` — terminal UX (dark bg with green text)
+- `Avatar.tsx`, `AgentCard.tsx`, `AgentDetailPanel.tsx` — `color: '#0d1117'` on avatar initials (dark text on vivid background)
+- `LabelBadge.tsx`, `StatusBadge.tsx`, `RunStatusBadge.tsx`, `ReviewDecisionBadge.tsx` — semantic badge/label colors
+- `AgentCard.tsx` status dot — `#3fb950`/`#8b949e` (active/inactive semantic indicator)
+
+### Build Verification
+Build passed cleanly: `tsc -b && vite build` — 2827 modules, no TypeScript errors.
