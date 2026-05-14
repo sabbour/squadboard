@@ -136,3 +136,25 @@
 - Dialog modals use `open={true}` pattern since parents control visibility via conditional rendering
 - `makeStyles` pseudo-selector `'&:hover'` not used on Card (Griffel type strictness) — Card has built-in hover behavior
 - Build clean: 0 TypeScript errors, bundle 1,019 kB gzip 294 kB
+
+## 2026-05-14 — Crash fix: Agents + Workflows pages + CSS migration regressions
+
+### Root causes found
+
+**Agents.tsx crash** — JSX syntax error: the "Hire Agent" `<button>` was missing its closing `>` after the last prop (`onMouseLeave`). React/TSC couldn't parse the children (`<span>+</span>` and text) as valid JSX, causing `TS2657: JSX expressions must have one parent element` and several cascading parse errors. The build failed, so the production bundle was not generated → page crashed.
+
+**Workflows.tsx crash** — Same root cause: the build failed entirely due to the Agents.tsx syntax error (and the CSS migration regressions below), so WorkflowList and the page never reached the browser in a valid state.
+
+**ReviewPanel.tsx regressions (from CSS var migration):**
+1. `span` content line was corrupted — the `{POLICY_LABELS[reviewGroup.policy.kind] ` fragment was eaten and `> ?? reviewGroup.policy.kind}` was left as literal text, producing invalid JSX at line 106.
+2. `button` style object was missing the closing `}}` (deleted during the color replace), causing parse errors at line 240+.
+
+**Settings.tsx regression** — `display: 'flex'` was deleted from the spend card div during the color migration, leaving `alignItems`/`justifyContent`/`flexWrap` properties with no effect (layout broken).
+
+### Fixes applied
+- `Agents.tsx`: Added the missing `>` to close the button's JSX opening tag.
+- `ReviewPanel.tsx`: Restored `{POLICY_LABELS[…] ?? …}` JSX expression; restored `}}` closing the style object.
+- `Settings.tsx`: Re-added `display: 'flex'` to the spend card container.
+- Build verified: `tsc -b && vite build` passes clean, 0 TS errors.
+
+Commit: `46b7ce6a`
