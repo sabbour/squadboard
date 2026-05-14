@@ -44,3 +44,6 @@ Every demo ships with a passing E2E test. Critical durability suites land in:
 ## Learnings
 
 <!-- Append learnings below -->
+
+### 2026-05-14
+Wrote `docs/acceptance-criteria.md` — 572 lines, 15 demo sections, functional + durability ACs throughout. Key insight: Demos 1–3 and 13 are UI-only or read-only — durability ACs are minimal or absent (4 demos total). Demos 4–12, 14–15 all touch the workflow engine and require invariant coverage (11 demos with durability ACs). Invariants I-2 (single-spawner) and I-3 (lease/heartbeat) appear in the most demos (6–7 each) and will be the hardest to exercise reliably in CI — they need real clock control (fake clock or time-warp) or process-kill harnesses; neither is trivially parallelizable in a shared `embedded-postgres` environment. Biggest quality risk: Demo 10 (fan-out) has the most complex durability surface — the six-step transaction (I-5) requires a kill-mid-transaction harness that no other demo needs, and it's the only place where partial rollback correctness must be proven end-to-end.

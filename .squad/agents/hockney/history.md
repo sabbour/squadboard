@@ -80,3 +80,14 @@ Demo 6 workflow engine: YAML parser (js-yaml), WorkflowDefinition (route/agent_r
 - `refreshInstallationToken` is the canonical fetch path; `getInstallationToken` is the cache-check gateway (both private static).
 - Existing `new GitHubClient(token, owner, repo)` constructor kept — all current callers (sync.ts, github-sync route) work unchanged.
 - jose RS256 JWT: `importPKCS8` expects PEM string (PKCS#8 format, "-----BEGIN PRIVATE KEY-----"). GitHub App private keys downloaded from GitHub UI are PKCS#1 ("-----BEGIN RSA PRIVATE KEY-----") — downstream code must convert with `openssl pkcs8 -topk8 -nocrypt` if needed. Document this in the API route that accepts the private key.
+
+### 2026-05-14 — GitHub sync API + README for GitHub App auth (github-app-api todo)
+
+- `PUT /api/projects/:id/github` now accepts two shapes: `{ authType:'pat', token, owner, repo }` and `{ authType:'app', appId, installationId, privateKey, owner, repo }`. Missing `authType` defaults to `'pat'` for backward compat. Stores into `githubAuthType`, `githubToken`, `githubAppId`, `githubAppInstallationId`, `githubAppPrivateKey` columns; nullifies unused set on each save.
+- `GET /api/projects/:id/github` returns `authType`; App auth returns `appId` + `installationId` but never `privateKey`; PAT auth returns redacted token (last 4 chars visible).
+- `POST /api/projects/:id/github/sync` checks auth-type-appropriate config fields and calls `GitHubSync.fromProject(id, project)`.
+- `GitHubSync` constructor changed from `(projectId, token, owner, repo)` to `(projectId, client: GitHubClient)`. Static async `fromProject()` factory picks `fromPat` vs `fromApp` based on `githubAuthType`.
+- `startSyncLoop` signature simplified to `(projectId, intervalMs?)` — reads full project row from DB each tick so App installation token cache can refresh transparently.
+- `client.ts` had duplicate interface+class declarations from a prior session's botched merge; removed the dead duplicate block (lines 369–592).
+- Pre-existing TS2742 router type errors (across all route files) and `drizzle.config.ts` rootDir error remain unfixed — they are build-baseline failures, not regressions from this task.
+- README GitHub Sync section expanded: PAT + App instructions, PKCS#8 conversion command, security note on plaintext key storage, GET response field table.

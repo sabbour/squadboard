@@ -19,3 +19,5 @@
 - **2026-05-14 Demo 3 agents UI:** AgentGrid (two sections: active/disabled), AgentCard (initials avatar, model badge, status dot), AgentDetailPanel slide-over (Overview + Charter tabs, enable/disable toggle), HireAgentModal (kebab name validation, model selector). Updated Layout to enable Agents nav.
 
 - **2026-05-14 Demo 4 run UI:** RunButton (agent selector dropdown + start run), RunStatusBadge (5 states with pulse animation), RunOutputPanel (SSE EventSource, terminal-style, auto-scroll), RunHistory (Runs tab in CardDetail), CostDisplay. Updated IssueCard footer + CardDetail tabs.
+
+- **2026-05-14 dev script optimization (backlog batch 1):** Root `pnpm dev` script fixed to run server+client concurrently. Changed from single `--filter @sabbour/squadboard-server dev` to dual `--filter @sabbour/squadboard-server --filter @sabbour/squadboard-client run dev`. No extra dependencies; pnpm's native multi-filter parallelization works cross-platform. Express on :3000, Vite on :5173, proxy already configured. Merged to main.

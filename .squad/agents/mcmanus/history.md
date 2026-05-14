@@ -17,3 +17,5 @@
   - **Pattern:** When distilling a research doc into a PRD, the rule is: the PRD answers "what and why"; the research doc answers "how." If a section requires reading code or schema to understand, it belongs in the research doc, not the PRD.
   - **Next:** Redfoot should copy-pass for voice. Deep design file needs to move into the repo proper.
 
+- **2026-05-14 Deliverables Decomposition:** Decomposed PRD into `docs/deliverables.md` — 15 demos, dependency graph, owner assignments. Demo 1 (Hello Squadboard) has no dependencies; Demos 14-15 depend on most prior work. Key architectural insight: demos split cleanly into Foundation → Engine Core → Board UI → Workflow → Advanced layers. Owner assignments follow domain routing: Hockney owns engine-heavy demos, Kobayashi owns SDK seams, Keyser owns UI-primary demos, Verbal owns real-time.
+
