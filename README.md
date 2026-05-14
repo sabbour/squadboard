@@ -36,7 +36,16 @@ Before you begin, ensure you have the following installed:
   npm install -g pnpm
   ```
 
-No external Postgres needed — Squadboard runs an embedded Postgres instance locally at `~/.squadboard/data`.
+No external Postgres needed on macOS or linux/x64 — Squadboard runs an embedded Postgres instance locally at `~/.squadboard/data`.
+
+> **linux/arm64 (e.g. Raspberry Pi, Apple Silicon under Linux):** The embedded Postgres binary requires
+> system shared libraries (`libpq.so.5`, `libicuuc.so.60`) that may not be present.  Set
+> `DATABASE_URL=postgresql://localhost:5432/squadboard` and ensure Postgres is running, or install it:
+> ```bash
+> sudo apt install postgresql   # starts on port 5432 by default
+> export DATABASE_URL=postgresql://postgres@localhost:5432/squadboard
+> ```
+> The server will print a clear error and fall back automatically when the embedded binary cannot run.
 
 ### Installation
 
