@@ -1,0 +1,17 @@
+{
+  "name": "@sabbour/squadboard",
+  "version": "0.1.0",
+  "description": "Local-first kanban + workflow board for Squad agents",
+  "license": "MIT",
+  "private": false,
+  "type": "module",
+  "scripts": {
+    "build": "pnpm -r build",
+    "dev": "pnpm --filter @sabbour/squadboard-server dev",
+    "start": "pnpm --filter @sabbour/squadboard-cli start"
+  },
+  "engines": {
+    "node": ">=20.0.0",
+    "pnpm": ">=8.0.0"
+  }
+}

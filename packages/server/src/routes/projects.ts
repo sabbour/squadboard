@@ -1,0 +1,46 @@
+import { Router } from 'express';
+import type { Request, Response } from 'express';
+import { eq } from 'drizzle-orm';
+import { getDb, schema } from '../db/index.js';
+
+const router = Router();
+
+router.get('/', async (_req: Request, res: Response) => {
+  const db = getDb();
+  const rows = await db.select().from(schema.projects);
+  res.json(rows);
+});
+
+router.post('/', async (req: Request, res: Response) => {
+  const { name, path } = req.body as { name: string; path: string };
+
+  if (!name || !path) {
+    res.status(400).json({ error: '`name` and `path` are required' });
+    return;
+  }
+
+  const db = getDb();
+  const [created] = await db
+    .insert(schema.projects)
+    .values({ name, path })
+    .returning();
+
+  res.status(201).json(created);
+});
+
+router.get('/:id', async (req: Request, res: Response) => {
+  const db = getDb();
+  const [project] = await db
+    .select()
+    .from(schema.projects)
+    .where(eq(schema.projects.id, req.params.id));
+
+  if (!project) {
+    res.status(404).json({ error: 'Project not found' });
+    return;
+  }
+
+  res.json(project);
+});
+
+export default router;

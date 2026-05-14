@@ -79,6 +79,25 @@ Existing roles unchanged: McManus (Lead Architect), Keyser (Frontend Dev), Fenst
 **What:** `docs/acceptance-criteria.md` defines functional + durability ACs per demo. A demo is NOT shippable until all its ACs have passing tests. Kujan has reject authority on any durability/recovery criterion. All 5 engine invariants are tagged in the demos that exercise them.
 **Rationale:** Durability and recovery contracts are non-negotiable. If a PR lands without AC coverage, Kujan rejects, and a different agent (not the original author) writes the fix.
 
+### 2026-05-14: Demo 1 backend scaffold choices
+**By:** Hockney
+**What:** pnpm workspaces monorepo. Express v5 + TypeScript ESM. embedded-postgres data dir: ~/.squadboard/data. Drizzle ORM for schema management. CLI package with `squadboard init` command. Port 3000.
+**Details:**
+- `packages/server` — Express v5, TypeScript ESM, embedded-postgres on port 54321, Drizzle ORM + pg driver
+- `packages/cli` — `squadboard init` command, TCP-probes port 3000 before opening browser
+- Bootstrap schema runs `CREATE TABLE IF NOT EXISTS` on server startup (Demo 1 pragmatic); proper `pnpm db:generate && pnpm db:push` supersedes this
+- Wired Kobayashi's `/api/squad/register` to real DB insert (upsert by path column) — removed sidecar-only stub
+- `embedded-postgres` data dir `~/.squadboard/data`, internal port 54321 (avoids clash with system Postgres on 5432)
+- Client dist path: `packages/server/dist` → `../..` → `packages/client/dist` (Keyser's build output)
+
+### 2026-05-14: .squad/ discovery strategy
+**By:** Kobayashi
+**What:** Discovery scans home dir (depth 3) + common dev dirs (~/src, ~/code, ~/projects, ~/dev, ~/workspace). Validation: must have team.md. Auto-registration creates projects row. Manual path entry also supported via GET /api/squad/validate.
+
+### 2026-05-14: Demo 1 frontend stack
+**By:** Keyser
+**What:** Vite 6 + React 19 + TypeScript ESM. Tailwind CSS v4. TanStack Query v5. React Router v7. Dark mode first (GitHub palette). No component library — custom components only. Fenster does visual passes. API client proxies to localhost:3000.
+
 ## Governance
 
 - All meaningful changes require team consensus

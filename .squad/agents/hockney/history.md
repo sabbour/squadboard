@@ -40,3 +40,6 @@
 ## Learnings
 
 <!-- Append learnings below -->
+
+### 2026-05-14 — Demo 1 backend scaffold
+Demo 1 backend scaffold: Express v5 + embedded-postgres + Drizzle ORM. Monorepo with pnpm workspaces. packages/server (backend), packages/cli (npx entry). Schema: projects + settings tables. Server port 3000, health endpoint, projects CRUD stubs. Wired Kobayashi's squad discovery routes to real DB (upsert by path). CLI uses waitForPort (TCP probe, 15s timeout) before opening browser — avoids brittle sleep().
