@@ -65,3 +65,18 @@ Demo 6 workflow engine: YAML parser (js-yaml), WorkflowDefinition (route/agent_r
 - `githubAuthType` is nullable TEXT (not an enum) so no `DO $$ BEGIN ALTER TYPE ... END $$` dance is needed — 'pat' vs 'app' is validated at the app layer, not the DB layer.
 - `githubAppPrivateKey` is stored plaintext TEXT in the hacking phase; a secrets manager integration (Vault, AWS SM) is deferred to prod hardening.
 - No routes, API handlers, or client files were touched — schema-only step per task scope.
+
+### 2026-05-14 — GitHub App schema integration (backlog batch 1)
+
+- Schema additions merged into backlog batch 1 orchestration. Decision recorded to decisions.md. Integrated into team session log. Plaintext PEM storage acceptable for local dev; secrets manager path documented for production. Backward-compatible: existing NULL auth_type rows treated as 'pat'. API client logic is follow-up task (future).
+
+### 2026-05-14 — GitHub App JWT auth in GitHubClient (github-app-client todo)
+
+- Added `jose` (^6.0.0, RS256 JWT signing, pure ESM) to `packages/server/package.json`.
+- Module-level `installationTokenCache: Map<string, {token, expiresAt}>` — keyed by `${appId}:${installationId}`, invalidated 60 s before `expires_at`.
+- `GitHubClient.fromPat(token, owner, repo)` — static factory, wraps existing constructor (zero behavior change for existing callers).
+- `GitHubClient.fromApp(appId, installationId, privateKey, owner, repo)` — async factory: generates App JWT via `generateAppJwt`, POSTs to `/app/installations/{id}/access_tokens`, caches result, returns client with installation token.
+- `generateAppJwt` uses `importPKCS8` + `SignJWT` from `jose`; sets `iat=now-60, exp=now+600, iss=appId` per GitHub spec.
+- `refreshInstallationToken` is the canonical fetch path; `getInstallationToken` is the cache-check gateway (both private static).
+- Existing `new GitHubClient(token, owner, repo)` constructor kept — all current callers (sync.ts, github-sync route) work unchanged.
+- jose RS256 JWT: `importPKCS8` expects PEM string (PKCS#8 format, "-----BEGIN PRIVATE KEY-----"). GitHub App private keys downloaded from GitHub UI are PKCS#1 ("-----BEGIN RSA PRIVATE KEY-----") — downstream code must convert with `openssl pkcs8 -topk8 -nocrypt` if needed. Document this in the API route that accepts the private key.
