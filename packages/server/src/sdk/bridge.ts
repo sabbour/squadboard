@@ -6,11 +6,13 @@ import { eq } from 'drizzle-orm';
 import { createAgentSession } from './squad-client.js';
 import { OutputStreamer } from './output-streamer.js';
 import { CostTracker } from './cost-tracker.js';
+import { BudgetGuard, BudgetExceededError } from './budget-guard.js';
 
 export type { IssueRun } from '../db/schema.js';
 
 export interface AgentRunInput {
   issueRunId: string;
+  projectId: string; // needed for budget guard
   agent: Agent;
   issueTitle: string;
   issueBody: string;
@@ -24,6 +26,7 @@ export interface AgentRunOutput {
   tokensUsed?: number;
   costUsd?: string;
   errorMessage?: string;
+  budgetExceeded?: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -35,6 +38,21 @@ export async function executeAgentRun(input: AgentRunInput): Promise<AgentRunOut
   const db = getDb();
   const streamer = new OutputStreamer(input.issueRunId, db);
   const tracker = new CostTracker(input.issueRunId, db);
+
+  // Budget guard check (opt-in: no-op if project has no budget configured)
+  try {
+    await BudgetGuard.check(input.projectId);
+  } catch (err: unknown) {
+    if (err instanceof BudgetExceededError) {
+      return {
+        success: false,
+        output: '',
+        errorMessage: err.message,
+        budgetExceeded: true,
+      };
+    }
+    throw err;
+  }
 
   try {
     // 1. Resolve agent charter from disk.
@@ -56,13 +74,18 @@ export async function executeAgentRun(input: AgentRunInput): Promise<AgentRunOut
     await streamer.write(result.output);
     await streamer.flush();
 
-    // 5. Record costs.
-    await tracker.record(result.tokensUsed, result.costUsd);
+    // 5. Record costs with granular input/output split.
+    const modelId = input.agent.model ?? 'claude-sonnet-4';
+    if (result.inputTokens != null && result.outputTokens != null) {
+      await tracker.recordCost(result.inputTokens, result.outputTokens, modelId);
+    } else {
+      await tracker.record(result.tokensUsed, result.costUsd);
+    }
 
     // Mark run success.
     await db
       .update(issueRuns)
-      .set({ status: 'success' })
+      .set({ status: 'completed' })
       .where(eq(issueRuns.id, input.issueRunId));
 
     return {

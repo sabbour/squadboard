@@ -13,6 +13,8 @@ export interface SessionResult {
   output: string;
   tokensUsed: number;
   costUsd: string;
+  inputTokens?: number;
+  outputTokens?: number;
 }
 
 function stubSession(options: SessionOptions): SessionResult {

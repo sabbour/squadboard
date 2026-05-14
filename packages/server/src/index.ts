@@ -13,6 +13,7 @@ import labelsRouter from './routes/labels.js';
 import { issueRunsRouter, projectRunsRouter } from './routes/runs.js';
 import routingRouter from './routes/routing.js';
 import { workflowsRouter, issueWorkflowRouter } from './routes/workflows.js';
+import costsRouter from './routes/costs.js';
 import { dispatcher } from './engine/dispatcher.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -47,6 +48,7 @@ async function main(): Promise<void> {
   app.use('/api/projects/:projectId/routing', routingRouter);
   app.use('/api/projects/:projectId/workflows', workflowsRouter);
   app.use('/api/projects/:projectId/issues/:issueId/workflow', issueWorkflowRouter);
+  app.use('/api/projects/:id/costs', costsRouter);
 
   if (existsSync(CLIENT_DIST)) {
     app.use(express.static(CLIENT_DIST));

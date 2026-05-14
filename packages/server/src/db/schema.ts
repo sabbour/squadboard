@@ -1,4 +1,4 @@
-import { pgTable, uuid, text, timestamp, integer, boolean, pgEnum, primaryKey } from 'drizzle-orm/pg-core';
+import { pgTable, uuid, text, timestamp, integer, boolean, pgEnum, primaryKey, numeric } from 'drizzle-orm/pg-core';
 
 export const agentStatusEnum = pgEnum('agent_status', ['active', 'disabled', 'retired']);
 
@@ -6,6 +6,7 @@ export const projects = pgTable('projects', {
   id: uuid('id').primaryKey().defaultRandom(),
   name: text('name').notNull(),
   path: text('path').notNull(), // path to .squad/ directory
+  monthlyBudgetUsd: numeric('monthly_budget_usd', { precision: 10, scale: 2 }), // opt-in budget cap
   createdAt: timestamp('created_at').notNull().defaultNow(),
   updatedAt: timestamp('updated_at').notNull().defaultNow(),
 });
@@ -111,7 +112,11 @@ export const issueRuns = pgTable('issue_runs', {
   completedAt: timestamp('completed_at'),
   output: text('output'),
   errorMessage: text('error_message'),
+  // Legacy total-token field kept for backward compat
   costTokens: integer('cost_tokens').default(0),
+  // Demo 7: granular token tracking
+  inputTokens: integer('input_tokens').default(0),
+  outputTokens: integer('output_tokens').default(0),
   costUsd: text('cost_usd').default('0'),
   createdAt: timestamp('created_at').notNull().defaultNow(),
   updatedAt: timestamp('updated_at').notNull().defaultNow(),
@@ -135,6 +140,13 @@ export const stepRuns = pgTable('step_runs', {
   stepType: text('step_type').notNull(),
   status: runStatusEnum('status').notNull().default('pending'),
   pinnedAgentRevisions: text('pinned_agent_revisions'), // JSON: {agentName: charterHash}; snapshotted at step start
+  // Demo 7: retry policy
+  retryCount: integer('retry_count').default(0),
+  maxRetries: integer('max_retries').default(3),
+  retryDelay: integer('retry_delay').default(0), // ms delay before next retry (reserved for future use)
+  // Demo 7: lease for step-level crash recovery
+  leaseExpiresAt: timestamp('lease_expires_at'),
+  heartbeatAt: timestamp('heartbeat_at'),
   createdAt: timestamp('created_at').notNull().defaultNow(),
   updatedAt: timestamp('updated_at').notNull().defaultNow(),
 });

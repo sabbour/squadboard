@@ -217,6 +217,21 @@ async function bootstrapSchema(): Promise<void> {
 
     ALTER TABLE step_runs
       ADD COLUMN IF NOT EXISTS pinned_agent_revisions TEXT;
+
+    -- Demo 7: resilience + cost schema additions
+    ALTER TABLE projects
+      ADD COLUMN IF NOT EXISTS monthly_budget_usd NUMERIC(10, 2);
+
+    ALTER TABLE issue_runs
+      ADD COLUMN IF NOT EXISTS input_tokens  INTEGER DEFAULT 0,
+      ADD COLUMN IF NOT EXISTS output_tokens INTEGER DEFAULT 0;
+
+    ALTER TABLE step_runs
+      ADD COLUMN IF NOT EXISTS retry_count    INTEGER DEFAULT 0,
+      ADD COLUMN IF NOT EXISTS max_retries    INTEGER DEFAULT 3,
+      ADD COLUMN IF NOT EXISTS retry_delay    INTEGER DEFAULT 0,
+      ADD COLUMN IF NOT EXISTS lease_expires_at TIMESTAMPTZ,
+      ADD COLUMN IF NOT EXISTS heartbeat_at    TIMESTAMPTZ;
   `);
 
   console.log('[db] schema bootstrapped');

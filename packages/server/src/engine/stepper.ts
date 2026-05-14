@@ -128,6 +128,7 @@ export async function runWorker(issueRunId: string): Promise<void> {
   try {
     const result = await executeAgentRun({
       issueRunId,
+      projectId: project.id,
       agent,
       issueTitle: issue.title,
       issueBody: issue.body ?? '',
