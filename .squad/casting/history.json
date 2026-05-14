@@ -1,0 +1,56 @@
+{
+  "assignment_cast_snapshots": {
+    "repl-cast-2026-05-14T08:12:50.143Z": {
+      "created_at": "2026-05-14T08:12:50.143Z",
+      "agents": [
+        "mcmanus",
+        "keyser",
+        "fenster",
+        "verbal",
+        "scribe",
+        "ralph"
+      ],
+      "universe": "The Usual Suspects"
+    },
+    "augment-squadboard-2026-05-14T08:17:03.000Z": {
+      "created_at": "2026-05-14T08:17:03.000Z",
+      "reason": "Project pivoted from 'foo' to Squadboard (full-stack workflow engine + kanban). Added backend, SDK integration, testing, and DevRel; re-roled Verbal from Interaction Dev to Real-time/WebSocket Dev.",
+      "agents_added": [
+        "hockney",
+        "kobayashi",
+        "kujan",
+        "redfoot"
+      ],
+      "agents_rerolled": [
+        {
+          "agent": "verbal",
+          "from": "Interaction Dev",
+          "to": "Real-time / WebSocket Dev"
+        }
+      ],
+      "agents": [
+        "mcmanus",
+        "keyser",
+        "fenster",
+        "verbal",
+        "hockney",
+        "kobayashi",
+        "kujan",
+        "redfoot",
+        "scribe",
+        "ralph"
+      ],
+      "universe": "The Usual Suspects"
+    }
+  },
+  "universe_usage_history": [
+    {
+      "universe": "The Usual Suspects",
+      "used_at": "2026-05-14T08:12:50.143Z"
+    },
+    {
+      "universe": "The Usual Suspects",
+      "used_at": "2026-05-14T08:17:03.000Z"
+    }
+  ]
+}
