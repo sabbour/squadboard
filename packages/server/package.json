@@ -13,6 +13,7 @@
     "db:studio": "drizzle-kit studio"
   },
   "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.29.0",
     "ajv": "^8.17.1",
     "chokidar": "^3.6.0",
     "drizzle-orm": "^0.36.4",

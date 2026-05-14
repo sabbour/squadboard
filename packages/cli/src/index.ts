@@ -7,11 +7,25 @@ import { dirname, join } from 'node:path';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
+const MCP_CONFIG = JSON.stringify(
+  {
+    mcpServers: {
+      squadboard: {
+        command: 'squadboard',
+        args: ['mcp'],
+      },
+    },
+  },
+  null,
+  2,
+);
+
 const USAGE = `
 Squadboard CLI v0.1.0
 
 Usage:
   squadboard init   Start the Squadboard server and open the UI
+  squadboard mcp    Start the MCP server (stdio) for Claude Desktop / Cursor
 
 `.trim();
 
@@ -22,7 +36,7 @@ if (!command || command === '--help' || command === '-h') {
   process.exit(command ? 0 : 1);
 }
 
-if (command !== 'init') {
+if (command !== 'init' && command !== 'mcp') {
   console.error(`Unknown command: ${command}`);
   console.error('Run `squadboard --help` for usage.');
   process.exit(1);
@@ -30,6 +44,7 @@ if (command !== 'init') {
 
 // packages/cli/dist/index.js → up 2 → packages/ → server/dist/index.js
 const SERVER_ENTRY = join(__dirname, '..', '..', 'server', 'dist', 'index.js');
+const MCP_ENTRY = join(__dirname, '..', '..', 'server', 'dist', 'mcp', 'index.js');
 const PORT = parseInt(process.env.PORT ?? '3000', 10);
 const URL = `http://localhost:${PORT}`;
 
@@ -65,7 +80,51 @@ async function openBrowser(url: string): Promise<void> {
   await open(url);
 }
 
+/**
+ * `squadboard mcp` — print the MCP server config JSON then spawn the server.
+ * The MCP server (stdio) is consumed by Claude Desktop, Cursor, etc.
+ */
+async function runMcp(): Promise<void> {
+  console.error('[squadboard] MCP server config (paste into your MCP host):');
+  console.error(MCP_CONFIG);
+  console.error('');
+  console.error('[squadboard] Starting MCP server on stdio…');
+
+  const mcpProcess = spawn('node', [MCP_ENTRY], {
+    stdio: 'inherit',
+    env: process.env,
+  });
+
+  mcpProcess.on('error', (err: Error) => {
+    console.error('[cli] failed to start MCP server:', err.message);
+    console.error(
+      '  Make sure you have built the server first: cd packages/server && pnpm build',
+    );
+    process.exit(1);
+  });
+
+  mcpProcess.on('exit', (code) => {
+    if (code !== 0 && code !== null) {
+      process.exit(code);
+    }
+  });
+
+  process.on('SIGINT', () => {
+    mcpProcess.kill('SIGINT');
+    process.exit(0);
+  });
+  process.on('SIGTERM', () => {
+    mcpProcess.kill('SIGTERM');
+    process.exit(0);
+  });
+}
+
 async function main(): Promise<void> {
+  if (command === 'mcp') {
+    await runMcp();
+    return;
+  }
+
   console.log('🎯 Starting Squadboard…');
 
   const server = spawn('node', [SERVER_ENTRY], {
