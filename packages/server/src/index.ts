@@ -15,9 +15,13 @@ import { issueRunsRouter, projectRunsRouter } from './routes/runs.js';
 import routingRouter from './routes/routing.js';
 import { workflowsRouter, issueWorkflowRouter, workflowRunsRouter, stepRunsRouter } from './routes/workflows.js';
 import costsRouter from './routes/costs.js';
+import analyticsRouter from './routes/analytics.js';
+import githubSyncRouter from './routes/github-sync.js';
 import { dispatcher } from './engine/dispatcher.js';
 import { initWebSocketServer } from './realtime/ws-server.js';
 import { listPresence } from './realtime/presence.js';
+import { initGitHubSyncHooks } from './github/sync-hook.js';
+import { stopAllSyncLoops } from './github/sync.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -37,6 +41,9 @@ async function main(): Promise<void> {
   // Start the workflow engine dispatcher (5 s tick: sweep → wake → advance)
   dispatcher.start();
 
+  // Demo 15: register GitHub sync event-bus hooks
+  initGitHubSyncHooks();
+
   const app = express();
   app.use(express.json());
 
@@ -52,6 +59,9 @@ async function main(): Promise<void> {
   app.use('/api/projects/:projectId/workflows', workflowsRouter);
   app.use('/api/projects/:projectId/issues/:issueId/workflow', issueWorkflowRouter);
   app.use('/api/projects/:id/costs', costsRouter);
+  app.use('/api/projects/:id/analytics', analyticsRouter);
+  // Demo 15: GitHub sync endpoints
+  app.use('/api/projects/:id/github', githubSyncRouter);
   // Demo 9: peer review endpoints (not project-scoped)
   app.use('/api/workflow-runs', workflowRunsRouter);
   app.use('/api/step-runs', stepRunsRouter);
@@ -93,6 +103,7 @@ async function main(): Promise<void> {
   const gracefulShutdown = (signal: string) => {
     console.log(`[squadboard] received ${signal}`);
     dispatcher.stop();
+    stopAllSyncLoops(); // Demo 15: stop GitHub sync polling loops
     server.close(() => {
       closeDb()
         .then(() => process.exit(0))

@@ -7,12 +7,15 @@ import Costs from './pages/Costs.tsx'
 import Workflows from './pages/Workflows.tsx'
 import WorkflowEditor from './pages/WorkflowEditor.tsx'
 import Settings from './pages/Settings.tsx'
+import Dashboard from './pages/Dashboard.tsx'
 
 export default function App() {
   return (
     <Routes>
       <Route element={<Layout />}>
         <Route index element={<ProjectPicker />} />
+        <Route path="projects/:id" element={<Navigate to="dashboard" replace />} />
+        <Route path="projects/:id/dashboard" element={<Dashboard />} />
         <Route path="projects/:id/board" element={<Board />} />
         <Route path="projects/:id/agents" element={<Agents />} />
         <Route path="projects/:id/costs" element={<Costs />} />

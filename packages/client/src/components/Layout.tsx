@@ -1,6 +1,7 @@
 import { Outlet, NavLink, useParams } from 'react-router'
 
 const NAV_ITEMS = [
+  { label: 'Dashboard', to: 'dashboard', icon: '📊', enabled: true },
   { label: 'Board', to: 'board', icon: '📋', enabled: true },
   { label: 'Agents', to: 'agents', icon: '🤖', enabled: true },
   { label: 'Workflows', to: 'workflows', icon: '⚙', enabled: true },
