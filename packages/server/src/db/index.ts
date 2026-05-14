@@ -232,6 +232,73 @@ async function bootstrapSchema(): Promise<void> {
       ADD COLUMN IF NOT EXISTS retry_delay    INTEGER DEFAULT 0,
       ADD COLUMN IF NOT EXISTS lease_expires_at TIMESTAMPTZ,
       ADD COLUMN IF NOT EXISTS heartbeat_at    TIMESTAMPTZ;
+
+    -- Demo 8: Routing Tiers 2+3 schema additions
+
+    -- Add 'specifier_run' to the issue_run_kind enum (Invariant 1 / AC Demo8-Durability-1)
+    DO $$ BEGIN
+      ALTER TYPE issue_run_kind ADD VALUE IF NOT EXISTS 'specifier_run';
+    EXCEPTION WHEN duplicate_object THEN NULL;
+    END $$;
+
+    -- Routing audit columns on issue_runs
+    ALTER TABLE issue_runs
+      ADD COLUMN IF NOT EXISTS routing_tier      INTEGER,
+      ADD COLUMN IF NOT EXISTS routing_score     NUMERIC(5, 4),
+      ADD COLUMN IF NOT EXISTS routing_reasoning TEXT;
+
+    -- Cached keyword sets per agent (populated on agent sync)
+    CREATE TABLE IF NOT EXISTS agent_keywords (
+      agent_id    UUID        PRIMARY KEY REFERENCES agents(id) ON DELETE CASCADE,
+      keywords    TEXT        NOT NULL DEFAULT '[]',
+      focus_areas TEXT        NOT NULL DEFAULT '[]',
+      updated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+
+    -- Immutable routing audit log (one row per routing decision)
+    CREATE TABLE IF NOT EXISTS routing_log (
+      id               UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+      project_id       UUID        NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+      issue_id         UUID        REFERENCES issues(id) ON DELETE SET NULL,
+      tier             INTEGER,
+      resolved_agent   TEXT,
+      matched_rule     TEXT,
+      score            NUMERIC(5, 4),
+      reasoning        TEXT,
+      specifier_run_id UUID        REFERENCES issue_runs(id) ON DELETE SET NULL,
+      decided_at       TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+
+    -- Demo 9: Peer Review schema additions
+
+    -- Columns on issue_runs to support peer_review kind
+    ALTER TABLE issue_runs
+      ADD COLUMN IF NOT EXISTS step_run_id   UUID REFERENCES step_runs(id),
+      ADD COLUMN IF NOT EXISTS input_context TEXT;
+
+    -- requestChangesPolicy on workflow_runs (default 'first' = GitHub PR semantics)
+    ALTER TABLE workflow_runs
+      ADD COLUMN IF NOT EXISTS request_changes_policy TEXT DEFAULT 'first';
+
+    -- Peer review outcome columns on step_runs (approve steps only)
+    ALTER TABLE step_runs
+      ADD COLUMN IF NOT EXISTS review_decision    TEXT,
+      ADD COLUMN IF NOT EXISTS review_comment     TEXT,
+      ADD COLUMN IF NOT EXISTS review_suggestions JSONB;
+
+    -- Audit trail: every review verb is recorded here (approve/request_changes/comment/dismiss)
+    CREATE TABLE IF NOT EXISTS review_events (
+      id                  UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+      workflow_run_id     UUID        NOT NULL REFERENCES workflow_runs(id) ON DELETE CASCADE,
+      step_run_id         UUID        NOT NULL REFERENCES step_runs(id) ON DELETE CASCADE,
+      issue_run_id        UUID        REFERENCES issue_runs(id),
+      reviewer_agent_id   UUID        REFERENCES agents(id),
+      reviewer_name       TEXT,
+      verb                TEXT        NOT NULL,
+      body                TEXT,
+      suggestions         JSONB,
+      created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
   `);
 
   console.log('[db] schema bootstrapped');

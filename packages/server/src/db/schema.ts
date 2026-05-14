@@ -1,4 +1,4 @@
-import { pgTable, uuid, text, timestamp, integer, boolean, pgEnum, primaryKey, numeric } from 'drizzle-orm/pg-core';
+import { pgTable, uuid, text, timestamp, integer, boolean, pgEnum, primaryKey, numeric, jsonb } from 'drizzle-orm/pg-core';
 
 export const agentStatusEnum = pgEnum('agent_status', ['active', 'disabled', 'retired']);
 
@@ -96,7 +96,8 @@ export const runStatusEnum = pgEnum('run_status', ['pending', 'running', 'comple
 export const workspaceStrategyEnum = pgEnum('workspace_strategy', ['scratch', 'dir', 'worktree']);
 
 // Invariant 1: routing desugars to issue_runs with kind='agent_run'.
-export const issueRunKindEnum = pgEnum('issue_run_kind', ['agent_run', 'route', 'peer_review', 'split']);
+// 'specifier_run' is the Tier-3 LLM routing variant (AC Demo 8 Durability-1).
+export const issueRunKindEnum = pgEnum('issue_run_kind', ['agent_run', 'route', 'peer_review', 'split', 'specifier_run']);
 
 export const issueRuns = pgTable('issue_runs', {
   id: uuid('id').primaryKey().defaultRandom(),
@@ -106,6 +107,10 @@ export const issueRuns = pgTable('issue_runs', {
   status: runStatusEnum('status').notNull().default('pending'),
   workspaceStrategy: workspaceStrategyEnum('workspace_strategy').notNull().default('scratch'),
   workspacePath: text('workspace_path'),
+  // Demo 9: back-reference to the approve step_run that spawned this peer_review run.
+  stepRunId: uuid('step_run_id'),
+  // Demo 9: additional context prepended to issueBody for peer_review runs.
+  inputContext: text('input_context'),
   leaseExpiresAt: timestamp('lease_expires_at'),
   heartbeatAt: timestamp('heartbeat_at'),
   startedAt: timestamp('started_at'),
@@ -118,6 +123,10 @@ export const issueRuns = pgTable('issue_runs', {
   inputTokens: integer('input_tokens').default(0),
   outputTokens: integer('output_tokens').default(0),
   costUsd: text('cost_usd').default('0'),
+  // Demo 8: routing audit fields
+  routingTier: integer('routing_tier'),        // 1 | 2 | 3 — which tier resolved this run
+  routingScore: numeric('routing_score', { precision: 5, scale: 4 }), // Tier-2 keyword score
+  routingReasoning: text('routing_reasoning'), // Tier-3 LLM reasoning or Tier-2 score breakdown
   createdAt: timestamp('created_at').notNull().defaultNow(),
   updatedAt: timestamp('updated_at').notNull().defaultNow(),
 });
@@ -128,6 +137,8 @@ export const workflowRuns = pgTable('workflow_runs', {
   workflowVersionId: uuid('workflow_version_id'), // set when a versioned workflow drives this run
   status: runStatusEnum('status').notNull().default('pending'),
   currentStepIndex: integer('current_step_index').default(0),
+  // Demo 9: peer review blocking policy ('first' | 'majority' | 'all') — default GitHub semantics
+  requestChangesPolicy: text('request_changes_policy').default('first'),
   createdAt: timestamp('created_at').notNull().defaultNow(),
   updatedAt: timestamp('updated_at').notNull().defaultNow(),
 });
@@ -147,6 +158,10 @@ export const stepRuns = pgTable('step_runs', {
   // Demo 7: lease for step-level crash recovery
   leaseExpiresAt: timestamp('lease_expires_at'),
   heartbeatAt: timestamp('heartbeat_at'),
+  // Demo 9: peer review outcome fields (set when this step_run is an approve step)
+  reviewDecision: text('review_decision'),     // 'approve' | 'request_changes'
+  reviewComment: text('review_comment'),
+  reviewSuggestions: jsonb('review_suggestions'), // string[]
   createdAt: timestamp('created_at').notNull().defaultNow(),
   updatedAt: timestamp('updated_at').notNull().defaultNow(),
 });
@@ -157,6 +172,28 @@ export type WorkflowRun = typeof workflowRuns.$inferSelect;
 export type NewWorkflowRun = typeof workflowRuns.$inferInsert;
 export type StepRun = typeof stepRuns.$inferSelect;
 export type NewStepRun = typeof stepRuns.$inferInsert;
+
+// ---------------------------------------------------------------------------
+// Peer review audit trail — Demo 9
+// ---------------------------------------------------------------------------
+
+// All 4 review verbs are recorded here: approve, request_changes, comment, dismiss.
+// Invariant 1: peer_review desugars to issue_runs; review_events captures the outcome.
+export const reviewEvents = pgTable('review_events', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  workflowRunId: uuid('workflow_run_id').notNull().references(() => workflowRuns.id, { onDelete: 'cascade' }),
+  stepRunId: uuid('step_run_id').notNull().references(() => stepRuns.id, { onDelete: 'cascade' }),
+  issueRunId: uuid('issue_run_id').references(() => issueRuns.id), // the peer_review issueRun, null for human reviews
+  reviewerAgentId: uuid('reviewer_agent_id').references(() => agents.id), // null for human reviewers
+  reviewerName: text('reviewer_name'), // display name (human or agent name)
+  verb: text('verb').notNull(), // 'approve' | 'request_changes' | 'comment' | 'dismiss'
+  body: text('body'),
+  suggestions: jsonb('suggestions'), // string[] — structured suggestions from request_changes
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+});
+
+export type ReviewEvent = typeof reviewEvents.$inferSelect;
+export type NewReviewEvent = typeof reviewEvents.$inferInsert;
 
 // ---------------------------------------------------------------------------
 // Routing tier 1 — Demo 5
@@ -216,3 +253,45 @@ export type WorkflowVersion = typeof workflowVersions.$inferSelect;
 export type NewWorkflowVersion = typeof workflowVersions.$inferInsert;
 export type IssueWorkflow = typeof issueWorkflows.$inferSelect;
 export type NewIssueWorkflow = typeof issueWorkflows.$inferInsert;
+
+// ---------------------------------------------------------------------------
+// Demo 8 — Routing Tiers 2 + 3
+// ---------------------------------------------------------------------------
+
+/**
+ * Cached keyword sets extracted from each agent's charter.md.
+ * Populated on agent sync; consumed by Tier-2 keyword scoring.
+ */
+export const agentKeywords = pgTable('agent_keywords', {
+  agentId: uuid('agent_id').primaryKey().references(() => agents.id, { onDelete: 'cascade' }),
+  // JSON-serialized string[]: keywords extracted from Skills/Expertise section
+  keywords: text('keywords').notNull().default('[]'),
+  // Focus areas extracted from charter (used for label matching in Tier 2)
+  focusAreas: text('focus_areas').notNull().default('[]'),
+  updatedAt: timestamp('updated_at').notNull().defaultNow(),
+});
+
+export type AgentKeywords = typeof agentKeywords.$inferSelect;
+export type NewAgentKeywords = typeof agentKeywords.$inferInsert;
+
+/**
+ * Immutable audit log of every routing decision (all tiers).
+ * One row per issue that enters the router — logged regardless of which tier matched.
+ */
+export const routingLog = pgTable('routing_log', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  projectId: uuid('project_id').notNull().references(() => projects.id, { onDelete: 'cascade' }),
+  issueId: uuid('issue_id').references(() => issues.id, { onDelete: 'set null' }),
+  // Which tier produced the match (1 | 2 | 3); null if all tiers missed (triage)
+  tier: integer('tier'),
+  resolvedAgent: text('resolved_agent'),
+  matchedRule: text('matched_rule'),             // Tier-1 rawRule, Tier-2 pattern, 'llm' for Tier-3
+  score: numeric('score', { precision: 5, scale: 4 }), // Tier-2 keyword score
+  reasoning: text('reasoning'),                  // Tier-3 LLM reasoning or Tier-2 score breakdown
+  // The issueRun created for specifier_run (Tier-3 only)
+  specifierRunId: uuid('specifier_run_id').references(() => issueRuns.id, { onDelete: 'set null' }),
+  decidedAt: timestamp('decided_at').notNull().defaultNow(),
+});
+
+export type RoutingLog = typeof routingLog.$inferSelect;
+export type NewRoutingLog = typeof routingLog.$inferInsert;
