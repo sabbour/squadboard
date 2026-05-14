@@ -7,6 +7,9 @@ import { initDb, closeDb } from './db/index.js';
 import healthRouter from './routes/health.js';
 import projectsRouter from './routes/projects.js';
 import squadRouter from './routes/squad.js';
+import agentsRouter from './routes/agents.js';
+import issuesRouter from './routes/issues.js';
+import labelsRouter from './routes/labels.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -29,6 +32,9 @@ async function main(): Promise<void> {
   app.use('/api/health', healthRouter);
   app.use('/api/projects', projectsRouter);
   app.use('/api/squad', squadRouter);
+  app.use('/api/projects/:projectId/agents', agentsRouter);
+  app.use('/api/projects/:projectId/issues', issuesRouter);
+  app.use('/api/projects/:projectId/labels', labelsRouter);
 
   if (existsSync(CLIENT_DIST)) {
     app.use(express.static(CLIENT_DIST));

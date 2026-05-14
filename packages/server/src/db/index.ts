@@ -54,6 +54,66 @@ async function bootstrapSchema(): Promise<void> {
       project_id  UUID        REFERENCES projects(id),
       CONSTRAINT settings_key_unique UNIQUE (key)
     );
+
+    DO $$ BEGIN
+      CREATE TYPE column_status AS ENUM ('backlog', 'todo', 'in_progress', 'in_review', 'done');
+    EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+    CREATE TABLE IF NOT EXISTS issues (
+      id           UUID          PRIMARY KEY DEFAULT gen_random_uuid(),
+      project_id   UUID          NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+      title        TEXT          NOT NULL,
+      body         TEXT          NOT NULL DEFAULT '',
+      status       column_status NOT NULL DEFAULT 'backlog',
+      assignee_id  UUID,
+      position     INTEGER       NOT NULL DEFAULT 0,
+      archived     INTEGER       NOT NULL DEFAULT 0,
+      created_at   TIMESTAMPTZ   NOT NULL DEFAULT NOW(),
+      updated_at   TIMESTAMPTZ   NOT NULL DEFAULT NOW()
+    );
+
+    CREATE TABLE IF NOT EXISTS comments (
+      id          UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+      issue_id    UUID        NOT NULL REFERENCES issues(id) ON DELETE CASCADE,
+      body        TEXT        NOT NULL,
+      author_id   UUID,
+      created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+
+    CREATE TABLE IF NOT EXISTS labels (
+      id          UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+      project_id  UUID        NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+      name        TEXT        NOT NULL,
+      color       TEXT        NOT NULL DEFAULT '#388bfd',
+      created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+
+    CREATE TABLE IF NOT EXISTS issue_labels (
+      issue_id    UUID NOT NULL REFERENCES issues(id) ON DELETE CASCADE,
+      label_id    UUID NOT NULL REFERENCES labels(id) ON DELETE CASCADE,
+      PRIMARY KEY (issue_id, label_id)
+    );
+
+    DO $$ BEGIN
+      CREATE TYPE agent_status AS ENUM ('active', 'disabled', 'retired');
+    EXCEPTION WHEN duplicate_object THEN null;
+    END $$;
+
+    CREATE TABLE IF NOT EXISTS agents (
+      id            UUID          PRIMARY KEY DEFAULT gen_random_uuid(),
+      project_id    UUID          NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+      name          TEXT          NOT NULL,
+      role          TEXT          NOT NULL,
+      model         TEXT,
+      status        agent_status  NOT NULL DEFAULT 'active',
+      charter_path  TEXT          NOT NULL,
+      history_path  TEXT,
+      charter_hash  TEXT,
+      created_at    TIMESTAMPTZ   NOT NULL DEFAULT NOW(),
+      updated_at    TIMESTAMPTZ   NOT NULL DEFAULT NOW(),
+      CONSTRAINT agents_project_name_unique UNIQUE (project_id, name)
+    );
   `);
 
   console.log('[db] schema bootstrapped');

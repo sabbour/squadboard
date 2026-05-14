@@ -98,6 +98,28 @@ Existing roles unchanged: McManus (Lead Architect), Keyser (Frontend Dev), Fenst
 **By:** Keyser
 **What:** Vite 6 + React 19 + TypeScript ESM. Tailwind CSS v4. TanStack Query v5. React Router v7. Dark mode first (GitHub palette). No component library — custom components only. Fenster does visual passes. API client proxies to localhost:3000.
 
+### 2026-05-14: Demo 2 — Issues/Comments/Labels schema
+**By:** Hockney
+**What:** issues.status uses pgEnum (backlog/todo/in_progress/in_review/done). position integer for column ordering. Soft delete via archived flag. Bulk action via POST /bulk. Move endpoint recalculates positions.
+**Details:**
+- Issues table: status enum (backlog/todo/in_progress/in_review/done), position ordering, soft-delete via archived flag
+- Comments table: markdown body, threaded per issue
+- Labels table: per-project, colored badges, many-to-many issue_labels join table
+- 14 endpoints: POST/GET issues, POST issue, PUT/DELETE issue, POST move, POST bulk, POST/GET comments, POST comment, DELETE comment, GET/POST labels, POST add-label, DELETE label-link
+**Owner:** Hockney (backend)
+
+### 2026-05-14: Demo 2 — Kanban board UI
+**By:** Keyser
+**What:** @hello-pangea/dnd for drag-drop (maintained react-beautiful-dnd fork). Optimistic updates on drag. CardDetail as right slide-over (not page nav). Multi-select via checkbox. BulkActionBar at bottom when selection active. Five fixed columns matching DB enum.
+**Details:**
+- Five-column board (backlog/todo/in_progress/in_review/done) with drag-and-drop persistence
+- IssueCard component: labels, assignee avatar, comment count, multi-select checkbox
+- CardDetail: right-side slide-over with full card view, comments, label picker
+- BulkActionBar: move/archive batch operations when items selected
+- FilterBar: title search + label filter chips
+- CreateIssueModal, CommentList (react-markdown + remark-gfm), AddComment
+**Owner:** Keyser (frontend)
+
 ## Governance
 
 - All meaningful changes require team consensus

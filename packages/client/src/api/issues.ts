@@ -1,0 +1,104 @@
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { apiFetch } from './client.ts'
+
+export type ColumnId = 'backlog' | 'todo' | 'in_progress' | 'in_review' | 'done'
+
+export interface Label {
+  id: string
+  name: string
+  color: string
+}
+
+export interface Assignee {
+  id: string
+  name: string
+  avatarUrl?: string
+}
+
+export interface Issue {
+  id: string
+  projectId: string
+  title: string
+  body?: string
+  column: ColumnId
+  labels: Label[]
+  assignee?: Assignee
+  commentCount: number
+  createdAt: string
+  updatedAt: string
+}
+
+export interface CreateIssueInput {
+  title: string
+  body?: string
+  column?: ColumnId
+  labelIds?: string[]
+  assigneeId?: string
+}
+
+export interface MoveIssueInput {
+  column: ColumnId
+  position?: number
+}
+
+export interface BulkActionInput {
+  issueIds: string[]
+  action: 'move' | 'label' | 'archive'
+  column?: ColumnId
+  labelId?: string
+}
+
+export function useIssues(projectId: string, filters?: { search?: string; labelId?: string; assigneeId?: string }) {
+  const params = new URLSearchParams()
+  if (filters?.labelId) params.set('label', filters.labelId)
+  if (filters?.assigneeId) params.set('assignee', filters.assigneeId)
+  const qs = params.toString() ? `?${params.toString()}` : ''
+
+  return useQuery<Issue[]>({
+    queryKey: ['issues', projectId, filters],
+    queryFn: () => apiFetch<Issue[]>(`/api/projects/${projectId}/issues${qs}`),
+    enabled: Boolean(projectId),
+  })
+}
+
+export function useCreateIssue(projectId: string) {
+  const queryClient = useQueryClient()
+  return useMutation<Issue, Error, CreateIssueInput>({
+    mutationFn: (input) =>
+      apiFetch<Issue>(`/api/projects/${projectId}/issues`, {
+        method: 'POST',
+        body: JSON.stringify(input),
+      }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['issues', projectId] })
+    },
+  })
+}
+
+export function useMoveIssue(projectId: string) {
+  const queryClient = useQueryClient()
+  return useMutation<Issue, Error, { issueId: string } & MoveIssueInput>({
+    mutationFn: ({ issueId, ...input }) =>
+      apiFetch<Issue>(`/api/projects/${projectId}/issues/${issueId}/move`, {
+        method: 'PATCH',
+        body: JSON.stringify(input),
+      }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['issues', projectId] })
+    },
+  })
+}
+
+export function useBulkAction(projectId: string) {
+  const queryClient = useQueryClient()
+  return useMutation<void, Error, BulkActionInput>({
+    mutationFn: (input) =>
+      apiFetch<void>(`/api/projects/${projectId}/issues/bulk`, {
+        method: 'POST',
+        body: JSON.stringify(input),
+      }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['issues', projectId] })
+    },
+  })
+}

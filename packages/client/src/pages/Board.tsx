@@ -1,18 +1,77 @@
+import { useState, useCallback } from 'react'
 import { useParams } from 'react-router'
 import { useProject } from '../api/projects.ts'
-import EmptyBoard from '../components/EmptyBoard.tsx'
+import { useIssues, useBulkAction, type Issue, type ColumnId } from '../api/issues.ts'
+import KanbanBoard from '../components/board/KanbanBoard.tsx'
+import FilterBar from '../components/board/FilterBar.tsx'
+import CardDetail from '../components/board/CardDetail.tsx'
+import BulkActionBar from '../components/board/BulkActionBar.tsx'
+import CreateIssueModal from '../components/board/CreateIssueModal.tsx'
 
 export default function Board() {
   const { id } = useParams<{ id: string }>()
-  const { data: project, isLoading, isError } = useProject(id ?? '')
+  const projectId = id ?? ''
 
-  if (isLoading) {
-    return (
-      <div style={{ padding: '32px', color: 'var(--text-muted)' }}>Loading project…</div>
+  const { data: project, isLoading: projectLoading, isError: projectError } = useProject(projectId)
+
+  // Filter state
+  const [search, setSearch] = useState('')
+  const [activeLabelId, setActiveLabelId] = useState<string | undefined>()
+
+  // Issues (API-filtered by label; client-filtered by search)
+  const { data: allIssues = [], isLoading: issuesLoading } = useIssues(projectId, { labelId: activeLabelId })
+
+  const filteredIssues = search.trim()
+    ? allIssues.filter((i) => i.title.toLowerCase().includes(search.toLowerCase()))
+    : allIssues
+
+  // Card detail slide-over
+  const [activeCard, setActiveCard] = useState<Issue | null>(null)
+
+  // Multi-select
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+
+  const handleSelect = useCallback((issueId: string, shiftKey: boolean) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev)
+      if (shiftKey) {
+        // Shift-click: toggle
+        if (next.has(issueId)) next.delete(issueId)
+        else next.add(issueId)
+      } else {
+        if (next.has(issueId)) next.delete(issueId)
+        else next.add(issueId)
+      }
+      return next
+    })
+  }, [])
+
+  // Bulk actions
+  const bulkAction = useBulkAction(projectId)
+
+  function handleBulkMove(column: ColumnId) {
+    bulkAction.mutate(
+      { issueIds: Array.from(selectedIds), action: 'move', column },
+      { onSuccess: () => setSelectedIds(new Set()) }
     )
   }
 
-  if (isError || !project) {
+  function handleBulkArchive() {
+    bulkAction.mutate(
+      { issueIds: Array.from(selectedIds), action: 'archive' },
+      { onSuccess: () => setSelectedIds(new Set()) }
+    )
+  }
+
+  // Create issue modal
+  const [createColumn, setCreateColumn] = useState<ColumnId | null>(null)
+
+  // ── Loading / error states ────────────────────────────────────────────
+  if (projectLoading) {
+    return <div style={{ padding: '32px', color: 'var(--text-muted)' }}>Loading project…</div>
+  }
+
+  if (projectError || !project) {
     return (
       <div style={{ padding: '32px', color: 'var(--danger)' }}>
         Failed to load project. Make sure the backend is running.
@@ -52,14 +111,60 @@ export default function Board() {
             color: 'var(--text-muted)',
           }}
         >
-          Demo 1
+          Demo 2
         </span>
       </div>
 
+      {/* Filter bar */}
+      <FilterBar
+        projectId={projectId}
+        search={search}
+        onSearchChange={setSearch}
+        activeLabelId={activeLabelId}
+        onLabelChange={setActiveLabelId}
+      />
+
       {/* Board body */}
-      <div style={{ flex: 1, overflow: 'auto', padding: '24px' }}>
-        <EmptyBoard />
+      <div style={{ flex: 1, overflow: 'auto', padding: '16px 24px' }}>
+        {issuesLoading ? (
+          <div style={{ color: 'var(--text-muted)', padding: '16px' }}>Loading issues…</div>
+        ) : (
+          <KanbanBoard
+            projectId={projectId}
+            issues={filteredIssues}
+            selectedIds={selectedIds}
+            onSelect={handleSelect}
+            onOpenCard={setActiveCard}
+            onCreateIssue={setCreateColumn}
+          />
+        )}
       </div>
+
+      {/* Card detail slide-over */}
+      {activeCard && (
+        <CardDetail
+          projectId={projectId}
+          issue={activeCard}
+          onClose={() => setActiveCard(null)}
+        />
+      )}
+
+      {/* Bulk action bar */}
+      <BulkActionBar
+        selectedCount={selectedIds.size}
+        onMove={handleBulkMove}
+        onArchive={handleBulkArchive}
+        onClear={() => setSelectedIds(new Set())}
+      />
+
+      {/* Create issue modal */}
+      {createColumn && (
+        <CreateIssueModal
+          projectId={projectId}
+          defaultColumn={createColumn}
+          onClose={() => setCreateColumn(null)}
+        />
+      )}
     </div>
   )
 }
