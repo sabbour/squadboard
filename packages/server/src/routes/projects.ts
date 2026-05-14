@@ -43,4 +43,19 @@ router.get('/:id', async (req: Request, res: Response) => {
   res.json(project);
 });
 
+router.delete('/:id', async (req: Request, res: Response) => {
+  const db = getDb();
+  const deleted = await db
+    .delete(schema.projects)
+    .where(eq(schema.projects.id, req.params.id))
+    .returning();
+
+  if (deleted.length === 0) {
+    res.status(404).json({ ok: false, error: 'Project not found' });
+    return;
+  }
+
+  res.status(204).send();
+});
+
 export default router;
