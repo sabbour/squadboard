@@ -45,4 +45,6 @@ Major doc cuts:
 
 - **2026-05-14 PRD Copy Pass (tagged):** Tagged to perform copy pass on `docs/prd.md` (voice/clarity, no content changes — the five invariants are paste-locked and canonical).
 - **2026-05-14 PRD Copy Pass (completed):** Completed copy pass on `docs/prd.md`. 5 surgical edits, ~1% shrink (12,331 → 12,195 bytes), no content changes. Tightened vision, simplified scope/architecture, polished tech-stack links, removed instructional trailer. ✅ Approved as publish-ready for hacking phase.
+- **2026-05-14 Top-level README (completed):** Authored `README.md` at project root (5,024 bytes). Hero banner (horizontal SVG) + 10 sections (show-before-tell: quick-start precedes architecture). Both SVGs referenced per brand guidelines. All content sourced from PRD; zero invention. Hacking-phase compliant (no contributing/CI badges). Decision file + decision inbox entry logged. Ready for Scribe commit.
+- **2026-05-14 README merged:** Decision entry merged into `decisions.md` by Scribe. Inbox file deleted. README + brand assets (both SVGs + square PNG) committed. Skipped Windows NTFS metadata files (`:Zone.Identifier`, `:sec.endpointdlp` — DLP scanner artifacts).
 
