@@ -6,6 +6,7 @@ interface KanbanColumnProps {
   columnId: ColumnId
   label: string
   issues: Issue[]
+  projectId: string
   selectedIds: Set<string>
   onSelect: (id: string, shiftKey: boolean) => void
   onOpenCard: (issue: Issue) => void
@@ -16,6 +17,7 @@ export default function KanbanColumn({
   columnId,
   label,
   issues,
+  projectId,
   selectedIds,
   onSelect,
   onOpenCard,
@@ -120,6 +122,7 @@ export default function KanbanColumn({
                 key={issue.id}
                 issue={issue}
                 index={index}
+                projectId={projectId}
                 isSelected={selectedIds.has(issue.id)}
                 onSelect={onSelect}
                 onOpen={onOpenCard}

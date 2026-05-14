@@ -10,6 +10,8 @@ import squadRouter from './routes/squad.js';
 import agentsRouter from './routes/agents.js';
 import issuesRouter from './routes/issues.js';
 import labelsRouter from './routes/labels.js';
+import { issueRunsRouter, projectRunsRouter } from './routes/runs.js';
+import { dispatcher } from './engine/dispatcher.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -26,6 +28,9 @@ async function main(): Promise<void> {
   const connectionString = await startEmbeddedPostgres();
   await initDb(connectionString);
 
+  // Start the workflow engine dispatcher (5 s tick: sweep → wake → advance)
+  dispatcher.start();
+
   const app = express();
   app.use(express.json());
 
@@ -35,6 +40,8 @@ async function main(): Promise<void> {
   app.use('/api/projects/:projectId/agents', agentsRouter);
   app.use('/api/projects/:projectId/issues', issuesRouter);
   app.use('/api/projects/:projectId/labels', labelsRouter);
+  app.use('/api/projects/:projectId/issues/:issueId/runs', issueRunsRouter);
+  app.use('/api/projects/:projectId/runs', projectRunsRouter);
 
   if (existsSync(CLIENT_DIST)) {
     app.use(express.static(CLIENT_DIST));
@@ -62,6 +69,7 @@ async function main(): Promise<void> {
 
   const gracefulShutdown = (signal: string) => {
     console.log(`[squadboard] received ${signal}`);
+    dispatcher.stop();
     server.close(() => {
       closeDb()
         .then(() => process.exit(0))

@@ -43,3 +43,9 @@
 
 ### 2026-05-14 — Demo 1 backend scaffold
 Demo 1 backend scaffold: Express v5 + embedded-postgres + Drizzle ORM. Monorepo with pnpm workspaces. packages/server (backend), packages/cli (npx entry). Schema: projects + settings tables. Server port 3000, health endpoint, projects CRUD stubs. Wired Kobayashi's squad discovery routes to real DB (upsert by path). CLI uses waitForPort (TCP probe, 15s timeout) before opening browser — avoids brittle sleep().
+
+### 2026-05-14 — Demo 2 backend: issues/comments/labels CRUD API
+Demo 2 backend: issues/comments/labels CRUD API. Drizzle schema additions: issues (with status enum + position), comments, labels, issue_labels. Bulk action endpoint. Move endpoint handles position recalculation.
+
+### 2026-05-14 — Demo 4 engine core
+Demo 4 engine core: Dispatcher (5s tick: sweep→wake→advance), Stepper (FOR UPDATE SKIP LOCKED → invariant 2), Workspace (scratch/dir/worktree strategies), Sweeper (reclaim expired leases + orphaned runs). SSE stream endpoint for real-time output. Heartbeat 30s, lease TTL 90s. SDK bridge stubbed — Kobayashi fills in.

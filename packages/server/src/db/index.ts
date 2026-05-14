@@ -2,7 +2,8 @@ import { drizzle } from 'drizzle-orm/node-postgres';
 import { Pool } from 'pg';
 import * as schema from './schema.js';
 
-type Db = ReturnType<typeof drizzle<typeof schema>>;
+export type DrizzleDb = ReturnType<typeof drizzle<typeof schema>>;
+type Db = DrizzleDb;
 
 let _pool: Pool | null = null;
 let _db: Db | null = null;
@@ -113,6 +114,53 @@ async function bootstrapSchema(): Promise<void> {
       created_at    TIMESTAMPTZ   NOT NULL DEFAULT NOW(),
       updated_at    TIMESTAMPTZ   NOT NULL DEFAULT NOW(),
       CONSTRAINT agents_project_name_unique UNIQUE (project_id, name)
+    );
+
+    DO $$ BEGIN
+      CREATE TYPE run_status AS ENUM ('pending', 'running', 'completed', 'failed', 'cancelled');
+    EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+    DO $$ BEGIN
+      CREATE TYPE workspace_strategy AS ENUM ('scratch', 'dir', 'worktree');
+    EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+    CREATE TABLE IF NOT EXISTS issue_runs (
+      id                  UUID              PRIMARY KEY DEFAULT gen_random_uuid(),
+      issue_id            UUID              NOT NULL REFERENCES issues(id) ON DELETE CASCADE,
+      agent_id            UUID              NOT NULL REFERENCES agents(id),
+      status              run_status        NOT NULL DEFAULT 'pending',
+      workspace_strategy  workspace_strategy NOT NULL DEFAULT 'scratch',
+      workspace_path      TEXT,
+      lease_expires_at    TIMESTAMPTZ,
+      heartbeat_at        TIMESTAMPTZ,
+      started_at          TIMESTAMPTZ,
+      completed_at        TIMESTAMPTZ,
+      output              TEXT,
+      error_message       TEXT,
+      cost_tokens         INTEGER DEFAULT 0,
+      cost_usd            TEXT DEFAULT '0',
+      created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at          TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+
+    CREATE TABLE IF NOT EXISTS workflow_runs (
+      id                  UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+      issue_id            UUID        NOT NULL REFERENCES issues(id),
+      status              run_status  NOT NULL DEFAULT 'pending',
+      current_step_index  INTEGER     DEFAULT 0,
+      created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at          TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+
+    CREATE TABLE IF NOT EXISTS step_runs (
+      id               UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+      workflow_run_id  UUID        NOT NULL REFERENCES workflow_runs(id) ON DELETE CASCADE,
+      issue_run_id     UUID        REFERENCES issue_runs(id),
+      step_index       INTEGER     NOT NULL,
+      step_type        TEXT        NOT NULL,
+      status           run_status  NOT NULL DEFAULT 'pending',
+      created_at       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at       TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
   `);
 

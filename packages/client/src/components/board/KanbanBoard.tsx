@@ -86,6 +86,7 @@ export default function KanbanBoard({
             columnId={col.id}
             label={col.label}
             issues={issuesByColumn(col.id)}
+            projectId={projectId}
             selectedIds={selectedIds}
             onSelect={onSelect}
             onOpenCard={onOpenCard}

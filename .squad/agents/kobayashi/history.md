@@ -47,3 +47,6 @@ Demo 1 SDK surface: squad-discovery.ts scans filesystem for .squad/ dirs (home +
 
 ### 2026-05-14
 Demo 3 SDK: CharterCompiler parses charter.md (name, role, model, expertise, reviewer authority). agent-sync.ts syncs .squad/agents/ to DB, hash-based change detection. Hire flow creates charter.md + history.md on disk atomically.
+
+### 2026-05-14
+Demo 4 SDK bridge: executeAgentRun is the single entry point (Invariant 1). SquadClient.createSession() called directly, bypassing SquadCoordinator. Graceful fallback to stub when SDK not installed. OutputStreamer appends chunks to DB. CostTracker records per-run costs.

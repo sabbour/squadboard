@@ -1,19 +1,27 @@
 import { Draggable } from '@hello-pangea/dnd'
 import { useState } from 'react'
 import { type Issue } from '../../api/issues.ts'
+import { useIssueRuns } from '../../api/runs.ts'
 import LabelBadge from '../LabelBadge.tsx'
 import Avatar from '../Avatar.tsx'
+import RunButton from '../runs/RunButton.tsx'
+import RunStatusBadge from '../runs/RunStatusBadge.tsx'
+import CostDisplay from '../runs/CostDisplay.tsx'
 
 interface IssueCardProps {
   issue: Issue
   index: number
+  projectId: string
   isSelected: boolean
   onSelect: (id: string, shiftKey: boolean) => void
   onOpen: (issue: Issue) => void
 }
 
-export default function IssueCard({ issue, index, isSelected, onSelect, onOpen }: IssueCardProps) {
+export default function IssueCard({ issue, index, projectId, isSelected, onSelect, onOpen }: IssueCardProps) {
   const [hovered, setHovered] = useState(false)
+  const { data: runs } = useIssueRuns(projectId, issue.id)
+  const activeRun = runs?.find((r) => r.status === 'running' || r.status === 'pending')
+  const lastRun = runs?.[0]
 
   return (
     <Draggable draggableId={issue.id} index={index}>
@@ -82,26 +90,39 @@ export default function IssueCard({ issue, index, isSelected, onSelect, onOpen }
               </div>
             )}
 
-            {/* Footer: assignee + comment count */}
+            {/* Footer: assignee + comment count + run */}
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '6px' }}>
-              <div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                 {issue.assignee && (
                   <Avatar name={issue.assignee.name} avatarUrl={issue.assignee.avatarUrl} size={20} />
                 )}
+                {activeRun && <RunStatusBadge status={activeRun.status} />}
+                {!activeRun && lastRun?.status === 'completed' && (
+                  <CostDisplay costUsd={lastRun.costUsd} costTokens={lastRun.costTokens} />
+                )}
+                {!activeRun && lastRun?.status === 'failed' && (
+                  <RunStatusBadge status="failed" />
+                )}
               </div>
-              {issue.commentCount > 0 && (
-                <span
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '3px',
-                    fontSize: '11px',
-                    color: '#8b949e',
-                  }}
-                >
-                  💬 {issue.commentCount}
-                </span>
-              )}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                {issue.commentCount > 0 && (
+                  <span
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '3px',
+                      fontSize: '11px',
+                      color: '#8b949e',
+                    }}
+                  >
+                    💬 {issue.commentCount}
+                  </span>
+                )}
+                <RunButton
+                  projectId={projectId}
+                  issueId={issue.id}
+                />
+              </div>
             </div>
           </div>
         </div>

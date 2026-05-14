@@ -130,6 +130,37 @@ Existing roles unchanged: McManus (Lead Architect), Keyser (Frontend Dev), Fenst
 **What:** Agents page uses grid layout (not list). Two sections: Active + Disabled. AgentDetailPanel is 520px slide-over (wider than board's 480px for charter editing). Charter editing is raw textarea (no Monaco in Demo 3 — Monaco lands in Demo 11). HireAgentModal validates kebab-case name.
 **Rationale:** Grid scales better for scanning agents; dual sections clarify state at a glance. Wider panel accommodates charter editing; raw textarea keeps Demo 3 lean.
 
+### 2026-05-14: Engine core architecture (Demo 4)
+**By:** Hockney
+**What:** Dispatcher tick=5s (sweep→wake→advance). Stepper uses raw SQL FOR UPDATE SKIP LOCKED (Drizzle doesn't support it). Lease TTL=90s, heartbeat=30s. Three workspace strategies: scratch (tmpdir), dir (~/.squadboard/workspaces), worktree (stubbed for Demo 4). SSE stream uses 1s DB poll for Demo 4 (real pipe streaming in Demo 12). Sweeper runs on every tick. Invariants 1, 2, 3 now enforced.
+**Details:**
+- Schema: issueRuns, workflowRuns, stepRuns + status/strategy enums
+- Dispatcher: 5s tick loop (sweep → wake → advance)
+- Stepper: claim-and-run with raw SQL FOR UPDATE SKIP LOCKED
+- Sweeper: reclaim expired leases + orphaned runs on crash/restart
+- Workspace: scratch (tmpdir), dir (~/.squadboard/workspaces), worktree (stubbed)
+- Routes: POST/GET issue runs, GET run status, POST cancel, GET SSE stream
+
+### 2026-05-14: SDK bridge architecture (Demo 4)
+**By:** Kobayashi
+**What:** executeAgentRun() is the ONLY function the engine calls for LLM work (Invariant 1 enforced). SquadCoordinator bypass confirmed: engine calls SquadClient.createSession() directly. SDK gracefully degrades to stub when @sabbour/squad-sdk not installed. OutputStreamer streams chunks to DB. CostTracker records per run.
+**Details:**
+- executeAgentRun(): single entry point, reads charter, calls SquadClient directly
+- SquadClient: @sabbour/squad-sdk wrapper with graceful stub fallback
+- OutputStreamer: incremental SQL COALESCE append to issue_runs.output
+- CostTracker: per-run token + cost recording
+
+### 2026-05-14: Run status UI pattern (Demo 4)
+**By:** Keyser
+**What:** RunOutputPanel uses EventSource (SSE) for real-time output. Terminal-style display (#0d1117 bg, monospace, green text). RunHistory tab added to CardDetail. RunButton in IssueCard footer. CostDisplay shows $X.XXX · N tokens. Running state uses animated pulse badge.
+**Details:**
+- RunButton: agent selector dropdown + start/cancel/done states
+- RunOutputPanel: SSE EventSource, terminal-style, auto-scroll
+- RunStatusBadge: 5 states with animated pulse on Running
+- RunHistory: collapsible run list in CardDetail Runs tab
+- CostDisplay: $X.XXX · N tokens format
+- Updated: IssueCard footer, CardDetail tabs, KanbanColumn/Board prop threading
+
 ## Governance
 
 - All meaningful changes require team consensus

@@ -15,3 +15,5 @@
 - **2026-05-14 Demo 2 kanban board:** @hello-pangea/dnd for drag-drop with optimistic updates. Five columns. IssueCard, KanbanColumn, CardDetail slide-over, BulkActionBar, FilterBar, CreateIssueModal, CommentList. Multi-select with bulk actions. Fenster's dark design system tokens applied.
 
 - **2026-05-14 Demo 3 agents UI:** AgentGrid (two sections: active/disabled), AgentCard (initials avatar, model badge, status dot), AgentDetailPanel slide-over (Overview + Charter tabs, enable/disable toggle), HireAgentModal (kebab name validation, model selector). Updated Layout to enable Agents nav.
+
+- **2026-05-14 Demo 4 run UI:** RunButton (agent selector dropdown + start run), RunStatusBadge (5 states with pulse animation), RunOutputPanel (SSE EventSource, terminal-style, auto-scroll), RunHistory (Runs tab in CardDetail), CostDisplay. Updated IssueCard footer + CardDetail tabs.
