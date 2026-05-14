@@ -24,14 +24,162 @@ Running multiple Squad agents today means tracking work in terminal logs, Notion
 
 Squadboard gives you a kanban board for visibility, a deterministic workflow engine for reliable orchestration, and a live ops view for real-time awareness — all local-first by default, with GitHub at the seams when you ship.
 
-## Quick start
+## Getting Started
+
+### Prerequisites
+
+Before you begin, ensure you have the following installed:
+
+- **Node.js** ≥ 20.0.0 ([download](https://nodejs.org))
+- **pnpm** ≥ 8.0.0
+  ```bash
+  npm install -g pnpm
+  ```
+
+No external Postgres needed — Squadboard runs an embedded Postgres instance locally at `~/.squadboard/data`.
+
+### Installation
+
+1. Clone the repository:
+   ```bash
+   git clone https://github.com/you/foo
+   cd foo
+   ```
+
+2. Install dependencies:
+   ```bash
+   pnpm install
+   ```
+
+### Initialize & Run
+
+**Option A: Start the full app (backend + frontend)**
 
 ```bash
-npx @sabbour/squadboard init
-npx @sabbour/squadboard up
+pnpm run dev
 ```
 
-Open http://localhost:3000, create your first project, discover your Squad agents, and run your first workflow.
+This starts:
+- Backend (Express + WebSocket) on http://localhost:3000
+- Frontend (React + Vite) on http://localhost:5173
+- Embedded Postgres on localhost:54321 (auto-managed, no setup needed)
+
+Open http://localhost:5173 in your browser.
+
+**Option B: Start components separately**
+
+Backend:
+```bash
+pnpm --filter @squadboard/server dev
+```
+
+Frontend (in another terminal):
+```bash
+pnpm --filter @squadboard/client dev
+```
+
+### First Run: Initialize Squadboard
+
+The first time you start, Squadboard:
+- Creates `~/.squadboard/data` directory
+- Spins up embedded Postgres
+- Seeds the schema (projects, runs, workflows, agents)
+
+No additional init command needed — the server does this automatically on startup.
+
+### CLI Reference
+
+Use the Squadboard CLI to launch the server or integrate with AI agents:
+
+```bash
+# Start the server and open the UI (equivalent to `pnpm run dev`)
+squadboard init
+
+# Start the MCP server for Claude Desktop / Cursor
+squadboard mcp
+```
+
+Or use `npx` directly:
+```bash
+npx @sabbour/squadboard init
+npx @sabbour/squadboard mcp
+```
+
+### MCP Integration (Claude Desktop / Cursor)
+
+To connect Squadboard with Claude Desktop or Cursor:
+
+1. Run the MCP server to see the config:
+   ```bash
+   squadboard mcp
+   ```
+
+2. You'll see the MCP server config. Copy it and add to your MCP host's config file:
+
+   **Claude Desktop** (`~/Library/Application Support/Claude/claude_desktop_config.json`):
+   ```json
+   {
+     "mcpServers": {
+       "squadboard": {
+         "command": "squadboard",
+         "args": ["mcp"]
+       }
+     }
+   }
+   ```
+
+   **Cursor** (check Cursor docs for config location):
+   ```json
+   {
+     "mcpServers": {
+       "squadboard": {
+         "command": "squadboard",
+         "args": ["mcp"]
+       }
+     }
+   }
+   ```
+
+3. Restart your MCP host (Claude Desktop / Cursor). Squadboard tools are now available to agents.
+
+### GitHub Sync (Optional)
+
+Connect a GitHub repository to sync issues and PRs:
+
+1. In the Squadboard UI, go to **Project Settings** > **GitHub**
+2. Paste a GitHub personal access token (with `repo` scope)
+3. Enter the repo owner and name
+
+Or via API:
+```bash
+curl -X PUT http://localhost:3000/api/projects/{projectId}/github \
+  -H "Content-Type: application/json" \
+  -d '{"token":"ghp_xxxxx", "owner":"your-org", "repo":"your-repo"}'
+```
+
+### Build for Production
+
+```bash
+pnpm build
+```
+
+This compiles TypeScript and builds the React frontend. Output:
+- Backend: `packages/server/dist/index.js`
+- Frontend: `packages/client/dist/`
+
+Start the production build:
+```bash
+pnpm start
+```
+
+### Database Studio (Development)
+
+Inspect or edit the database schema:
+```bash
+pnpm --filter @squadboard/server db:studio
+```
+
+Opens Drizzle Studio on http://localhost:3001.
 
 ## What you get
 
