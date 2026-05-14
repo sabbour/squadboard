@@ -4,6 +4,7 @@ export interface SessionOptions {
     workspacePath: string;
     squadPath: string;
     task: string;
+    model?: string;
 }
 export interface SessionResult {
     output: string;

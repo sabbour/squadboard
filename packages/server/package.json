@@ -13,14 +13,15 @@
     "db:studio": "drizzle-kit studio"
   },
   "dependencies": {
+    "@copilot-extensions/preview-sdk": "^5.0.1",
     "@modelcontextprotocol/sdk": "^1.29.0",
-    "jose": "^6.0.0",
     "@types/ws": "^8.18.1",
     "ajv": "^8.17.1",
     "chokidar": "^3.6.0",
     "drizzle-orm": "^0.36.4",
     "embedded-postgres": "18.3.0-beta.17",
     "express": "^5.0.0",
+    "jose": "^6.0.0",
     "js-yaml": "^4.1.0",
     "pg": "^8.13.0",
     "ws": "^8.20.1"

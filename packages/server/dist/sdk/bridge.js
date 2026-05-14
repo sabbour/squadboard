@@ -42,6 +42,7 @@ export async function executeAgentRun(input) {
             workspacePath: input.workspacePath,
             squadPath: input.projectSquadPath,
             task,
+            model: input.agent.model ?? undefined,
         });
         // 4. Stream output to DB.
         await streamer.write(result.output);
@@ -76,20 +77,19 @@ export async function executeAgentRun(input) {
     }
 }
 // ---------------------------------------------------------------------------
-// Demo 4 stub — used when @sabbour/squad-sdk is not installed.
-// The squad-client module calls this automatically; this export is provided
-// so callers can force-stub in tests or local hacking.
+// Test/local-hacking override — forces an immediate offline briefing without
+// hitting any LLM backend. Mirrors the offline-briefing path in squad-client
+// but resolves instantly (no subprocess spawning, no 2 s delay).
 // ---------------------------------------------------------------------------
 export async function executeAgentRunStub(input) {
-    await new Promise((resolve) => setTimeout(resolve, 2000));
-    const output = `Agent ${input.agent.name} processed issue: ${input.issueTitle}\n` +
-        `Workspace: ${input.workspacePath}\n` +
-        `[stub output — real SDK integration in production]`;
+    const output = `# Agent Task Briefing — ${input.agent.name} (forced-stub)\n\n` +
+        `**Workspace:** \`${input.workspacePath}\`\n\n` +
+        `## Task\n${input.issueTitle}\n\n${input.issueBody}`;
     return {
         success: true,
         output,
-        tokensUsed: 150,
-        costUsd: '0.002',
+        tokensUsed: Math.ceil(output.length / 4),
+        costUsd: '0.000',
     };
 }
 //# sourceMappingURL=bridge.js.map

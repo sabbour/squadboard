@@ -1,6 +1,5 @@
 // Agent session runner.
-// Tries real LLM backends (llm CLI, ollama) via subprocess before falling back to a
-// structured offline briefing that includes the full charter + task.
+// Backend priority: Copilot SDK (GITHUB_TOKEN) → llm CLI → ollama → offline briefing.
 
 import { readFile } from 'node:fs/promises';
 import { execFile } from 'node:child_process';
@@ -14,6 +13,7 @@ export interface SessionOptions {
   workspacePath: string;
   squadPath: string;
   task: string; // issue title + body
+  model?: string; // optional — passed through from agent.model
 }
 
 export interface SessionResult {
@@ -22,6 +22,38 @@ export interface SessionResult {
   costUsd: string;
   inputTokens?: number;
   outputTokens?: number;
+}
+
+/**
+ * Attempt to call GitHub Copilot's API via @copilot-extensions/preview-sdk.
+ * Requires GITHUB_TOKEN or SQUADBOARD_GITHUB_TOKEN in the environment.
+ * Returns null if no token is present or the call fails.
+ */
+async function tryCopilotSdk(charter: string, task: string, model?: string): Promise<string | null> {
+  const token = process.env.GITHUB_TOKEN ?? process.env.SQUADBOARD_GITHUB_TOKEN;
+  if (!token) {
+    console.warn('[squad-client] No GITHUB_TOKEN set — Copilot SDK backend skipped. Set GITHUB_TOKEN for real LLM calls.');
+    return null;
+  }
+
+  try {
+    const { prompt } = await import('@copilot-extensions/preview-sdk');
+    const { message } = await prompt({
+      token,
+      ...(model ? { model } : {}),
+      messages: [
+        { role: 'system' as const, content: charter },
+        { role: 'user' as const, content: task },
+      ],
+    });
+    const content = typeof message.content === 'string'
+      ? message.content
+      : JSON.stringify(message.content);
+    return content.trim() || null;
+  } catch (err) {
+    console.warn('[squad-client] Copilot SDK failed:', err instanceof Error ? err.message : err);
+    return null;
+  }
 }
 
 /**
@@ -66,7 +98,7 @@ function buildOfflineBriefing(options: SessionOptions, charter: string): Session
     `# Agent Task Briefing — ${options.agentName}`,
     ``,
     `> **Offline run** — no LLM backend detected (\`gh copilot\` extension, \`llm\`, and \`ollama\` are not available on this host).`,
-    `> To get a live response: install the \`llm\` CLI (\`pip install llm\`) and configure a model, or run \`ollama serve\` with the \`llama3\` model pulled.`,
+    `> To get a live response: set GITHUB_TOKEN for the Copilot SDK backend, install the \`llm\` CLI (\`pip install llm\`) and configure a model, or run \`ollama serve\` with the \`llama3\` model pulled.`,
     ``,
     `## Workspace`,
     `\`${options.workspacePath}\``,
@@ -88,10 +120,26 @@ export async function createAgentSession(options: SessionOptions): Promise<Sessi
   const charter = await readFile(options.charterPath, 'utf8').catch(
     () => `(charter not found at: ${options.charterPath})`,
   );
+  const task = options.task;
 
-  const llmOutput = await tryLlmBackend(charter, options.task);
+  // 1. Try Copilot SDK — real LLM via GitHub Copilot API (primary backend)
+  const copilotOutput = await tryCopilotSdk(charter, task, options.model);
+  if (copilotOutput !== null) {
+    const inputTokens = Math.ceil((charter.length + task.length) / 4);
+    const outputTokens = Math.ceil(copilotOutput.length / 4);
+    return {
+      output: copilotOutput,
+      tokensUsed: inputTokens + outputTokens,
+      costUsd: '0.000',
+      inputTokens,
+      outputTokens,
+    };
+  }
+
+  // 2. Try local LLM backends (llm CLI → ollama)
+  const llmOutput = await tryLlmBackend(charter, task);
   if (llmOutput !== null) {
-    const inputTokens = Math.ceil((charter.length + options.task.length) / 4);
+    const inputTokens = Math.ceil((charter.length + task.length) / 4);
     const outputTokens = Math.ceil(llmOutput.length / 4);
     return {
       output: llmOutput,
@@ -102,6 +150,7 @@ export async function createAgentSession(options: SessionOptions): Promise<Sessi
     };
   }
 
+  // 3. Offline briefing — always works, zero cost
   console.warn('[squad-client] No LLM backend available — returning offline briefing for %s', options.agentName);
   return buildOfflineBriefing(options, charter);
 }

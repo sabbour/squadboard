@@ -68,6 +68,7 @@ export async function executeAgentRun(input: AgentRunInput): Promise<AgentRunOut
       workspacePath: input.workspacePath,
       squadPath: input.projectSquadPath,
       task,
+      model: input.agent.model ?? undefined,
     });
 
     // 4. Stream output to DB.
