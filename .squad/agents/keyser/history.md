@@ -48,3 +48,30 @@
 - **api/squad.ts new hooks:** Added `useInitSquad` (POST /api/squad/init) and `useCreateSquad` (POST /api/squad/create), both unwrap `{ ok, data }` envelope, typed against Hockney's documented response shapes.
 - **DiscoveryModal redesign:** Replaced single-section modal with tabbed UI (Discover / Connect existing / Create new). Tab bar uses bottom-border active indicator, accent color. Discover tab = existing scan+register flow. Connect tab: path + optional name, 409 → friendly message "use Discover instead", 422 → "directory not found". Create tab: parent + project name, live preview of `{parent}/{name}/.squad/` path.
 - **Commit:** `5060eb7` on main
+
+## 2026-05-14 — Fluent UI Icons + Phase 2 atomic upgrades
+
+**Tasks completed:**
+- Installed `@fluentui/react-icons` via pnpm into `@sabbour/squadboard-client`.
+- Replaced all emoji usage across 12 source files with named Fluent icon components.
+- Committed to main: `feat(client): Fluent UI icons + Phase 2 atomic component upgrades`.
+
+## Learnings
+
+**Icons used:**
+- Sidebar nav (24px): `Home24Regular`, `Grid24Regular`, `ClipboardTaskListLtr24Regular`, `Bot24Regular`, `ArrowSync24Regular`, `Money24Regular`, `Settings24Regular`
+- Review actions/badges: `CheckmarkCircle20Regular`, `ArrowSync20Regular`, `Chat20Regular`, `DismissCircle20Regular`, `Clock20Regular`
+- Toolbar/inline: `Search20Regular`, `Play20Regular`, `Warning20Regular`, `ClipboardPaste20Regular`, `Checkmark20Regular`, `Folder20Regular`
+- Settings nav: `TextDescription20Regular`, `PlugConnected20Regular`, `Money20Regular`, `Settings20Regular`
+- ProjectCard: `ClipboardTaskListLtr20Regular`
+
+**What worked well:**
+- Icon naming is consistent: `{Name}{Size}{Style}` — TypeScript autocomplete catches wrong names immediately.
+- Fluent icons are inline SVGs — they inherit CSS `color`, so no extra prop needed to colorize.
+- For icon-in-array patterns (NAV_ITEMS, SECTIONS), changing `icon: string` → `icon: React.ReactNode` is the right approach.
+
+**Gotchas:**
+- `ClipboardTaskList` is actually `ClipboardTaskListLtr` — the TS error message helpfully offers the correct name.
+- SVG `<text>` elements (WorkflowStepFlow) cannot host React components — replaced emojis with plain unicode symbols (⇄ ▶ ✓) instead.
+- Fluent icon components don't accept `className` for direct sizing — use inline `style={{ width, height }}` or wrap in `<span>` with font-size.
+- `PlugConnected20Regular` is the correct name for 🔌 (MCP / plugins).
