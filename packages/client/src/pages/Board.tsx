@@ -1,5 +1,6 @@
 import { useState, useCallback } from 'react'
 import { useParams } from 'react-router'
+import { useQueryClient } from '@tanstack/react-query'
 import { useProject } from '../api/projects.ts'
 import { useIssues, useBulkAction, type Issue, type ColumnId } from '../api/issues.ts'
 import KanbanBoard from '../components/board/KanbanBoard.tsx'
@@ -7,12 +8,22 @@ import FilterBar from '../components/board/FilterBar.tsx'
 import CardDetail from '../components/board/CardDetail.tsx'
 import BulkActionBar from '../components/board/BulkActionBar.tsx'
 import CreateIssueModal from '../components/board/CreateIssueModal.tsx'
+import PresenceBar from '../components/board/PresenceBar.tsx'
+import ConflictToast from '../components/board/ConflictToast.tsx'
+import { useRealtimeBoard } from '../realtime/useRealtimeBoard.ts'
 
 export default function Board() {
   const { id } = useParams<{ id: string }>()
   const projectId = id ?? ''
 
   const { data: project, isLoading: projectLoading, isError: projectError } = useProject(projectId)
+  const queryClient = useQueryClient()
+
+  // Realtime: WS connection + live cache updates
+  const { connected, presenceList } = useRealtimeBoard(projectId)
+
+  // Conflict toast state (shown when an issue update returns 409)
+  const [showConflict, setShowConflict] = useState(false)
 
   // Filter state
   const [search, setSearch] = useState('')
@@ -102,7 +113,6 @@ export default function Board() {
         </div>
         <span
           style={{
-            marginLeft: 'auto',
             fontSize: '11px',
             background: 'var(--surface)',
             border: '1px solid var(--border)',
@@ -111,8 +121,17 @@ export default function Board() {
             color: 'var(--text-muted)',
           }}
         >
-          Demo 2
+          Demo 12
         </span>
+
+        {/* Live presence avatars + connection dot */}
+        <PresenceBar
+          users={presenceList}
+          connected={connected}
+          issueTitles={Object.fromEntries(
+            (allIssues ?? []).map((i) => [i.id, i.title])
+          )}
+        />
       </div>
 
       {/* Filter bar */}
@@ -163,6 +182,17 @@ export default function Board() {
           projectId={projectId}
           defaultColumn={createColumn}
           onClose={() => setCreateColumn(null)}
+        />
+      )}
+
+      {/* 409 conflict toast */}
+      {showConflict && (
+        <ConflictToast
+          onReload={() => {
+            void queryClient.invalidateQueries({ queryKey: ['issues', projectId] })
+            setShowConflict(false)
+          }}
+          onDismiss={() => setShowConflict(false)}
         />
       )}
     </div>

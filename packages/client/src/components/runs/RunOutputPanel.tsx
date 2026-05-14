@@ -1,9 +1,47 @@
-import { useEffect, useRef } from 'react'
-import { type IssueRun, useRunStream, useCancelRun } from '../../api/runs.ts'
+import { useEffect, useRef, useState } from 'react'
+import { type IssueRun, useCancelRun } from '../../api/runs.ts'
 import { type Agent } from '../../api/agents.ts'
 import RunStatusBadge from './RunStatusBadge.tsx'
 import CostDisplay from './CostDisplay.tsx'
 import { RoutingTierBadge } from '../routing/RoutingTierBadge.tsx'
+import { wsClient } from '../../realtime/ws-client.ts'
+
+const BASE = import.meta.env.VITE_API_URL ?? 'http://localhost:3000'
+
+/** Stream run output lines via WS if connected, falling back to SSE EventSource. */
+function useRunStreamWS(projectId: string, runId: string, enabled: boolean): string[] {
+  const [lines, setLines] = useState<string[]>([])
+
+  useEffect(() => {
+    if (!enabled || !runId) return
+    setLines([])
+
+    // Primary: WebSocket
+    if (wsClient.state === 'connected') {
+      wsClient.send({ type: 'subscribe_run', runId })
+
+      const handler = (payload: { runId: string; line: string }) => {
+        if (payload.runId === runId) {
+          setLines((prev) => [...prev, payload.line])
+        }
+      }
+      wsClient.on('run.output', handler)
+
+      return () => {
+        wsClient.off('run.output', handler)
+        wsClient.send({ type: 'unsubscribe_run', runId })
+      }
+    }
+
+    // Fallback: SSE EventSource (original behaviour)
+    const es = new EventSource(`${BASE}/api/projects/${projectId}/runs/${runId}/stream`)
+    es.onmessage = (e) => setLines((prev) => [...prev, e.data as string])
+    es.onerror = () => es.close()
+    return () => es.close()
+  }, [projectId, runId, enabled])
+
+  return lines
+}
 
 interface RunOutputPanelProps {
   projectId: string
@@ -14,7 +52,7 @@ interface RunOutputPanelProps {
 export default function RunOutputPanel({ projectId, run, agent }: RunOutputPanelProps) {
   const bottomRef = useRef<HTMLDivElement>(null)
   const isActive = run.status === 'running' || run.status === 'pending'
-  const lines = useRunStream(projectId, run.id, isActive)
+  const lines = useRunStreamWS(projectId, run.id, isActive)
   const cancelRun = useCancelRun(projectId)
 
   // Combine SSE lines with stored output for completed runs
