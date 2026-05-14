@@ -75,11 +75,45 @@ export class GitHubSync {
 
   constructor(
     private readonly projectId: string,
-    token: string,
-    owner: string,
-    repo: string,
+    client: GitHubClient,
   ) {
-    this.client = new GitHubClient(token, owner, repo);
+    this.client = client;
+  }
+
+  /**
+   * Build a GitHubSync from a stored project row.
+   * Picks PAT or App auth based on githubAuthType (null → 'pat').
+   */
+  static async fromProject(
+    projectId: string,
+    project: {
+      githubAuthType?: string | null;
+      githubToken?: string | null;
+      githubOwner: string | null;
+      githubRepo: string | null;
+      githubAppId?: string | null;
+      githubAppInstallationId?: string | null;
+      githubAppPrivateKey?: string | null;
+    },
+  ): Promise<GitHubSync> {
+    const authType = project.githubAuthType ?? 'pat';
+    const owner = project.githubOwner!;
+    const repo = project.githubRepo!;
+
+    let client: GitHubClient;
+    if (authType === 'app') {
+      client = await GitHubClient.fromApp(
+        project.githubAppId!,
+        project.githubAppInstallationId!,
+        project.githubAppPrivateKey!,
+        owner,
+        repo,
+      );
+    } else {
+      client = GitHubClient.fromPat(project.githubToken!, owner, repo);
+    }
+
+    return new GitHubSync(projectId, client);
   }
 
   /**
@@ -331,31 +365,29 @@ export class GitHubSync {
 
 /**
  * Start a periodic pull loop for a project.
+ * Reads full project config from DB on each tick (supports PAT and App auth).
  * Returns the interval handle (also stored in activeSyncLoops map).
  */
 export function startSyncLoop(
   projectId: string,
-  token: string,
-  owner: string,
-  repo: string,
   intervalMs = 60_000,
 ): ReturnType<typeof setInterval> {
   // Stop any existing loop first
   stopSyncLoop(projectId);
 
-  const sync = new GitHubSync(projectId, token, owner, repo);
-
   const handle = setInterval(async () => {
     try {
-      // Fetch the project's last sync timestamp to use as `since`
       const db = getDb();
       const [project] = await db
-        .select({ githubSyncLastAt: schema.projects.githubSyncLastAt })
+        .select()
         .from(schema.projects)
         .where(eq(schema.projects.id, projectId))
         .limit(1);
 
-      const since = project?.githubSyncLastAt?.toISOString();
+      if (!project || !project.githubSyncEnabled) return;
+
+      const since = project.githubSyncLastAt?.toISOString();
+      const sync = await GitHubSync.fromProject(projectId, project);
       await sync.pullChanges(since);
     } catch (err) {
       // Fire-and-forget: log but don't crash the loop

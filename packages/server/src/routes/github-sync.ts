@@ -50,13 +50,29 @@ router.get('/', async (req: Request, res: Response) => {
       return;
     }
 
-    res.json({
+    const authType = project.githubAuthType ?? 'pat';
+
+    const base = {
       githubSyncEnabled: project.githubSyncEnabled ?? false,
       githubOwner: project.githubOwner ?? null,
       githubRepo: project.githubRepo ?? null,
-      githubToken: redactToken(project.githubToken ?? null),
       githubSyncLastAt: project.githubSyncLastAt ?? null,
-    });
+      authType,
+    };
+
+    if (authType === 'app') {
+      res.json({
+        ...base,
+        appId: project.githubAppId ?? null,
+        installationId: project.githubAppInstallationId ?? null,
+        // privateKey is never returned over the API
+      });
+    } else {
+      res.json({
+        ...base,
+        githubToken: redactToken(project.githubToken ?? null),
+      });
+    }
   } catch (err) {
     handleError(res, err);
   }
@@ -68,15 +84,63 @@ router.put('/', async (req: Request, res: Response) => {
   try {
     const db = getDb();
     const { id } = req.params;
-    const { token, owner, repo } = req.body as {
+    const body = req.body as {
+      authType?: string;
+      // PAT fields
       token?: string;
+      // App fields
+      appId?: string;
+      installationId?: string;
+      privateKey?: string;
+      // Common
       owner?: string;
       repo?: string;
     };
 
-    if (!token || !owner || !repo) {
-      res.status(400).json({ error: 'token, owner, and repo are required' });
+    const authType = body.authType ?? 'pat';
+
+    if (!body.owner || !body.repo) {
+      res.status(400).json({ error: 'owner and repo are required' });
       return;
+    }
+
+    let updates: Record<string, unknown>;
+
+    if (authType === 'app') {
+      if (!body.appId || !body.installationId || !body.privateKey) {
+        res
+          .status(400)
+          .json({ error: 'appId, installationId, and privateKey are required for App auth' });
+        return;
+      }
+      updates = {
+        githubSyncEnabled: true,
+        githubAuthType: 'app',
+        githubOwner: body.owner,
+        githubRepo: body.repo,
+        githubToken: null,
+        githubAppId: body.appId,
+        githubAppInstallationId: body.installationId,
+        githubAppPrivateKey: body.privateKey,
+        updatedAt: new Date(),
+      };
+    } else {
+      // PAT (default)
+      if (!body.token) {
+        res.status(400).json({ error: 'token is required for PAT auth' });
+        return;
+      }
+      updates = {
+        githubSyncEnabled: true,
+        githubAuthType: 'pat',
+        githubOwner: body.owner,
+        githubRepo: body.repo,
+        githubToken: body.token,
+        githubAppId: null,
+        githubAppInstallationId: null,
+        githubAppPrivateKey: null,
+        updatedAt: new Date(),
+      };
     }
 
     const project = await getProject(id);
@@ -87,24 +151,32 @@ router.put('/', async (req: Request, res: Response) => {
 
     await db
       .update(schema.projects)
-      .set({
-        githubSyncEnabled: true,
-        githubToken: token,
-        githubOwner: owner,
-        githubRepo: repo,
-        updatedAt: new Date(),
-      })
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      .set(updates as any)
       .where(eq(schema.projects.id, id));
 
     // (Re)start the sync loop for this project
-    startSyncLoop(id, token, owner, repo);
+    startSyncLoop(id);
 
-    res.json({
-      githubSyncEnabled: true,
-      githubOwner: owner,
-      githubRepo: repo,
-      githubToken: redactToken(token),
-    });
+    if (authType === 'app') {
+      res.json({
+        githubSyncEnabled: true,
+        authType: 'app',
+        githubOwner: body.owner,
+        githubRepo: body.repo,
+        appId: body.appId,
+        installationId: body.installationId,
+        // privateKey omitted
+      });
+    } else {
+      res.json({
+        githubSyncEnabled: true,
+        authType: 'pat',
+        githubOwner: body.owner,
+        githubRepo: body.repo,
+        githubToken: redactToken(body.token!),
+      });
+    }
   } catch (err) {
     handleError(res, err);
   }
@@ -154,23 +226,22 @@ router.post('/sync', async (req: Request, res: Response) => {
       return;
     }
 
-    if (
+    const authType = project.githubAuthType ?? 'pat';
+
+    const missingConfig =
       !project.githubSyncEnabled ||
-      !project.githubToken ||
       !project.githubOwner ||
-      !project.githubRepo
-    ) {
+      !project.githubRepo ||
+      (authType === 'pat' && !project.githubToken) ||
+      (authType === 'app' &&
+        (!project.githubAppId || !project.githubAppInstallationId || !project.githubAppPrivateKey));
+
+    if (missingConfig) {
       res.status(409).json({ error: 'GitHub sync is not configured for this project' });
       return;
     }
 
-    const sync = new GitHubSync(
-      id,
-      project.githubToken,
-      project.githubOwner,
-      project.githubRepo,
-    );
-
+    const sync = await GitHubSync.fromProject(id, project);
     const result = await sync.pushAllIssues();
 
     res.json({ ok: true, ...result });

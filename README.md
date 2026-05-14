@@ -150,7 +150,9 @@ Squadboard exposes tools via Model Context Protocol (MCP) over stdio. Connect fr
 
 ### GitHub Sync (Optional)
 
-Connect a GitHub repository to sync issues and PRs:
+Connect a GitHub repository to sync issues and PRs. Two authentication methods are supported.
+
+#### Option A — Personal Access Token (PAT)
 
 1. In the Squadboard UI, go to **Project Settings** > **GitHub**
 2. Paste a GitHub personal access token (with `repo` scope)
@@ -160,8 +162,44 @@ Or via API:
 ```bash
 curl -X PUT http://localhost:3000/api/projects/{projectId}/github \
   -H "Content-Type: application/json" \
-  -d '{"token":"ghp_xxxxx", "owner":"your-org", "repo":"your-repo"}'
+  -d '{"authType":"pat","token":"ghp_xxxxx","owner":"your-org","repo":"your-repo"}'
 ```
+
+> **Backward compatible:** requests without `authType` are treated as PAT.
+
+#### Option B — GitHub App
+
+GitHub Apps are recommended for fine-grained permissions and higher rate limits.
+
+1. [Create a GitHub App](https://docs.github.com/en/apps/creating-github-apps) with **Issues: Read & Write** permissions.
+2. Install the App on your repository and note the **App ID** and **Installation ID**.
+3. Download the private key (`.pem`) from the App settings page.
+4. Convert the key from PKCS#1 to PKCS#8 (required by the `jose` RS256 JWT library):
+   ```bash
+   openssl pkcs8 -topk8 -nocrypt -in github-app.pem -out github-app-pkcs8.pem
+   ```
+5. Configure via API:
+   ```bash
+   curl -X PUT http://localhost:3000/api/projects/{projectId}/github \
+     -H "Content-Type: application/json" \
+     -d '{
+       "authType": "app",
+       "appId": "123456",
+       "installationId": "78901234",
+       "privateKey": "-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----",
+       "owner": "your-org",
+       "repo": "your-repo"
+     }'
+   ```
+
+> **Security note:** The private key is stored in plaintext during the hacking phase. Use a secrets manager (Vault, AWS Secrets Manager) in production.
+
+#### GET response
+
+`GET /api/projects/:id/github` returns:
+- `authType`: `"pat"` or `"app"`
+- PAT: `githubToken` (redacted — last 4 chars visible)
+- App: `appId`, `installationId` — **`privateKey` is never returned**
 
 ### Build for Production
 
