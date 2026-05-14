@@ -2,7 +2,7 @@
 // Connects to the Squadboard server and fans out typed events to subscribers.
 
 const WS_BASE = (() => {
-  const apiBase = import.meta.env.VITE_API_URL ?? 'http://localhost:3000'
+  const apiBase = import.meta.env.VITE_API_URL ?? `${window.location.protocol}//${window.location.host}`
   return apiBase.replace(/^http/, 'ws')
 })()
 

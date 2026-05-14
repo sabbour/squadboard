@@ -1,0 +1,44 @@
+<svg width="1200" height="360" viewBox="0 0 1200 360" xmlns="http://www.w3.org/2000/svg">
+
+  <!-- Icon centered around y=180 -->
+  <g transform="translate(80,-40)">
+    <path d="
+      M118 180
+      C95 120 210 100 310 132
+      L362 150
+      C448 170 440 210 360 228
+      L302 246
+      C205 270 98 250 118 180
+      Z"
+      fill="#000000"/>
+
+    <path d="
+      M185 178
+      C185 150 235 145 290 158
+      L330 170
+      C355 178 350 188 325 195
+      L292 205
+      C250 215 210 212 185 198
+    "
+      fill="none"
+      stroke="#000000"
+      stroke-width="14"
+      stroke-linecap="round"
+      stroke-linejoin="round"/>
+
+    <circle cx="176" cy="268" r="16" fill="#000000"/>
+    <circle cx="330" cy="264" r="18" fill="#000000"/>
+  </g>
+
+  <!-- Wordmark perfectly centered vertically -->
+  <text x="560" y="180"
+        font-family="Roboto Slab, Georgia, serif"
+        font-size="92"
+        font-weight="600"
+        fill="#000000"
+        letter-spacing="0.5"
+        dominant-baseline="middle">
+    Squadboard
+  </text>
+
+</svg>

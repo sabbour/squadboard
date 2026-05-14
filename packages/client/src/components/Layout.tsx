@@ -1,4 +1,5 @@
 import { Outlet, NavLink, useParams } from 'react-router'
+import squadboardLogo from '../assets/squadboard-horizontal.svg'
 
 const NAV_ITEMS = [
   { label: 'Dashboard', to: 'dashboard', icon: '📊', enabled: true },
@@ -38,10 +39,7 @@ export default function Layout() {
             gap: '8px',
           }}
         >
-          <span style={{ fontSize: '18px' }}>⬡</span>
-          <span style={{ fontWeight: 700, fontSize: '15px', letterSpacing: '-0.01em' }}>
-            Squadboard
-          </span>
+          <img src={squadboardLogo} alt="Squadboard" style={{ height: '24px', display: 'block' }} />
         </div>
 
         {/* Top nav — only show project nav when inside a project */}
@@ -113,7 +111,7 @@ export default function Layout() {
                       fontWeight: isActive ? 500 : 400,
                       fontSize: '13px',
                       textDecoration: 'none',
-                      background: isActive ? 'rgba(56, 139, 253, 0.1)' : 'transparent',
+                      background: isActive ? 'rgba(9, 105, 218, 0.08)' : 'transparent',
                       borderLeft: isActive ? '2px solid var(--accent)' : '2px solid transparent',
                     })}
                   >
@@ -146,7 +144,7 @@ export default function Layout() {
                       fontWeight: isActive ? 500 : 400,
                       fontSize: '13px',
                       textDecoration: 'none',
-                      background: isActive ? 'rgba(56, 139, 253, 0.1)' : 'transparent',
+                      background: isActive ? 'rgba(9, 105, 218, 0.08)' : 'transparent',
                       borderLeft: isActive ? '2px solid var(--accent)' : '2px solid transparent',
                     })}
                   >
