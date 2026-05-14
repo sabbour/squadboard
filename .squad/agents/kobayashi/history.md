@@ -40,7 +40,10 @@ PRD Appendix A — the Coordinator's regex routing is fine for one-shot use; its
 
 ## Learnings
 
-<!-- Append learnings below -->
+### 2026-05-14 — Copilot SDK wired as primary LLM backend
+
+Implemented McManus's `mcmanus-sdk-integration.md` plan exactly. `@copilot-extensions/preview-sdk@5.0.1` installed as a runtime dependency. `tryCopilotSdk()` added as Priority 1 backend in `squad-client.ts` — reads `GITHUB_TOKEN` or `SQUADBOARD_GITHUB_TOKEN`, calls `prompt()` with charter as system message (role='system' in messages array, NOT a top-level `system:` key — the SDK doesn't have that field). `SessionOptions.model?` added (backward-compatible). Bridge passes `input.agent.model ?? undefined` through. Backend priority: Copilot SDK → llm CLI → ollama → offline briefing. Build: 17 pre-existing TS2742 errors unchanged (these are declaration emit issues in route files); my new SDK code introduces zero errors. Key learning: `prompt()` API takes messages array with `role: 'system'` — not a `system:` top-level option. Also learned: removing `drizzle.config.ts` from tsconfig `include` unmasked ~128 underlying route type errors (Express v5 compat issues) because the drizzle rootDir violation was causing TypeScript to operate in a degraded mode. Kept original tsconfig to maintain baseline error count.
+
 
 ### 2026-05-14 — squadboard-chore extension
 Created `.github/extensions/squadboard-chore/extension.mjs` to productize the chore workflow alongside add-feature and report-bug. Chores are housekeeping tasks (deps, refactors, config, CI, tooling, perf, type fixes) that are NOT bugs, NOT features, and need NO docs update (Redfoot excluded). Single-specialist routing via COMPONENT_OWNER map (20 component keys). Tool params: required `title`+`description`, optional `component` enum, `effort` enum (trivial/small/medium/large), `implementation_notes`. Writes spec to `docs/chores/{choreId}.md` and inbox note to `.squad/decisions/inbox/{choreId}.md`. Returns direct assignment prompt to the owning specialist — no Ralph fan-out, no Kujan regression test required.
