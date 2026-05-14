@@ -48,7 +48,7 @@ export default function CharterEditor({ projectId, agentId }: CharterEditorProps
           flex: 1,
           minHeight: '320px',
           width: '100%',
-          background: '#0d1117',
+          background: 'var(--surface)',
           border: '1px solid var(--border)',
           borderRadius: 'var(--radius)',
           color: 'var(--text)',

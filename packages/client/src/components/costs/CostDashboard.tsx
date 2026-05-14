@@ -1,5 +1,14 @@
 import { useCostSummary, useBudget } from '../../api/costs.ts'
 import { Warning20Regular } from '@fluentui/react-icons'
+import {
+  Table,
+  TableHeader,
+  TableHeaderCell,
+  TableBody,
+  TableRow,
+  TableCell,
+  TableCellLayout,
+} from '@fluentui/react-components'
 
 interface CostDashboardProps {
   projectId: string
@@ -23,9 +32,9 @@ function BudgetBar({ percent, budgetUsd, spend }: { percent: number; budgetUsd: 
   const color = percent > 95 ? '#f85149' : percent > 80 ? '#d29922' : '#3fb950'
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', color: '#8b949e' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', color: 'var(--text-muted)' }}>
         <span>MTD spend vs. budget</span>
-        <span style={{ color: percent > 95 ? '#f85149' : '#e6edf3' }}>
+        <span style={{ color: percent > 95 ? '#f85149' : 'var(--text)' }}>
           {fmtShort(spend)} / {fmtShort(budgetUsd)} ({percent.toFixed(0)}%)
         </span>
       </div>
@@ -33,9 +42,9 @@ function BudgetBar({ percent, budgetUsd, spend }: { percent: number; budgetUsd: 
         style={{
           height: '8px',
           borderRadius: '4px',
-          background: '#21262d',
+          background: 'var(--border)',
           overflow: 'hidden',
-          border: '1px solid #30363d',
+          border: '1px solid var(--border)',
         }}
       >
         <div
@@ -58,7 +67,7 @@ export default function CostDashboard({ projectId }: CostDashboardProps) {
 
   if (summaryLoading || budgetLoading) {
     return (
-      <div style={{ padding: '32px', color: '#8b949e', fontSize: '13px' }}>Loading cost data…</div>
+      <div style={{ padding: '32px', color: 'var(--text-muted)', fontSize: '13px' }}>Loading cost data…</div>
     )
   }
 
@@ -101,8 +110,8 @@ export default function CostDashboard({ projectId }: CostDashboardProps) {
       {/* MTD spend card */}
       <div
         style={{
-          background: '#161b22',
-          border: '1px solid #30363d',
+          background: 'var(--surface)',
+          border: '1px solid var(--border)',
           borderRadius: '8px',
           padding: '20px 24px',
           display: 'flex',
@@ -110,10 +119,10 @@ export default function CostDashboard({ projectId }: CostDashboardProps) {
           gap: '12px',
         }}
       >
-        <span style={{ fontSize: '12px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', color: '#8b949e' }}>
+        <span style={{ fontSize: '12px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--text-muted)' }}>
           Month-to-date spend
         </span>
-        <span style={{ fontSize: '36px', fontWeight: 700, letterSpacing: '-0.02em', color: '#e6edf3', fontVariantNumeric: 'tabular-nums' }}>
+        <span style={{ fontSize: '36px', fontWeight: 700, letterSpacing: '-0.02em', color: 'var(--text)', fontVariantNumeric: 'tabular-nums' }}>
           {fmtShort(summary.totalMtd)}
         </span>
 
@@ -128,101 +137,83 @@ export default function CostDashboard({ projectId }: CostDashboardProps) {
       </div>
 
       {/* By Agent table */}
-      <div style={{ background: '#161b22', border: '1px solid #30363d', borderRadius: '8px', overflow: 'hidden' }}>
-        <div style={{ padding: '12px 16px', borderBottom: '1px solid #30363d' }}>
-          <span style={{ fontSize: '13px', fontWeight: 600, color: '#e6edf3' }}>By Agent</span>
+      <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '8px', overflow: 'hidden' }}>
+        <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--border)' }}>
+          <span style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text)' }}>By Agent</span>
         </div>
         {summary.byAgent.length === 0 ? (
-          <div style={{ padding: '20px 16px', fontSize: '13px', color: '#8b949e' }}>No agent cost data yet.</div>
+          <div style={{ padding: '20px 16px', fontSize: '13px', color: 'var(--text-muted)' }}>No agent cost data yet.</div>
         ) : (
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>
-            <thead>
-              <tr style={{ borderBottom: '1px solid #30363d' }}>
+          <Table size="small">
+            <TableHeader>
+              <TableRow>
                 {['Agent', 'Runs', 'Total Cost', 'Avg / Run'].map((h) => (
-                  <th
-                    key={h}
-                    style={{
-                      padding: '8px 16px',
-                      textAlign: h === 'Agent' ? 'left' : 'right',
-                      color: '#8b949e',
-                      fontWeight: 500,
-                    }}
-                  >
+                  <TableHeaderCell key={h} style={{ textAlign: h === 'Agent' ? 'left' : 'right' }}>
                     {h}
-                  </th>
+                  </TableHeaderCell>
                 ))}
-              </tr>
-            </thead>
-            <tbody>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
               {summary.byAgent.map((row) => (
-                <tr
-                  key={row.agentId}
-                  style={{ borderBottom: '1px solid #21262d' }}
-                >
-                  <td style={{ padding: '10px 16px', color: '#e6edf3', fontWeight: 500 }}>{row.agentName}</td>
-                  <td style={{ padding: '10px 16px', textAlign: 'right', color: '#8b949e' }}>{row.runs.toLocaleString()}</td>
-                  <td style={{ padding: '10px 16px', textAlign: 'right', color: '#e6edf3', fontVariantNumeric: 'tabular-nums' }}>
+                <TableRow key={row.agentId}>
+                  <TableCell>
+                    <TableCellLayout style={{ fontWeight: 500 }}>{row.agentName}</TableCellLayout>
+                  </TableCell>
+                  <TableCell style={{ textAlign: 'right', color: 'var(--text-muted)' }}>{row.runs.toLocaleString()}</TableCell>
+                  <TableCell style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
                     {fmt(row.totalUsd)}
-                  </td>
-                  <td style={{ padding: '10px 16px', textAlign: 'right', color: '#8b949e', fontVariantNumeric: 'tabular-nums' }}>
+                  </TableCell>
+                  <TableCell style={{ textAlign: 'right', color: 'var(--text-muted)', fontVariantNumeric: 'tabular-nums' }}>
                     {fmt(row.avgUsdPerRun)}
-                  </td>
-                </tr>
+                  </TableCell>
+                </TableRow>
               ))}
-            </tbody>
-          </table>
+            </TableBody>
+          </Table>
         )}
       </div>
 
       {/* By Model table */}
-      <div style={{ background: '#161b22', border: '1px solid #30363d', borderRadius: '8px', overflow: 'hidden' }}>
-        <div style={{ padding: '12px 16px', borderBottom: '1px solid #30363d' }}>
-          <span style={{ fontSize: '13px', fontWeight: 600, color: '#e6edf3' }}>By Model</span>
+      <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '8px', overflow: 'hidden' }}>
+        <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--border)' }}>
+          <span style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text)' }}>By Model</span>
         </div>
         {summary.byModel.length === 0 ? (
-          <div style={{ padding: '20px 16px', fontSize: '13px', color: '#8b949e' }}>No model cost data yet.</div>
+          <div style={{ padding: '20px 16px', fontSize: '13px', color: 'var(--text-muted)' }}>No model cost data yet.</div>
         ) : (
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>
-            <thead>
-              <tr style={{ borderBottom: '1px solid #30363d' }}>
+          <Table size="small">
+            <TableHeader>
+              <TableRow>
                 {['Model', 'Runs', 'Tokens In', 'Tokens Out', 'Cost'].map((h) => (
-                  <th
-                    key={h}
-                    style={{
-                      padding: '8px 16px',
-                      textAlign: h === 'Model' ? 'left' : 'right',
-                      color: '#8b949e',
-                      fontWeight: 500,
-                    }}
-                  >
+                  <TableHeaderCell key={h} style={{ textAlign: h === 'Model' ? 'left' : 'right' }}>
                     {h}
-                  </th>
+                  </TableHeaderCell>
                 ))}
-              </tr>
-            </thead>
-            <tbody>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
               {summary.byModel.map((row) => (
-                <tr
-                  key={row.model}
-                  style={{ borderBottom: '1px solid #21262d' }}
-                >
-                  <td style={{ padding: '10px 16px', color: '#e6edf3', fontWeight: 500, fontFamily: 'monospace', fontSize: '11px' }}>
-                    {row.model}
-                  </td>
-                  <td style={{ padding: '10px 16px', textAlign: 'right', color: '#8b949e' }}>{row.runs.toLocaleString()}</td>
-                  <td style={{ padding: '10px 16px', textAlign: 'right', color: '#8b949e', fontVariantNumeric: 'tabular-nums' }}>
+                <TableRow key={row.model}>
+                  <TableCell>
+                    <TableCellLayout style={{ fontWeight: 500, fontFamily: 'monospace', fontSize: '11px' }}>
+                      {row.model}
+                    </TableCellLayout>
+                  </TableCell>
+                  <TableCell style={{ textAlign: 'right', color: 'var(--text-muted)' }}>{row.runs.toLocaleString()}</TableCell>
+                  <TableCell style={{ textAlign: 'right', color: 'var(--text-muted)', fontVariantNumeric: 'tabular-nums' }}>
                     {fmtK(row.tokensIn)}
-                  </td>
-                  <td style={{ padding: '10px 16px', textAlign: 'right', color: '#8b949e', fontVariantNumeric: 'tabular-nums' }}>
+                  </TableCell>
+                  <TableCell style={{ textAlign: 'right', color: 'var(--text-muted)', fontVariantNumeric: 'tabular-nums' }}>
                     {fmtK(row.tokensOut)}
-                  </td>
-                  <td style={{ padding: '10px 16px', textAlign: 'right', color: '#e6edf3', fontVariantNumeric: 'tabular-nums' }}>
+                  </TableCell>
+                  <TableCell style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
                     {fmt(row.totalUsd)}
-                  </td>
-                </tr>
+                  </TableCell>
+                </TableRow>
               ))}
-            </tbody>
-          </table>
+            </TableBody>
+          </Table>
         )}
       </div>
     </div>

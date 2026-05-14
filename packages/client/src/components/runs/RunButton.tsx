@@ -90,8 +90,8 @@ export default function RunButton({ projectId, issueId, onRunStarted }: RunButto
           onClick={handleCancel}
           style={{
             background: 'none',
-            border: '1px solid #30363d',
-            color: '#8b949e',
+            border: '1px solid var(--border)',
+            color: 'var(--text-muted)',
             borderRadius: '4px',
             padding: '1px 6px',
             fontSize: '11px',
@@ -122,9 +122,9 @@ export default function RunButton({ projectId, issueId, onRunStarted }: RunButto
           <button
             onClick={() => setOpen((v) => !v)}
             style={{
-              background: '#21262d',
-              border: '1px solid #30363d',
-              color: '#8b949e',
+              background: 'var(--bg)',
+              border: '1px solid var(--border)',
+              color: 'var(--text-muted)',
               borderRadius: '4px',
               padding: '2px 6px',
               fontSize: '11px',
@@ -147,8 +147,8 @@ export default function RunButton({ projectId, issueId, onRunStarted }: RunButto
                 bottom: '100%',
                 left: 0,
                 marginBottom: '4px',
-                background: '#21262d',
-                border: '1px solid #30363d',
+                background: 'var(--bg)',
+                border: '1px solid var(--border)',
                 borderRadius: '6px',
                 minWidth: '140px',
                 zIndex: 50,
@@ -166,7 +166,7 @@ export default function RunButton({ projectId, issueId, onRunStarted }: RunButto
                     textAlign: 'left',
                     background: selectedAgentId === agent.id ? '#388bfd22' : 'none',
                     border: 'none',
-                    color: '#e6edf3',
+                    color: 'var(--text)',
                     padding: '7px 12px',
                     fontSize: '12px',
                     cursor: 'pointer',

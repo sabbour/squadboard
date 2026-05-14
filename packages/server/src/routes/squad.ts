@@ -2,11 +2,20 @@ import { Router, Request, Response } from 'express';
 import { eq } from 'drizzle-orm';
 import fs from 'node:fs/promises';
 import path from 'node:path';
+import os from 'node:os';
 import { discoverSquadDirectories, validateSquadDir } from '../services/squad-discovery.js';
 import { linkProjectToSquad } from '../services/project-squad.js';
 import { getDb, schema } from '../db/index.js';
 
 const router = Router();
+
+/**
+ * GET /api/squad/home
+ * Returns the server process's home directory.
+ */
+router.get('/home', (_req: Request, res: Response) => {
+  res.json({ path: os.homedir() });
+});
 
 /**
  * GET /api/squad/discover
@@ -216,11 +225,11 @@ router.post('/create', async (req: Request, res: Response) => {
     try {
       const stat = await fs.stat(parentPath);
       if (!stat.isDirectory()) {
-        res.status(422).json({ ok: false, error: 'Directory does not exist' });
+        res.status(422).json({ ok: false, error: `Parent directory does not exist: ${parentPath}` });
         return;
       }
     } catch {
-      res.status(422).json({ ok: false, error: 'Directory does not exist' });
+      res.status(422).json({ ok: false, error: `Parent directory does not exist: ${parentPath}` });
       return;
     }
 

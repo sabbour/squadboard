@@ -1,6 +1,7 @@
 import { useParams } from 'react-router'
 import { useProject } from '../api/projects.ts'
 import CostDashboard from '../components/costs/CostDashboard.tsx'
+import { Subtitle1, Caption1 } from '@fluentui/react-components'
 
 export default function Costs() {
   const { id } = useParams<{ id: string }>()
@@ -34,12 +35,10 @@ export default function Costs() {
         }}
       >
         <div>
-          <h1 style={{ fontSize: '18px', fontWeight: 600, color: 'var(--text)' }}>
-            {project.name} — Costs
-          </h1>
-          <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '2px' }}>
+          <Subtitle1 as="h1">{project.name} — Costs</Subtitle1>
+          <Caption1 style={{ color: 'var(--text-muted)', marginTop: '2px', display: 'block' }}>
             Month-to-date LLM spend across all agents and runs
-          </p>
+          </Caption1>
         </div>
         <span
           style={{

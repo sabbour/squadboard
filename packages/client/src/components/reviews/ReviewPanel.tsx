@@ -78,10 +78,10 @@ export function ReviewPanel({ reviewGroup, allowHumanOverride = true }: ReviewPa
   }
 
   const inputStyle: React.CSSProperties = {
-    background: '#0d1117',
-    border: '1px solid #30363d',
+    background: 'var(--surface)',
+    border: '1px solid var(--border)',
     borderRadius: '6px',
-    color: '#e6edf3',
+    color: 'var(--text)',
     padding: '6px 10px',
     fontSize: '12px',
     outline: 'none',
@@ -127,8 +127,8 @@ export function ReviewPanel({ reviewGroup, allowHumanOverride = true }: ReviewPa
                 style={{
                   display: 'flex',
                   gap: '10px',
-                  background: '#0d1117',
-                  border: '1px solid #21262d',
+                  background: 'var(--bg)',
+                  border: '1px solid var(--border)',
                   borderRadius: '6px',
                   padding: '10px 12px',
                 }}
@@ -136,7 +136,7 @@ export function ReviewPanel({ reviewGroup, allowHumanOverride = true }: ReviewPa
                 <Avatar name={event.agentName} size={28} />
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
-                    <span style={{ fontSize: '12px', fontWeight: 600, color: '#e6edf3' }}>
+                    <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text)' }}>
                       {event.agentName}
                     </span>
                     <span
@@ -155,7 +155,7 @@ export function ReviewPanel({ reviewGroup, allowHumanOverride = true }: ReviewPa
                     </span>
                   </div>
                   {event.comment && (
-                    <p style={{ fontSize: '12px', color: '#c9d1d9', margin: '6px 0 0', lineHeight: '1.5', whiteSpace: 'pre-wrap' }}>
+                    <p style={{ fontSize: '12px', color: 'var(--text)', margin: '6px 0 0', lineHeight: '1.5', whiteSpace: 'pre-wrap' }}>
                       {event.comment}
                     </p>
                   )}
@@ -173,7 +173,7 @@ export function ReviewPanel({ reviewGroup, allowHumanOverride = true }: ReviewPa
       {allowHumanOverride && reviewGroup.decision === 'pending' && (
         <div
           style={{
-            borderTop: '1px solid #21262d',
+            borderTop: '1px solid var(--border)',
             paddingTop: '12px',
             display: 'flex',
             flexDirection: 'column',
@@ -196,7 +196,7 @@ export function ReviewPanel({ reviewGroup, allowHumanOverride = true }: ReviewPa
                 display: 'flex',
                 alignItems: 'center',
                 gap: '4px',
-                background: submitting ? '#21262d' : 'rgba(63,185,80,0.12)',
+                background: submitting ? 'rgba(0,0,0,0.05)' : 'rgba(63,185,80,0.12)',
                 border: '1px solid rgba(63,185,80,0.4)',
                 color: '#3fb950',
                 borderRadius: '6px',
@@ -216,7 +216,7 @@ export function ReviewPanel({ reviewGroup, allowHumanOverride = true }: ReviewPa
                 display: 'flex',
                 alignItems: 'center',
                 gap: '4px',
-                background: submitting ? '#21262d' : 'rgba(210,153,34,0.12)',
+                background: submitting ? 'rgba(0,0,0,0.05)' : 'rgba(210,153,34,0.12)',
                 border: '1px solid rgba(210,153,34,0.4)',
                 color: '#d29922',
                 borderRadius: '6px',

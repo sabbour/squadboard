@@ -10,6 +10,7 @@ import { RoutingTierBadge } from '../components/routing/RoutingTierBadge.tsx'
 import { RoutingLogTable } from '../components/routing/RoutingLogTable.tsx'
 import { RoutingStatsPanel } from '../components/routing/RoutingStatsPanel.tsx'
 import { ArrowSync20Regular, Bot20Regular, ArrowSwap20Regular } from '@fluentui/react-icons'
+import { Subtitle1 } from '@fluentui/react-components'
 
 interface RouteTestResult {
   agentName: string | null
@@ -214,7 +215,7 @@ export default function Agents() {
         }}
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <h1 style={{ fontSize: '16px', fontWeight: 600, color: 'var(--text)' }}>Agents</h1>
+          <Subtitle1 as="h1">Agents</Subtitle1>
           {!isLoading && (
             <span
               style={{

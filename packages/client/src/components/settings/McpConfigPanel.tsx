@@ -22,9 +22,9 @@ function CopyButton({ text }: { text: string }) {
     <button
       onClick={handleCopy}
       style={{
-        background: copied ? 'rgba(63,185,80,0.12)' : '#21262d',
-        border: `1px solid ${copied ? 'rgba(63,185,80,0.4)' : '#30363d'}`,
-        color: copied ? '#3fb950' : '#8b949e',
+        background: copied ? 'rgba(63,185,80,0.12)' : 'var(--bg)',
+        border: `1px solid ${copied ? 'rgba(63,185,80,0.4)' : 'var(--border)'}`,
+        color: copied ? '#3fb950' : 'var(--text-muted)',
         borderRadius: '6px',
         padding: '4px 10px',
         fontSize: '11px',
@@ -41,15 +41,15 @@ function CopyButton({ text }: { text: string }) {
 function Accordion({ title, children }: { title: string; children: React.ReactNode }) {
   const [open, setOpen] = useState(false)
   return (
-    <div style={{ border: '1px solid #30363d', borderRadius: '6px', overflow: 'hidden' }}>
+    <div style={{ border: '1px solid var(--border)', borderRadius: '6px', overflow: 'hidden' }}>
       <button
         onClick={() => setOpen((o) => !o)}
         style={{
           width: '100%',
-          background: '#161b22',
+          background: 'var(--bg)',
           border: 'none',
-          borderBottom: open ? '1px solid #30363d' : 'none',
-          color: '#e6edf3',
+          borderBottom: open ? '1px solid var(--border)' : 'none',
+          color: 'var(--text)',
           padding: '10px 14px',
           fontSize: '13px',
           fontWeight: 500,
@@ -60,11 +60,11 @@ function Accordion({ title, children }: { title: string; children: React.ReactNo
           textAlign: 'left',
         }}
       >
-        <span style={{ fontSize: '11px', color: '#8b949e' }}>{open ? '▾' : '▸'}</span>
+        <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{open ? '▾' : '▸'}</span>
         {title}
       </button>
       {open && (
-        <div style={{ padding: '14px', background: '#0d1117', fontSize: '13px', color: '#c9d1d9', lineHeight: '1.7' }}>
+        <div style={{ padding: '14px', background: 'var(--surface)', fontSize: '13px', color: 'var(--text)', lineHeight: '1.7' }}>
           {children}
         </div>
       )}
@@ -105,19 +105,19 @@ export function McpConfigPanel({ projectId }: McpConfigPanelProps) {
             marginBottom: '8px',
           }}
         >
-          <p style={{ fontSize: '12px', color: '#8b949e', margin: 0 }}>
+          <p style={{ fontSize: '12px', color: 'var(--text-muted)', margin: 0 }}>
             Add this to your AI client's MCP configuration:
           </p>
           <CopyButton text={configJson} />
         </div>
         <pre
           style={{
-            background: '#0d1117',
-            border: '1px solid #30363d',
+            background: 'var(--bg)',
+            border: '1px solid var(--border)',
             borderRadius: '6px',
             padding: '14px',
             fontSize: '12px',
-            color: '#e6edf3',
+            color: 'var(--text)',
             overflowX: 'auto',
             margin: 0,
             fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
@@ -130,7 +130,7 @@ export function McpConfigPanel({ projectId }: McpConfigPanelProps) {
 
       {/* How to connect */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-        <p style={{ fontSize: '11px', color: '#8b949e', textTransform: 'uppercase', letterSpacing: '0.05em', margin: 0, fontWeight: 600 }}>
+        <p style={{ fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', margin: 0, fontWeight: 600 }}>
           How to connect
         </p>
         <Accordion title="Claude Desktop">
@@ -153,7 +153,7 @@ export function McpConfigPanel({ projectId }: McpConfigPanelProps) {
 
       {/* Available tools */}
       <div>
-        <p style={{ fontSize: '11px', color: '#8b949e', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '10px', fontWeight: 600 }}>
+        <p style={{ fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '10px', fontWeight: 600 }}>
           Available MCP Tools ({MCP_TOOLS.length})
         </p>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
@@ -163,8 +163,8 @@ export function McpConfigPanel({ projectId }: McpConfigPanelProps) {
               style={{
                 display: 'flex',
                 gap: '12px',
-                background: '#0d1117',
-                border: '1px solid #21262d',
+                background: 'var(--bg)',
+                border: '1px solid var(--border)',
                 borderRadius: '6px',
                 padding: '8px 12px',
                 alignItems: 'flex-start',
@@ -173,7 +173,7 @@ export function McpConfigPanel({ projectId }: McpConfigPanelProps) {
               <code style={{ fontSize: '12px', color: '#58a6ff', whiteSpace: 'nowrap', fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace', flexShrink: 0 }}>
                 {tool.name}
               </code>
-              <span style={{ fontSize: '12px', color: '#8b949e', lineHeight: '1.5' }}>{tool.description}</span>
+              <span style={{ fontSize: '12px', color: 'var(--text-muted)', lineHeight: '1.5' }}>{tool.description}</span>
             </div>
           ))}
         </div>
@@ -181,8 +181,8 @@ export function McpConfigPanel({ projectId }: McpConfigPanelProps) {
 
       {/* Project info */}
       {project && (
-        <div style={{ fontSize: '11px', color: '#484f58', borderTop: '1px solid #21262d', paddingTop: '12px' }}>
-          Project: <strong style={{ color: '#8b949e' }}>{project.name}</strong> · ID: <code style={{ fontFamily: 'monospace' }}>{projectId}</code>
+        <div style={{ fontSize: '11px', color: 'var(--text-muted)', borderTop: '1px solid var(--border)', paddingTop: '12px' }}>
+          Project: <strong style={{ color: 'var(--text)' }}>{project.name}</strong> · ID: <code style={{ fontFamily: 'monospace' }}>{projectId}</code>
         </div>
       )}
     </div>

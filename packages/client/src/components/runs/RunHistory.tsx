@@ -51,8 +51,8 @@ export default function RunHistory({ projectId, issueId }: RunHistoryProps) {
                 display: 'flex',
                 alignItems: 'center',
                 gap: '10px',
-                background: '#21262d',
-                border: `1px solid ${isExpanded ? '#388bfd' : '#30363d'}`,
+                background: 'var(--bg)',
+                border: `1px solid ${isExpanded ? '#388bfd' : 'var(--border)'}`,
                 borderRadius: '6px',
                 padding: '8px 12px',
                 cursor: 'pointer',
@@ -68,7 +68,7 @@ export default function RunHistory({ projectId, issueId }: RunHistoryProps) {
               />
 
               {/* Agent name */}
-              <span style={{ flex: 1, fontSize: '12px', fontWeight: 500, color: '#e6edf3' }}>
+              <span style={{ flex: 1, fontSize: '12px', fontWeight: 500, color: 'var(--text)' }}>
                 {agent?.name ?? run.agentId}
               </span>
 

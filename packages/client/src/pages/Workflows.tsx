@@ -1,6 +1,7 @@
 import { useParams } from 'react-router'
 import { useProject } from '../api/projects.ts'
 import WorkflowList from '../components/workflows/WorkflowList.tsx'
+import { Subtitle1, Caption1 } from '@fluentui/react-components'
 
 export default function Workflows() {
   const { id } = useParams<{ id: string }>()
@@ -34,12 +35,10 @@ export default function Workflows() {
         }}
       >
         <div>
-          <h1 style={{ fontSize: '18px', fontWeight: 600, color: 'var(--text)' }}>
-            {project.name} — Workflows
-          </h1>
-          <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '2px' }}>
+          <Subtitle1 as="h1">{project.name} — Workflows</Subtitle1>
+          <Caption1 style={{ color: 'var(--text-muted)', marginTop: '2px', display: 'block' }}>
             Define, edit, and attach YAML workflows to issues
-          </p>
+          </Caption1>
         </div>
         <span
           style={{

@@ -67,8 +67,8 @@ function TierBar({ stats }: { stats: RoutingStats }) {
           height: '12px',
           borderRadius: '6px',
           overflow: 'hidden',
-          background: '#21262d',
-          border: '1px solid #30363d',
+          background: 'var(--border)',
+          border: '1px solid var(--border)',
         }}
       >
         {segments.map((seg) => (

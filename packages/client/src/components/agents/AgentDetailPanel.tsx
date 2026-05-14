@@ -87,6 +87,10 @@ export default function AgentDetailPanel({ projectId, agent, onClose }: AgentDet
           style={{
             padding: '16px 20px',
             borderBottom: '1px solid var(--border)',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '12px',
+            flexShrink: 0,
           }}
         >
           {/* Avatar */}
@@ -111,8 +115,8 @@ export default function AgentDetailPanel({ projectId, agent, onClose }: AgentDet
 
           {/* Name + role */}
           <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontWeight: 600, fontSize: '15px', color: '#e6edf3' }}>{current.name}</div>
-            <div style={{ fontSize: '12px', color: '#8b949e', marginTop: '2px' }}>{current.role}</div>
+            <div style={{ fontWeight: 600, fontSize: '15px', color: 'var(--text)' }}>{current.name}</div>
+            <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '2px' }}>{current.role}</div>
           </div>
 
           <StatusBadge status={current.status} />
@@ -140,8 +144,7 @@ export default function AgentDetailPanel({ projectId, agent, onClose }: AgentDet
         <div
           style={{
             display: 'flex',
-            borderBottom: '1px solid #30363d',
-            flexShrink: 0,
+            borderBottom: '1px solid var(--border)',
           }}
         >
           {(['overview', 'charter'] as Tab[]).map((t) => (
@@ -198,11 +201,11 @@ export default function AgentDetailPanel({ projectId, agent, onClose }: AgentDet
                 <code
                   style={{
                     fontSize: '12px',
-                    color: '#e6edf3',
-                    background: '#0d1117',
+                    color: 'var(--text)',
+                    background: 'var(--bg)',
                     padding: '4px 8px',
                     borderRadius: '4px',
-                    border: '1px solid #30363d',
+                    border: '1px solid var(--border)',
                     display: 'inline-block',
                     wordBreak: 'break-all',
                   }}
@@ -215,13 +218,13 @@ export default function AgentDetailPanel({ projectId, agent, onClose }: AgentDet
               <div style={{ display: 'flex', gap: '24px', flexWrap: 'wrap' }}>
                 <div>
                   <p style={labelStyle}>Created</p>
-                  <span style={{ fontSize: '13px', color: '#e6edf3' }}>
+                  <span style={{ fontSize: '13px', color: 'var(--text)' }}>
                     {formatDistanceToNow(new Date(current.createdAt), { addSuffix: true })}
                   </span>
                 </div>
                 <div>
                   <p style={labelStyle}>Last Updated</p>
-                  <span style={{ fontSize: '13px', color: '#e6edf3' }}>
+                  <span style={{ fontSize: '13px', color: 'var(--text)' }}>
                     {formatDistanceToNow(new Date(current.updatedAt), { addSuffix: true })}
                   </span>
                 </div>
@@ -233,12 +236,12 @@ export default function AgentDetailPanel({ projectId, agent, onClose }: AgentDet
                   <p style={labelStyle}>Recent History</p>
                   <div
                     style={{
-                      background: '#0d1117',
-                      border: '1px solid #30363d',
+                      background: 'var(--bg)',
+                      border: '1px solid var(--border)',
                       borderRadius: '6px',
                       padding: '12px',
                       fontSize: '12px',
-                      color: '#8b949e',
+                      color: 'var(--text-muted)',
                       lineHeight: '1.6',
                       whiteSpace: 'pre-wrap',
                       fontFamily: 'ui-monospace, SFMono-Regular, monospace',
@@ -262,7 +265,7 @@ export default function AgentDetailPanel({ projectId, agent, onClose }: AgentDet
         <div
           style={{
             padding: '12px 20px',
-            borderTop: '1px solid #30363d',
+            borderTop: '1px solid var(--border)',
             display: 'flex',
             justifyContent: 'flex-end',
             flexShrink: 0,
@@ -313,7 +316,7 @@ export default function AgentDetailPanel({ projectId, agent, onClose }: AgentDet
 
 const labelStyle: React.CSSProperties = {
   fontSize: '11px',
-  color: '#8b949e',
+  color: 'var(--text-muted)',
   textTransform: 'uppercase',
   letterSpacing: '0.05em',
   marginBottom: '6px',

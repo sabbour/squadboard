@@ -20,7 +20,7 @@ export default function WorkflowList({ projectId }: WorkflowListProps) {
   const { data: workflows, isLoading, isError } = useWorkflows(projectId)
 
   if (isLoading) {
-    return <div style={{ padding: '24px', color: '#8b949e', fontSize: '13px' }}>Loading workflows…</div>
+    return <div style={{ padding: '24px', color: 'var(--text-muted)', fontSize: '13px' }}>Loading workflows…</div>
   }
 
   if (isError) {
@@ -33,30 +33,22 @@ export default function WorkflowList({ projectId }: WorkflowListProps) {
       <div
         style={{
           padding: '12px 24px',
-          borderBottom: '1px solid #30363d',
+          borderBottom: '1px solid var(--border)',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
         }}
       >
-        <span style={{ fontSize: '13px', color: '#8b949e' }}>
+        <span style={{ fontSize: '13px', color: 'var(--text-muted)' }}>
           {workflows?.length ?? 0} workflow{workflows?.length !== 1 ? 's' : ''}
         </span>
-        <button
+        <Button
+          appearance="primary"
+          size="small"
           onClick={() => navigate(`/projects/${projectId}/workflows/new`)}
-          style={{
-            background: '#388bfd',
-            color: '#fff',
-            border: 'none',
-            borderRadius: '5px',
-            padding: '6px 14px',
-            fontSize: '12px',
-            fontWeight: 500,
-            cursor: 'pointer',
-          }}
         >
           + New Workflow
-        </button>
+        </Button>
       </div>
 
       {/* Empty state */}
@@ -65,7 +57,7 @@ export default function WorkflowList({ projectId }: WorkflowListProps) {
           style={{
             padding: '48px 24px',
             textAlign: 'center',
-            color: '#484f58',
+            color: 'var(--text-muted)',
             fontSize: '13px',
             display: 'flex',
             flexDirection: 'column',
@@ -75,75 +67,51 @@ export default function WorkflowList({ projectId }: WorkflowListProps) {
         >
           <span style={{ fontSize: '28px' }}>⚙</span>
           <span>No workflows yet.</span>
-          <button
+          <Button
+            appearance="outline"
+            size="small"
             onClick={() => navigate(`/projects/${projectId}/workflows/new`)}
-            style={{
-              background: 'none',
-              border: '1px solid #30363d',
-              borderRadius: '5px',
-              padding: '6px 16px',
-              color: '#8b949e',
-              fontSize: '12px',
-              cursor: 'pointer',
-            }}
           >
             Create your first workflow →
-          </button>
+          </Button>
         </div>
       )}
 
       {/* Workflow rows */}
       {workflows && workflows.length > 0 && (
-        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
-          <thead>
-            <tr style={{ borderBottom: '1px solid #30363d' }}>
+        <Table size="medium">
+          <TableHeader>
+            <TableRow>
               {['Name', 'Steps', 'Template', 'Created'].map((h) => (
-                <th
-                  key={h}
-                  style={{
-                    padding: '10px 24px',
-                    textAlign: 'left',
-                    color: '#8b949e',
-                    fontWeight: 500,
-                    fontSize: '12px',
-                  }}
-                >
-                  {h}
-                </th>
+                <TableHeaderCell key={h}>{h}</TableHeaderCell>
               ))}
-            </tr>
-          </thead>
-          <tbody>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
             {workflows.map((wf) => {
               const stepCount = countSteps(wf.yamlContent)
               return (
-                <tr
+                <TableRow
                   key={wf.id}
                   onClick={() => navigate(`/projects/${projectId}/workflows/${wf.id}`)}
-                  style={{
-                    borderBottom: '1px solid #21262d',
-                    cursor: 'pointer',
-                  }}
-                  onMouseEnter={(e) => (e.currentTarget.style.background = '#161b22')}
-                  onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
+                  style={{ cursor: 'pointer' }}
                 >
-                  <td style={{ padding: '12px 24px', color: '#e6edf3', fontWeight: 500 }}>
-                    {wf.name}
-                  </td>
-                  <td style={{ padding: '12px 24px', color: '#8b949e' }}>
-                    {stepCount} step{stepCount !== 1 ? 's' : ''}
-                  </td>
-                  <td style={{ padding: '12px 24px', color: '#8b949e', fontFamily: 'monospace', fontSize: '11px' }}>
+                  <TableCell>
+                    <TableCellLayout style={{ fontWeight: 500 }}>{wf.name}</TableCellLayout>
+                  </TableCell>
+                  <TableCell style={{ color: 'var(--text-muted)' }}>                    {stepCount} step{stepCount !== 1 ? 's' : ''}
+                  </TableCell>
+                  <TableCell style={{ color: 'var(--text-muted)', fontFamily: 'monospace', fontSize: '11px' }}>
                     {wf.templateSlug ?? '—'}
-                  </td>
-                  <td style={{ padding: '12px 24px', color: '#484f58', fontSize: '11px' }}>
+                  </TableCell>
+                  <TableCell style={{ color: 'var(--text-muted)', fontSize: '11px' }}>
                     {new Date(wf.createdAt).toLocaleDateString()}
-                  </td>
-                </tr>
+                  </TableCell>
+                </TableRow>
               )
             })}
-          </tbody>
-        </table>
+          </TableBody>
+        </Table>
       )}
     </div>
   )

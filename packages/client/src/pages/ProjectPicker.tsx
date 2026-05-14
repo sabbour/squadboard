@@ -1,6 +1,6 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router'
-import { Button, Title3, Body1, Dialog, DialogSurface, DialogBody, DialogTitle, DialogContent, DialogActions, tokens } from '@fluentui/react-components'
+import { Button, Title2, Title3, Body1, Dialog, DialogSurface, DialogBody, DialogTitle, DialogContent, DialogActions, tokens } from '@fluentui/react-components'
 import { Folder20Regular } from '@fluentui/react-icons'
 import { useProjects } from '../api/projects.ts'
 import { useDiscoverSquad, useRegisterSquad, useInitSquad, useCreateSquad } from '../api/squad.ts'
@@ -18,7 +18,7 @@ export default function ProjectPicker() {
     <div style={{ padding: '32px' }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '24px' }}>
         <div>
-          <h1 style={{ fontSize: '20px', fontWeight: 600, color: 'var(--text)' }}>Projects</h1>
+          <Title2 as="h1">Projects</Title2>
           <Body1 style={{ color: 'var(--text-muted)', marginTop: '4px', display: 'block' }}>
             Select a project to open its board, or connect a new .squad/ directory.
           </Body1>
@@ -323,6 +323,29 @@ function CreateTab({ onCreated }: { onCreated: (id: string) => void }) {
   const [projectName, setProjectName] = useState('')
   const { mutate: createSquad, isPending, error } = useCreateSquad()
 
+  // Default parentPath to the server's home directory on mount
+  useEffect(() => {
+    fetch('/api/squad/home')
+      .then((r) => r.json())
+      .then((data: { path: string }) => {
+        if (data.path) setParentPath(data.path)
+      })
+      .catch(() => { /* ignore, user can type manually */ })
+  }, [])
+
+  // Parse the structured error message from the API
+  const errorMsg = (() => {
+    if (!error) return null
+    const m = error.message.match(/^API \d+: (.+)$/)
+    if (m) {
+      try {
+        const body = JSON.parse(m[1]) as { error?: string }
+        if (body.error) return body.error
+      } catch { /* fall through */ }
+    }
+    return error.message
+  })()
+
   const preview = parentPath.trim() && projectName.trim()
     ? `${parentPath.trim().replace(/\/$/, '')}/${projectName.trim()}/.squad/`
     : null
@@ -385,8 +408,8 @@ function CreateTab({ onCreated }: { onCreated: (id: string) => void }) {
           </div>
         )}
 
-        {error && (
-          <p style={{ color: 'var(--danger)', fontSize: '13px', margin: 0 }}>{error.message}</p>
+        {errorMsg && (
+          <p style={{ color: 'var(--danger)', fontSize: '13px', margin: 0 }}>{errorMsg}</p>
         )}
 
         <button
