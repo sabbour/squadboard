@@ -26,12 +26,12 @@ export default function RunHistory({ projectId, issueId }: RunHistoryProps) {
   const [expandedRunId, setExpandedRunId] = useState<string | null>(null)
 
   if (isLoading) {
-    return <p style={{ fontSize: '12px', color: '#8b949e' }}>Loading runs…</p>
+    return <p style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Loading runs…</p>
   }
 
   if (!runs || runs.length === 0) {
     return (
-      <p style={{ fontSize: '13px', color: '#484f58', textAlign: 'center', padding: '24px 0' }}>
+      <p style={{ fontSize: '13px', color: 'var(--text-muted)', textAlign: 'center', padding: '24px 0' }}>
         No runs yet. Use the ▶ Run button on the card.
       </p>
     )
@@ -76,7 +76,7 @@ export default function RunHistory({ projectId, issueId }: RunHistoryProps) {
               <RunStatusBadge status={run.status} />
 
               {/* Duration */}
-              <span style={{ fontSize: '11px', color: '#8b949e', minWidth: '40px', textAlign: 'right' }}>
+              <span style={{ fontSize: '11px', color: 'var(--text-muted)', minWidth: '40px', textAlign: 'right' }}>
                 {duration(run.startedAt, run.completedAt)}
               </span>
 
@@ -84,7 +84,7 @@ export default function RunHistory({ projectId, issueId }: RunHistoryProps) {
               <CostDisplay costUsd={run.costUsd} costTokens={run.costTokens} />
 
               {/* Expand chevron */}
-              <span style={{ fontSize: '10px', color: '#8b949e', marginLeft: '4px' }}>
+              <span style={{ fontSize: '10px', color: 'var(--text-muted)', marginLeft: '4px' }}>
                 {isExpanded ? '▲' : '▼'}
               </span>
             </button>

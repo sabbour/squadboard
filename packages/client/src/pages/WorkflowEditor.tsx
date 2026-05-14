@@ -72,13 +72,13 @@ function highlightYaml(raw: string): string {
   s = s.replace(/(^(\s*)-\s+type\s*:\s*)(route|agent_run|approve)/gm,
     (_, pre, _indent, kw) => {
       const colors: Record<string, string> = { route: '#388bfd', agent_run: '#3fb950', approve: '#f0883e' }
-      return `<span style="color:#8b949e">${pre}</span><span style="color:${colors[kw] ?? '#1f2328'}">${kw}</span>`
+      return `<span style="color:#656d76">${pre}</span><span style="color:${colors[kw] ?? '#1f2328'}">${kw}</span>`
     })
   s = s.replace(/(^\s*(?:name|steps|label|agent|description)\s*:)/gm,
     (m) => `<span style="color:#d29922">${m}</span>`)
   // Comments
   s = s.replace(/(#.*)$/gm,
-    (m) => `<span style="color:#484f58;font-style:italic">${m}</span>`)
+    (m) => `<span style="color:#656d76;font-style:italic">${m}</span>`)
 
   return s
 }
@@ -215,7 +215,7 @@ export default function WorkflowEditor() {
           style={{
             background: 'none',
             border: 'none',
-            color: '#8b949e',
+            color: 'var(--text-muted)',
             fontSize: '18px',
             cursor: 'pointer',
             lineHeight: 1,
@@ -255,7 +255,7 @@ export default function WorkflowEditor() {
             background: 'none',
             border: '1px solid var(--border)',
             borderRadius: '5px',
-            color: '#8b949e',
+            color: 'var(--text-muted)',
             fontSize: '12px',
             padding: '4px 10px',
             cursor: 'pointer',

@@ -67,8 +67,8 @@ function BudgetSection({ projectId }: { projectId: string }) {
       {/* Current spend */}
       <div
         style={{
-          background: '#0d1117',
-          border: '1px solid #30363d',
+          background: 'var(--surface)',
+          border: '1px solid var(--border)',
           borderRadius: '8px',
           padding: '14px 16px',
           display: 'flex',
@@ -79,10 +79,10 @@ function BudgetSection({ projectId }: { projectId: string }) {
         }}
       >
         <div>
-          <div style={{ fontSize: '22px', fontWeight: 700, color: overBudget ? '#f85149' : '#e6edf3', fontFamily: 'monospace' }}>
+          <div style={{ fontSize: '22px', fontWeight: 700, color: overBudget ? '#f85149' : 'var(--text)', fontFamily: 'monospace' }}>
             ${mtd.toFixed(2)}
           </div>
-          <div style={{ fontSize: '12px', color: '#8b949e', marginTop: '2px' }}>Month-to-date spend</div>
+          <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '2px' }}>Month-to-date spend</div>
         </div>
         {budgetAmt != null && (
           <div style={{ textAlign: 'right' }}>
@@ -90,7 +90,7 @@ function BudgetSection({ projectId }: { projectId: string }) {
               {pct.toFixed(1)}% of ${budgetAmt.toFixed(2)}
             </div>
             {/* Mini progress bar */}
-            <div style={{ width: '120px', height: '6px', borderRadius: '3px', background: '#21262d', marginTop: '6px', border: '1px solid #30363d', overflow: 'hidden' }}>
+            <div style={{ width: '120px', height: '6px', borderRadius: '3px', background: 'var(--border)', marginTop: '6px', border: '1px solid var(--border)', overflow: 'hidden' }}>
               <div
                 style={{
                   width: `${Math.min(pct, 100)}%`,
@@ -106,12 +106,12 @@ function BudgetSection({ projectId }: { projectId: string }) {
 
       {/* Budget input */}
       <div>
-        <label style={{ display: 'block', fontSize: '12px', color: '#8b949e', marginBottom: '6px' }}>
+        <label style={{ display: 'block', fontSize: '12px', color: 'var(--text-muted)', marginBottom: '6px' }}>
           Monthly budget (USD)
         </label>
         <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
           <div style={{ position: 'relative' }}>
-            <span style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', color: '#8b949e', fontSize: '13px' }}>$</span>
+            <span style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)', fontSize: '13px' }}>$</span>
             <input
               type="number"
               min="0"
@@ -120,10 +120,10 @@ function BudgetSection({ projectId }: { projectId: string }) {
               value={value}
               onChange={(e) => setValue(e.target.value)}
               style={{
-                background: '#0d1117',
-                border: '1px solid #30363d',
+                background: 'var(--surface)',
+                border: '1px solid var(--border)',
                 borderRadius: '6px',
-                color: '#e6edf3',
+                color: 'var(--text)',
                 padding: '6px 10px 6px 24px',
                 fontSize: '13px',
                 outline: 'none',
@@ -135,9 +135,9 @@ function BudgetSection({ projectId }: { projectId: string }) {
             onClick={handleSave}
             disabled={saving || !value}
             style={{
-              background: saved ? 'rgba(63,185,80,0.12)' : saving ? '#21262d' : '#238636',
+              background: saved ? 'rgba(63,185,80,0.12)' : saving ? 'rgba(0,0,0,0.05)' : '#238636',
               border: `1px solid ${saved ? 'rgba(63,185,80,0.4)' : '#2ea043'}`,
-              color: saved ? '#3fb950' : '#e6edf3',
+              color: saved ? '#3fb950' : 'white',
               borderRadius: '6px',
               padding: '6px 16px',
               fontSize: '13px',

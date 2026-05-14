@@ -162,13 +162,13 @@ function TestRoutingPanel({ projectId }: { projectId: string }) {
                     {result.tier && <RoutingTierBadge tier={result.tier} showLabel />}
                   </div>
                   {result.ruleSummary && (
-                    <div style={{ marginTop: '4px', fontSize: '11px', color: '#8b949e' }}>
+                    <div style={{ marginTop: '4px', fontSize: '11px', color: 'var(--text-muted)' }}>
                       {result.ruleSummary}
                     </div>
                   )}
                 </>
               ) : (
-                <span style={{ color: '#8b949e' }}>No rule matched → Tier 2</span>
+                <span style={{ color: 'var(--text-muted)' }}>No rule matched → Tier 2</span>
               )}
             </div>
           )}
@@ -265,7 +265,7 @@ export default function Agents() {
                 background: '#238636',
                 border: '1px solid #2ea043',
                 borderRadius: 'var(--radius)',
-                color: '#e6edf3',
+                color: 'white',
                 padding: '7px 14px',
                 fontSize: '13px',
                 fontWeight: 500,
@@ -325,7 +325,7 @@ export default function Agents() {
           <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
             {/* Stats */}
             <div>
-              <p style={{ fontSize: '11px', color: '#8b949e', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '12px', fontWeight: 600 }}>
+              <p style={{ fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '12px', fontWeight: 600 }}>
                 Routing Stats
               </p>
               {routingStats ? (
@@ -333,13 +333,13 @@ export default function Agents() {
               ) : statsLoading ? (
                 <RoutingStatsPanel stats={{ tier1Count: 0, tier2Count: 0, tier3Count: 0, triageCount: 0, total: 0 }} isLoading />
               ) : (
-                <p style={{ fontSize: '12px', color: '#484f58' }}>No routing data yet.</p>
+                <p style={{ fontSize: '12px', color: 'var(--text-muted)' }}>No routing data yet.</p>
               )}
             </div>
 
             {/* Log */}
             <div>
-              <p style={{ fontSize: '11px', color: '#8b949e', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '12px', fontWeight: 600 }}>
+              <p style={{ fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '12px', fontWeight: 600 }}>
                 Routing Log
               </p>
               <RoutingLogTable entries={routingLog} isLoading={logLoading} />

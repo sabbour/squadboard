@@ -50,7 +50,7 @@ function SuggestionsAccordion({ suggestions }: { suggestions: string[] }) {
         {suggestions.length} suggestion{suggestions.length !== 1 ? 's' : ''}
       </button>
       {open && (
-        <ul style={{ margin: '6px 0 0 12px', padding: 0, listStyle: 'disc', color: '#8b949e', fontSize: '12px', lineHeight: '1.6' }}>
+        <ul style={{ margin: '6px 0 0 12px', padding: 0, listStyle: 'disc', color: 'var(--text-muted)', fontSize: '12px', lineHeight: '1.6' }}>
           {suggestions.map((s, i) => (
             <li key={i}>{s}</li>
           ))}
@@ -97,13 +97,13 @@ export function ReviewPanel({ reviewGroup, allowHumanOverride = true }: ReviewPa
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '6px' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <span style={{ fontSize: '12px', fontWeight: 600, color: '#e6edf3' }}>
+          <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text)' }}>
             {reviewGroup.stepLabel ?? 'Peer Review'}
           </span>
           <ReviewDecisionBadge decision={reviewGroup.decision} />
         </div>
         {reviewGroup.policy && (
-          <span style={{ fontSize: '11px', color: '#8b949e' }}>
+          <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
             {POLICY_LABELS[reviewGroup.policy.kind] ?? reviewGroup.policy.kind}
             {reviewGroup.policy.required != null && reviewGroup.policy.total != null && (
               <> ({reviewGroup.policy.required}/{reviewGroup.policy.total})</>
@@ -114,7 +114,7 @@ export function ReviewPanel({ reviewGroup, allowHumanOverride = true }: ReviewPa
 
       {/* Events */}
       {reviewGroup.events.length === 0 ? (
-        <div style={{ fontSize: '12px', color: '#484f58', padding: '8px 0' }}>
+        <div style={{ fontSize: '12px', color: 'var(--text-muted)', padding: '8px 0' }}>
           No review events yet.
         </div>
       ) : (
@@ -150,7 +150,7 @@ export function ReviewPanel({ reviewGroup, allowHumanOverride = true }: ReviewPa
                     >
                       {verbCfg.icon} {verbCfg.label}
                     </span>
-                    <span style={{ fontSize: '11px', color: '#484f58', marginLeft: 'auto' }}>
+                    <span style={{ fontSize: '11px', color: 'var(--text-muted)', marginLeft: 'auto' }}>
                       {formatDistanceToNow(new Date(event.createdAt), { addSuffix: true })}
                     </span>
                   </div>
@@ -234,7 +234,7 @@ export function ReviewPanel({ reviewGroup, allowHumanOverride = true }: ReviewPa
               style={{
                 background: 'none',
                 border: 'none',
-                color: '#8b949e',
+                color: 'var(--text-muted)',
                 fontSize: '12px',
                 cursor: 'pointer',
                 padding: '5px 4px',

@@ -34,8 +34,7 @@ export default function CostDisplay({ costUsd, costTokens, tokensIn, tokensOut, 
       title={tooltip}
       style={{
         fontSize: '11px',
-        color: '#8b949e',
-        display: 'inline-flex',
+        color: 'var(--text-muted)',
         alignItems: 'center',
         gap: '4px',
         cursor: 'default',
@@ -43,7 +42,7 @@ export default function CostDisplay({ costUsd, costTokens, tokensIn, tokensOut, 
     >
       {usdLabel && <span>{usdLabel}</span>}
       {tokenLabel && (
-        <span style={{ color: '#484f58' }}>
+        <span style={{ color: 'var(--text-muted)', opacity: 0.7 }}>
           ({tokenLabel})
         </span>
       )}

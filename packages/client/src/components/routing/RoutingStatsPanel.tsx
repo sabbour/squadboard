@@ -35,7 +35,7 @@ function StatCard({
         {count}
       </div>
       <div style={{ fontSize: '12px', fontWeight: 600, color, marginTop: '4px' }}>{label}</div>
-      {sub && <div style={{ fontSize: '11px', color: '#8b949e', marginTop: '2px' }}>{sub}</div>}
+      {sub && <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '2px' }}>{sub}</div>}
     </div>
   )
 }
@@ -56,7 +56,7 @@ function TierBar({ stats }: { stats: RoutingStats }) {
 
   return (
     <div>
-      <div style={{ fontSize: '11px', color: '#8b949e', marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+      <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
         Tier Distribution
       </div>
 
@@ -89,7 +89,7 @@ function TierBar({ stats }: { stats: RoutingStats }) {
         {segments.map((seg) => (
           <div key={seg.label} style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
             <div style={{ width: '8px', height: '8px', borderRadius: '2px', background: seg.color }} />
-            <span style={{ fontSize: '11px', color: '#8b949e' }}>
+            <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
               {seg.label} — {seg.pct.toFixed(1)}%
             </span>
           </div>

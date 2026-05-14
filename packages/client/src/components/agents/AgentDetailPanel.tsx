@@ -126,15 +126,15 @@ export default function AgentDetailPanel({ projectId, agent, onClose }: AgentDet
             style={{
               background: 'none',
               border: 'none',
-              color: '#8b949e',
+              color: 'var(--text-muted)',
               fontSize: '18px',
               cursor: 'pointer',
               padding: '2px 6px',
               borderRadius: '4px',
               flexShrink: 0,
             }}
-            onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.color = '#e6edf3' }}
-            onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.color = '#8b949e' }}
+            onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.color = 'var(--text)' }}
+            onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.color = 'var(--text-muted)' }}
           >
             ✕
           </button>
@@ -191,7 +191,7 @@ export default function AgentDetailPanel({ projectId, agent, onClose }: AgentDet
                     {current.model}
                   </span>
                 ) : (
-                  <span style={{ fontSize: '13px', color: '#8b949e' }}>auto</span>
+                  <span style={{ fontSize: '13px', color: 'var(--text-muted)' }}>auto</span>
                 )}
               </div>
 

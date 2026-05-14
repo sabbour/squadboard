@@ -39,7 +39,7 @@ export default function WorkflowStepFlow({ steps, activeStepIndex }: WorkflowSte
           alignItems: 'center',
           justifyContent: 'center',
           height: '100%',
-          color: '#484f58',
+          color: 'var(--text-muted)',
           fontSize: '13px',
           flexDirection: 'column',
           gap: '8px',
@@ -67,7 +67,7 @@ export default function WorkflowStepFlow({ steps, activeStepIndex }: WorkflowSte
         const isActive = activeStepIndex === i
         const stepType = step.type ?? 'route'
         const icon = STEP_ICONS[stepType] ?? '▪'
-        const color = STEP_COLORS[stepType] ?? '#8b949e'
+        const color = STEP_COLORS[stepType] ?? '#656d76'
         const label = step.label ?? stepType
         const subLabel = step.agent ? `@${step.agent}` : null
 
@@ -81,13 +81,13 @@ export default function WorkflowStepFlow({ steps, activeStepIndex }: WorkflowSte
                   y1={y - ARROW_H}
                   x2={cx}
                   y2={y - 8}
-                  stroke="#30363d"
+                  stroke="#d0d7de"
                   strokeWidth="2"
                 />
                 {/* Arrowhead */}
                 <polygon
                   points={`${cx - 5},${y - 8} ${cx + 5},${y - 8} ${cx},${y - 1}`}
-                  fill="#30363d"
+                  fill="#d0d7de"
                 />
               </>
             )}
@@ -99,7 +99,7 @@ export default function WorkflowStepFlow({ steps, activeStepIndex }: WorkflowSte
               width={BOX_W}
               height={BOX_H}
               rx={6}
-              fill={isActive ? 'rgba(56,139,253,0.15)' : '#161b22'}
+              fill={isActive ? 'rgba(56,139,253,0.15)' : '#f6f8fa'}
               stroke={isActive ? '#388bfd' : color}
               strokeWidth={isActive ? 2 : 1}
             />
@@ -133,7 +133,7 @@ export default function WorkflowStepFlow({ steps, activeStepIndex }: WorkflowSte
               y={subLabel ? y + BOX_H / 2 - 4 : y + BOX_H / 2 + 5}
               fontSize={12}
               fontWeight={500}
-              fill="#e6edf3"
+              fill="#1f2328"
             >
               {label.length > 20 ? label.slice(0, 19) + '…' : label}
             </text>
@@ -144,7 +144,7 @@ export default function WorkflowStepFlow({ steps, activeStepIndex }: WorkflowSte
                 x={x + 56}
                 y={y + BOX_H / 2 + 13}
                 fontSize={10}
-                fill="#8b949e"
+                fill="#656d76"
               >
                 {subLabel.length > 22 ? subLabel.slice(0, 21) + '…' : subLabel}
               </text>

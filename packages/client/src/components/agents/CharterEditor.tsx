@@ -76,7 +76,7 @@ export default function CharterEditor({ projectId, agentId }: CharterEditorProps
             background: dirty ? '#238636' : 'transparent',
             border: `1px solid ${dirty ? '#2ea043' : 'var(--border)'}`,
             borderRadius: 'var(--radius)',
-            color: dirty ? '#e6edf3' : 'var(--text-muted)',
+            color: dirty ? 'white' : 'var(--text-muted)',
             padding: '6px 16px',
             fontSize: '13px',
             fontWeight: 500,
