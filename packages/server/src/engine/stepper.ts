@@ -126,12 +126,18 @@ export async function runWorker(issueRunId: string): Promise<void> {
 
   // --- Call SDK bridge ---
   try {
+    // For peer_review runs, prepend the inputContext (prior step output + review prompt)
+    // to the issue body so the reviewer agent sees what it must evaluate.
+    const effectiveBody = run.inputContext
+      ? `${run.inputContext}\n\n---\n\n${issue.body ?? ''}`
+      : (issue.body ?? '');
+
     const result = await executeAgentRun({
       issueRunId,
       projectId: project.id,
       agent,
       issueTitle: issue.title,
-      issueBody: issue.body ?? '',
+      issueBody: effectiveBody,
       workspacePath,
       projectSquadPath: project.path,
     });

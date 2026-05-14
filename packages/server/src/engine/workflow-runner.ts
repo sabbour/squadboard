@@ -16,6 +16,16 @@ import { eq, and } from 'drizzle-orm';
 import { getDb, schema } from '../db/index.js';
 import { resolveRoute } from './router.js';
 import { parseWorkflowYaml } from '../services/workflow-parser.js';
+import type { WorkflowStep } from '../services/workflow-parser.js';
+import {
+  createPeerReviewRuns,
+  collectReviewDecisions,
+  shouldBlock,
+  isQuorumMet,
+  injectReviewerFeedback,
+  recordApproval,
+} from './peer-reviewer.js';
+import type { RequestChangesPolicy } from './peer-reviewer.js';
 
 // ---------------------------------------------------------------------------
 // createWorkflowRun
@@ -25,7 +35,7 @@ import { parseWorkflowYaml } from '../services/workflow-parser.js';
  * Initialise a workflow_run for an issue under a specific workflow version.
  *
  *  1. Parse the YAML to enumerate steps
- *  2. INSERT workflow_run (with workflowVersionId)
+ *  2. INSERT workflow_run (with workflowVersionId and requestChangesPolicy)
  *  3. INSERT step_runs (one per step, all pending)
  *
  * @returns The new workflowRunId.
@@ -50,6 +60,10 @@ export async function createWorkflowRun(
 
   const definition = await parseWorkflowYaml(wv.yamlContent);
 
+  // Derive requestChangesPolicy from the first approve step (or default 'first')
+  const approveStep = definition.steps.find((s) => s.type === 'approve');
+  const requestChangesPolicy = approveStep?.request_changes_policy ?? 'first';
+
   // INSERT workflow_run
   const [wfRun] = await db
     .insert(workflowRuns)
@@ -58,6 +72,7 @@ export async function createWorkflowRun(
       workflowVersionId,
       status: 'pending',
       currentStepIndex: 0,
+      requestChangesPolicy,
     })
     .returning({ id: workflowRuns.id });
 
@@ -75,7 +90,7 @@ export async function createWorkflowRun(
 
   console.log(
     `[workflow-runner] created workflow_run ${wfRun.id} for issue ${issueId} ` +
-    `(version ${workflowVersionId}, ${definition.steps.length} steps)`,
+    `(version ${workflowVersionId}, ${definition.steps.length} steps, policy=${requestChangesPolicy})`,
   );
   return wfRun.id;
 }
@@ -153,7 +168,7 @@ export async function advanceWorkflowRun(workflowRunId: string): Promise<void> {
       break;
 
     case 'approve':
-      await handleApproveStep(wfRun, currentStep, stepDef);
+      await handleApproveStep(wfRun, currentStep, stepDef as WorkflowStep | undefined);
       break;
 
     default:
@@ -308,17 +323,292 @@ async function handleAgentRunStep(
 async function handleApproveStep(
   wfRun: typeof schema.workflowRuns.$inferSelect,
   stepRun: typeof schema.stepRuns.$inferSelect,
-  stepDef: { approvers?: string[]; timeout?: string } | undefined,
+  stepDef: WorkflowStep | undefined,
 ): Promise<void> {
-  // Demo 9 stub — approval gate is not yet implemented.
-  // For now: log the pending approval and leave the step in 'pending'.
-  // Demo 9 will fill in quorum logic, approver resolution, and timeout handling.
-  if (stepRun.status === 'pending') {
-    console.log(
-      `[workflow-runner] approve step ${stepRun.stepIndex} for workflow_run ${wfRun.id} is pending approval ` +
-      `(approvers: ${JSON.stringify(stepDef?.approvers ?? [])}, timeout: ${stepDef?.timeout ?? 'none'}) — stub until Demo 9`,
-    );
+  const db = getDb();
+  const { stepRuns, issueRuns, agents, issues, workflowRuns } = schema;
+
+  // Already approved — advance.
+  if (stepRun.status === 'completed') {
+    await advanceToNextStep(wfRun.id, wfRun.currentStepIndex ?? 0);
+    return;
   }
+
+  const policy: RequestChangesPolicy = (wfRun.requestChangesPolicy as RequestChangesPolicy) ?? 'first';
+  const approverNames: string[] = stepDef?.approvers ?? [];
+  const quorum = stepDef?.quorum;
+  const excludeAuthor = stepDef?.exclude_author ?? false;
+
+  // -----------------------------------------------------------------------
+  // Phase A: First tick — spin up peer_review issueRuns for each reviewer.
+  // -----------------------------------------------------------------------
+  if (stepRun.status === 'pending') {
+    // Resolve reviewer agents by name within this project.
+    const [issue] = await db
+      .select({ projectId: issues.projectId })
+      .from(issues)
+      .where(eq(issues.id, wfRun.issueId))
+      .limit(1);
+    if (!issue) {
+      console.error(`[workflow-runner] issue ${wfRun.issueId} not found for approve step`);
+      return;
+    }
+
+    // Determine which agent ran the prior step (for reviewer lockout).
+    const priorStepIndex = (wfRun.currentStepIndex ?? 0) - 1;
+    let priorAgentId: string | null = null;
+    let priorOutput = '';
+
+    if (priorStepIndex >= 0) {
+      const [priorStep] = await db
+        .select()
+        .from(stepRuns)
+        .where(
+          and(
+            eq(stepRuns.workflowRunId, wfRun.id),
+            eq(stepRuns.stepIndex, priorStepIndex),
+          ),
+        )
+        .limit(1);
+
+      if (priorStep?.issueRunId) {
+        const [priorRun] = await db
+          .select({ agentId: issueRuns.agentId, output: issueRuns.output })
+          .from(issueRuns)
+          .where(eq(issueRuns.id, priorStep.issueRunId))
+          .limit(1);
+
+        priorAgentId = priorRun?.agentId ?? null;
+        priorOutput = priorRun?.output ?? '';
+      }
+    }
+
+    // Resolve approver agent IDs; apply exclude_author lockout.
+    const reviewerAgentIds: string[] = [];
+    for (const name of approverNames) {
+      const [ag] = await db
+        .select({ id: agents.id, name: agents.name })
+        .from(agents)
+        .where(and(eq(agents.projectId, issue.projectId), eq(agents.name, name)))
+        .limit(1);
+
+      if (!ag) {
+        console.warn(`[workflow-runner] approve step: reviewer agent '${name}' not found — skipping`);
+        continue;
+      }
+      if (excludeAuthor && ag.id === priorAgentId) {
+        console.log(`[workflow-runner] reviewer lockout: '${name}' is the author — excluded`);
+        continue;
+      }
+      reviewerAgentIds.push(ag.id);
+    }
+
+    if (reviewerAgentIds.length === 0) {
+      // No reviewers available — auto-approve and advance.
+      console.warn(`[workflow-runner] approve step has no eligible reviewers — auto-approving`);
+      await db
+        .update(stepRuns)
+        .set({ status: 'completed', reviewDecision: 'approve', updatedAt: new Date() })
+        .where(eq(stepRuns.id, stepRun.id));
+      await advanceToNextStep(wfRun.id, wfRun.currentStepIndex ?? 0);
+      return;
+    }
+
+    // Create peer_review issueRuns (Invariant 1).
+    await createPeerReviewRuns(
+      wfRun.id,
+      stepRun.id,
+      wfRun.issueId,
+      reviewerAgentIds,
+      priorOutput,
+    );
+
+    // Mark approve step_run as running (stepper will tick it).
+    await db
+      .update(stepRuns)
+      .set({ status: 'running', updatedAt: new Date() })
+      .where(eq(stepRuns.id, stepRun.id));
+
+    await db
+      .update(workflowRuns)
+      .set({ status: 'running', updatedAt: new Date() })
+      .where(eq(workflowRuns.id, wfRun.id));
+
+    console.log(
+      `[workflow-runner] approve step ${stepRun.stepIndex} for workflow_run ${wfRun.id} ` +
+      `initiated with ${reviewerAgentIds.length} reviewer(s), policy=${policy}`,
+    );
+    return;
+  }
+
+  // -----------------------------------------------------------------------
+  // Phase B: Subsequent ticks — poll for all peer_review issueRuns complete.
+  // -----------------------------------------------------------------------
+  if (stepRun.status === 'running') {
+    const { allComplete, decisions } = await collectReviewDecisions(stepRun.id);
+
+    if (!allComplete) {
+      // Reviewers still running — wait.
+      return;
+    }
+
+    // Check quorum (N-of-M) before evaluating policy.
+    const quorumMet = isQuorumMet(decisions, quorum);
+
+    if (!quorumMet) {
+      // Quorum not reached yet — but all runs completed (some may have failed/been skipped).
+      // If every run is done and quorum still not met, we must re-queue.
+      console.log(
+        `[workflow-runner] approve step ${stepRun.stepIndex}: quorum not met ` +
+        `(${decisions.filter((d) => d.decision === 'approve').length} approvals, need ${quorum?.n ?? 1}) — re-queuing`,
+      );
+    }
+
+    const blocked = shouldBlock(decisions, policy, quorum) || !quorumMet;
+
+    if (blocked) {
+      // Re-queue the prior agent_run step with reviewer feedback injected.
+      await injectReviewerFeedback(stepRun.id, wfRun.id, decisions);
+      await requeuePriorStep(wfRun, stepRun);
+    } else {
+      // All reviewers approved (and quorum met if configured) — advance.
+      await recordApproval(stepRun.id, wfRun.id, decisions);
+      await db
+        .update(stepRuns)
+        .set({ status: 'completed', updatedAt: new Date() })
+        .where(eq(stepRuns.id, stepRun.id));
+      await advanceToNextStep(wfRun.id, wfRun.currentStepIndex ?? 0);
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// requeuePriorStep — re-run the agent_run step before an approve gate
+// ---------------------------------------------------------------------------
+
+/**
+ * Reset the prior agent_run step to pending (with feedback in inputContext)
+ * and wind the workflow back so the agent revises its work.
+ *
+ * The prior step's issueRun is NOT recycled — a fresh pending issueRun will be
+ * spawned by the next handleAgentRunStep tick after we clear issueRunId.
+ */
+async function requeuePriorStep(
+  wfRun: typeof schema.workflowRuns.$inferSelect,
+  approveStepRun: typeof schema.stepRuns.$inferSelect,
+): Promise<void> {
+  const db = getDb();
+  const { stepRuns, workflowRuns, issueRuns } = schema;
+
+  const priorIndex = approveStepRun.stepIndex - 1;
+  if (priorIndex < 0) {
+    console.warn(`[workflow-runner] approve step at index 0 — no prior step to re-queue`);
+    return;
+  }
+
+  const [priorStep] = await db
+    .select()
+    .from(stepRuns)
+    .where(
+      and(
+        eq(stepRuns.workflowRunId, wfRun.id),
+        eq(stepRuns.stepIndex, priorIndex),
+      ),
+    )
+    .limit(1);
+
+  if (!priorStep) {
+    console.error(`[workflow-runner] no prior step_run at index ${priorIndex} for re-queue`);
+    return;
+  }
+
+  // Build feedback context from the approve step's stored suggestions.
+  const suggestions: string[] = Array.isArray(approveStepRun.reviewSuggestions)
+    ? (approveStepRun.reviewSuggestions as string[])
+    : [];
+  const comment = approveStepRun.reviewComment ?? '';
+
+  const feedbackContext = buildFeedbackContext(comment, suggestions);
+
+  // Create a new issueRun with the feedback injected so the agent sees it.
+  // We clear the prior step's issueRunId so handleAgentRunStep waits for the new run.
+  // The new issueRun copies agentId from the old one.
+  if (priorStep.issueRunId) {
+    const [oldRun] = await db
+      .select({ agentId: issueRuns.agentId })
+      .from(issueRuns)
+      .where(eq(issueRuns.id, priorStep.issueRunId))
+      .limit(1);
+
+    if (oldRun) {
+      const [newRun] = await db
+        .insert(issueRuns)
+        .values({
+          issueId: wfRun.issueId,
+          agentId: oldRun.agentId,
+          kind: 'agent_run',
+          status: 'pending',
+          inputContext: feedbackContext,
+        })
+        .returning({ id: issueRuns.id });
+
+      // Reset prior step_run: link to new issueRun, set pending.
+      await db
+        .update(stepRuns)
+        .set({
+          status: 'pending',
+          issueRunId: newRun.id,
+          retryCount: (priorStep.retryCount ?? 0) + 1,
+          updatedAt: new Date(),
+        })
+        .where(eq(stepRuns.id, priorStep.id));
+    }
+  } else {
+    // Prior step had no issueRunId — just reset to pending.
+    await db
+      .update(stepRuns)
+      .set({ status: 'pending', updatedAt: new Date() })
+      .where(eq(stepRuns.id, priorStep.id));
+  }
+
+  // Reset the approve step to pending so it will re-initiate reviews after the revision.
+  await db
+    .update(stepRuns)
+    .set({
+      status: 'pending',
+      reviewDecision: null,
+      reviewComment: null,
+      reviewSuggestions: null,
+      updatedAt: new Date(),
+    })
+    .where(eq(stepRuns.id, approveStepRun.id));
+
+  // Wind workflow back to the prior step index.
+  await db
+    .update(workflowRuns)
+    .set({ currentStepIndex: priorIndex, updatedAt: new Date() })
+    .where(eq(workflowRuns.id, wfRun.id));
+
+  console.log(
+    `[workflow-runner] re-queued prior step ${priorIndex} for workflow_run ${wfRun.id} ` +
+    `with reviewer feedback (${suggestions.length} suggestion(s))`,
+  );
+}
+
+function buildFeedbackContext(comment: string, suggestions: string[]): string {
+  const lines = ['## Reviewer Feedback (requires revision)', ''];
+  if (comment) {
+    lines.push(comment, '');
+  }
+  if (suggestions.length > 0) {
+    lines.push('**Suggestions:**');
+    for (const s of suggestions) {
+      lines.push(`- ${s}`);
+    }
+    lines.push('');
+  }
+  lines.push('Please address the feedback above and resubmit your work.');
+  return lines.join('\n');
 }
 
 // ---------------------------------------------------------------------------

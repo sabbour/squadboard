@@ -169,7 +169,29 @@ Existing roles unchanged: McManus (Lead Architect), Keyser (Frontend Dev), Fenst
 **By:** Kobayashi
 **What:** Parser reads actual .squad/routing.md table format. MatchType inferred from pattern: label: prefix → label, * → catchall, else keyword. Priority = file order. matchRule() used by Hockney's router.ts. RoutingBadge shows auto-assignment provenance on IssueCard.
 
-## Governance
+### 2026-05-14: Demo 14 — MCP server binding (Open Question #7 resolution)
+**By:** Kobayashi (SDK Integrator)
+**What:** The MCP server is implemented as a **stdio server** (not TCP), spawned as a separate process via `squadboard mcp`. This supersedes the "same process, localhost TCP" proposal from the deliverables brief — stdio is simpler, requires no port management, and is the standard transport for MCP hosts (Claude Desktop, Cursor, etc.).
+
+- Entry point: `packages/server/dist/mcp/index.js`
+- Transport: stdio (JSON-RPC 2.0 over stdin/stdout, stderr for logs)
+- Started via: `squadboard mcp` CLI command
+- MCP tools exposed: `squadboard_list_issues`, `squadboard_create_issue`, `squadboard_run_agent`, `squadboard_get_run_status`, `squadboard_list_agents`, `squadboard_slash_command`
+- SDK: `@modelcontextprotocol/sdk@^1.29.0` (installed in `packages/server`)
+- Slash handler: `packages/server/src/mcp/slash-handler.ts` — parses `/squadboard <cmd>` strings, returns markdown
+- Express stays on port 3000; no MCP TCP port needed.
+
+**Rationale:** stdio avoids port conflicts, firewall issues, and is the de-facto MCP convention. Claude Desktop config snippet printed to stderr on `squadboard mcp` startup.
+
+### Demo 9 open question #2 resolution: `request_changes_policy` default
+**By:** Hockney
+**What:** `request_changes_policy` on `approve` workflow steps defaults to `'first'` — the first reviewer who requests changes blocks the workflow and re-queues the prior agent_run step with feedback injected. This mirrors GitHub PR semantics.
+**Allowed values:** `'first'` (default) | `'majority'` (strict majority must request changes to block) | `'all'` (every reviewer must request changes to block).
+**Interaction with `quorum`:** `quorum: { n: 2, of: 3 }` requires ≥ N approvals before the policy is evaluated. A `'first'` request_changes short-circuits regardless of quorum — the veto lands the moment any single reviewer requests changes.
+**Why 'first':** Safety over convenience. One reviewer seeing a problem is enough to stop the train. Teams wanting permissive gates can opt into `'majority'` or `'all'` explicitly.
+**Enforced at:** `peer-reviewer.ts::shouldBlock()` + `workflow-runner.ts::handleApproveStep()`.
+**Owner:** Hockney.
+
 
 - All meaningful changes require team consensus
 - Document architectural decisions here

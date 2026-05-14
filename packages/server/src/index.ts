@@ -12,7 +12,7 @@ import issuesRouter from './routes/issues.js';
 import labelsRouter from './routes/labels.js';
 import { issueRunsRouter, projectRunsRouter } from './routes/runs.js';
 import routingRouter from './routes/routing.js';
-import { workflowsRouter, issueWorkflowRouter } from './routes/workflows.js';
+import { workflowsRouter, issueWorkflowRouter, workflowRunsRouter, stepRunsRouter } from './routes/workflows.js';
 import costsRouter from './routes/costs.js';
 import { dispatcher } from './engine/dispatcher.js';
 
@@ -49,6 +49,9 @@ async function main(): Promise<void> {
   app.use('/api/projects/:projectId/workflows', workflowsRouter);
   app.use('/api/projects/:projectId/issues/:issueId/workflow', issueWorkflowRouter);
   app.use('/api/projects/:id/costs', costsRouter);
+  // Demo 9: peer review endpoints (not project-scoped)
+  app.use('/api/workflow-runs', workflowRunsRouter);
+  app.use('/api/step-runs', stepRunsRouter);
 
   if (existsSync(CLIENT_DIST)) {
     app.use(express.static(CLIENT_DIST));

@@ -20,6 +20,10 @@ export interface WorkflowStep {
   prompt?: string;
   approvers?: string[];
   timeout?: string;    // e.g. "24h"
+  // Demo 9: peer review configuration
+  request_changes_policy?: 'first' | 'majority' | 'all'; // default 'first'
+  quorum?: { n: number; of: number };   // n-of-m approvals needed; overrides approvers length
+  exclude_author?: boolean;              // if true, issue author cannot review their own work
 }
 
 export interface WorkflowDefinition {
@@ -109,6 +113,14 @@ export async function parseWorkflowYaml(yamlContent: string): Promise<WorkflowDe
     if (s['prompt'] !== undefined) step.prompt = String(s['prompt']);
     if (Array.isArray(s['approvers'])) step.approvers = s['approvers'].map(String);
     if (s['timeout'] !== undefined) step.timeout = String(s['timeout']);
+    if (s['request_changes_policy'] !== undefined) {
+      step.request_changes_policy = s['request_changes_policy'] as WorkflowStep['request_changes_policy'];
+    }
+    if (s['quorum'] !== undefined && typeof s['quorum'] === 'object' && s['quorum'] !== null) {
+      const q = s['quorum'] as Record<string, unknown>;
+      step.quorum = { n: Number(q['n'] ?? 1), of: Number(q['of'] ?? 1) };
+    }
+    if (s['exclude_author'] !== undefined) step.exclude_author = Boolean(s['exclude_author']);
     return step;
   });
 
