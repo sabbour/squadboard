@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router'
+import { Button } from '@fluentui/react-components'
 import { useProjects } from '../api/projects.ts'
 import { useDiscoverSquad, useRegisterSquad, useInitSquad, useCreateSquad } from '../api/squad.ts'
 import type { SquadDirectory } from '../api/squad.ts'
@@ -21,20 +22,12 @@ export default function ProjectPicker() {
             Select a project to open its board, or connect a new .squad/ directory.
           </p>
         </div>
-        <button
+        <Button
+          appearance="primary"
           onClick={() => setShowModal(true)}
-          style={{
-            background: 'var(--accent)',
-            color: '#fff',
-            border: 'none',
-            borderRadius: 'var(--radius)',
-            padding: '8px 16px',
-            fontWeight: 500,
-            fontSize: '14px',
-          }}
         >
           Add Project
-        </button>
+        </Button>
       </div>
 
       {isLoading && (

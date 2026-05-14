@@ -212,7 +212,7 @@ export default function Settings() {
           style={{
             marginLeft: 'auto',
           }}
-        >
+        />
       </div>
 
       {/* Body: sidebar + content */}

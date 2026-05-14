@@ -45,7 +45,7 @@ export default function Workflows() {
           style={{
             marginLeft: 'auto',
           }}
-        >
+        />
       </div>
 
       {/* Workflow list */}

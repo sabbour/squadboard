@@ -294,7 +294,7 @@ export default function WorkflowEditor() {
         <span
           style={{
           }}
-        >
+        />
       </div>
 
       {/* Split pane body */}

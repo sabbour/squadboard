@@ -45,7 +45,7 @@ export default function Costs() {
           style={{
             marginLeft: 'auto',
           }}
-        >
+        />
       </div>
 
       {/* Dashboard */}

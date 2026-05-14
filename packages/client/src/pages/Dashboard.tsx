@@ -263,7 +263,7 @@ export default function Dashboard() {
           style={{
             marginLeft: 'auto',
           }}
-        >
+        />
       </div>
 
       {/* Scrollable body */}
