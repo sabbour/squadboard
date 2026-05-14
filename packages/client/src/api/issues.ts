@@ -30,6 +30,10 @@ export interface Issue {
   autoRoutedTo?: string
   /** Human-readable summary of the rule that matched, e.g. "Matched: label:bug → hockney". */
   routingRuleSummary?: string
+  /** ID of the workflow attached to this issue, if any. */
+  attachedWorkflowId?: string
+  /** Display name of the attached workflow. */
+  attachedWorkflowName?: string
 }
 
 export interface CreateIssueInput {
