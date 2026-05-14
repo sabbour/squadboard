@@ -124,7 +124,7 @@ function DiscoveryModal({
   onClose: () => void
   onCreated: (id: string) => void
 }) {
-  const { data: dirs, isFetching, refetch } = useDiscoverSquad()
+  const { data: dirs, isFetching, isError: isDiscoverError, error: discoverError, refetch } = useDiscoverSquad()
   const { mutate: register, isPending: isRegistering, error: registerError } = useRegisterSquad()
   const [manualPath, setManualPath] = useState('')
   const [manualName, setManualName] = useState('')
@@ -222,13 +222,19 @@ function DiscoveryModal({
               </button>
             </div>
 
-            {dirs && dirs.length === 0 && (
+            {isDiscoverError && (
+              <p style={{ color: 'var(--danger)', fontSize: '13px', marginTop: '8px' }}>
+                Scan failed: {discoverError?.message ?? 'Unknown error'}
+              </p>
+            )}
+
+            {!isDiscoverError && dirs && dirs.length === 0 && (
               <p style={{ color: 'var(--text-muted)', fontSize: '13px' }}>
                 No .squad/ directories found on the filesystem.
               </p>
             )}
 
-            {dirs && dirs.length > 0 && (
+            {!isDiscoverError && dirs && dirs.length > 0 && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                 {dirs.map((dir) => (
                   <button

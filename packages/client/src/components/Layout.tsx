@@ -39,7 +39,7 @@ export default function Layout() {
             gap: '8px',
           }}
         >
-          <img src={squadboardLogo} alt="Squadboard" style={{ height: '24px', display: 'block' }} />
+          <img src={squadboardLogo} alt="Squadboard" style={{ height: '32px', display: 'block' }} />
         </div>
 
         {/* Top nav — only show project nav when inside a project */}
