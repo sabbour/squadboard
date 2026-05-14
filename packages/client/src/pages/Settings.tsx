@@ -4,13 +4,14 @@ import { useProject } from '../api/projects.ts'
 import { useBudget } from '../api/costs.ts'
 import { apiFetch } from '../api/client.ts'
 import { McpConfigPanel } from '../components/settings/McpConfigPanel.tsx'
+import { TextDescription20Regular, PlugConnected20Regular, Money20Regular, Settings20Regular } from '@fluentui/react-icons'
 
 type Section = 'general' | 'mcp' | 'budget'
 
-const SECTIONS: { id: Section; label: string; icon: string }[] = [
-  { id: 'general', label: 'General', icon: '📝' },
-  { id: 'mcp', label: 'MCP Config', icon: '🔌' },
-  { id: 'budget', label: 'Budget', icon: '💰' },
+const SECTIONS: { id: Section; label: string; icon: React.ReactNode }[] = [
+  { id: 'general', label: 'General', icon: <TextDescription20Regular /> },
+  { id: 'mcp', label: 'MCP Config', icon: <PlugConnected20Regular /> },
+  { id: 'budget', label: 'Budget', icon: <Money20Regular /> },
 ]
 
 function SectionHeader({ title, sub }: { title: string; sub?: string }) {
@@ -203,8 +204,8 @@ export default function Settings() {
           flexShrink: 0,
         }}
       >
-        <h1 style={{ fontSize: '16px', fontWeight: 600, color: 'var(--text)', margin: 0 }}>
-          ⚙ Settings
+        <h1 style={{ fontSize: '16px', fontWeight: 600, color: 'var(--text)', margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <Settings20Regular /> Settings
         </h1>
         <span style={{ fontSize: '13px', color: 'var(--text-muted)' }}>·</span>
         <span style={{ fontSize: '13px', color: 'var(--text-muted)' }}>{project.name}</span>

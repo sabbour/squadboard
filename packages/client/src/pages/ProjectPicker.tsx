@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router'
 import { Button } from '@fluentui/react-components'
+import { Folder20Regular } from '@fluentui/react-icons'
 import { useProjects } from '../api/projects.ts'
 import { useDiscoverSquad, useRegisterSquad, useInitSquad, useCreateSquad } from '../api/squad.ts'
 import type { SquadDirectory } from '../api/squad.ts'
@@ -86,7 +87,7 @@ function EmptyState({ onDiscover }: { onDiscover: () => void }) {
         borderRadius: 'var(--radius)',
       }}
     >
-      <div style={{ fontSize: '32px', marginBottom: '16px' }}>📁</div>
+      <div style={{ fontSize: '32px', marginBottom: '16px' }}><Folder20Regular style={{ fontSize: '32px', width: '32px', height: '32px' }} /></div>
       <h2 style={{ fontSize: '16px', fontWeight: 600, marginBottom: '8px' }}>No projects yet</h2>
       <p style={{ color: 'var(--text-muted)', maxWidth: '320px', marginBottom: '24px' }}>
         Connect a <code style={{ fontFamily: 'monospace', color: 'var(--accent)' }}>.squad/</code>{' '}

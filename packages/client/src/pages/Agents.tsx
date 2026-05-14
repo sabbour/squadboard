@@ -9,6 +9,7 @@ import HireAgentModal from '../components/agents/HireAgentModal.tsx'
 import { RoutingTierBadge } from '../components/routing/RoutingTierBadge.tsx'
 import { RoutingLogTable } from '../components/routing/RoutingLogTable.tsx'
 import { RoutingStatsPanel } from '../components/routing/RoutingStatsPanel.tsx'
+import { ArrowSync20Regular, Bot20Regular, ArrowSwap20Regular } from '@fluentui/react-icons'
 
 interface RouteTestResult {
   agentName: string | null
@@ -250,7 +251,7 @@ export default function Agents() {
                 opacity: refreshKeywords.isPending ? 0.6 : 1,
               }}
             >
-              🔄 Refresh keywords
+              <ArrowSync20Regular /> Refresh keywords
             </button>
           )}
           {activeTab === 'agents' && (
@@ -289,10 +290,10 @@ export default function Agents() {
         }}
       >
         <button style={TAB_STYLE(activeTab === 'agents')} onClick={() => setActiveTab('agents')}>
-          🤖 Agents
+          <Bot20Regular /> Agents
         </button>
         <button style={TAB_STYLE(activeTab === 'routing')} onClick={() => setActiveTab('routing')}>
-          🔀 Routing
+          <ArrowSwap20Regular /> Routing
         </button>
       </div>
 

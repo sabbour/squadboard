@@ -3,12 +3,18 @@ import { type WorkflowRunReviews, type ReviewVerb, useSubmitReview } from '../..
 import { ReviewDecisionBadge } from './ReviewDecisionBadge.tsx'
 import { formatDistanceToNow } from 'date-fns'
 import Avatar from '../Avatar.tsx'
+import {
+  CheckmarkCircle20Regular,
+  ArrowSync20Regular,
+  Chat20Regular,
+  DismissCircle20Regular,
+} from '@fluentui/react-icons'
 
-const VERB_CONFIG: Record<ReviewVerb, { icon: string; label: string; color: string }> = {
-  approve: { icon: '✅', label: 'Approved', color: '#3fb950' },
-  request_changes: { icon: '🔄', label: 'Changes requested', color: '#d29922' },
-  comment: { icon: '💬', label: 'Commented', color: '#58a6ff' },
-  dismiss: { icon: '❌', label: 'Dismissed', color: '#f85149' },
+const VERB_CONFIG: Record<ReviewVerb, { icon: React.ReactNode; label: string; color: string }> = {
+  approve: { icon: <CheckmarkCircle20Regular />, label: 'Approved', color: '#3fb950' },
+  request_changes: { icon: <ArrowSync20Regular />, label: 'Changes requested', color: '#d29922' },
+  comment: { icon: <Chat20Regular />, label: 'Commented', color: '#58a6ff' },
+  dismiss: { icon: <DismissCircle20Regular />, label: 'Dismissed', color: '#f85149' },
 }
 
 const POLICY_LABELS: Record<string, string> = {
@@ -201,7 +207,7 @@ export function ReviewPanel({ reviewGroup, allowHumanOverride = true }: ReviewPa
                 opacity: submitting && submitting !== 'approve' ? 0.5 : 1,
               }}
             >
-              ✅ Approve
+              <CheckmarkCircle20Regular /> Approve
             </button>
             <button
               onClick={() => handleSubmit('request_changes')}
@@ -221,7 +227,7 @@ export function ReviewPanel({ reviewGroup, allowHumanOverride = true }: ReviewPa
                 opacity: submitting && submitting !== 'request_changes' ? 0.5 : 1,
               }}
             >
-              🔄 Request changes
+              <ArrowSync20Regular /> Request changes
             </button>
             <button
               onClick={() => setShowComment((o) => !o)}

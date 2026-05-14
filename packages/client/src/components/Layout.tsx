@@ -1,16 +1,25 @@
 import { Outlet, NavLink, useParams } from 'react-router'
 import squadboardLogo from '../assets/squadboard-horizontal.svg'
+import {
+  Home24Regular,
+  Grid24Regular,
+  ClipboardTaskListLtr24Regular,
+  Bot24Regular,
+  ArrowSync24Regular,
+  Money24Regular,
+  Settings24Regular,
+} from '@fluentui/react-icons'
 
-const NAV_ITEMS = [
-  { label: 'Dashboard', to: 'dashboard', icon: '📊', enabled: true },
-  { label: 'Board', to: 'board', icon: '📋', enabled: true },
-  { label: 'Agents', to: 'agents', icon: '🤖', enabled: true },
-  { label: 'Workflows', to: 'workflows', icon: '⚙', enabled: true },
-  { label: 'Costs', to: 'costs', icon: '💰', enabled: true },
+const NAV_ITEMS: { label: string; to: string; icon: React.ReactNode; enabled: boolean }[] = [
+  { label: 'Dashboard', to: 'dashboard', icon: <Grid24Regular />, enabled: true },
+  { label: 'Board', to: 'board', icon: <ClipboardTaskListLtr24Regular />, enabled: true },
+  { label: 'Agents', to: 'agents', icon: <Bot24Regular />, enabled: true },
+  { label: 'Workflows', to: 'workflows', icon: <ArrowSync24Regular />, enabled: true },
+  { label: 'Costs', to: 'costs', icon: <Money24Regular />, enabled: true },
 ]
 
-const NAV_BOTTOM_ITEMS = [
-  { label: 'Settings', to: 'settings', icon: '⚙️', enabled: true },
+const NAV_BOTTOM_ITEMS: { label: string; to: string; icon: React.ReactNode; enabled: boolean }[] = [
+  { label: 'Settings', to: 'settings', icon: <Settings24Regular />, enabled: true },
 ]
 
 export default function Layout() {
@@ -58,7 +67,7 @@ export default function Layout() {
               borderRadius: 0,
             })}
           >
-            <span>🏠</span> Projects
+            <Home24Regular /> Projects
           </NavLink>
 
           {id && (

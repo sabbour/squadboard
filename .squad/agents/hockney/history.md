@@ -91,3 +91,11 @@ Demo 6 workflow engine: YAML parser (js-yaml), WorkflowDefinition (route/agent_r
 - `client.ts` had duplicate interface+class declarations from a prior session's botched merge; removed the dead duplicate block (lines 369–592).
 - Pre-existing TS2742 router type errors (across all route files) and `drizzle.config.ts` rootDir error remain unfixed — they are build-baseline failures, not regressions from this task.
 - README GitHub Sync section expanded: PAT + App instructions, PKCS#8 conversion command, security note on plaintext key storage, GET response field table.
+
+### 2026-05-14 — Remove project API + create/init project API
+
+- `DELETE /api/projects/:id` added to `routes/projects.ts`. Uses Drizzle `.delete().returning()` to detect 0-row case for 404. Returns 204 No Content on success. Filesystem untouched — DB-only removal.
+- `POST /api/squad/init` added to `routes/squad.ts`. Validates target dir exists (fs.stat), rejects if `.squad/` already present (409), scaffolds team.md / decisions.md / 4 empty dirs with .gitkeep, then upserts into projects table via shared `registerProject` helper and calls `linkProjectToSquad`.
+- `POST /api/squad/create` added to `routes/squad.ts`. Validates parentPath exists, rejects if project subdir already present (409), creates project dir, delegates to same scaffold + register helpers.
+- `scaffoldSquad()` and `registerProject()` are module-private helpers in squad.ts — no new service file needed; scope is route-level only.
+- Pre-existing TS2742 build errors (all route files) remain as baseline — not introduced by this task.

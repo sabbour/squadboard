@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router'
 import { useWorkflow, useCreateWorkflow, useUpdateWorkflow } from '../api/workflows.ts'
 import WorkflowStepFlow, { type WorkflowStep } from '../components/workflows/WorkflowStepFlow.tsx'
 import TemplatePicker from '../components/workflows/TemplatePicker.tsx'
+import { ClipboardPaste20Regular, Warning20Regular, Checkmark20Regular } from '@fluentui/react-icons'
 
 // ---------------------------------------------------------------------------
 // Simple YAML → step parser (no external dependency)
@@ -258,19 +259,22 @@ export default function WorkflowEditor() {
             fontSize: '12px',
             padding: '4px 10px',
             cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '4px',
           }}
         >
-          📋 Use template
+          <ClipboardPaste20Regular /> Use template
         </button>
 
         <div style={{ flex: 1 }} />
 
         {/* Save feedback */}
         {saveOk && (
-          <span style={{ fontSize: '12px', color: '#3fb950' }}>✓ Saved</span>
+          <span style={{ fontSize: '12px', color: '#3fb950', display: 'flex', alignItems: 'center', gap: '4px' }}><Checkmark20Regular /> Saved</span>
         )}
         {saveError && (
-          <span style={{ fontSize: '12px', color: '#f85149' }} title={saveError}>⚠ {saveError.slice(0, 40)}</span>
+          <span style={{ fontSize: '12px', color: '#f85149', display: 'flex', alignItems: 'center', gap: '4px' }} title={saveError}><Warning20Regular /> {saveError.slice(0, 40)}</span>
         )}
 
         <button

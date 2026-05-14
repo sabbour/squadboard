@@ -1,4 +1,5 @@
 import { useCostSummary, useBudget } from '../../api/costs.ts'
+import { Warning20Regular } from '@fluentui/react-icons'
 
 interface CostDashboardProps {
   projectId: string
@@ -89,7 +90,7 @@ export default function CostDashboard({ projectId }: CostDashboardProps) {
             color: '#f85149',
           }}
         >
-          <span style={{ fontSize: '16px' }}>⚠️</span>
+          <span style={{ display: 'flex', color: '#f85149' }}><Warning20Regular /></span>
           <span>
             <strong>Budget exceeded.</strong> Runs are paused until the budget is raised or the month resets.
             Spending {fmtShort(budget!.mtdSpend)} of {fmtShort(budget!.monthlyBudgetUsd!)} monthly budget.

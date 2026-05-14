@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import type { Project } from '../api/projects.ts'
 import { useDeleteProject } from '../api/projects.ts'
+import { ClipboardTaskListLtr20Regular } from '@fluentui/react-icons'
 
 interface ProjectCardProps {
   project: Project
@@ -52,7 +53,7 @@ export default function ProjectCard({ project, onClick }: ProjectCardProps) {
         }}
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', width: '100%' }}>
-          <span style={{ fontSize: '18px' }}>📋</span>
+          <ClipboardTaskListLtr20Regular style={{ flexShrink: 0 }} />
           <span style={{ fontWeight: 600, fontSize: '15px', flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
             {project.name}
           </span>

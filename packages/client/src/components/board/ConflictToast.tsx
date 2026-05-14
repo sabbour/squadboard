@@ -3,6 +3,7 @@
 
 import { useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
+import { Warning20Regular } from '@fluentui/react-icons'
 
 interface ConflictToastProps {
   onReload: () => void
@@ -48,7 +49,7 @@ export default function ConflictToast({ onReload, onDismiss, autoCloseMs = 10_00
       }}
     >
       {/* Warning icon */}
-      <span style={{ fontSize: '18px', flexShrink: 0 }} aria-hidden>⚠️</span>
+      <span style={{ flexShrink: 0, display: 'flex', color: '#e36209' }} aria-hidden><Warning20Regular /></span>
 
       <div style={{ flex: 1, minWidth: 0 }}>
         <p style={{ fontSize: '13px', fontWeight: 600, color: '#e6edf3', margin: 0 }}>

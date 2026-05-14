@@ -1,27 +1,32 @@
 import { type ReviewDecision } from '../../api/reviews.ts'
+import {
+  CheckmarkCircle20Regular,
+  ArrowSync20Regular,
+  Clock20Regular,
+} from '@fluentui/react-icons'
 
 interface ReviewDecisionBadgeProps {
   decision: ReviewDecision
 }
 
-const DECISION_CONFIG: Record<ReviewDecision, { label: string; color: string; bg: string; border: string; icon: string }> = {
+const DECISION_CONFIG: Record<ReviewDecision, { label: string; color: string; bg: string; border: string; icon: React.ReactNode }> = {
   approved: {
     label: 'Approved',
-    icon: '✅',
+    icon: <CheckmarkCircle20Regular />,
     color: '#3fb950',
     bg: 'rgba(63,185,80,0.12)',
     border: 'rgba(63,185,80,0.3)',
   },
   changes_requested: {
     label: 'Changes requested',
-    icon: '🔄',
+    icon: <ArrowSync20Regular />,
     color: '#d29922',
     bg: 'rgba(210,153,34,0.12)',
     border: 'rgba(210,153,34,0.3)',
   },
   pending: {
     label: 'Pending review',
-    icon: '⏳',
+    icon: <Clock20Regular />,
     color: '#8b949e',
     bg: 'rgba(139,148,158,0.12)',
     border: 'rgba(139,148,158,0.3)',

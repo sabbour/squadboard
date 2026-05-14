@@ -1,0 +1,306 @@
+import { pgTable, uuid, text, timestamp, integer, boolean, pgEnum, primaryKey, numeric, jsonb } from 'drizzle-orm/pg-core';
+export const agentStatusEnum = pgEnum('agent_status', ['active', 'disabled', 'retired']);
+export const projects = pgTable('projects', {
+    id: uuid('id').primaryKey().defaultRandom(),
+    name: text('name').notNull(),
+    path: text('path').notNull(), // path to .squad/ directory
+    monthlyBudgetUsd: numeric('monthly_budget_usd', { precision: 10, scale: 2 }), // opt-in budget cap
+    // Demo 15: GitHub Sync (OQ #8 resolution — OFF by default, opt-in per project)
+    githubSyncEnabled: boolean('github_sync_enabled').notNull().default(false),
+    githubToken: text('github_token'), // PAT stored plaintext (hacking phase; use secrets manager in prod)
+    githubOwner: text('github_owner'), // GitHub org or user
+    githubRepo: text('github_repo'), // GitHub repository name
+    githubSyncLastAt: timestamp('github_sync_last_at'), // timestamp of last successful pull
+    // GitHub App auth (follow-up to Demo 15 PAT auth — null means PAT for backward compat)
+    githubAuthType: text('github_auth_type'), // 'pat' | 'app' — null treated as 'pat'
+    githubAppId: text('github_app_id'), // numeric GitHub App ID as string
+    githubAppInstallationId: text('github_app_installation_id'), // installation ID for this repo
+    githubAppPrivateKey: text('github_app_private_key'), // PEM private key, plaintext (hacking phase)
+    createdAt: timestamp('created_at').notNull().defaultNow(),
+    updatedAt: timestamp('updated_at').notNull().defaultNow(),
+});
+export const settings = pgTable('settings', {
+    id: uuid('id').primaryKey().defaultRandom(),
+    key: text('key').notNull().unique(),
+    value: text('value'),
+    projectId: uuid('project_id').references(() => projects.id),
+});
+export const agents = pgTable('agents', {
+    id: uuid('id').primaryKey().defaultRandom(),
+    projectId: uuid('project_id').notNull().references(() => projects.id, { onDelete: 'cascade' }),
+    name: text('name').notNull(),
+    role: text('role').notNull(),
+    model: text('model'),
+    status: agentStatusEnum('status').notNull().default('active'),
+    charterPath: text('charter_path').notNull(),
+    historyPath: text('history_path'),
+    charterHash: text('charter_hash'),
+    createdAt: timestamp('created_at').notNull().defaultNow(),
+    updatedAt: timestamp('updated_at').notNull().defaultNow(),
+});
+// ---------------------------------------------------------------------------
+// Board data layer — Demo 2
+// ---------------------------------------------------------------------------
+export const columnStatusEnum = pgEnum('column_status', ['backlog', 'todo', 'in_progress', 'in_review', 'done']);
+export const issues = pgTable('issues', {
+    id: uuid('id').primaryKey().defaultRandom(),
+    projectId: uuid('project_id').notNull().references(() => projects.id, { onDelete: 'cascade' }),
+    title: text('title').notNull(),
+    body: text('body').default(''),
+    status: columnStatusEnum('status').notNull().default('backlog'),
+    assigneeId: uuid('assignee_id'), // references agents.id later
+    position: integer('position').notNull().default(0),
+    archived: integer('archived').notNull().default(0), // 0 = active, 1 = archived (soft delete)
+    /** Optimistic concurrency token (Demo 12 / OQ #6). Incremented on every PATCH. */
+    version: integer('version').notNull().default(1),
+    // Demo 15: GitHub Sync fields
+    githubIssueNumber: integer('github_issue_number'), // linked GitHub issue number
+    githubIssueUrl: text('github_issue_url'), // html_url of the GitHub issue
+    githubNodeId: text('github_node_id'), // GitHub GraphQL node_id
+    createdAt: timestamp('created_at').notNull().defaultNow(),
+    updatedAt: timestamp('updated_at').notNull().defaultNow(),
+});
+export const comments = pgTable('comments', {
+    id: uuid('id').primaryKey().defaultRandom(),
+    issueId: uuid('issue_id').notNull().references(() => issues.id, { onDelete: 'cascade' }),
+    body: text('body').notNull(),
+    authorId: uuid('author_id'), // null = system comment
+    // Demo 15: GitHub Sync
+    githubCommentId: text('github_comment_id'), // GitHub comment ID (stringified integer)
+    createdAt: timestamp('created_at').notNull().defaultNow(),
+    updatedAt: timestamp('updated_at').notNull().defaultNow(),
+});
+export const labels = pgTable('labels', {
+    id: uuid('id').primaryKey().defaultRandom(),
+    projectId: uuid('project_id').notNull().references(() => projects.id, { onDelete: 'cascade' }),
+    name: text('name').notNull(),
+    color: text('color').notNull().default('#388bfd'),
+    createdAt: timestamp('created_at').notNull().defaultNow(),
+});
+export const issueLabels = pgTable('issue_labels', {
+    issueId: uuid('issue_id').notNull().references(() => issues.id, { onDelete: 'cascade' }),
+    labelId: uuid('label_id').notNull().references(() => labels.id, { onDelete: 'cascade' }),
+}, (t) => ({ pk: primaryKey({ columns: [t.issueId, t.labelId] }) }));
+// ---------------------------------------------------------------------------
+// Engine data layer — Demo 4 / Demo 5
+// ---------------------------------------------------------------------------
+// Demo 10 adds 'splitting' (fan_out in progress) and 'waiting_children' (fan_out waiting for children)
+export const runStatusEnum = pgEnum('run_status', ['pending', 'running', 'completed', 'failed', 'cancelled', 'splitting', 'waiting_children']);
+export const workspaceStrategyEnum = pgEnum('workspace_strategy', ['scratch', 'dir', 'worktree']);
+// Invariant 1: routing desugars to issue_runs with kind='agent_run'.
+// 'specifier_run' is the Tier-3 LLM routing variant (AC Demo 8 Durability-1).
+export const issueRunKindEnum = pgEnum('issue_run_kind', ['agent_run', 'route', 'peer_review', 'split', 'specifier_run']);
+export const issueRuns = pgTable('issue_runs', {
+    id: uuid('id').primaryKey().defaultRandom(),
+    issueId: uuid('issue_id').notNull().references(() => issues.id, { onDelete: 'cascade' }),
+    agentId: uuid('agent_id').notNull().references(() => agents.id),
+    kind: issueRunKindEnum('kind').notNull().default('agent_run'),
+    status: runStatusEnum('status').notNull().default('pending'),
+    workspaceStrategy: workspaceStrategyEnum('workspace_strategy').notNull().default('scratch'),
+    workspacePath: text('workspace_path'),
+    // Demo 9: back-reference to the approve step_run that spawned this peer_review run.
+    stepRunId: uuid('step_run_id'),
+    // Demo 9: additional context prepended to issueBody for peer_review runs.
+    inputContext: text('input_context'),
+    leaseExpiresAt: timestamp('lease_expires_at'),
+    heartbeatAt: timestamp('heartbeat_at'),
+    startedAt: timestamp('started_at'),
+    completedAt: timestamp('completed_at'),
+    output: text('output'),
+    errorMessage: text('error_message'),
+    // Legacy total-token field kept for backward compat
+    costTokens: integer('cost_tokens').default(0),
+    // Demo 7: granular token tracking
+    inputTokens: integer('input_tokens').default(0),
+    outputTokens: integer('output_tokens').default(0),
+    costUsd: text('cost_usd').default('0'),
+    // Demo 8: routing audit fields
+    routingTier: integer('routing_tier'), // 1 | 2 | 3 — which tier resolved this run
+    routingScore: numeric('routing_score', { precision: 5, scale: 4 }), // Tier-2 keyword score
+    routingReasoning: text('routing_reasoning'), // Tier-3 LLM reasoning or Tier-2 score breakdown
+    createdAt: timestamp('created_at').notNull().defaultNow(),
+    updatedAt: timestamp('updated_at').notNull().defaultNow(),
+});
+export const workflowRuns = pgTable('workflow_runs', {
+    id: uuid('id').primaryKey().defaultRandom(),
+    issueId: uuid('issue_id').notNull().references(() => issues.id),
+    workflowVersionId: uuid('workflow_version_id'), // set when a versioned workflow drives this run
+    status: runStatusEnum('status').notNull().default('pending'),
+    currentStepIndex: integer('current_step_index').default(0),
+    // Demo 9: peer review blocking policy ('first' | 'majority' | 'all') — default GitHub semantics
+    requestChangesPolicy: text('request_changes_policy').default('first'),
+    // Demo 10: fan_out / child workflow support (Invariant 5)
+    parentWorkflowRunId: text('parent_workflow_run_id'), // UUID stored as text (self-referential)
+    childWorkflowRunIds: jsonb('child_workflow_run_ids').default('[]'), // string[]
+    pinnedAgentRevisions: text('pinned_agent_revisions'), // JSON: {agentName: charterHash}; inherited from parent
+    variables: jsonb('variables').default('{}'), // propagated from parent on fan_out
+    inlineStepsJson: text('inline_steps_json'), // JSON: WorkflowStep[] for fan_out child workflows
+    createdAt: timestamp('created_at').notNull().defaultNow(),
+    updatedAt: timestamp('updated_at').notNull().defaultNow(),
+});
+export const stepRuns = pgTable('step_runs', {
+    id: uuid('id').primaryKey().defaultRandom(),
+    workflowRunId: uuid('workflow_run_id').notNull().references(() => workflowRuns.id, { onDelete: 'cascade' }),
+    issueRunId: uuid('issue_run_id').references(() => issueRuns.id),
+    stepIndex: integer('step_index').notNull(),
+    stepType: text('step_type').notNull(),
+    status: runStatusEnum('status').notNull().default('pending'),
+    pinnedAgentRevisions: text('pinned_agent_revisions'), // JSON: {agentName: charterHash}; snapshotted at step start
+    // Demo 7: retry policy
+    retryCount: integer('retry_count').default(0),
+    maxRetries: integer('max_retries').default(3),
+    retryDelay: integer('retry_delay').default(0), // ms delay before next retry (reserved for future use)
+    // Demo 7: lease for step-level crash recovery
+    leaseExpiresAt: timestamp('lease_expires_at'),
+    heartbeatAt: timestamp('heartbeat_at'),
+    // Demo 9: peer review outcome fields (set when this step_run is an approve step)
+    reviewDecision: text('review_decision'), // 'approve' | 'request_changes'
+    reviewComment: text('review_comment'),
+    reviewSuggestions: jsonb('review_suggestions'), // string[]
+    // Demo 10: fan_out step support (Invariant 5)
+    splitTargets: jsonb('split_targets'), // resolved split targets (SplitTarget[])
+    output: text('output'), // step output; fan_out merges children outputs here
+    stepConfig: jsonb('step_config'), // inline step config for fan_out child steps (WorkflowStep)
+    resolvedAgentId: text('resolved_agent_id'), // pre-resolved agent UUID for agent_run in fan_out children
+    createdAt: timestamp('created_at').notNull().defaultNow(),
+    updatedAt: timestamp('updated_at').notNull().defaultNow(),
+});
+// ---------------------------------------------------------------------------
+// Peer review audit trail — Demo 9
+// ---------------------------------------------------------------------------
+// All 4 review verbs are recorded here: approve, request_changes, comment, dismiss.
+// Invariant 1: peer_review desugars to issue_runs; review_events captures the outcome.
+export const reviewEvents = pgTable('review_events', {
+    id: uuid('id').primaryKey().defaultRandom(),
+    workflowRunId: uuid('workflow_run_id').notNull().references(() => workflowRuns.id, { onDelete: 'cascade' }),
+    stepRunId: uuid('step_run_id').notNull().references(() => stepRuns.id, { onDelete: 'cascade' }),
+    issueRunId: uuid('issue_run_id').references(() => issueRuns.id), // the peer_review issueRun, null for human reviews
+    reviewerAgentId: uuid('reviewer_agent_id').references(() => agents.id), // null for human reviewers
+    reviewerName: text('reviewer_name'), // display name (human or agent name)
+    verb: text('verb').notNull(), // 'approve' | 'request_changes' | 'comment' | 'dismiss'
+    body: text('body'),
+    suggestions: jsonb('suggestions'), // string[] — structured suggestions from request_changes
+    createdAt: timestamp('created_at').notNull().defaultNow(),
+});
+// ---------------------------------------------------------------------------
+// Routing tier 1 — Demo 5
+// ---------------------------------------------------------------------------
+// Cache of compiled routing rules loaded from .squad/routing.md
+export const routingRules = pgTable('routing_rules', {
+    id: uuid('id').primaryKey().defaultRandom(),
+    projectId: uuid('project_id').notNull().references(() => projects.id, { onDelete: 'cascade' }),
+    priority: integer('priority').notNull().default(0),
+    pattern: text('pattern').notNull(), // the match pattern (label, keyword, etc.)
+    matchType: text('match_type').notNull(), // 'label' | 'keyword' | 'assignee' | 'catchall'
+    agentName: text('agent_name').notNull(), // target agent name
+    rawRule: text('raw_rule').notNull(), // original line from routing.md
+    loadedAt: timestamp('loaded_at').notNull().defaultNow(),
+});
+// ---------------------------------------------------------------------------
+// YAML Workflow definitions — Demo 6
+// ---------------------------------------------------------------------------
+export const workflows = pgTable('workflows', {
+    id: uuid('id').primaryKey().defaultRandom(),
+    projectId: uuid('project_id').notNull().references(() => projects.id, { onDelete: 'cascade' }),
+    name: text('name').notNull(),
+    slug: text('slug').notNull(), // kebab-case identifier
+    description: text('description'),
+    createdAt: timestamp('created_at').notNull().defaultNow(),
+    updatedAt: timestamp('updated_at').notNull().defaultNow(),
+});
+// Immutable versioned snapshots; updates create a new version row.
+export const workflowVersions = pgTable('workflow_versions', {
+    id: uuid('id').primaryKey().defaultRandom(),
+    workflowId: uuid('workflow_id').notNull().references(() => workflows.id, { onDelete: 'cascade' }),
+    version: integer('version').notNull(), // monotonic, starting at 1
+    yamlContent: text('yaml_content').notNull(),
+    jsonSchema: text('json_schema'), // parsed JSON Schema for output validation (Invariant 4)
+    pinnedAgentRevisions: text('pinned_agent_revisions'), // JSON: {agentName: charterHash}
+    isActive: boolean('is_active').notNull().default(true),
+    createdAt: timestamp('created_at').notNull().defaultNow(),
+});
+// Links an issue to the active workflow version it runs under.
+export const issueWorkflows = pgTable('issue_workflows', {
+    issueId: uuid('issue_id').primaryKey().references(() => issues.id, { onDelete: 'cascade' }),
+    workflowVersionId: uuid('workflow_version_id').notNull().references(() => workflowVersions.id),
+    attachedAt: timestamp('attached_at').notNull().defaultNow(),
+});
+// ---------------------------------------------------------------------------
+// Demo 8 — Routing Tiers 2 + 3
+// ---------------------------------------------------------------------------
+/**
+ * Cached keyword sets extracted from each agent's charter.md.
+ * Populated on agent sync; consumed by Tier-2 keyword scoring.
+ */
+export const agentKeywords = pgTable('agent_keywords', {
+    agentId: uuid('agent_id').primaryKey().references(() => agents.id, { onDelete: 'cascade' }),
+    // JSON-serialized string[]: keywords extracted from Skills/Expertise section
+    keywords: text('keywords').notNull().default('[]'),
+    // Focus areas extracted from charter (used for label matching in Tier 2)
+    focusAreas: text('focus_areas').notNull().default('[]'),
+    updatedAt: timestamp('updated_at').notNull().defaultNow(),
+});
+/**
+ * Immutable audit log of every routing decision (all tiers).
+ * One row per issue that enters the router — logged regardless of which tier matched.
+ */
+export const routingLog = pgTable('routing_log', {
+    id: uuid('id').primaryKey().defaultRandom(),
+    projectId: uuid('project_id').notNull().references(() => projects.id, { onDelete: 'cascade' }),
+    issueId: uuid('issue_id').references(() => issues.id, { onDelete: 'set null' }),
+    // Which tier produced the match (1 | 2 | 3); null if all tiers missed (triage)
+    tier: integer('tier'),
+    resolvedAgent: text('resolved_agent'),
+    matchedRule: text('matched_rule'), // Tier-1 rawRule, Tier-2 pattern, 'llm' for Tier-3
+    score: numeric('score', { precision: 5, scale: 4 }), // Tier-2 keyword score
+    reasoning: text('reasoning'), // Tier-3 LLM reasoning or Tier-2 score breakdown
+    // The issueRun created for specifier_run (Tier-3 only)
+    specifierRunId: uuid('specifier_run_id').references(() => issueRuns.id, { onDelete: 'set null' }),
+    decidedAt: timestamp('decided_at').notNull().defaultNow(),
+});
+// ---------------------------------------------------------------------------
+// Demo 10 — Fan-Out + Handoff (Invariant 5)
+// ---------------------------------------------------------------------------
+/**
+ * issue_links: records the parent→child relationship created by fan_out materialisation.
+ * One row per child issue per fan_out invocation.
+ */
+export const issueLinks = pgTable('issue_links', {
+    id: uuid('id').primaryKey().defaultRandom(),
+    parentIssueId: uuid('parent_issue_id').notNull().references(() => issues.id, { onDelete: 'cascade' }),
+    childIssueId: uuid('child_issue_id').notNull().references(() => issues.id, { onDelete: 'cascade' }),
+    linkType: text('link_type').notNull().default('fan_out'), // 'fan_out' | 'handoff'
+    createdAt: timestamp('created_at').notNull().defaultNow(),
+});
+/**
+ * handoff_context: stores variables, message, and split-target info propagated
+ * from parent to each child during fan_out materialization or a handoff step.
+ */
+export const handoffContext = pgTable('handoff_context', {
+    id: uuid('id').primaryKey().defaultRandom(),
+    workflowRunId: uuid('workflow_run_id').notNull().references(() => workflowRuns.id, { onDelete: 'cascade' }),
+    stepRunId: uuid('step_run_id').notNull().references(() => stepRuns.id, { onDelete: 'cascade' }),
+    targetIssueId: uuid('target_issue_id').references(() => issues.id, { onDelete: 'set null' }),
+    // Serialised context: includes splitTarget info, inherited variables, handoff message
+    contextJson: jsonb('context_json').notNull().default('{}'),
+    createdAt: timestamp('created_at').notNull().defaultNow(),
+});
+// ---------------------------------------------------------------------------
+// Demo 15 — GitHub Sync
+// ---------------------------------------------------------------------------
+/**
+ * Audit log for every GitHub sync operation (push or pull).
+ * One row per entity (issue or comment) per sync attempt.
+ */
+export const githubSyncLog = pgTable('github_sync_log', {
+    id: uuid('id').primaryKey().defaultRandom(),
+    projectId: uuid('project_id').notNull().references(() => projects.id, { onDelete: 'cascade' }),
+    direction: text('direction').notNull(), // 'push' | 'pull'
+    entityType: text('entity_type').notNull(), // 'issue' | 'comment' | 'batch'
+    entityId: text('entity_id').notNull(), // local UUID or GitHub number as string
+    githubNumber: integer('github_number'), // GitHub issue / comment number (if known)
+    status: text('status').notNull(), // 'ok' | 'error'
+    errorMsg: text('error_msg'),
+    syncedAt: timestamp('synced_at').notNull().defaultNow(),
+});
+//# sourceMappingURL=schema.js.map

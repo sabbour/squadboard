@@ -1,6 +1,7 @@
 import { useState, useRef } from 'react'
 import { useLabels } from '../../api/labels.ts'
 import LabelBadge from '../LabelBadge.tsx'
+import { Search20Regular } from '@fluentui/react-icons'
 
 interface FilterBarProps {
   projectId: string
@@ -38,15 +39,15 @@ export default function FilterBar({
         <span
           style={{
             position: 'absolute',
-            left: '10px',
+            left: '8px',
             top: '50%',
             transform: 'translateY(-50%)',
             color: '#8b949e',
-            fontSize: '14px',
+            display: 'flex',
             pointerEvents: 'none',
           }}
         >
-          🔍
+          <Search20Regular />
         </span>
         <input
           ref={inputRef}

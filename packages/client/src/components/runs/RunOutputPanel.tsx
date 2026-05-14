@@ -5,6 +5,7 @@ import RunStatusBadge from './RunStatusBadge.tsx'
 import CostDisplay from './CostDisplay.tsx'
 import { RoutingTierBadge } from '../routing/RoutingTierBadge.tsx'
 import { wsClient } from '../../realtime/ws-client.ts'
+import { Search20Regular, Play20Regular } from '@fluentui/react-icons'
 
 const BASE = import.meta.env.VITE_API_URL ?? 'http://localhost:3000'
 
@@ -93,9 +94,9 @@ export default function RunOutputPanel({ projectId, run, agent }: RunOutputPanel
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
           <span style={{ fontSize: '12px', fontWeight: 600, color: '#e6edf3', fontFamily: 'monospace' }}>
-            {run.kind === 'peer_review'
-              ? `🔍 Review by ${agent?.name ?? 'agent'}`
-              : agent ? `▶ ${agent.name}` : '▶ Run'}
+          {run.kind === 'peer_review'
+              ? <><Search20Regular /> Review by {agent?.name ?? 'agent'}</>
+              : agent ? <><Play20Regular /> {agent.name}</> : <><Play20Regular /> Run</>}
           </span>
           {run.workspacePath && (
             <span style={{ fontSize: '11px', color: '#8b949e', fontFamily: 'monospace' }}>
