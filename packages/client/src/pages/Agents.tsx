@@ -2,14 +2,19 @@ import { useState } from 'react'
 import { useParams } from 'react-router'
 import { useAgents, type Agent } from '../api/agents.ts'
 import { apiFetch } from '../api/client.ts'
+import { useRoutingLog, useRoutingStats, useRefreshKeywords, type TestRoutingResult } from '../api/routing.ts'
 import AgentGrid from '../components/agents/AgentGrid.tsx'
 import AgentDetailPanel from '../components/agents/AgentDetailPanel.tsx'
 import HireAgentModal from '../components/agents/HireAgentModal.tsx'
+import { RoutingTierBadge } from '../components/routing/RoutingTierBadge.tsx'
+import { RoutingLogTable } from '../components/routing/RoutingLogTable.tsx'
+import { RoutingStatsPanel } from '../components/routing/RoutingStatsPanel.tsx'
 
 interface RouteTestResult {
   agentName: string | null
   ruleSummary: string | null
   matched: boolean
+  tier?: TestRoutingResult['tier']
 }
 
 function TestRoutingPanel({ projectId }: { projectId: string }) {
@@ -149,8 +154,11 @@ function TestRoutingPanel({ projectId }: { projectId: string }) {
             >
               {result.matched ? (
                 <>
-                  <span style={{ color: '#3fb950', fontWeight: 600 }}>✓ Routed to: </span>
-                  <span style={{ fontWeight: 600 }}>{result.agentName}</span>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <span style={{ color: '#3fb950', fontWeight: 600 }}>✓ Routed to: </span>
+                    <span style={{ fontWeight: 600 }}>{result.agentName}</span>
+                    {result.tier && <RoutingTierBadge tier={result.tier} showLabel />}
+                  </div>
                   {result.ruleSummary && (
                     <div style={{ marginTop: '4px', fontSize: '11px', color: '#8b949e' }}>
                       {result.ruleSummary}
@@ -173,6 +181,23 @@ export default function Agents() {
   const { data: agents = [], isLoading, isError } = useAgents(projectId)
   const [selectedAgent, setSelectedAgent] = useState<Agent | null>(null)
   const [showHireModal, setShowHireModal] = useState(false)
+  const [activeTab, setActiveTab] = useState<'agents' | 'routing'>('agents')
+
+  const { data: routingLog = [], isLoading: logLoading } = useRoutingLog(projectId)
+  const { data: routingStats, isLoading: statsLoading } = useRoutingStats(projectId)
+  const refreshKeywords = useRefreshKeywords(projectId)
+
+  const TAB_STYLE = (active: boolean): React.CSSProperties => ({
+    background: 'none',
+    border: 'none',
+    borderBottom: `2px solid ${active ? '#388bfd' : 'transparent'}`,
+    color: active ? '#e6edf3' : '#8b949e',
+    padding: '6px 14px',
+    fontSize: '13px',
+    fontWeight: active ? 600 : 400,
+    cursor: 'pointer',
+    marginBottom: '-1px',
+  })
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0 }}>
@@ -206,46 +231,118 @@ export default function Agents() {
           )}
         </div>
 
-        <button
-          onClick={() => setShowHireModal(true)}
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '6px',
-            background: '#238636',
-            border: '1px solid #2ea043',
-            borderRadius: 'var(--radius)',
-            color: '#e6edf3',
-            padding: '7px 14px',
-            fontSize: '13px',
-            fontWeight: 500,
-            cursor: 'pointer',
-          }}
-          onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.background = '#2ea043' }}
-          onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.background = '#238636' }}
-        >
-          <span style={{ fontSize: '16px', lineHeight: 1 }}>+</span>
-          Hire Agent
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          {activeTab === 'routing' && (
+            <button
+              onClick={() => void refreshKeywords.mutate()}
+              disabled={refreshKeywords.isPending}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                background: '#21262d',
+                border: '1px solid #30363d',
+                borderRadius: 'var(--radius)',
+                color: '#e6edf3',
+                padding: '6px 12px',
+                fontSize: '12px',
+                cursor: refreshKeywords.isPending ? 'not-allowed' : 'pointer',
+                opacity: refreshKeywords.isPending ? 0.6 : 1,
+              }}
+            >
+              🔄 Refresh keywords
+            </button>
+          )}
+          {activeTab === 'agents' && (
+            <button
+              onClick={() => setShowHireModal(true)}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                background: '#238636',
+                border: '1px solid #2ea043',
+                borderRadius: 'var(--radius)',
+                color: '#e6edf3',
+                padding: '7px 14px',
+                fontSize: '13px',
+                fontWeight: 500,
+                cursor: 'pointer',
+              }}
+              onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.background = '#2ea043' }}
+              onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.background = '#238636' }}
+            >
+              <span style={{ fontSize: '16px', lineHeight: 1 }}>+</span>
+              Hire Agent
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* Tabs */}
+      <div
+        style={{
+          display: 'flex',
+          padding: '0 24px',
+          borderBottom: '1px solid var(--border)',
+          flexShrink: 0,
+        }}
+      >
+        <button style={TAB_STYLE(activeTab === 'agents')} onClick={() => setActiveTab('agents')}>
+          🤖 Agents
+        </button>
+        <button style={TAB_STYLE(activeTab === 'routing')} onClick={() => setActiveTab('routing')}>
+          🔀 Routing
         </button>
       </div>
 
       {/* Body */}
       <div style={{ flex: 1, overflowY: 'auto', padding: '24px' }}>
-        {isLoading && (
-          <div style={{ color: 'var(--text-muted)', fontSize: '13px', textAlign: 'center', paddingTop: '48px' }}>
-            Loading agents…
-          </div>
-        )}
-        {isError && (
-          <div style={{ color: 'var(--danger)', fontSize: '13px', textAlign: 'center', paddingTop: '48px' }}>
-            Failed to load agents.
-          </div>
-        )}
-        {!isLoading && !isError && (
+        {activeTab === 'agents' && (
           <>
-            <AgentGrid agents={agents} onSelectAgent={setSelectedAgent} />
-            <TestRoutingPanel projectId={projectId} />
+            {isLoading && (
+              <div style={{ color: 'var(--text-muted)', fontSize: '13px', textAlign: 'center', paddingTop: '48px' }}>
+                Loading agents…
+              </div>
+            )}
+            {isError && (
+              <div style={{ color: 'var(--danger)', fontSize: '13px', textAlign: 'center', paddingTop: '48px' }}>
+                Failed to load agents.
+              </div>
+            )}
+            {!isLoading && !isError && (
+              <>
+                <AgentGrid agents={agents} onSelectAgent={setSelectedAgent} />
+                <TestRoutingPanel projectId={projectId} />
+              </>
+            )}
           </>
+        )}
+
+        {activeTab === 'routing' && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+            {/* Stats */}
+            <div>
+              <p style={{ fontSize: '11px', color: '#8b949e', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '12px', fontWeight: 600 }}>
+                Routing Stats
+              </p>
+              {routingStats ? (
+                <RoutingStatsPanel stats={routingStats} isLoading={statsLoading} />
+              ) : statsLoading ? (
+                <RoutingStatsPanel stats={{ tier1Count: 0, tier2Count: 0, tier3Count: 0, triageCount: 0, total: 0 }} isLoading />
+              ) : (
+                <p style={{ fontSize: '12px', color: '#484f58' }}>No routing data yet.</p>
+              )}
+            </div>
+
+            {/* Log */}
+            <div>
+              <p style={{ fontSize: '11px', color: '#8b949e', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '12px', fontWeight: 600 }}>
+                Routing Log
+              </p>
+              <RoutingLogTable entries={routingLog} isLoading={logLoading} />
+            </div>
+          </div>
         )}
       </div>
 

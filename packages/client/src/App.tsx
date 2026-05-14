@@ -6,6 +6,7 @@ import Agents from './pages/Agents.tsx'
 import Costs from './pages/Costs.tsx'
 import Workflows from './pages/Workflows.tsx'
 import WorkflowEditor from './pages/WorkflowEditor.tsx'
+import Settings from './pages/Settings.tsx'
 
 export default function App() {
   return (
@@ -18,6 +19,7 @@ export default function App() {
         <Route path="projects/:id/workflows" element={<Workflows />} />
         <Route path="projects/:id/workflows/new" element={<WorkflowEditor />} />
         <Route path="projects/:id/workflows/:workflowId" element={<WorkflowEditor />} />
+        <Route path="projects/:id/settings" element={<Settings />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Route>
     </Routes>

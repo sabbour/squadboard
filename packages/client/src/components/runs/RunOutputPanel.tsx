@@ -3,6 +3,7 @@ import { type IssueRun, useRunStream, useCancelRun } from '../../api/runs.ts'
 import { type Agent } from '../../api/agents.ts'
 import RunStatusBadge from './RunStatusBadge.tsx'
 import CostDisplay from './CostDisplay.tsx'
+import { RoutingTierBadge } from '../routing/RoutingTierBadge.tsx'
 
 interface RunOutputPanelProps {
   projectId: string
@@ -54,13 +55,16 @@ export default function RunOutputPanel({ projectId, run, agent }: RunOutputPanel
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
           <span style={{ fontSize: '12px', fontWeight: 600, color: '#e6edf3', fontFamily: 'monospace' }}>
-            {agent ? `▶ ${agent.name}` : '▶ Run'}
+            {run.kind === 'peer_review'
+              ? `🔍 Review by ${agent?.name ?? 'agent'}`
+              : agent ? `▶ ${agent.name}` : '▶ Run'}
           </span>
           {run.workspacePath && (
             <span style={{ fontSize: '11px', color: '#8b949e', fontFamily: 'monospace' }}>
               {run.workspacePath}
             </span>
           )}
+          {run.routingTier && <RoutingTierBadge tier={run.routingTier} />}
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
           <RunStatusBadge status={run.status} />

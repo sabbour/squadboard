@@ -7,6 +7,10 @@ const NAV_ITEMS = [
   { label: 'Costs', to: 'costs', icon: '💰', enabled: true },
 ]
 
+const NAV_BOTTOM_ITEMS = [
+  { label: 'Settings', to: 'settings', icon: '⚙️', enabled: true },
+]
+
 export default function Layout() {
   const { id } = useParams<{ id?: string }>()
 
@@ -40,7 +44,7 @@ export default function Layout() {
         </div>
 
         {/* Top nav — only show project nav when inside a project */}
-        <nav style={{ flex: 1, padding: '8px 0' }}>
+        <nav style={{ flex: 1, padding: '8px 0', display: 'flex', flexDirection: 'column' }}>
           <NavLink
             to="/"
             style={({ isActive }) => ({
@@ -118,6 +122,39 @@ export default function Layout() {
                 )
               })}
             </>
+          )}
+
+          {/* Spacer */}
+          <div style={{ flex: 1 }} />
+
+          {/* Bottom nav — Settings (only when inside a project) */}
+          {id && (
+            <div style={{ padding: '8px 0', borderTop: '1px solid var(--border)' }}>
+              {NAV_BOTTOM_ITEMS.map((item) => {
+                const to = `/projects/${id}/${item.to}`
+                return (
+                  <NavLink
+                    key={item.label}
+                    to={to}
+                    style={({ isActive }) => ({
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '8px',
+                      padding: '7px 16px',
+                      color: isActive ? 'var(--text)' : 'var(--text-muted)',
+                      fontWeight: isActive ? 500 : 400,
+                      fontSize: '13px',
+                      textDecoration: 'none',
+                      background: isActive ? 'rgba(56, 139, 253, 0.1)' : 'transparent',
+                      borderLeft: isActive ? '2px solid var(--accent)' : '2px solid transparent',
+                    })}
+                  >
+                    {item.icon && <span>{item.icon}</span>}
+                    {item.label}
+                  </NavLink>
+                )
+              })}
+            </div>
           )}
         </nav>
       </aside>

@@ -4,12 +4,16 @@ import { apiFetch } from './client.ts'
 
 export type RunStatus = 'pending' | 'running' | 'completed' | 'failed' | 'cancelled'
 export type WorkspaceStrategy = 'scratch' | 'dir' | 'worktree'
+export type RunKind = 'agent_run' | 'route' | 'peer_review' | 'approve'
+export type RoutingTier = 'T1' | 'T2' | 'T3'
 
 export interface IssueRun {
   id: string
   issueId: string
   agentId: string
   status: RunStatus
+  kind?: RunKind
+  routingTier?: RoutingTier
   workspaceStrategy: WorkspaceStrategy
   workspacePath?: string
   output?: string

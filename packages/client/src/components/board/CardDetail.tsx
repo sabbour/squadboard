@@ -4,6 +4,7 @@ import { useLabels } from '../../api/labels.ts'
 import { useIssueRuns } from '../../api/runs.ts'
 import { useAgents } from '../../api/agents.ts'
 import { useWorkflowRun, useStartWorkflow } from '../../api/workflows.ts'
+import { useWorkflowRunReviews } from '../../api/reviews.ts'
 import LabelBadge from '../LabelBadge.tsx'
 import Avatar from '../Avatar.tsx'
 import CommentList from './CommentList.tsx'
@@ -11,6 +12,7 @@ import AddComment from './AddComment.tsx'
 import RunOutputPanel from '../runs/RunOutputPanel.tsx'
 import RunHistory from '../runs/RunHistory.tsx'
 import { AttachWorkflowModal } from '../workflows/AttachWorkflowModal.tsx'
+import { ReviewPanel } from '../reviews/ReviewPanel.tsx'
 import { formatDistanceToNow } from 'date-fns'
 
 interface CardDetailProps {
@@ -29,6 +31,7 @@ export default function CardDetail({ projectId, issue, onClose }: CardDetailProp
   const { data: runs } = useIssueRuns(projectId, issue.id)
   const { data: agents } = useAgents(projectId)
   const { data: workflowRun } = useWorkflowRun(projectId, issue.id)
+  const { data: reviewGroups = [] } = useWorkflowRunReviews(workflowRun?.id ?? '')
   const startWorkflow = useStartWorkflow(projectId, issue.id)
 
   const activeRun = runs?.find((r) => r.status === 'running' || r.status === 'pending')
@@ -303,6 +306,25 @@ export default function CardDetail({ projectId, issue, onClose }: CardDetailProp
                   </div>
                 ) : (
                   <p style={{ fontSize: '12px', color: '#8b949e' }}>No workflow attached.</p>
+                )}
+
+                {/* Review panels for approve steps */}
+                {reviewGroups.length > 0 && (
+                  <div style={{ marginTop: '12px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                    {reviewGroups.map((group) => (
+                      <div
+                        key={group.stepRunId}
+                        style={{
+                          background: '#0d1117',
+                          border: '1px solid #30363d',
+                          borderRadius: '6px',
+                          padding: '12px',
+                        }}
+                      >
+                        <ReviewPanel reviewGroup={group} allowHumanOverride />
+                      </div>
+                    ))}
+                  </div>
                 )}
               </div>
 
