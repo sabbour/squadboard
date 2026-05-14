@@ -106,3 +106,33 @@
 - SVG `<text>` elements (WorkflowStepFlow) cannot host React components — replaced emojis with plain unicode symbols (⇄ ▶ ✓) instead.
 - Fluent icon components don't accept `className` for direct sizing — use inline `style={{ width, height }}` or wrap in `<span>` with font-size.
 - `PlugConnected20Regular` is the correct name for 🔌 (MCP / plugins).
+
+
+## 2026-05-14: Phase 3 — Structural Fluent UI Components
+
+**Commit:** `02843107`
+**Files changed:** 21 (593 insertions, 612 deletions)
+
+### Components migrated
+
+| Component | Old pattern | Fluent replacement |
+|---|---|---|
+| `Layout.tsx` sidebar | Custom `<aside>` + `<NavLink>` | `NavDrawer` + `NavDrawerBody` + `NavDrawerFooter` + `NavItem` + `NavSectionHeader` |
+| `HireAgentModal.tsx` | Custom fixed-position backdrop + div | `Dialog` + `DialogSurface` + `DialogBody` + `DialogContent` + `DialogActions` + `Field` + `Input` + `Select` |
+| `AttachWorkflowModal.tsx` | Custom fixed-position backdrop | `Dialog` + `DialogSurface` + `DialogBody` + `DialogContent` + `DialogActions` |
+| `TemplatePicker.tsx` | Custom fixed-position modal | `Dialog` + `DialogSurface` + `DialogBody` + `DialogContent` + `DialogActions` |
+| `ProjectPicker.tsx` (DiscoveryModal) | Custom fixed-position modal | `Dialog` + `DialogSurface` + `DialogBody` + `DialogContent` + `DialogActions` |
+| `RoutingLogTable.tsx` | `<table>/<thead>/<tbody>/<tr>/<th>/<td>` | `Table` + `TableHeader` + `TableHeaderCell` + `TableBody` + `TableRow` + `TableCell` + `TableCellLayout` |
+| `AgentLeaderboard.tsx` | `<table>/<thead>/<tbody>/<tr>/<th>/<td>` | `Table` + `TableHeader` + `TableHeaderCell` + `TableBody` + `TableRow` + `TableCell` + `TableCellLayout` |
+| `WorkflowList.tsx` table | `<table>/<tr>/<th>/<td>` + raw `<button>` | `Table` + `TableRow` + `TableCell` + `Button` (outline/primary) |
+| `CostDashboard.tsx` (2 tables) | `<table>/<thead>/<tbody>/<tr>/<th>/<td>` | `Table` + `TableHeader` + `TableHeaderCell` + `TableBody` + `TableRow` + `TableCell` |
+| `ProjectCard.tsx` | `<div>/<button>` container | `Card` + `CardHeader` + `Caption1` + `Text` + `Button` (transparent icon) |
+| Typography (Agents, Workflows, Costs, ProjectPicker) | `<h1>/<h2>/<p>` with inline style | `Title2`, `Subtitle1`, `Body1`, `Caption1` |
+
+### Notes
+- `board/` files untouched (Keyser-7 working there concurrently)
+- `FilterBar.tsx` skipped per instructions
+- NavDrawer uses `useLocation` + `useNavigate` from react-router for controlled active state
+- Dialog modals use `open={true}` pattern since parents control visibility via conditional rendering
+- `makeStyles` pseudo-selector `'&:hover'` not used on Card (Griffel type strictness) — Card has built-in hover behavior
+- Build clean: 0 TypeScript errors, bundle 1,019 kB gzip 294 kB
