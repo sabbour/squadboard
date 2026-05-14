@@ -212,3 +212,17 @@ Existing roles unchanged: McManus (Lead Architect), Keyser (Frontend Dev), Fenst
 - Works across multiple tabs without server-side session state.
 **Implementation:** `routes/issues.ts` PATCH handler; `db/schema.ts` + `db/index.ts` migration.
 **Owner:** Verbal.
+
+### Demo 15 open question #8 resolution: GitHub issue mirroring is OFF by default, opt-in per project
+**By:** Hockney (Backend / Workflow Engine Dev)
+**What:** GitHub issue mirroring (push Squadboard issues to GitHub Issues) is **disabled by default** on every project. It becomes active only when explicitly enabled via `PUT /api/projects/:id/github` with a valid PAT + owner + repo.
+**Mechanism:**
+- `projects.github_sync_enabled BOOLEAN DEFAULT FALSE` — gate column; sync hooks short-circuit immediately if false.
+- `projects.github_token TEXT` — GitHub Personal Access Token, stored in plaintext in Postgres.
+- `projects.github_owner TEXT`, `projects.github_repo TEXT` — target repository.
+- `PUT /api/projects/:id/github { token, owner, repo }` enables sync and starts a 60 s pull loop.
+- `DELETE /api/projects/:id/github` disables sync and stops the pull loop.
+**Security note:** Token stored in plaintext is acceptable for the local-first hacking phase (Postgres is embedded and not exposed). **Production deployments MUST use a secrets manager** (e.g., AWS Secrets Manager, Azure Key Vault, HashiCorp Vault) and store only a secret reference in the DB column. This is a known tech debt item; do not ship to multi-tenant cloud without addressing it.
+**Why opt-in:** Teams using Squadboard for internal planning should not be required to expose their issues to GitHub. Mirroring is an advanced integration — opting in is the safe default.
+**Owner:** Hockney.
+**Files:** `packages/server/src/github/client.ts`, `sync.ts`, `sync-hook.ts`, `routes/github-sync.ts`, `db/schema.ts`, `db/index.ts`.

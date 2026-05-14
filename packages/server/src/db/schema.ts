@@ -7,6 +7,12 @@ export const projects = pgTable('projects', {
   name: text('name').notNull(),
   path: text('path').notNull(), // path to .squad/ directory
   monthlyBudgetUsd: numeric('monthly_budget_usd', { precision: 10, scale: 2 }), // opt-in budget cap
+  // Demo 15: GitHub Sync (OQ #8 resolution — OFF by default, opt-in per project)
+  githubSyncEnabled: boolean('github_sync_enabled').notNull().default(false),
+  githubToken: text('github_token'),            // PAT stored plaintext (hacking phase; use secrets manager in prod)
+  githubOwner: text('github_owner'),            // GitHub org or user
+  githubRepo: text('github_repo'),              // GitHub repository name
+  githubSyncLastAt: timestamp('github_sync_last_at'), // timestamp of last successful pull
   createdAt: timestamp('created_at').notNull().defaultNow(),
   updatedAt: timestamp('updated_at').notNull().defaultNow(),
 });
@@ -57,6 +63,10 @@ export const issues = pgTable('issues', {
   archived: integer('archived').notNull().default(0), // 0 = active, 1 = archived (soft delete)
   /** Optimistic concurrency token (Demo 12 / OQ #6). Incremented on every PATCH. */
   version: integer('version').notNull().default(1),
+  // Demo 15: GitHub Sync fields
+  githubIssueNumber: integer('github_issue_number'),  // linked GitHub issue number
+  githubIssueUrl: text('github_issue_url'),            // html_url of the GitHub issue
+  githubNodeId: text('github_node_id'),                // GitHub GraphQL node_id
   createdAt: timestamp('created_at').notNull().defaultNow(),
   updatedAt: timestamp('updated_at').notNull().defaultNow(),
 });
@@ -66,6 +76,8 @@ export const comments = pgTable('comments', {
   issueId: uuid('issue_id').notNull().references(() => issues.id, { onDelete: 'cascade' }),
   body: text('body').notNull(),
   authorId: uuid('author_id'), // null = system comment
+  // Demo 15: GitHub Sync
+  githubCommentId: text('github_comment_id'),  // GitHub comment ID (stringified integer)
   createdAt: timestamp('created_at').notNull().defaultNow(),
   updatedAt: timestamp('updated_at').notNull().defaultNow(),
 });
@@ -345,3 +357,27 @@ export const handoffContext = pgTable('handoff_context', {
 
 export type HandoffContext = typeof handoffContext.$inferSelect;
 export type NewHandoffContext = typeof handoffContext.$inferInsert;
+
+// ---------------------------------------------------------------------------
+// Demo 15 — GitHub Sync
+// ---------------------------------------------------------------------------
+
+/**
+ * Audit log for every GitHub sync operation (push or pull).
+ * One row per entity (issue or comment) per sync attempt.
+ */
+export const githubSyncLog = pgTable('github_sync_log', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  projectId: uuid('project_id').notNull().references(() => projects.id, { onDelete: 'cascade' }),
+  direction: text('direction').notNull(),    // 'push' | 'pull'
+  entityType: text('entity_type').notNull(), // 'issue' | 'comment' | 'batch'
+  entityId: text('entity_id').notNull(),     // local UUID or GitHub number as string
+  githubNumber: integer('github_number'),    // GitHub issue / comment number (if known)
+  status: text('status').notNull(),          // 'ok' | 'error'
+  errorMsg: text('error_msg'),
+  syncedAt: timestamp('synced_at').notNull().defaultNow(),
+});
+
+export type GithubSyncLog = typeof githubSyncLog.$inferSelect;
+export type NewGithubSyncLog = typeof githubSyncLog.$inferInsert;
+

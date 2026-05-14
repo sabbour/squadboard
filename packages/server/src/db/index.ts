@@ -361,6 +361,39 @@ async function bootstrapSchema(): Promise<void> {
     -- Demo 12: Optimistic concurrency token on issues (OQ #6)
     ALTER TABLE issues
       ADD COLUMN IF NOT EXISTS version INTEGER NOT NULL DEFAULT 1;
+
+    -- Demo 15: GitHub Sync schema additions (OQ #8 resolution — opt-in per project)
+
+    -- projects: sync configuration columns
+    ALTER TABLE projects
+      ADD COLUMN IF NOT EXISTS github_sync_enabled BOOLEAN NOT NULL DEFAULT FALSE,
+      ADD COLUMN IF NOT EXISTS github_token        TEXT,
+      ADD COLUMN IF NOT EXISTS github_owner        TEXT,
+      ADD COLUMN IF NOT EXISTS github_repo         TEXT,
+      ADD COLUMN IF NOT EXISTS github_sync_last_at TIMESTAMPTZ;
+
+    -- issues: GitHub link columns
+    ALTER TABLE issues
+      ADD COLUMN IF NOT EXISTS github_issue_number INTEGER,
+      ADD COLUMN IF NOT EXISTS github_issue_url    TEXT,
+      ADD COLUMN IF NOT EXISTS github_node_id      TEXT;
+
+    -- comments: GitHub comment link
+    ALTER TABLE comments
+      ADD COLUMN IF NOT EXISTS github_comment_id TEXT;
+
+    -- github_sync_log: audit trail for every sync operation
+    CREATE TABLE IF NOT EXISTS github_sync_log (
+      id           UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+      project_id   UUID        NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+      direction    TEXT        NOT NULL,  -- 'push' | 'pull'
+      entity_type  TEXT        NOT NULL,  -- 'issue' | 'comment' | 'batch'
+      entity_id    TEXT        NOT NULL,  -- local UUID or GitHub number as string
+      github_number INTEGER,
+      status       TEXT        NOT NULL,  -- 'ok' | 'error'
+      error_msg    TEXT,
+      synced_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
   `);
 
   console.log('[db] schema bootstrapped');
