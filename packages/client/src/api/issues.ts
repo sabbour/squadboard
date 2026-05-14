@@ -26,6 +26,10 @@ export interface Issue {
   commentCount: number
   createdAt: string
   updatedAt: string
+  /** Set when the issue was assigned by the deterministic routing engine. */
+  autoRoutedTo?: string
+  /** Human-readable summary of the rule that matched, e.g. "Matched: label:bug → hockney". */
+  routingRuleSummary?: string
 }
 
 export interface CreateIssueInput {

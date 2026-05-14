@@ -88,16 +88,20 @@ export type Label = typeof labels.$inferSelect;
 export type NewLabel = typeof labels.$inferInsert;
 
 // ---------------------------------------------------------------------------
-// Engine data layer — Demo 4
+// Engine data layer — Demo 4 / Demo 5
 // ---------------------------------------------------------------------------
 
 export const runStatusEnum = pgEnum('run_status', ['pending', 'running', 'completed', 'failed', 'cancelled']);
 export const workspaceStrategyEnum = pgEnum('workspace_strategy', ['scratch', 'dir', 'worktree']);
 
+// Invariant 1: routing desugars to issue_runs with kind='agent_run'.
+export const issueRunKindEnum = pgEnum('issue_run_kind', ['agent_run', 'route', 'peer_review', 'split']);
+
 export const issueRuns = pgTable('issue_runs', {
   id: uuid('id').primaryKey().defaultRandom(),
   issueId: uuid('issue_id').notNull().references(() => issues.id, { onDelete: 'cascade' }),
   agentId: uuid('agent_id').notNull().references(() => agents.id),
+  kind: issueRunKindEnum('kind').notNull().default('agent_run'),
   status: runStatusEnum('status').notNull().default('pending'),
   workspaceStrategy: workspaceStrategyEnum('workspace_strategy').notNull().default('scratch'),
   workspacePath: text('workspace_path'),
@@ -141,23 +145,20 @@ export type StepRun = typeof stepRuns.$inferSelect;
 export type NewStepRun = typeof stepRuns.$inferInsert;
 
 // ---------------------------------------------------------------------------
-// Agent runs — Demo 4
+// Routing tier 1 — Demo 5
 // ---------------------------------------------------------------------------
 
-export const runStatusEnum = pgEnum('run_status', ['pending', 'running', 'success', 'failed']);
-
-export const issueRuns = pgTable('issue_runs', {
+// Cache of compiled routing rules loaded from .squad/routing.md
+export const routingRules = pgTable('routing_rules', {
   id: uuid('id').primaryKey().defaultRandom(),
-  issueId: uuid('issue_id').notNull().references(() => issues.id, { onDelete: 'cascade' }),
-  agentId: uuid('agent_id').notNull().references(() => agents.id, { onDelete: 'cascade' }),
-  status: runStatusEnum('status').notNull().default('pending'),
-  output: text('output').default(''),
-  costTokens: integer('cost_tokens'),
-  costUsd: text('cost_usd'),
-  errorMessage: text('error_message'),
-  createdAt: timestamp('created_at').notNull().defaultNow(),
-  updatedAt: timestamp('updated_at').notNull().defaultNow(),
+  projectId: uuid('project_id').notNull().references(() => projects.id, { onDelete: 'cascade' }),
+  priority: integer('priority').notNull().default(0),
+  pattern: text('pattern').notNull(),       // the match pattern (label, keyword, etc.)
+  matchType: text('match_type').notNull(),  // 'label' | 'keyword' | 'assignee' | 'catchall'
+  agentName: text('agent_name').notNull(),  // target agent name
+  rawRule: text('raw_rule').notNull(),      // original line from routing.md
+  loadedAt: timestamp('loaded_at').notNull().defaultNow(),
 });
 
-export type IssueRun = typeof issueRuns.$inferSelect;
-export type NewIssueRun = typeof issueRuns.$inferInsert;
+export type RoutingRule = typeof routingRules.$inferSelect;
+export type NewRoutingRule = typeof routingRules.$inferInsert;

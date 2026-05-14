@@ -11,6 +11,7 @@ import agentsRouter from './routes/agents.js';
 import issuesRouter from './routes/issues.js';
 import labelsRouter from './routes/labels.js';
 import { issueRunsRouter, projectRunsRouter } from './routes/runs.js';
+import routingRouter from './routes/routing.js';
 import { dispatcher } from './engine/dispatcher.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -42,6 +43,7 @@ async function main(): Promise<void> {
   app.use('/api/projects/:projectId/labels', labelsRouter);
   app.use('/api/projects/:projectId/issues/:issueId/runs', issueRunsRouter);
   app.use('/api/projects/:projectId/runs', projectRunsRouter);
+  app.use('/api/projects/:projectId/routing', routingRouter);
 
   if (existsSync(CLIENT_DIST)) {
     app.use(express.static(CLIENT_DIST));

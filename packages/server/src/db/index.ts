@@ -162,6 +162,24 @@ async function bootstrapSchema(): Promise<void> {
       created_at       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       updated_at       TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
+
+    DO $$ BEGIN
+      CREATE TYPE issue_run_kind AS ENUM ('agent_run', 'route', 'peer_review', 'split');
+    EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+    ALTER TABLE issue_runs
+      ADD COLUMN IF NOT EXISTS kind issue_run_kind NOT NULL DEFAULT 'agent_run';
+
+    CREATE TABLE IF NOT EXISTS routing_rules (
+      id          UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+      project_id  UUID        NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+      priority    INTEGER     NOT NULL DEFAULT 0,
+      pattern     TEXT        NOT NULL,
+      match_type  TEXT        NOT NULL,
+      agent_name  TEXT        NOT NULL,
+      raw_rule    TEXT        NOT NULL,
+      loaded_at   TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
   `);
 
   console.log('[db] schema bootstrapped');

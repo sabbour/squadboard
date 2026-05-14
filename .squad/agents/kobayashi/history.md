@@ -50,3 +50,9 @@ Demo 3 SDK: CharterCompiler parses charter.md (name, role, model, expertise, rev
 
 ### 2026-05-14
 Demo 4 SDK bridge: executeAgentRun is the single entry point (Invariant 1). SquadClient.createSession() called directly, bypassing SquadCoordinator. Graceful fallback to stub when SDK not installed. OutputStreamer appends chunks to DB. CostTracker records per-run costs.
+
+### 2026-05-14
+Demo 5: routing-compiler.ts parses .squad/routing.md tables into RoutingRule[] (label/keyword/catchall match types, priority by file order). RoutingBadge shows ⚡ Auto on auto-routed cards. Routing test panel in Agents page.
+
+### 2026-05-14 — Demo 5 routing compiler deepdive
+Demo 5 routing compiler: parseRoutingFile reads .squad/routing.md 3-table format (label/keyword/catchall rows). matchRule(issue) walks priority order, returns first match or null for escalation. RoutingBadge.tsx renders ⚡ Auto pill on auto-routed issue cards (shows matched rule label on hover). Agents page routing test panel: input issue title + labels, output resolved assignee. Non-fatal on parse errors (logs + continues).

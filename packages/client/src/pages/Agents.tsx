@@ -1,9 +1,172 @@
 import { useState } from 'react'
 import { useParams } from 'react-router'
 import { useAgents, type Agent } from '../api/agents.ts'
+import { apiFetch } from '../api/client.ts'
 import AgentGrid from '../components/agents/AgentGrid.tsx'
 import AgentDetailPanel from '../components/agents/AgentDetailPanel.tsx'
 import HireAgentModal from '../components/agents/HireAgentModal.tsx'
+
+interface RouteTestResult {
+  agentName: string | null
+  ruleSummary: string | null
+  matched: boolean
+}
+
+function TestRoutingPanel({ projectId }: { projectId: string }) {
+  const [open, setOpen] = useState(false)
+  const [title, setTitle] = useState('')
+  const [labels, setLabels] = useState('')
+  const [result, setResult] = useState<RouteTestResult | null>(null)
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  async function handleTest() {
+    if (!title.trim()) return
+    setLoading(true)
+    setError(null)
+    setResult(null)
+    try {
+      const labelList = labels.split(',').map((l) => l.trim()).filter(Boolean)
+      const qs = new URLSearchParams({ title: title.trim() })
+      labelList.forEach((l) => qs.append('label', l))
+      const data = await apiFetch<RouteTestResult>(
+        `/api/projects/${projectId}/routing/test?${qs.toString()}`
+      )
+      setResult(data)
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : 'Request failed')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const inputStyle: React.CSSProperties = {
+    background: '#0d1117',
+    border: '1px solid #30363d',
+    borderRadius: 'var(--radius)',
+    color: '#e6edf3',
+    padding: '6px 10px',
+    fontSize: '13px',
+    outline: 'none',
+    width: '100%',
+    boxSizing: 'border-box',
+  }
+
+  return (
+    <div
+      style={{
+        margin: '24px 0 0',
+        border: '1px solid #30363d',
+        borderRadius: 'var(--radius)',
+        overflow: 'hidden',
+      }}
+    >
+      {/* Collapsible header */}
+      <button
+        onClick={() => setOpen((o) => !o)}
+        style={{
+          width: '100%',
+          background: '#161b22',
+          border: 'none',
+          borderBottom: open ? '1px solid #30363d' : 'none',
+          color: '#e6edf3',
+          padding: '10px 16px',
+          fontSize: '13px',
+          fontWeight: 600,
+          cursor: 'pointer',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '8px',
+          textAlign: 'left',
+        }}
+      >
+        <span style={{ fontSize: '11px', color: '#8b949e' }}>{open ? '▾' : '▸'}</span>
+        🧪 Test Routing
+      </button>
+
+      {open && (
+        <div style={{ padding: '16px', background: '#0d1117', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+          <div>
+            <label style={{ fontSize: '11px', color: '#8b949e', display: 'block', marginBottom: '4px' }}>
+              Issue title
+            </label>
+            <input
+              style={inputStyle}
+              placeholder="e.g. Fix the WebSocket reconnect bug"
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && handleTest()}
+            />
+          </div>
+          <div>
+            <label style={{ fontSize: '11px', color: '#8b949e', display: 'block', marginBottom: '4px' }}>
+              Labels (comma-separated)
+            </label>
+            <input
+              style={inputStyle}
+              placeholder="e.g. bug, squad:hockney"
+              value={labels}
+              onChange={(e) => setLabels(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && handleTest()}
+            />
+          </div>
+
+          <button
+            onClick={handleTest}
+            disabled={loading || !title.trim()}
+            style={{
+              alignSelf: 'flex-start',
+              background: loading ? '#21262d' : '#1f6feb',
+              border: '1px solid #388bfd',
+              borderRadius: 'var(--radius)',
+              color: '#e6edf3',
+              padding: '6px 14px',
+              fontSize: '13px',
+              fontWeight: 500,
+              cursor: loading || !title.trim() ? 'not-allowed' : 'pointer',
+              opacity: !title.trim() ? 0.5 : 1,
+            }}
+          >
+            {loading ? 'Testing…' : 'Test Route'}
+          </button>
+
+          {error && (
+            <div style={{ fontSize: '12px', color: 'var(--danger)', padding: '8px', background: 'rgba(248,81,73,0.1)', borderRadius: 'var(--radius)', border: '1px solid rgba(248,81,73,0.3)' }}>
+              {error}
+            </div>
+          )}
+
+          {result && (
+            <div
+              style={{
+                padding: '10px 14px',
+                borderRadius: 'var(--radius)',
+                background: result.matched ? 'rgba(46,160,67,0.1)' : 'rgba(139,148,158,0.1)',
+                border: `1px solid ${result.matched ? 'rgba(46,160,67,0.3)' : '#30363d'}`,
+                fontSize: '13px',
+                color: '#e6edf3',
+              }}
+            >
+              {result.matched ? (
+                <>
+                  <span style={{ color: '#3fb950', fontWeight: 600 }}>✓ Routed to: </span>
+                  <span style={{ fontWeight: 600 }}>{result.agentName}</span>
+                  {result.ruleSummary && (
+                    <div style={{ marginTop: '4px', fontSize: '11px', color: '#8b949e' }}>
+                      {result.ruleSummary}
+                    </div>
+                  )}
+                </>
+              ) : (
+                <span style={{ color: '#8b949e' }}>No rule matched → Tier 2</span>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
 
 export default function Agents() {
   const { id: projectId = '' } = useParams<{ id: string }>()
@@ -79,7 +242,10 @@ export default function Agents() {
           </div>
         )}
         {!isLoading && !isError && (
-          <AgentGrid agents={agents} onSelectAgent={setSelectedAgent} />
+          <>
+            <AgentGrid agents={agents} onSelectAgent={setSelectedAgent} />
+            <TestRoutingPanel projectId={projectId} />
+          </>
         )}
       </div>
 

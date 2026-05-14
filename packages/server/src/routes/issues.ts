@@ -2,6 +2,9 @@ import { Router } from 'express';
 import type { Request, Response } from 'express';
 import * as issuesService from '../services/issues.js';
 import type { ColumnStatus } from '../services/issues.js';
+import { eq } from 'drizzle-orm';
+import { getDb, schema } from '../db/index.js';
+import { resolveRoute, createRoutedRun } from '../engine/router.js';
 
 const router = Router({ mergeParams: true });
 
@@ -43,14 +46,51 @@ router.get('/', async (req: Request, res: Response) => {
 router.post('/', async (req: Request, res: Response) => {
   try {
     const { projectId } = req.params;
-    const { title, body, status, assigneeId } = req.body as {
+    const { title, body, status, assigneeId, labels } = req.body as {
       title: string;
       body?: string;
       status?: ColumnStatus;
       assigneeId?: string;
+      labels?: string[];
     };
     const created = await issuesService.createIssue(projectId, { title, body, status, assigneeId });
-    res.status(201).json(created);
+
+    // Tier 1 auto-routing: resolve a rule and create an issue_run (Invariant 1)
+    let autoRoutedTo: string | null = null;
+    try {
+      const issueLabels = labels ?? [];
+      const match = await resolveRoute(projectId, {
+        title: created.title,
+        labels: issueLabels,
+        body: created.body ?? '',
+      });
+
+      if (match) {
+        // Look up the agent by name within this project
+        const [agent] = await getDb()
+          .select()
+          .from(schema.agents)
+          .where(
+            and(
+              eq(schema.agents.projectId, projectId),
+              eq(schema.agents.name, match.agentName),
+            ),
+          );
+
+        if (agent) {
+          await createRoutedRun(created.id, agent.id, match.rule.rawRule);
+          autoRoutedTo = match.agentName;
+          console.log(`[issues] auto-routed issue ${created.id} to agent '${match.agentName}'`);
+        } else {
+          console.warn(`[issues] routing matched agent '${match.agentName}' but no such agent found in project ${projectId}`);
+        }
+      }
+    } catch (routingErr) {
+      // Routing failure must not fail issue creation
+      console.error('[issues] auto-routing error (non-fatal):', routingErr);
+    }
+
+    res.status(201).json({ ...created, autoRoutedTo });
   } catch (err) {
     handleError(res, err);
   }

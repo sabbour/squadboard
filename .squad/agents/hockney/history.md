@@ -47,5 +47,8 @@ Demo 1 backend scaffold: Express v5 + embedded-postgres + Drizzle ORM. Monorepo 
 ### 2026-05-14 — Demo 2 backend: issues/comments/labels CRUD API
 Demo 2 backend: issues/comments/labels CRUD API. Drizzle schema additions: issues (with status enum + position), comments, labels, issue_labels. Bulk action endpoint. Move endpoint handles position recalculation.
 
-### 2026-05-14 — Demo 4 engine core
-Demo 4 engine core: Dispatcher (5s tick: sweep→wake→advance), Stepper (FOR UPDATE SKIP LOCKED → invariant 2), Workspace (scratch/dir/worktree strategies), Sweeper (reclaim expired leases + orphaned runs). SSE stream endpoint for real-time output. Heartbeat 30s, lease TTL 90s. SDK bridge stubbed — Kobayashi fills in.
+### 2026-05-14 — Demo 5 routing tier 1
+Demo 5 routing tier 1: router.ts loads rules from .squad/routing.md via Kobayashi's parseRoutingFile. Resolves by label→keyword→catchall priority. createRoutedRun inserts issue_runs with kind='agent_run' (Invariant 1: routing desugars to agent_run). Auto-routes on issue create. Hot-reload is restart-only (PRD non-goal).
+
+### 2026-05-14 — Demo 5 routing tier 1 deepdive
+Demo 5 engine completion: routing_rules table caches parsed rules (3-table format: label, keyword, catchall). POST /reload refreshes cache. GET /rules surfaces active rules. POST /test validates match logic. resolveRoute matches label→keyword→catchall priority, returns null for escalation tiers. createRoutedRun inserts issue_run with kind='agent_run' + routing context. Auto-route hook on POST /issues applies resolveRoute (non-fatal on miss).

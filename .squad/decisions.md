@@ -161,6 +161,14 @@ Existing roles unchanged: McManus (Lead Architect), Keyser (Frontend Dev), Fenst
 - CostDisplay: $X.XXX · N tokens format
 - Updated: IssueCard footer, CardDetail tabs, KanbanColumn/Board prop threading
 
+### 2026-05-14: Demo 5 — Routing Tier 1 architecture
+**By:** Hockney
+**What:** Routing desugars to issue_runs kind='agent_run' (Invariant 1). Rules loaded from routing.md into routing_rules cache table. Match order: label > keyword > catchall. Hot-reload is restart-only (v1 non-goal). resolveRoute returns null for Tier 2/3 escalation (Demo 8).
+
+### 2026-05-14: Demo 5 — routing.md parse strategy
+**By:** Kobayashi
+**What:** Parser reads actual .squad/routing.md table format. MatchType inferred from pattern: label: prefix → label, * → catchall, else keyword. Priority = file order. matchRule() used by Hockney's router.ts. RoutingBadge shows auto-assignment provenance on IssueCard.
+
 ## Governance
 
 - All meaningful changes require team consensus

@@ -7,6 +7,7 @@ import Avatar from '../Avatar.tsx'
 import RunButton from '../runs/RunButton.tsx'
 import RunStatusBadge from '../runs/RunStatusBadge.tsx'
 import CostDisplay from '../runs/CostDisplay.tsx'
+import { RoutingBadge } from './RoutingBadge.tsx'
 
 interface IssueCardProps {
   issue: Issue
@@ -95,6 +96,9 @@ export default function IssueCard({ issue, index, projectId, isSelected, onSelec
               <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                 {issue.assignee && (
                   <Avatar name={issue.assignee.name} avatarUrl={issue.assignee.avatarUrl} size={20} />
+                )}
+                {issue.routingRuleSummary && (
+                  <RoutingBadge ruleSummary={issue.routingRuleSummary} />
                 )}
                 {activeRun && <RunStatusBadge status={activeRun.status} />}
                 {!activeRun && lastRun?.status === 'completed' && (
