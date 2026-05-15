@@ -122,6 +122,24 @@ Key learnings:
 
 **New-user vs power-user split:** keyed on `ceremonyId` route param being absent (`isNew = !ceremonyId || ceremonyId === 'new'`). Conjure panel, PageHeader, intro card, and name field above the body are all gated on `isNew`. The edit-mode header (name input + badges + run/validate buttons) is unchanged.
 
+### 2026-05-15 — Phase 5 sdk-state.ts wrapper (p5-state-wrapper)
+
+Created `packages/server/src/services/sdk-state.ts` — the foundational SquadState shim for Phase 5.
+
+**API surface chosen:**
+- `getState(projectId): Promise<SquadState>` — lazily cached, primary entry point.
+- `invalidateState(projectId): void` — cache eviction (call after re-linking a project path).
+- Seven typed collection accessors: `getAgents`, `getRouting`, `getDecisions`, `getSkills`, `getTeam`, `getTemplates`, `getConfig`. Each returns the SDK collection instance directly.
+- `ProjectNotFoundError` — typed error thrown when the project row is absent from the DB.
+
+**Storage strategy:** `FSStorageProvider(rootDir)` with confinement, combined with `SquadState.fromStorage()` (synchronous factory, no existence re-validation). `projects.path` in the DB is the `.squad/` dir; `rootDir = path.dirname(squadPath)`.
+
+**Cache:** `Map<string, SquadState>` scoped to the server process. Collections themselves always read through to the filesystem — no stale data risk on reads. Cache eviction is explicit via `invalidateState()`.
+
+**TypeScript check:** Zero new errors introduced. Two pre-existing errors in `conjure-classifier.ts` (`modelId`/`source` mismatch from prior session) are untouched.
+
+Decision filed: `.squad/decisions/inbox/kobayashi-sdk-state-wrapper.md`.
+
 ## Recent team activity
 
 **2026-05-15 Round 2 shipped:** Hockney (attachments backend), McManus (multi-modal frontend), Verbal (Consult chat fix), Fenster (typography sweep), Kobayashi (Ceremony Conjure UX), Keyser (layout rebalance). See `.squad/decisions.md` for Fluent2 canon, image bytea architecture, create-page pattern, react-markdown rendering.
