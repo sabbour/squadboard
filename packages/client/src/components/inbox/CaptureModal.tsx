@@ -18,17 +18,18 @@
  */
 
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { tokens } from '@fluentui/react-components'
+import { tokens, Spinner } from '@fluentui/react-components'
 import { useProjects } from '../../api/projects.ts'
 import { useLabels } from '../../api/labels.ts'
 import {
   useCreateInboxItem,
-  useFormulateInboxItem,
   useUpdateInboxItem,
   usePublishInboxItem,
   useDiscardInboxItem,
   useInboxItem,
   type InboxItem,
+  type FormulateResult,
+  type FormulateModelInfo,
 } from '../../api/inbox.ts'
 import type { ColumnId } from '../../api/issues.ts'
 
@@ -71,12 +72,13 @@ export default function CaptureModal({
   const [confidence, setConfidence] = useState<string | null>(null)
   const [rationale, setRationale] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [modelUsed, setModelUsed] = useState<FormulateModelInfo | null>(null)
+  const [isFormulating, setIsFormulating] = useState(false)
   const draftRef = useRef<HTMLTextAreaElement | null>(null)
 
   // Hydrate from existing inbox item when caller passes an id.
   const { data: existing } = useInboxItem(existingItemId)
   const create = useCreateInboxItem()
-  const formulate = useFormulateInboxItem(itemId)
   const update = useUpdateInboxItem(itemId)
   const publish = usePublishInboxItem(itemId)
   const discard = useDiscardInboxItem(itemId)
@@ -137,6 +139,7 @@ export default function CaptureModal({
       setError('Type something first.')
       return
     }
+    setIsFormulating(true)
     try {
       let id = itemId
       if (!id) {
@@ -155,11 +158,14 @@ export default function CaptureModal({
             const txt = await r.text()
             throw new Error(`HTTP ${r.status}: ${txt}`)
           }
-          return r.json() as Promise<InboxItem>
+          return r.json() as Promise<FormulateResult>
         })
-      hydrateFromItem(payload)
+      setModelUsed(payload.modelUsed)
+      hydrateFromItem(payload.item)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to formulate')
+    } finally {
+      setIsFormulating(false)
     }
   }
 
@@ -352,7 +358,7 @@ export default function CaptureModal({
 
           {inPreview && (
             <>
-              {(rationale || confidence) && (
+              {(rationale || confidence || modelUsed) && (
                 <div
                   style={{
                     fontSize: '12px',
@@ -363,6 +369,7 @@ export default function CaptureModal({
                     display: 'flex',
                     alignItems: 'center',
                     gap: '8px',
+                    flexWrap: 'wrap',
                   }}
                 >
                   {confidence && (
@@ -382,6 +389,22 @@ export default function CaptureModal({
                     </span>
                   )}
                   <span style={{ flex: 1 }}>{rationale || 'No rationale provided.'}</span>
+                  {modelUsed && (
+                    <span
+                      title={`Resolved via: ${modelUsed.via}`}
+                      style={{
+                        background: tokens.colorNeutralBackground3,
+                        color: tokens.colorNeutralForeground2,
+                        padding: '2px 6px',
+                        borderRadius: '4px',
+                        fontSize: '11px',
+                        fontFamily: 'monospace',
+                        whiteSpace: 'nowrap',
+                      }}
+                    >
+                      {modelUsed.model}
+                    </span>
+                  )}
                 </div>
               )}
 
@@ -568,10 +591,17 @@ export default function CaptureModal({
               <button
                 type="button"
                 onClick={handleFormulate}
-                disabled={!draft.trim() || create.isPending || formulate.isPending}
-                style={btnPrimary(!draft.trim() || create.isPending || formulate.isPending)}
+                disabled={!draft.trim() || create.isPending || isFormulating}
+                style={btnPrimary(!draft.trim() || create.isPending || isFormulating)}
               >
-                {create.isPending || formulate.isPending ? 'Formulating…' : 'Formulate'}
+                {(create.isPending || isFormulating) ? (
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: '8px' }}>
+                    <Spinner size="tiny" appearance="inverted" />
+                    Formulating…
+                  </span>
+                ) : (
+                  'Formulate'
+                )}
               </button>
             </>
           ) : (

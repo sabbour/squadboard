@@ -100,12 +100,22 @@ export function useCreateInboxItem() {
   })
 }
 
+export interface FormulateModelInfo {
+  model: string
+  via: 'session' | 'agent' | 'project' | 'fallback'
+}
+
+export interface FormulateResult {
+  item: InboxItem
+  modelUsed: FormulateModelInfo
+}
+
 export function useFormulateInboxItem(id: string | null | undefined) {
   const qc = useQueryClient()
-  return useMutation<InboxItem, Error, void>({
+  return useMutation<FormulateResult, Error, void>({
     mutationFn: () =>
-      apiFetch<InboxItem>(`/api/inbox/${id}/formulate`, { method: 'POST' }),
-    onSuccess: (item) => {
+      apiFetch<FormulateResult>(`/api/inbox/${id}/formulate`, { method: 'POST' }),
+    onSuccess: ({ item }) => {
       qc.setQueryData(['inbox', 'item', item.id], item)
       void qc.invalidateQueries({ queryKey: ['inbox'] })
     },
