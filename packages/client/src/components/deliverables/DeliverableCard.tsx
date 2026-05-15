@@ -5,9 +5,17 @@ import {
   type Deliverable,
   type DeliverableKind,
   type DeliverableStatus,
+  type DeliverableReview,
   useRequestPeerReview,
+  useDeliverable,
 } from '../../api/deliverables.ts'
 import { useAgents, type Agent } from '../../api/agents.ts'
+import {
+  type ReviewDecision,
+  type ReviewEvent,
+  type WorkflowRunReviews,
+} from '../../api/reviews.ts'
+import { ReviewPanel } from '../reviews/ReviewPanel.tsx'
 import TextDeliverable from './kinds/TextDeliverable.tsx'
 import FilesDeliverable from './kinds/FilesDeliverable.tsx'
 import LinksDeliverable from './kinds/LinksDeliverable.tsx'
@@ -66,6 +74,8 @@ export default function DeliverableCard({ projectId, deliverable }: DeliverableC
 
   const { data: agents = [] } = useAgents(projectId)
   const requestPeerReview = useRequestPeerReview(projectId, deliverable.id)
+  const { data: full } = useDeliverable(projectId, open ? deliverable.id : null)
+  const reviewGroup = buildSyntheticReviewGroup(deliverable, full?.reviews ?? [])
 
   const status = STATUS_TONE[deliverable.status]
   const kindLabel = KIND_LABELS[deliverable.kind]
@@ -186,7 +196,27 @@ export default function DeliverableCard({ projectId, deliverable }: DeliverableC
         >
           {renderKindViewer(deliverable)}
 
-          {/* Inline review bar (placeholder until ReviewPanel rewire) */}
+          {/* Inline review panel — wired through the deliverable target */}
+          <div
+            style={{
+              borderTop: `1px solid ${tokens.colorNeutralStroke1}`,
+              paddingTop: '12px',
+            }}
+          >
+            <ReviewPanel
+              reviewGroup={reviewGroup}
+              target={{
+                kind: 'deliverable',
+                id: deliverable.id,
+                deliverableId: deliverable.id,
+                projectId,
+                title: deliverable.title,
+              }}
+              allowHumanOverride
+            />
+          </div>
+
+          {/* Peer-review request bar */}
           <div
             style={{
               display: 'flex',
@@ -278,6 +308,35 @@ export default function DeliverableCard({ projectId, deliverable }: DeliverableC
       )}
     </div>
   )
+}
+
+function buildSyntheticReviewGroup(
+  deliverable: Deliverable,
+  reviews: DeliverableReview[],
+): WorkflowRunReviews {
+  const decision: ReviewDecision =
+    deliverable.status === 'approved'
+      ? 'approved'
+      : deliverable.status === 'changes_requested'
+        ? 'changes_requested'
+        : 'pending'
+
+  const events: ReviewEvent[] = reviews.map((r) => ({
+    id: r.id,
+    agentId: r.reviewerAgentId ?? '',
+    agentName: r.reviewerName ?? 'Unknown reviewer',
+    verb: r.verb,
+    comment: r.body ?? undefined,
+    suggestions: r.suggestions ?? undefined,
+    createdAt: r.createdAt,
+  }))
+
+  return {
+    stepRunId: deliverable.id, // unused in deliverable mode but required by shape
+    stepLabel: 'Reviews',
+    decision,
+    events,
+  }
 }
 
 function renderKindViewer(deliverable: Deliverable) {

@@ -132,3 +132,77 @@ export function useModels() {
     staleTime: 5 * 60 * 1000,
   })
 }
+
+// ---------------------------------------------------------------------------
+// Hire-team / casting types and hooks
+//
+// Mirrors the SDK casting surface (universes + roles) so the HireTeamModal
+// can request a proposed cast and then confirm/materialise selected members
+// into Squadboard agents.
+// ---------------------------------------------------------------------------
+
+export type CastingUniverseId = 'usual-suspects' | 'oceans-eleven'
+
+export type CastingAgentRole =
+  | 'lead'
+  | 'developer'
+  | 'tester'
+  | 'reviewer'
+  | 'devops'
+  | 'security'
+  | 'designer'
+  | 'prompt-engineer'
+  | 'scribe'
+
+export interface CastedMember {
+  name: string
+  agentName: string
+  role: CastingAgentRole
+  personality: string
+  backstory: string
+  suggestedRoleId: string
+  suggestedRoleTitle: string
+}
+
+export interface HireTeamProposeInput {
+  universe: CastingUniverseId
+  teamSize?: number
+  requiredRoles?: CastingAgentRole[]
+}
+
+export interface HireTeamProposeResult {
+  members: CastedMember[]
+}
+
+export interface HireTeamConfirmInput {
+  members: CastedMember[]
+}
+
+export interface HireTeamConfirmResult {
+  created: Agent[]
+  errors: { agentName: string; error: string }[]
+}
+
+export function useHireTeamPropose(projectId: string) {
+  return useMutation<HireTeamProposeResult, Error, HireTeamProposeInput>({
+    mutationFn: (input) =>
+      apiFetch<Envelope<HireTeamProposeResult>>(
+        `/api/projects/${projectId}/agents/hire-team/propose`,
+        { method: 'POST', body: JSON.stringify(input) },
+      ).then(unwrap),
+  })
+}
+
+export function useHireTeamConfirm(projectId: string) {
+  const queryClient = useQueryClient()
+  return useMutation<HireTeamConfirmResult, Error, HireTeamConfirmInput>({
+    mutationFn: (input) =>
+      apiFetch<Envelope<HireTeamConfirmResult>>(
+        `/api/projects/${projectId}/agents/hire-team/confirm`,
+        { method: 'POST', body: JSON.stringify(input) },
+      ).then(unwrap),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['agents', projectId] })
+    },
+  })
+}

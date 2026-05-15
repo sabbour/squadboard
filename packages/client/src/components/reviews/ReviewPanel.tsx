@@ -1,5 +1,11 @@
 import { useState } from 'react'
-import { type WorkflowRunReviews, type ReviewVerb, useSubmitReview } from '../../api/reviews.ts'
+import {
+  type WorkflowRunReviews,
+  type ReviewVerb,
+  useSubmitReview,
+} from '../../api/reviews.ts'
+import { useReviewDeliverable } from '../../api/deliverables.ts'
+import { useAgents, type Agent } from '../../api/agents.ts'
 import { ReviewDecisionBadge } from './ReviewDecisionBadge.tsx'
 import { formatDistanceToNow } from 'date-fns'
 import Avatar from '../Avatar.tsx'
@@ -23,9 +29,41 @@ const POLICY_LABELS: Record<string, string> = {
   all_must_approve: 'Policy: all must approve',
 }
 
+// ---------------------------------------------------------------------------
+// Target shape — distinguishes step-run reviews (default) from deliverable
+// reviews. The DeliverableCard threads its target through so this panel can
+// post to the right server endpoint and render a deliverable header.
+// ---------------------------------------------------------------------------
+
+export type ReviewTarget =
+  | { kind: 'step'; id: string }
+  | {
+      kind: 'deliverable'
+      id: string
+      deliverableId: string
+      projectId: string
+      title?: string
+    }
+
 interface ReviewPanelProps {
   reviewGroup: WorkflowRunReviews
+  target?: ReviewTarget
   allowHumanOverride?: boolean
+}
+
+const inputStyle: React.CSSProperties = {
+  background: 'var(--surface)',
+  border: '1px solid var(--border)',
+  borderRadius: '6px',
+  color: 'var(--text)',
+  padding: '6px 10px',
+  fontSize: '12px',
+  outline: 'none',
+  width: '100%',
+  boxSizing: 'border-box',
+  resize: 'vertical',
+  minHeight: '60px',
+  fontFamily: 'inherit',
 }
 
 function SuggestionsAccordion({ suggestions }: { suggestions: string[] }) {
@@ -60,47 +98,24 @@ function SuggestionsAccordion({ suggestions }: { suggestions: string[] }) {
   )
 }
 
-export function ReviewPanel({ reviewGroup, allowHumanOverride = true }: ReviewPanelProps) {
-  const submitReview = useSubmitReview(reviewGroup.stepRunId)
-  const [submitting, setSubmitting] = useState<ReviewVerb | null>(null)
-  const [comment, setComment] = useState('')
-  const [showComment, setShowComment] = useState(false)
-
-  async function handleSubmit(verb: ReviewVerb) {
-    setSubmitting(verb)
-    try {
-      await submitReview.mutateAsync({ verb, comment: comment.trim() || undefined })
-      setComment('')
-      setShowComment(false)
-    } finally {
-      setSubmitting(null)
-    }
-  }
-
-  const inputStyle: React.CSSProperties = {
-    background: 'var(--surface)',
-    border: '1px solid var(--border)',
-    borderRadius: '6px',
-    color: 'var(--text)',
-    padding: '6px 10px',
-    fontSize: '12px',
-    outline: 'none',
-    width: '100%',
-    boxSizing: 'border-box',
-    resize: 'vertical',
-    minHeight: '60px',
-    fontFamily: 'inherit',
-  }
+export function ReviewPanel({ reviewGroup, target, allowHumanOverride = true }: ReviewPanelProps) {
+  const resolvedTarget: ReviewTarget =
+    target ?? { kind: 'step', id: reviewGroup.stepRunId }
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '6px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
           <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text)' }}>
             {reviewGroup.stepLabel ?? 'Peer Review'}
           </span>
           <ReviewDecisionBadge decision={reviewGroup.decision} />
+          {resolvedTarget.kind === 'deliverable' && resolvedTarget.title && (
+            <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+              Reviewing deliverable: <span style={{ fontStyle: 'italic' }}>{resolvedTarget.title}</span>
+            </span>
+          )}
         </div>
         {reviewGroup.policy && (
           <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
@@ -169,82 +184,321 @@ export function ReviewPanel({ reviewGroup, allowHumanOverride = true }: ReviewPa
         </div>
       )}
 
-      {/* Human override actions */}
+      {/* Human override actions — branch on target kind */}
       {allowHumanOverride && reviewGroup.decision === 'pending' && (
-        <div
+        resolvedTarget.kind === 'deliverable' ? (
+          <DeliverableOverrideActions target={resolvedTarget} />
+        ) : (
+          <StepOverrideActions stepRunId={resolvedTarget.id} />
+        )
+      )}
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Step-run override (existing behaviour, factored into a subcomponent)
+// ---------------------------------------------------------------------------
+
+function StepOverrideActions({ stepRunId }: { stepRunId: string }) {
+  const submitReview = useSubmitReview(stepRunId)
+  const [submitting, setSubmitting] = useState<ReviewVerb | null>(null)
+  const [comment, setComment] = useState('')
+  const [showComment, setShowComment] = useState(false)
+
+  async function handleSubmit(verb: ReviewVerb) {
+    setSubmitting(verb)
+    try {
+      await submitReview.mutateAsync({ verb, comment: comment.trim() || undefined })
+      setComment('')
+      setShowComment(false)
+    } finally {
+      setSubmitting(null)
+    }
+  }
+
+  return (
+    <div
+      style={{
+        borderTop: '1px solid var(--border)',
+        paddingTop: '12px',
+        display: 'flex',
+        flexDirection: 'column',
+        gap: '8px',
+      }}
+    >
+      {showComment && (
+        <textarea
+          style={inputStyle}
+          placeholder="Optional comment…"
+          value={comment}
+          onChange={(e) => setComment(e.target.value)}
+        />
+      )}
+      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+        <ApproveButton
+          onClick={() => handleSubmit('approve')}
+          submitting={submitting}
+        />
+        <RequestChangesButton
+          onClick={() => handleSubmit('request_changes')}
+          submitting={submitting}
+        />
+        <CommentToggle
+          showComment={showComment}
+          onToggle={() => setShowComment((o) => !o)}
+        />
+      </div>
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Deliverable override (Phase 9): approve/request_changes posts to the
+// per-deliverable review endpoint, with an inline "Spawn revision run by…"
+// agent picker that flows into the request_changes call.
+// ---------------------------------------------------------------------------
+
+function DeliverableOverrideActions({
+  target,
+}: {
+  target: Extract<ReviewTarget, { kind: 'deliverable' }>
+}) {
+  const reviewDeliverable = useReviewDeliverable(target.projectId, target.deliverableId)
+  const { data: agents = [] } = useAgents(target.projectId)
+  const [submitting, setSubmitting] = useState<ReviewVerb | null>(null)
+  const [comment, setComment] = useState('')
+  const [showComment, setShowComment] = useState(false)
+  const [showRevisionPicker, setShowRevisionPicker] = useState(false)
+  const [revisionAgentId, setRevisionAgentId] = useState<string>('')
+  const [error, setError] = useState<string | null>(null)
+
+  async function handleApprove() {
+    setSubmitting('approve')
+    setError(null)
+    try {
+      await reviewDeliverable.mutateAsync({
+        verb: 'approve',
+        body: comment.trim() || undefined,
+      })
+      setComment('')
+      setShowComment(false)
+    } catch (e) {
+      setError((e as Error)?.message ?? 'Failed to approve deliverable')
+    } finally {
+      setSubmitting(null)
+    }
+  }
+
+  async function handleRequestChanges() {
+    setSubmitting('request_changes')
+    setError(null)
+    try {
+      const trimmed = comment.trim()
+      const spawnRevision: { agentId?: string; body?: string } = {}
+      if (revisionAgentId) spawnRevision.agentId = revisionAgentId
+      if (trimmed) spawnRevision.body = trimmed
+      await reviewDeliverable.mutateAsync({
+        verb: 'request_changes',
+        body: trimmed || undefined,
+        spawnRevision,
+      })
+      setComment('')
+      setShowComment(false)
+      setShowRevisionPicker(false)
+      setRevisionAgentId('')
+    } catch (e) {
+      setError((e as Error)?.message ?? 'Failed to request changes')
+    } finally {
+      setSubmitting(null)
+    }
+  }
+
+  return (
+    <div
+      style={{
+        borderTop: '1px solid var(--border)',
+        paddingTop: '12px',
+        display: 'flex',
+        flexDirection: 'column',
+        gap: '8px',
+      }}
+    >
+      {showComment && (
+        <textarea
+          style={inputStyle}
+          placeholder="Optional comment…"
+          value={comment}
+          onChange={(e) => setComment(e.target.value)}
+        />
+      )}
+      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+        <ApproveButton onClick={handleApprove} submitting={submitting} />
+        <RequestChangesButton onClick={handleRequestChanges} submitting={submitting} />
+        <CommentToggle showComment={showComment} onToggle={() => setShowComment((o) => !o)} />
+        <button
+          type="button"
+          onClick={() => setShowRevisionPicker((o) => !o)}
           style={{
-            borderTop: '1px solid var(--border)',
-            paddingTop: '12px',
-            display: 'flex',
-            flexDirection: 'column',
-            gap: '8px',
+            background: 'none',
+            border: 'none',
+            color: 'var(--text-muted)',
+            fontSize: '12px',
+            cursor: 'pointer',
+            padding: '5px 4px',
           }}
         >
-          {showComment && (
-            <textarea
-              style={inputStyle}
-              placeholder="Optional comment…"
-              value={comment}
-              onChange={(e) => setComment(e.target.value)}
-            />
-          )}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-            <button
-              onClick={() => handleSubmit('approve')}
-              disabled={Boolean(submitting)}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '4px',
-                background: submitting ? 'rgba(0,0,0,0.05)' : 'rgba(63,185,80,0.12)',
-                border: '1px solid rgba(63,185,80,0.4)',
-                color: '#3fb950',
-                borderRadius: '6px',
-                padding: '5px 12px',
-                fontSize: '12px',
-                fontWeight: 500,
-                cursor: submitting ? 'not-allowed' : 'pointer',
-                opacity: submitting && submitting !== 'approve' ? 0.5 : 1,
-              }}
-            >
-              <CheckmarkCircle20Regular /> Approve
-            </button>
-            <button
-              onClick={() => handleSubmit('request_changes')}
-              disabled={Boolean(submitting)}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '4px',
-                background: submitting ? 'rgba(0,0,0,0.05)' : 'rgba(210,153,34,0.12)',
-                border: '1px solid rgba(210,153,34,0.4)',
-                color: '#d29922',
-                borderRadius: '6px',
-                padding: '5px 12px',
-                fontSize: '12px',
-                fontWeight: 500,
-                cursor: submitting ? 'not-allowed' : 'pointer',
-                opacity: submitting && submitting !== 'request_changes' ? 0.5 : 1,
-              }}
-            >
-              <ArrowSync20Regular /> Request changes
-            </button>
-            <button
-              onClick={() => setShowComment((o) => !o)}
-              style={{
-                background: 'none',
-                border: 'none',
-                color: 'var(--text-muted)',
-                fontSize: '12px',
-                cursor: 'pointer',
-                padding: '5px 4px',
-              }}
-            >
-              {showComment ? 'Hide comment' : '+ Add comment'}
-            </button>
-          </div>
-        </div>
+          {showRevisionPicker ? 'Hide revision picker' : '+ Spawn revision by…'}
+        </button>
+      </div>
+      {showRevisionPicker && (
+        <RevisionRow
+          agents={agents}
+          value={revisionAgentId}
+          onChange={setRevisionAgentId}
+        />
       )}
+      {error && (
+        <div style={{ fontSize: '11px', color: '#f85149' }}>{error}</div>
+      )}
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Shared button / row primitives
+// ---------------------------------------------------------------------------
+
+function ApproveButton({
+  onClick,
+  submitting,
+}: {
+  onClick: () => void
+  submitting: ReviewVerb | null
+}) {
+  return (
+    <button
+      onClick={onClick}
+      disabled={Boolean(submitting)}
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: '4px',
+        background: submitting ? 'rgba(0,0,0,0.05)' : 'rgba(63,185,80,0.12)',
+        border: '1px solid rgba(63,185,80,0.4)',
+        color: '#3fb950',
+        borderRadius: '6px',
+        padding: '5px 12px',
+        fontSize: '12px',
+        fontWeight: 500,
+        cursor: submitting ? 'not-allowed' : 'pointer',
+        opacity: submitting && submitting !== 'approve' ? 0.5 : 1,
+      }}
+    >
+      <CheckmarkCircle20Regular /> Approve
+    </button>
+  )
+}
+
+function RequestChangesButton({
+  onClick,
+  submitting,
+}: {
+  onClick: () => void
+  submitting: ReviewVerb | null
+}) {
+  return (
+    <button
+      onClick={onClick}
+      disabled={Boolean(submitting)}
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: '4px',
+        background: submitting ? 'rgba(0,0,0,0.05)' : 'rgba(210,153,34,0.12)',
+        border: '1px solid rgba(210,153,34,0.4)',
+        color: '#d29922',
+        borderRadius: '6px',
+        padding: '5px 12px',
+        fontSize: '12px',
+        fontWeight: 500,
+        cursor: submitting ? 'not-allowed' : 'pointer',
+        opacity: submitting && submitting !== 'request_changes' ? 0.5 : 1,
+      }}
+    >
+      <ArrowSync20Regular /> Request changes
+    </button>
+  )
+}
+
+function CommentToggle({
+  showComment,
+  onToggle,
+}: {
+  showComment: boolean
+  onToggle: () => void
+}) {
+  return (
+    <button
+      onClick={onToggle}
+      style={{
+        background: 'none',
+        border: 'none',
+        color: 'var(--text-muted)',
+        fontSize: '12px',
+        cursor: 'pointer',
+        padding: '5px 4px',
+      }}
+    >
+      {showComment ? 'Hide comment' : '+ Add comment'}
+    </button>
+  )
+}
+
+function RevisionRow({
+  agents,
+  value,
+  onChange,
+}: {
+  agents: Agent[]
+  value: string
+  onChange: (id: string) => void
+}) {
+  return (
+    <div
+      style={{
+        background: 'var(--bg)',
+        border: '1px solid var(--border)',
+        borderRadius: '6px',
+        padding: '8px 10px',
+        display: 'flex',
+        alignItems: 'center',
+        gap: '8px',
+        flexWrap: 'wrap',
+      }}
+    >
+      <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+        Spawn revision run by:
+      </span>
+      <select
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        style={{
+          background: 'var(--surface)',
+          border: '1px solid var(--border)',
+          borderRadius: '6px',
+          color: 'var(--text)',
+          padding: '4px 8px',
+          fontSize: '12px',
+        }}
+      >
+        <option value="">Let routing decide</option>
+        {agents.map((a) => (
+          <option key={a.id} value={a.id}>
+            @{a.name} ({a.role})
+          </option>
+        ))}
+      </select>
     </div>
   )
 }
