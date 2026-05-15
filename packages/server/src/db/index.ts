@@ -821,6 +821,20 @@ async function bootstrapSchema(): Promise<void> {
 
     CREATE UNIQUE INDEX IF NOT EXISTS column_meta_project_column_uq
       ON column_meta (project_id, column_id);
+
+    -- Image attachments — binary content stored in BYTEA (5 MB cap enforced in service layer)
+    CREATE TABLE IF NOT EXISTS issue_attachments (
+      id          UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+      issue_id    UUID        NOT NULL REFERENCES issues(id) ON DELETE CASCADE,
+      filename    TEXT        NOT NULL,
+      mime_type   TEXT        NOT NULL,
+      size_bytes  INTEGER     NOT NULL,
+      content     BYTEA       NOT NULL,
+      created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+
+    CREATE INDEX IF NOT EXISTS issue_attachments_issue_idx
+      ON issue_attachments (issue_id, created_at);
   `);
 
   await seedSystemReviewPolicyPresets();

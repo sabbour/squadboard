@@ -141,3 +141,20 @@ Multi-agent fanout session completed 2026-05-15T12:35:00Z:
 
 Session log: `.squad/log/2026-05-15T12:35:00Z-squad-fanout.md`
 
+
+## Learnings — 2026-05-15: Issue Attachments (image upload + byte-serve)
+
+**Bytea pattern in Drizzle ORM:**  
+Drizzle pg-core does not ship a built-in `bytea` helper; you add it via `customType` from `drizzle-orm/pg-core`. The minimal definition is:
+```ts
+const bytea = customType<{ data: Buffer; driverData: Buffer }>({
+  dataType() { return 'bytea'; },
+});
+```
+The pg driver returns bytea columns as Node.js `Buffer` objects automatically — no `fromDriver` conversion needed for the common case. The `customType` import must be added to the existing pg-core import list in `schema.ts`.
+
+**multer memoryStorage usage:**  
+`multer({ storage: multer.memoryStorage(), limits: { fileSize: N } })` makes the uploaded file available at `req.file.buffer` (a `Buffer`). The `limits.fileSize` guard rejects oversized streams before they reach the route handler — the service layer applies a second check to guard against middleware bypasses. The multer `MulterError` with `code === 'LIMIT_FILE_SIZE'` (or `message === 'File too large'`) maps to `{ ok: false, error: 'image_too_large' }`.
+
+**Staging discipline:**  
+On a previous commit (column-meta work) I accidentally staged untracked scratch files by using `git add packages/` instead of listing paths explicitly. Correct discipline: `git add -- <path1> <path2> ...` for each intentional file, then `git status` to confirm only those files are staged before committing. Never use `git add .` or broad directory globs in a repo with `.squad/` log files and editor artifacts.

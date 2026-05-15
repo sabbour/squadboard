@@ -1,7 +1,10 @@
 import { Router } from 'express';
 import type { Request, Response } from 'express';
+import multer from 'multer';
 import * as issuesService from '../services/issues.js';
 import type { ColumnStatus } from '../services/issues.js';
+import * as attachmentsService from '../services/issue-attachments.js';
+import { AttachmentError } from '../services/issue-attachments.js';
 import { formulateIssueDraft } from '../services/issue-formulator.js';
 import { and, eq, sql } from 'drizzle-orm';
 import { getDb, schema } from '../db/index.js';
@@ -357,6 +360,119 @@ router.delete('/:id/comments/:commentId', async (req: Request, res: Response) =>
     res.json(deleted);
   } catch (err) {
     handleError(res, err);
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Attachments — multer memory storage (5 MB limit enforced at multer layer
+// AND validated again in the service to prevent bypasses)
+// ---------------------------------------------------------------------------
+
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 5 * 1024 * 1024 },
+});
+
+function mapAttachmentError(code: string): { status: number; error: string } {
+  switch (code) {
+    case 'image_too_large':   return { status: 400, error: 'image_too_large' };
+    case 'unsupported_type':  return { status: 400, error: 'unsupported_type' };
+    case 'missing_file':      return { status: 400, error: 'missing_file' };
+    case 'invalid_project':   return { status: 400, error: 'invalid_project' };
+    case 'invalid_issue':     return { status: 400, error: 'invalid_issue' };
+    default:                  return { status: 500, error: 'internal' };
+  }
+}
+
+// POST /:issueId/attachments — upload an image
+router.post('/:issueId/attachments', upload.single('file'), async (req: Request, res: Response) => {
+  try {
+    const { projectId, issueId } = req.params as Record<string, string>;
+
+    if (!req.file) {
+      res.status(400).json({ ok: false, error: 'missing_file' });
+      return;
+    }
+
+    const record = await attachmentsService.createAttachment(projectId, issueId, {
+      filename: req.file.originalname,
+      mimeType: req.file.mimetype,
+      content:  req.file.buffer,
+    });
+
+    res.status(201).json({ ok: true, data: record });
+  } catch (err) {
+    if (err instanceof AttachmentError) {
+      const { status, error } = mapAttachmentError(err.code);
+      res.status(status).json({ ok: false, error });
+      return;
+    }
+    // multer fileSize limit exceeded
+    if (err instanceof Error && err.message === 'File too large') {
+      res.status(400).json({ ok: false, error: 'image_too_large' });
+      return;
+    }
+    console.error('[attachments] POST error:', err);
+    res.status(500).json({ ok: false, error: 'internal' });
+  }
+});
+
+// GET /:issueId/attachments — list attachments (no bytes)
+router.get('/:issueId/attachments', async (req: Request, res: Response) => {
+  try {
+    const { projectId, issueId } = req.params as Record<string, string>;
+    const records = await attachmentsService.listAttachments(projectId, issueId);
+    res.json({ ok: true, data: records });
+  } catch (err) {
+    if (err instanceof AttachmentError) {
+      const { status, error } = mapAttachmentError(err.code);
+      res.status(status).json({ ok: false, error });
+      return;
+    }
+    console.error('[attachments] GET list error:', err);
+    res.status(500).json({ ok: false, error: 'internal' });
+  }
+});
+
+// GET /:issueId/attachments/:attachmentId — serve raw bytes (long-cache, immutable)
+router.get('/:issueId/attachments/:attachmentId', async (req: Request, res: Response) => {
+  try {
+    const { projectId, issueId, attachmentId } = req.params as Record<string, string>;
+    const result = await attachmentsService.getAttachmentBytes(projectId, issueId, attachmentId);
+
+    if (!result) {
+      res.status(404).json({ ok: false, error: 'not_found' });
+      return;
+    }
+
+    res.set({
+      'Content-Type':   result.mimeType,
+      'Content-Length': String(result.sizeBytes),
+      'Cache-Control':  'public, max-age=31536000, immutable',
+      'ETag':           `"${attachmentId}"`,
+    });
+    res.end(result.content);
+  } catch (err) {
+    console.error('[attachments] GET bytes error:', err);
+    res.status(500).json({ ok: false, error: 'internal' });
+  }
+});
+
+// DELETE /:issueId/attachments/:attachmentId
+router.delete('/:issueId/attachments/:attachmentId', async (req: Request, res: Response) => {
+  try {
+    const { projectId, issueId, attachmentId } = req.params as Record<string, string>;
+    const deleted = await attachmentsService.deleteAttachment(projectId, issueId, attachmentId);
+
+    if (!deleted) {
+      res.status(404).json({ ok: false, error: 'not_found' });
+      return;
+    }
+
+    res.status(204).end();
+  } catch (err) {
+    console.error('[attachments] DELETE error:', err);
+    res.status(500).json({ ok: false, error: 'internal' });
   }
 });
 

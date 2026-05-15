@@ -1,4 +1,10 @@
-import { pgTable, uuid, text, timestamp, integer, boolean, pgEnum, primaryKey, numeric, jsonb, uniqueIndex } from 'drizzle-orm/pg-core';
+import { pgTable, uuid, text, timestamp, integer, boolean, pgEnum, primaryKey, numeric, jsonb, uniqueIndex, customType } from 'drizzle-orm/pg-core';
+
+// Bytea custom type — stores binary data (images, blobs) in PostgreSQL BYTEA columns.
+// The pg driver delivers bytea columns as Node.js Buffer objects, so no conversion needed.
+const bytea = customType<{ data: Buffer; driverData: Buffer }>({
+  dataType() { return 'bytea'; },
+});
 
 export const agentStatusEnum = pgEnum('agent_status', ['active', 'disabled', 'retired']);
 
@@ -859,3 +865,20 @@ export type ConsultMessage = typeof consultMessages.$inferSelect;
 export type NewConsultMessage = typeof consultMessages.$inferInsert;
 export type ConsultProposal = typeof consultProposals.$inferSelect;
 export type NewConsultProposal = typeof consultProposals.$inferInsert;
+
+// ---------------------------------------------------------------------------
+// Issue Attachments — image uploads stored as bytea in PG
+// ---------------------------------------------------------------------------
+
+export const issueAttachments = pgTable('issue_attachments', {
+  id:        uuid('id').primaryKey().defaultRandom(),
+  issueId:   uuid('issue_id').notNull().references(() => issues.id, { onDelete: 'cascade' }),
+  filename:  text('filename').notNull(),
+  mimeType:  text('mime_type').notNull(),
+  sizeBytes: integer('size_bytes').notNull(),
+  content:   bytea('content').notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+});
+
+export type IssueAttachment    = typeof issueAttachments.$inferSelect;
+export type NewIssueAttachment = typeof issueAttachments.$inferInsert;
