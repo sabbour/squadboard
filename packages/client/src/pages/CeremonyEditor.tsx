@@ -47,6 +47,10 @@ import {
   MessageBar,
   MessageBarBody,
   Switch,
+  TabList,
+  Tab,
+  type SelectTabData,
+  type SelectTabEvent,
 } from '@fluentui/react-components'
 import {
   ArrowUp16Regular,
@@ -57,34 +61,26 @@ import {
   Checkmark16Regular,
   Warning16Regular,
 } from '@fluentui/react-icons'
+import VisualCanvas from '../components/ceremony/VisualCanvas.tsx'
+import ProseTab from '../components/ceremony/ProseTab.tsx'
+import {
+  blankStep,
+  ceremonyYamlToGraph,
+  graphToCeremonyYaml,
+  rebuildGraph,
+  topLevelSteps,
+  type CeremonyHeader,
+  type CeremonyStep,
+  type StepKind,
+} from '../services/ceremony-graph.ts'
 
 // ---------------------------------------------------------------------------
-// Local step type — superset of WorkflowStepFlow.WorkflowStep so we can edit
-// the richer schema (type, agent, prompt, kind variants).
+// Phase 16: the single source of truth for editor state is now the
+// `CeremonyStep` discriminated union from services/ceremony-graph.ts. The
+// Code, Visual, and Prose tabs all read/write the same in-memory list.
 // ---------------------------------------------------------------------------
 
-type StepType = 'agent_run' | 'route' | 'approve' | 'fan_out' | 'handoff'
-
-interface UIStep {
-  type: StepType
-  label?: string
-  agent?: string
-  prompt?: string
-  // Approve advanced
-  approvers?: string[]
-  request_changes_policy?: 'first' | 'majority' | 'all'
-  timeout?: string
-  // Handoff
-  to?: string
-  message?: string
-  // Fan-out (Phase 15)
-  // 'serial' (default) lets the dispatcher claim child workflow_runs one tick at
-  // a time. 'parallel' tells the engine to immediately spawn every child's first
-  // LLM session via the SDK's spawnParallel(); see Phase 15 in docs.
-  mode?: 'serial' | 'parallel'
-}
-
-const STEP_TYPE_OPTIONS: { value: StepType; label: string }[] = [
+const STEP_TYPE_OPTIONS: { value: StepKind; label: string }[] = [
   { value: 'agent_run', label: 'Agent run' },
   { value: 'route', label: 'Route' },
   { value: 'approve', label: 'Peer review' },
@@ -116,167 +112,26 @@ const EVENT_TYPE_OPTIONS = [
 const TIMEZONE_OPTIONS = ['UTC', 'America/Los_Angeles', 'America/New_York', 'Europe/London', 'Europe/Berlin', 'Asia/Tokyo']
 
 // ---------------------------------------------------------------------------
-// Tiny YAML emitter (no runtime YAML lib on the client)
+// YAML <-> step adapter (single source of truth in services/ceremony-graph.ts).
 // ---------------------------------------------------------------------------
 
-function emitYaml(name: string, description: string | undefined, steps: UIStep[]): string {
-  const lines: string[] = []
-  lines.push(`name: ${quoteIfNeeded(name)}`)
-  if (description && description.trim()) {
-    lines.push(`description: ${quoteIfNeeded(description)}`)
-  }
-  lines.push('steps:')
-  for (const s of steps) {
-    lines.push(`  - type: ${s.type}`)
-    if (s.label) lines.push(`    label: ${quoteIfNeeded(s.label)}`)
-    if (s.agent) lines.push(`    agent: ${quoteIfNeeded(s.agent)}`)
-    if (s.prompt) {
-      const promptLines = s.prompt.split('\n')
-      if (promptLines.length === 1) {
-        lines.push(`    prompt: ${quoteIfNeeded(s.prompt)}`)
-      } else {
-        lines.push('    prompt: |')
-        for (const pl of promptLines) lines.push(`      ${pl}`)
-      }
-    }
-    if (s.type === 'approve') {
-      if (s.approvers && s.approvers.length > 0) {
-        lines.push('    approvers:')
-        for (const a of s.approvers) lines.push(`      - ${quoteIfNeeded(a)}`)
-      }
-      if (s.request_changes_policy) lines.push(`    request_changes_policy: ${s.request_changes_policy}`)
-      if (s.timeout) lines.push(`    timeout: ${quoteIfNeeded(s.timeout)}`)
-    }
-    if (s.type === 'handoff') {
-      if (s.to) lines.push(`    to: ${quoteIfNeeded(s.to)}`)
-      if (s.message) lines.push(`    message: ${quoteIfNeeded(s.message)}`)
-    }
-    if (s.type === 'fan_out') {
-      // Phase 15: emit only the spawn mode here. Other fan_out fields
-      // (split_by, agents, merge_strategy) aren't editable in the UI yet
-      // and round-trip through ceremony YAML untouched on the server side.
-      if (s.mode && s.mode !== 'serial') lines.push(`    mode: ${s.mode}`)
-    }
-  }
-  return lines.join('\n') + '\n'
+function emitYaml(header: CeremonyHeader, steps: CeremonyStep[]): string {
+  return graphToCeremonyYaml(rebuildGraph(header, steps))
 }
 
-function quoteIfNeeded(v: string): string {
-  if (/[:#\[\]&*!|>'"%@`]/.test(v) || v.includes('\n') || /^\s|\s$/.test(v)) {
-    return JSON.stringify(v)
-  }
-  return v
+function parseSteps(yaml: string): { header: CeremonyHeader; steps: CeremonyStep[] } {
+  const graph = ceremonyYamlToGraph(yaml)
+  return { header: graph.header, steps: topLevelSteps(graph) }
 }
 
-// Naive YAML→UIStep parser sufficient for files we emit ourselves.
-function parseSteps(yaml: string): UIStep[] {
-  const out: UIStep[] = []
-  const lines = yaml.split('\n')
-  let inSteps = false
-  let cur: Partial<UIStep> | null = null
-  let inPromptBlock = false
-  let promptBuf: string[] = []
-  let inApproversBlock = false
-
-  function commit() {
-    if (cur && cur.type) {
-      if (inPromptBlock) {
-        cur.prompt = promptBuf.join('\n').replace(/\n+$/, '')
-      }
-      out.push(cur as UIStep)
-    }
-    cur = null
-    inPromptBlock = false
-    inApproversBlock = false
-    promptBuf = []
-  }
-
-  for (const raw of lines) {
-    const stripped = raw.trimStart()
-    if (/^steps\s*:/.test(stripped)) {
-      inSteps = true
-      continue
-    }
-    if (!inSteps) continue
-    if (/^- type\s*:\s*/.test(stripped)) {
-      commit()
-      const t = stripped.replace(/^- type\s*:\s*/, '').trim() as StepType
-      cur = { type: t }
-      continue
-    }
-    if (!cur) continue
-    if (inPromptBlock) {
-      // Prompt continuation: indented at >4 spaces
-      if (raw.startsWith('      ')) {
-        promptBuf.push(raw.slice(6))
-        continue
-      }
-      cur.prompt = promptBuf.join('\n').replace(/\n+$/, '')
-      inPromptBlock = false
-      promptBuf = []
-    }
-    if (inApproversBlock) {
-      const m = stripped.match(/^-\s+(.+)/)
-      if (m) {
-        cur.approvers = cur.approvers ?? []
-        cur.approvers.push(unquote(m[1].trim()))
-        continue
-      }
-      inApproversBlock = false
-    }
-    let m = stripped.match(/^label\s*:\s*(.+)/)
-    if (m) { cur.label = unquote(m[1].trim()); continue }
-    m = stripped.match(/^agent\s*:\s*(.+)/)
-    if (m) { cur.agent = unquote(m[1].trim()); continue }
-    m = stripped.match(/^prompt\s*:\s*(\|)?\s*(.*)?/)
-    if (m) {
-      if (m[1] === '|') {
-        inPromptBlock = true
-        promptBuf = []
-      } else if (m[2]) {
-        cur.prompt = unquote(m[2].trim())
-      }
-      continue
-    }
-    if (/^approvers\s*:\s*$/.test(stripped)) {
-      inApproversBlock = true
-      cur.approvers = []
-      continue
-    }
-    m = stripped.match(/^request_changes_policy\s*:\s*(.+)/)
-    if (m) { cur.request_changes_policy = unquote(m[1].trim()) as 'first' | 'majority' | 'all'; continue }
-    m = stripped.match(/^timeout\s*:\s*(.+)/)
-    if (m) { cur.timeout = unquote(m[1].trim()); continue }
-    m = stripped.match(/^to\s*:\s*(.+)/)
-    if (m) { cur.to = unquote(m[1].trim()); continue }
-    m = stripped.match(/^message\s*:\s*(.+)/)
-    if (m) { cur.message = unquote(m[1].trim()); continue }
-    m = stripped.match(/^mode\s*:\s*(.+)/)
-    if (m) {
-      const v = unquote(m[1].trim())
-      if (v === 'serial' || v === 'parallel') cur.mode = v
-      continue
-    }
-    // Top-level field outside steps
-    if (!raw.startsWith(' ') && stripped.length > 0) {
-      commit()
-      inSteps = false
-    }
-  }
-  commit()
-  return out
-}
-
-function unquote(s: string): string {
-  if ((s.startsWith('"') && s.endsWith('"')) || (s.startsWith("'") && s.endsWith("'"))) {
-    try { return JSON.parse(s.replace(/^'/, '"').replace(/'$/, '"')) as string } catch { return s.slice(1, -1) }
-  }
-  return s
-}
-
-const DEFAULT_STEPS: UIStep[] = [
-  { type: 'agent_run', label: 'Run primary agent', agent: '', prompt: '' },
-  { type: 'approve', label: 'Human review', request_changes_policy: 'first', timeout: '24h' },
+const DEFAULT_STEPS: CeremonyStep[] = [
+  { ...blankStep('agent_run'), label: 'Run primary agent' },
+  {
+    ...(blankStep('approve') as Extract<CeremonyStep, { kind: 'approve' }>),
+    label: 'Human review',
+    request_changes_policy: 'first',
+    timeout: '24h',
+  },
 ]
 
 // ---------------------------------------------------------------------------
@@ -301,11 +156,13 @@ export default function CeremonyEditor() {
   // Editor state (initialised from the loaded ceremony or defaults).
   const [name, setName] = useState('New Ceremony')
   const [description, setDescription] = useState<string>('')
+  const [headerExtras, setHeaderExtras] = useState<Record<string, unknown>>({})
   const [kind, setKind] = useState<CeremonyKind>('ceremony')
   const [triggerKind, setTriggerKind] = useState<TriggerKind>('manual')
   const [triggerConfig, setTriggerConfig] = useState<Record<string, unknown>>({})
-  const [steps, setSteps] = useState<UIStep[]>(DEFAULT_STEPS)
+  const [steps, setSteps] = useState<CeremonyStep[]>(DEFAULT_STEPS)
   const [showAdvancedFor, setShowAdvancedFor] = useState<Set<number>>(new Set())
+  const [activeTab, setActiveTab] = useState<'code' | 'visual' | 'prose'>('code')
 
   const [saveErr, setSaveErr] = useState<string | null>(null)
   const [saveOk, setSaveOk] = useState(false)
@@ -325,11 +182,29 @@ export default function CeremonyEditor() {
     setTriggerKind(detail.ceremony.triggerKind)
     setTriggerConfig(detail.ceremony.triggerConfig ?? {})
     if (detail.activeVersion?.yamlContent) {
-      setSteps(parseSteps(detail.activeVersion.yamlContent))
+      try {
+        const parsed = parseSteps(detail.activeVersion.yamlContent)
+        setSteps(parsed.steps)
+        setHeaderExtras(parsed.header.extras)
+        // Prefer the YAML's name/description if the metadata is missing them.
+        if (!detail.ceremony.description && parsed.header.description) {
+          setDescription(parsed.header.description)
+        }
+      } catch {
+        // If YAML is malformed, leave the defaults so the user can still edit.
+      }
     }
   }, [isNew, detail])
 
-  const yaml = useMemo(() => emitYaml(name, description, steps), [name, description, steps])
+  const header = useMemo<CeremonyHeader>(
+    () => ({
+      name,
+      description: description.trim() ? description : undefined,
+      extras: headerExtras,
+    }),
+    [name, description, headerExtras],
+  )
+  const yaml = useMemo(() => emitYaml(header, steps), [header, steps])
   const readOnly = kind === 'narrative'
 
   // ---------- Step manipulation ----------
@@ -344,10 +219,22 @@ export default function CeremonyEditor() {
     setSteps((prev) => prev.filter((_, idx) => idx !== i))
   }
   function addStep() {
-    setSteps((prev) => [...prev, { type: 'agent_run', label: '', agent: '', prompt: '' }])
+    setSteps((prev) => [...prev, blankStep('agent_run')])
   }
-  function updateStep(i: number, patch: Partial<UIStep>) {
-    setSteps((prev) => prev.map((s, idx) => (idx === i ? { ...s, ...patch } : s)))
+  function updateStep(i: number, patch: Partial<CeremonyStep>) {
+    setSteps((prev) =>
+      prev.map((s, idx) => (idx === i ? ({ ...s, ...patch } as CeremonyStep) : s)),
+    )
+  }
+  function changeStepKind(i: number, nextKind: StepKind) {
+    setSteps((prev) =>
+      prev.map((s, idx) => {
+        if (idx !== i) return s
+        // Build a fresh step of the new kind, preserving label + extras.
+        const fresh = blankStep(nextKind)
+        return { ...fresh, label: s.label, extras: s.extras } as CeremonyStep
+      }),
+    )
   }
   function toggleAdvanced(i: number) {
     setShowAdvancedFor((prev) => {
@@ -632,228 +519,282 @@ export default function CeremonyEditor() {
           )}
         </div>
 
-        {/* Right: Steps */}
-        <div style={{ flex: 1, padding: '16px 18px', overflow: 'auto' }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
-            <Subtitle1>Steps ({steps.length})</Subtitle1>
-            <Button icon={<Add16Regular />} onClick={addStep} disabled={readOnly}>
-              Add step
-            </Button>
+        {/* Right: Code / Visual / Prose tabs */}
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
+          <div
+            style={{
+              padding: '6px 18px',
+              borderBottom: '1px solid var(--border)',
+              flexShrink: 0,
+            }}
+          >
+            <TabList
+              selectedValue={activeTab}
+              onTabSelect={(_e: SelectTabEvent, d: SelectTabData) =>
+                setActiveTab(d.value as 'code' | 'visual' | 'prose')
+              }
+            >
+              <Tab value="code">Code</Tab>
+              <Tab value="visual">Visual</Tab>
+              <Tab value="prose">Prose</Tab>
+            </TabList>
           </div>
 
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-            {steps.length === 0 && (
-              <Caption1 style={{ color: 'var(--text-muted)' }}>
-                No steps yet — click “Add step” to get started.
-              </Caption1>
-            )}
+          {activeTab === 'code' && (
+            <div style={{ flex: 1, padding: '16px 18px', overflow: 'auto' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+                <Subtitle1>Steps ({steps.length})</Subtitle1>
+                <Button icon={<Add16Regular />} onClick={addStep} disabled={readOnly}>
+                  Add step
+                </Button>
+              </div>
 
-            {steps.map((step, i) => (
-              <div
-                key={i}
-                style={{
-                  border: '1px solid var(--border)',
-                  borderRadius: 6,
-                  padding: 12,
-                  background: 'var(--surface)',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  gap: 8,
-                }}
-              >
-                {/* Row 1: reorder + type + delete */}
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <span style={{ minWidth: 22, color: 'var(--text-muted)', fontSize: 12 }}>{i + 1}.</span>
-                  <Button
-                    appearance="subtle"
-                    icon={<ArrowUp16Regular />}
-                    onClick={() => moveStep(i, -1)}
-                    disabled={readOnly || i === 0}
-                    aria-label="Move up"
-                  />
-                  <Button
-                    appearance="subtle"
-                    icon={<ArrowDown16Regular />}
-                    onClick={() => moveStep(i, 1)}
-                    disabled={readOnly || i === steps.length - 1}
-                    aria-label="Move down"
-                  />
-                  <Dropdown
-                    value={STEP_TYPE_OPTIONS.find((o) => o.value === step.type)?.label}
-                    selectedOptions={[step.type]}
-                    onOptionSelect={(_, d) => updateStep(i, { type: d.optionValue as StepType })}
-                    disabled={readOnly}
-                    style={{ minWidth: 140 }}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                {steps.length === 0 && (
+                  <Caption1 style={{ color: 'var(--text-muted)' }}>
+                    No steps yet — click “Add step” to get started.
+                  </Caption1>
+                )}
+
+                {steps.map((step, i) => (
+                  <div
+                    key={i}
+                    style={{
+                      border: '1px solid var(--border)',
+                      borderRadius: 6,
+                      padding: 12,
+                      background: 'var(--surface)',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: 8,
+                    }}
                   >
-                    {STEP_TYPE_OPTIONS.map((o) => (
-                      <Option key={o.value} value={o.value}>{o.label}</Option>
-                    ))}
-                  </Dropdown>
-                  <Input
-                    value={step.label ?? ''}
-                    onChange={(_, d) => updateStep(i, { label: d.value })}
-                    placeholder="label"
-                    disabled={readOnly}
-                    style={{ flex: 1 }}
-                  />
-                  <Button
-                    appearance="subtle"
-                    icon={<Delete16Regular />}
-                    onClick={() => deleteStep(i)}
-                    disabled={readOnly}
-                    aria-label="Delete"
-                  />
-                </div>
-
-                {/* Row 2: agent + prompt (for agent_run/route) */}
-                {(step.type === 'agent_run' || step.type === 'route') && (
-                  <>
-                    <div style={{ display: 'flex', gap: 8 }}>
+                    {/* Row 1: reorder + type + delete */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <span style={{ minWidth: 22, color: 'var(--text-muted)', fontSize: 12 }}>{i + 1}.</span>
+                      <Button
+                        appearance="subtle"
+                        icon={<ArrowUp16Regular />}
+                        onClick={() => moveStep(i, -1)}
+                        disabled={readOnly || i === 0}
+                        aria-label="Move up"
+                      />
+                      <Button
+                        appearance="subtle"
+                        icon={<ArrowDown16Regular />}
+                        onClick={() => moveStep(i, 1)}
+                        disabled={readOnly || i === steps.length - 1}
+                        aria-label="Move down"
+                      />
                       <Dropdown
-                        placeholder="Pick an agent…"
-                        value={step.agent}
-                        selectedOptions={step.agent ? [step.agent] : []}
-                        onOptionSelect={(_, d) => updateStep(i, { agent: d.optionValue })}
+                        value={STEP_TYPE_OPTIONS.find((o) => o.value === step.kind)?.label}
+                        selectedOptions={[step.kind]}
+                        onOptionSelect={(_, d) => changeStepKind(i, d.optionValue as StepKind)}
                         disabled={readOnly}
-                        style={{ minWidth: 200 }}
+                        style={{ minWidth: 140 }}
                       >
-                        {(agents ?? []).map((a) => (
-                          <Option key={a.id} value={a.name}>{a.name}</Option>
+                        {STEP_TYPE_OPTIONS.map((o) => (
+                          <Option key={o.value} value={o.value}>{o.label}</Option>
                         ))}
                       </Dropdown>
-                      <Caption1 style={{ color: 'var(--text-muted)', alignSelf: 'center' }}>
-                        Templates: <code>{'${input.foo}'}</code>, <code>{'${event.payload}'}</code>
-                      </Caption1>
-                    </div>
-                    <Textarea
-                      value={step.prompt ?? ''}
-                      onChange={(_, d) => updateStep(i, { prompt: d.value })}
-                      placeholder="Prompt template (multi-line OK)"
-                      disabled={readOnly}
-                      rows={3}
-                    />
-                  </>
-                )}
-
-                {step.type === 'handoff' && (
-                  <div style={{ display: 'flex', gap: 8, flexDirection: 'column' }}>
-                    <Input
-                      value={step.to ?? ''}
-                      onChange={(_, d) => updateStep(i, { to: d.value })}
-                      placeholder="to: agent name"
-                      disabled={readOnly}
-                    />
-                    <Textarea
-                      value={step.message ?? ''}
-                      onChange={(_, d) => updateStep(i, { message: d.value })}
-                      placeholder="message (optional)"
-                      disabled={readOnly}
-                      rows={2}
-                    />
-                  </div>
-                )}
-
-                {step.type === 'fan_out' && (
-                  <div style={{ display: 'flex', gap: 8, flexDirection: 'column' }}>
-                    <label style={{ fontSize: 12, display: 'flex', flexDirection: 'column', gap: 4 }}>
-                      Spawn mode
-                      <Dropdown
-                        value={step.mode === 'parallel' ? 'parallel — spawn all children at once (SDK)' : 'serial — let dispatcher claim children one tick at a time'}
-                        selectedOptions={[step.mode ?? 'serial']}
-                        onOptionSelect={(_, d) => updateStep(i, { mode: d.optionValue as 'serial' | 'parallel' })}
+                      <Input
+                        value={step.label ?? ''}
+                        onChange={(_, d) => updateStep(i, { label: d.value })}
+                        placeholder="label"
                         disabled={readOnly}
-                      >
-                        <Option value="serial">serial — let dispatcher claim children one tick at a time</Option>
-                        <Option value="parallel">parallel — spawn all children at once (SDK)</Option>
-                      </Dropdown>
-                    </label>
-                    <Caption1 style={{ color: 'var(--text-muted)' }}>
-                      Phase 15: <code>parallel</code> calls the SDK's <code>spawnParallel()</code> immediately
-                      after materialise so every child's first LLM session starts within ~1s instead of waiting
-                      ~5s per child for the dispatcher to claim it. Failures are isolated per child;
-                      on spawn error the dispatcher recovery path takes over.
-                    </Caption1>
-                    <Caption1 style={{ color: 'var(--text-muted)' }}>
-                      Other fan_out fields (<code>split_by</code>, <code>agents</code>, <code>merge_strategy</code>) are
-                      currently authored in the YAML preview below and round-trip untouched.
-                    </Caption1>
-                  </div>
-                )}
+                        style={{ flex: 1 }}
+                      />
+                      <Button
+                        appearance="subtle"
+                        icon={<Delete16Regular />}
+                        onClick={() => deleteStep(i)}
+                        disabled={readOnly}
+                        aria-label="Delete"
+                      />
+                    </div>
 
-                {/* Advanced toggle */}
-                {step.type === 'approve' && (
-                  <>
-                    <Button appearance="transparent" size="small" onClick={() => toggleAdvanced(i)}>
-                      {showAdvancedFor.has(i) ? '− Hide advanced' : '+ Show advanced'}
-                    </Button>
-                    {showAdvancedFor.has(i) && (
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                        <label style={{ fontSize: 12 }}>
-                          request_changes_policy
+                    {/* Row 2: agent + prompt (for agent_run/route) */}
+                    {(step.kind === 'agent_run' || step.kind === 'route') && (
+                      <>
+                        <div style={{ display: 'flex', gap: 8 }}>
                           <Dropdown
-                            value={step.request_changes_policy ?? 'first'}
-                            selectedOptions={[step.request_changes_policy ?? 'first']}
-                            onOptionSelect={(_, d) => updateStep(i, { request_changes_policy: d.optionValue as 'first' | 'majority' | 'all' })}
+                            placeholder="Pick an agent…"
+                            value={step.agent}
+                            selectedOptions={step.agent ? [step.agent] : []}
+                            onOptionSelect={(_, d) => updateStep(i, { agent: d.optionValue })}
                             disabled={readOnly}
+                            style={{ minWidth: 200 }}
                           >
-                            <Option value="first">first</Option>
-                            <Option value="majority">majority</Option>
-                            <Option value="all">all</Option>
+                            {(agents ?? []).map((a) => (
+                              <Option key={a.id} value={a.name}>{a.name}</Option>
+                            ))}
                           </Dropdown>
-                        </label>
-                        <label style={{ fontSize: 12 }}>
-                          timeout
-                          <Input
-                            value={step.timeout ?? ''}
-                            onChange={(_, d) => updateStep(i, { timeout: d.value })}
-                            placeholder="e.g. 24h"
-                            disabled={readOnly}
-                          />
-                        </label>
-                        <label style={{ fontSize: 12 }}>
-                          approvers (comma-separated)
-                          <Input
-                            value={(step.approvers ?? []).join(', ')}
-                            onChange={(_, d) =>
-                              updateStep(i, {
-                                approvers: d.value
-                                  .split(',')
-                                  .map((s) => s.trim())
-                                  .filter(Boolean),
-                              })
-                            }
-                            placeholder="lead, qa, security"
-                            disabled={readOnly}
-                          />
-                        </label>
+                          <Caption1 style={{ color: 'var(--text-muted)', alignSelf: 'center' }}>
+                            Templates: <code>{'${input.foo}'}</code>, <code>{'${event.payload}'}</code>
+                          </Caption1>
+                        </div>
+                        <Textarea
+                          value={step.prompt ?? ''}
+                          onChange={(_, d) => updateStep(i, { prompt: d.value })}
+                          placeholder="Prompt template (multi-line OK)"
+                          disabled={readOnly}
+                          rows={3}
+                        />
+                      </>
+                    )}
+
+                    {step.kind === 'handoff' && (
+                      <div style={{ display: 'flex', gap: 8, flexDirection: 'column' }}>
+                        <Input
+                          value={step.to ?? ''}
+                          onChange={(_, d) => updateStep(i, { to: d.value })}
+                          placeholder="to: agent name"
+                          disabled={readOnly}
+                        />
+                        <Textarea
+                          value={step.message ?? ''}
+                          onChange={(_, d) => updateStep(i, { message: d.value })}
+                          placeholder="message (optional)"
+                          disabled={readOnly}
+                          rows={2}
+                        />
                       </div>
                     )}
-                  </>
-                )}
-              </div>
-            ))}
-          </div>
 
-          {/* YAML preview */}
-          <details style={{ marginTop: 18 }}>
-            <summary style={{ cursor: 'pointer', color: 'var(--text-muted)', fontSize: 12 }}>
-              Preview YAML
-            </summary>
-            <pre
-              style={{
-                background: 'var(--surface)',
-                border: '1px solid var(--border)',
-                borderRadius: 6,
-                padding: 12,
-                fontSize: 12,
-                whiteSpace: 'pre-wrap',
-                wordBreak: 'break-all',
-                marginTop: 8,
+                    {step.kind === 'fan_out' && (
+                      <div style={{ display: 'flex', gap: 8, flexDirection: 'column' }}>
+                        <label style={{ fontSize: 12, display: 'flex', flexDirection: 'column', gap: 4 }}>
+                          Spawn mode
+                          <Dropdown
+                            value={step.mode === 'parallel' ? 'parallel — spawn all children at once (SDK)' : 'serial — let dispatcher claim children one tick at a time'}
+                            selectedOptions={[step.mode ?? 'serial']}
+                            onOptionSelect={(_, d) => updateStep(i, { mode: d.optionValue as 'serial' | 'parallel' })}
+                            disabled={readOnly}
+                          >
+                            <Option value="serial">serial — let dispatcher claim children one tick at a time</Option>
+                            <Option value="parallel">parallel — spawn all children at once (SDK)</Option>
+                          </Dropdown>
+                        </label>
+                        <Caption1 style={{ color: 'var(--text-muted)' }}>
+                          Phase 15: <code>parallel</code> calls the SDK's <code>spawnParallel()</code> immediately
+                          after materialise so every child's first LLM session starts within ~1s instead of waiting
+                          ~5s per child for the dispatcher to claim it. Failures are isolated per child;
+                          on spawn error the dispatcher recovery path takes over.
+                        </Caption1>
+                        <Caption1 style={{ color: 'var(--text-muted)' }}>
+                          Other fan_out fields (<code>split_by</code>, <code>agents</code>, <code>merge_strategy</code>) are
+                          currently authored in the YAML preview below and round-trip untouched.
+                        </Caption1>
+                      </div>
+                    )}
+
+                    {/* Advanced toggle */}
+                    {step.kind === 'approve' && (
+                      <>
+                        <Button appearance="transparent" size="small" onClick={() => toggleAdvanced(i)}>
+                          {showAdvancedFor.has(i) ? '− Hide advanced' : '+ Show advanced'}
+                        </Button>
+                        {showAdvancedFor.has(i) && (
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                            <label style={{ fontSize: 12 }}>
+                              request_changes_policy
+                              <Dropdown
+                                value={step.request_changes_policy ?? 'first'}
+                                selectedOptions={[step.request_changes_policy ?? 'first']}
+                                onOptionSelect={(_, d) => updateStep(i, { request_changes_policy: d.optionValue as 'first' | 'majority' | 'all' })}
+                                disabled={readOnly}
+                              >
+                                <Option value="first">first</Option>
+                                <Option value="majority">majority</Option>
+                                <Option value="all">all</Option>
+                              </Dropdown>
+                            </label>
+                            <label style={{ fontSize: 12 }}>
+                              timeout
+                              <Input
+                                value={step.timeout ?? ''}
+                                onChange={(_, d) => updateStep(i, { timeout: d.value })}
+                                placeholder="e.g. 24h"
+                                disabled={readOnly}
+                              />
+                            </label>
+                            <label style={{ fontSize: 12 }}>
+                              approvers (comma-separated)
+                              <Input
+                                value={(step.approvers ?? []).join(', ')}
+                                onChange={(_, d) =>
+                                  updateStep(i, {
+                                    approvers: d.value
+                                      .split(',')
+                                      .map((s) => s.trim())
+                                      .filter(Boolean),
+                                  })
+                                }
+                                placeholder="lead, qa, security"
+                                disabled={readOnly}
+                              />
+                            </label>
+                          </div>
+                        )}
+                      </>
+                    )}
+                  </div>
+                ))}
+              </div>
+
+              {/* YAML preview */}
+              <details style={{ marginTop: 18 }}>
+                <summary style={{ cursor: 'pointer', color: 'var(--text-muted)', fontSize: 12 }}>
+                  Preview YAML
+                </summary>
+                <pre
+                  style={{
+                    background: 'var(--surface)',
+                    border: '1px solid var(--border)',
+                    borderRadius: 6,
+                    padding: 12,
+                    fontSize: 12,
+                    whiteSpace: 'pre-wrap',
+                    wordBreak: 'break-all',
+                    marginTop: 8,
+                  }}
+                >
+                  {yaml}
+                </pre>
+              </details>
+            </div>
+          )}
+
+          {activeTab === 'visual' && (
+            <div style={{ flex: 1, minHeight: 0 }}>
+              <VisualCanvas
+                projectId={projectId}
+                header={header}
+                steps={steps}
+                onChange={(next) => setSteps(next)}
+                disabled={readOnly}
+              />
+            </div>
+          )}
+
+          {activeTab === 'prose' && (
+            <ProseTab
+              projectId={projectId}
+              ceremonyId={ceremonyId}
+              currentYaml={yaml}
+              currentName={name}
+              onAccept={({ header: h, steps: s, triggerKind: tk, triggerConfig: tc }) => {
+                if (h.name && h.name.trim()) setName(h.name)
+                if (h.description) setDescription(h.description)
+                setHeaderExtras(h.extras)
+                setSteps(s)
+                setTriggerKind(tk)
+                setTriggerConfig(tc)
+                setActiveTab('code')
               }}
-            >
-              {yaml}
-            </pre>
-          </details>
+              disabled={readOnly}
+            />
+          )}
         </div>
       </div>
     </div>
