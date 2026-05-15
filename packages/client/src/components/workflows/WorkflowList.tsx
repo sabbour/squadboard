@@ -1,7 +1,9 @@
 import { useNavigate } from 'react-router'
 import { useWorkflows } from '../../api/workflows.ts'
+import { useDraftCeremonies } from '../../api/ceremonies.ts'
 import {
   Button,
+  Badge,
   Table,
   TableHeader,
   TableHeaderCell,
@@ -18,6 +20,8 @@ interface WorkflowListProps {
 export default function WorkflowList({ projectId }: WorkflowListProps) {
   const navigate = useNavigate()
   const { data: workflows, isLoading, isError } = useWorkflows(projectId)
+  const { data: drafts } = useDraftCeremonies(projectId)
+  const draftCount = drafts?.length ?? 0
 
   if (isLoading) {
     return <div style={{ padding: '24px', color: 'var(--text-muted)', fontSize: '13px' }}>Loading ceremonies…</div>
@@ -37,18 +41,33 @@ export default function WorkflowList({ projectId }: WorkflowListProps) {
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
+          gap: 12,
         }}
       >
         <span style={{ fontSize: '13px', color: 'var(--text-muted)' }}>
           {workflows?.length ?? 0} ceremon{workflows?.length === 1 ? 'y' : 'ies'}
         </span>
-        <Button
-          appearance="primary"
-          size="small"
-          onClick={() => navigate(`/projects/${projectId}/ceremonies/new`)}
-        >
-          + New Ceremony
-        </Button>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          {draftCount > 0 && (
+            <Button
+              appearance="outline"
+              size="small"
+              onClick={() => navigate(`/projects/${projectId}/ceremonies/review`)}
+            >
+              Review drafts
+              <Badge appearance="filled" color="brand" size="small" style={{ marginLeft: 6 }}>
+                {draftCount}
+              </Badge>
+            </Button>
+          )}
+          <Button
+            appearance="primary"
+            size="small"
+            onClick={() => navigate(`/projects/${projectId}/ceremonies/new`)}
+          >
+            + New Ceremony
+          </Button>
+        </div>
       </div>
 
       {/* Empty state */}

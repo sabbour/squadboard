@@ -16,6 +16,8 @@ import { apiFetch } from './client.ts'
 export type TriggerKind = 'on_issue_entry' | 'on_schedule' | 'on_event' | 'manual'
 export type CeremonyKind = 'workflow' | 'ceremony' | 'review_policy' | 'narrative'
 
+export type CeremonyStatus = 'active' | 'draft' | 'paused' | 'archived'
+
 export interface Ceremony {
   id: string
   projectId: string
@@ -25,6 +27,11 @@ export interface Ceremony {
   triggerKind: TriggerKind
   triggerConfig: Record<string, unknown>
   kind: CeremonyKind
+  // Phase 11
+  status?: CeremonyStatus
+  parentNarrativeId?: string | null
+  lastTranslationError?: string | null
+  lastTranslationAttemptAt?: string | null
   createdAt: string
   updatedAt: string
 }
@@ -196,11 +203,105 @@ export function usePreviewCron(projectId: string) {
 }
 
 export function useConvertCeremony(projectId: string) {
-  return useMutation<unknown, Error, string>({
+  const queryClient = useQueryClient()
+  return useMutation<ConvertCeremonyResult, Error, string>({
     mutationFn: (ceremonyId) =>
-      apiFetch<unknown>(`/api/projects/${projectId}/ceremonies/${ceremonyId}/convert`, {
+      apiFetch<ConvertCeremonyResult>(
+        `/api/projects/${projectId}/ceremonies/${ceremonyId}/convert`,
+        { method: 'POST' },
+      ),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['ceremonies', projectId] })
+    },
+  })
+}
+
+// Phase 11 — translation result + activate / retry / import hooks.
+export interface ConvertCeremonyResult {
+  narrativeId: string
+  draftCeremonyId: string
+  yamlContent: string
+  triggerKind: TriggerKind
+  triggerConfig: Record<string, unknown>
+  rationale: string
+  warnings: string[]
+}
+
+export function useActivateCeremony(projectId: string) {
+  const queryClient = useQueryClient()
+  return useMutation<{ ceremony: Ceremony }, Error, string>({
+    mutationFn: (ceremonyId) =>
+      apiFetch<{ ceremony: Ceremony }>(
+        `/api/projects/${projectId}/ceremonies/${ceremonyId}/activate`,
+        { method: 'POST' },
+      ),
+    onSuccess: (resp) => {
+      void queryClient.invalidateQueries({ queryKey: ['ceremonies', projectId] })
+      void queryClient.invalidateQueries({ queryKey: ['ceremonies', projectId, resp.ceremony.id] })
+    },
+  })
+}
+
+export function useTranslateCeremony(projectId: string) {
+  const queryClient = useQueryClient()
+  return useMutation<ConvertCeremonyResult, Error, string>({
+    mutationFn: (ceremonyId) =>
+      apiFetch<ConvertCeremonyResult>(
+        `/api/projects/${projectId}/ceremonies/${ceremonyId}/translate`,
+        { method: 'POST' },
+      ),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['ceremonies', projectId] })
+    },
+  })
+}
+
+export interface ImportNarrativeInput {
+  projectId: string
+  name?: string
+  markdown: string
+  description?: string | null
+}
+
+export interface ImportNarrativeResult {
+  narrativeId: string
+  draftCeremonyId?: string
+  yamlContent?: string
+  triggerKind?: TriggerKind
+  triggerConfig?: Record<string, unknown>
+  rationale?: string
+  warnings?: string[]
+  error?: string
+  retryable?: boolean
+}
+
+export function useImportNarrative() {
+  const queryClient = useQueryClient()
+  return useMutation<ImportNarrativeResult, Error, ImportNarrativeInput>({
+    mutationFn: (input) =>
+      apiFetch<ImportNarrativeResult>(`/api/ceremonies/import-narrative`, {
         method: 'POST',
+        body: JSON.stringify(input),
       }),
+    onSuccess: (_resp, input) => {
+      void queryClient.invalidateQueries({ queryKey: ['ceremonies', input.projectId] })
+    },
+  })
+}
+
+/**
+ * Returns ceremonies in 'draft' status (the review queue) — i.e. translator
+ * output that has not yet been activated, plus any narratives whose
+ * translations failed and are awaiting retry.
+ */
+export function useDraftCeremonies(projectId: string) {
+  return useQuery<Ceremony[]>({
+    queryKey: ['ceremonies', projectId, 'drafts'],
+    queryFn: async () => {
+      const all = await apiFetch<Ceremony[]>(`/api/projects/${projectId}/ceremonies`)
+      return (all ?? []).filter((c) => (c as Ceremony & { status?: string }).status === 'draft')
+    },
+    enabled: Boolean(projectId),
   })
 }
 
