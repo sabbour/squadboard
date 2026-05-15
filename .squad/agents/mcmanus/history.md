@@ -21,3 +21,19 @@
 
 - **2026-05-15 Phase 8 Vertical Slice — Column Metadata Overlay:** Shipped per-project column rename/describe/recolor as a focused first slice of the larger Phase 8 epic. Key pattern: **overlay table, not enum replacement.** A new `column_meta` table stores label/description/color overrides per (project_id, column_id) pair. The existing `column_status` enum is untouched; Phase 8 proper (multi-board, `board_columns` table replacing the enum, presets, pickup_behaviour, scope-resolved default workflow) can rebuild on top of this without losing user-authored column descriptions. The `column_meta` rows carry over 1:1 into `board_columns` when that migration lands. Used `withTimezone: true` on both timestamp columns to be born Hockney-compliant. Delivered: idempotent bootstrap DDL, GET/PATCH/POST-reset API routes, `useColumnMeta`/`useUpdateColumn`/`useResetColumns` hooks, KanbanColumn 4px accent border + Fluent2 Tooltip on description hover, ColumnSettingsPanel drawer with 8-swatch color picker. Gear icon added to board header to open the drawer.
 
+## Recent team activity
+
+New decisions merged to `.squad/decisions.md`:
+- Demo 9 open question #2: `request_changes_policy` default is `'first'` (Hockney)
+- Demo 12 open question #6: Optimistic concurrency for concurrent issue edits (Verbal)
+- Demo 15 open question #8: GitHub issue mirroring OFF by default, opt-in per project (Hockney)
+
+See `.squad/decisions.md` for full details.
+
+Multi-agent fanout session completed 2026-05-15T12:35:00Z:
+- 5 agents shipped (2 keyser rounds, mcmanus, hockney, verbal)
+- 5 commits landed (42c120a0, d74c9622, d7cc2ada, 4d9fb813, base a97e2bce)
+- 2 agents in flight (fenster, kobayashi)
+
+Session log: `.squad/log/2026-05-15T12:35:00Z-squad-fanout.md`
+

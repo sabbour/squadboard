@@ -226,3 +226,35 @@ Existing roles unchanged: McManus (Lead Architect), Keyser (Frontend Dev), Fenst
 **Why opt-in:** Teams using Squadboard for internal planning should not be required to expose their issues to GitHub. Mirroring is an advanced integration — opting in is the safe default.
 **Owner:** Hockney.
 **Files:** `packages/server/src/github/client.ts`, `sync.ts`, `sync-hook.ts`, `routes/github-sync.ts`, `db/schema.ts`, `db/index.ts`.
+
+### 2026-05-15: Coordinator session-state snapshot
+**By:** Ahmed Sabbour (via Copilot CLI / Squad coordinator)
+**What:** Durable snapshot of mid-session state — what was just dispatched, what has shipped, what's open. Triple-recorded across `plan.md`, `todos` SQL table, and this file so the session can resume from any of the three.
+
+**Why:** User directive — *"You need to track all this somewhere durable in case the session crashes."* Compaction has already happened twice this session; rotating snapshots prevents replanning loss.
+
+**Snapshot:**
+
+- **Recently shipped (this segment):**
+  - `42c120a0` feat(issues): Formulate with AI on the New Issue dialog (Keyser)
+  - `a97e2bce` fix(ui): build break + 204 cache + Routing crash + sidebar/Consult overhaul
+
+- **In flight (5 background agents):**
+  - ⚛️ Keyser → Consult page layout rebalance (`pages/Consult.tsx`)
+  - 🎨 Fenster → Fluent2 typography + spacing consistency sweep (app-wide)
+  - 🏛 McManus → Customizable kanban columns slice (column_meta table + drawer)
+  - 🔧 Hockney → Timezone "7 hours ago" bug (withTimezone:true on user-facing timestamps)
+  - 📡 Verbal → Uber Now view `/now` (cross-project aggregator + global WS scope + page)
+
+- **Open bugs not yet dispatched:** issue spam loop (createIssue mutation runaway), `fry/` agent dir investigation, `p1-verify` smoke pass.
+
+- **Active machinery:** `manage_schedule` schedule #1 (10-min recurring status pings).
+
+**Resume rule:** if compaction or crash strikes, the next session can rebuild from `plan.md → "Session in flight — coordinator snapshot (2026-05-15 05:20 PDT)"` plus `SELECT * FROM todos WHERE id LIKE 's-%'`.
+
+**Forward-compatibility:** all 5 in-flight agents are independent — no inter-agent file conflicts. They will each commit atomically with explicit `git add` paths. Merge order doesn't matter.
+
+### 2026-05-14: New chore extension
+**By:** Ahmed (via Copilot)
+**What:** Added squadboard-chore extension for housekeeping tasks that aren't bugs or features, with no docs requirement.
+**Why:** Productize the chore workflow alongside add-feature and report-bug.

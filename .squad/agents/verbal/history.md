@@ -16,3 +16,20 @@
   - **`safeRelativeTime` guard**: Copied from `RoutingLogTable.tsx` into `Now.tsx` (not extracted to a shared util yet — wait until a 3rd consumer appears before extracting).
   - **Click-row navigation conventions**: Live session → `/projects/:id/sessions/:sessionId`; issue run → `/projects/:id/board?focus=:issueId`; workflow run → `/projects/:id/flow?run=:runId`. Consistent with how the Dashboard's Phase 12 Now section links to the flow board.
   - **`useNowFeed` fusion pattern**: `useQuery` with `refetchInterval: 15_000` as safety net + `useEffect` subscribing to `NOW_TRIGGER_EVENTS` (session.started/completed/error, run.started/completed, workflow.advanced) that invalidate the query cache. Full invalidate (not surgical cache update) is correct here: the feed covers all projects so surgical update would require per-event projectId routing which adds complexity without meaningful latency improvement for this use case.
+
+## Recent team activity
+
+New decisions merged to `.squad/decisions.md`:
+- Demo 9 open question #2: `request_changes_policy` default is `'first'` (Hockney)
+- Demo 12 open question #6: Optimistic concurrency for concurrent issue edits (Verbal)
+- Demo 15 open question #8: GitHub issue mirroring OFF by default, opt-in per project (Hockney)
+
+See `.squad/decisions.md` for full details.
+
+Multi-agent fanout session completed 2026-05-15T12:35:00Z:
+- 5 agents shipped (2 keyser rounds, mcmanus, hockney, verbal)
+- 5 commits landed (42c120a0, d74c9622, d7cc2ada, 4d9fb813, base a97e2bce)
+- 2 agents in flight (fenster, kobayashi)
+
+Session log: `.squad/log/2026-05-15T12:35:00Z-squad-fanout.md`
+
