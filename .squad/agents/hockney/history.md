@@ -63,3 +63,15 @@ On a previous commit (column-meta work) I accidentally staged untracked scratch 
 ## Archive
 
 For older learnings (Demo 1–15 architecture notes, GitHub App auth, TS fixes, UTC bug), see `history-archive.md`.
+
+## Learnings
+
+**2026-05-15 — Phase 3 Doctor (diagnostics service):**
+
+- `getWebSocketServer()` is already exported from `realtime/ws-server.ts` — no new singleton needed. The `WebSocketServer` node from `ws` doesn't expose a `.readyState` in its TypeScript types the same way a client `WebSocket` does; checking `wss !== null` is the primary liveness signal; `.clients.size` gives connected count.
+- `execFile` (promisified) is the safest way to invoke `gh auth status` — avoids shell injection, handles ENOENT cleanly. A non-zero exit still rejects the promise, so catch handles both "not found" and "not authed" cases.
+- Pool.connect() + client.query() both need independent timeouts for the postgres health check. 50ms is tight but correct for embedded Postgres — if that fails the DB is genuinely unhealthy.
+- Dynamic `import('@bradygaster/squad-sdk/client')` inside async functions works cleanly with ESM + `"moduleResolution": "bundler"` — no top-level import needed, which keeps the diagnostics service from throwing at module load time if the SDK isn't configured yet.
+- `Promise.all` across all checks (each individually try/catch'd) gives true parallelism — total wall-clock bounded by the slowest single check, not the sum of all. The SDK checks each re-connect/disconnect to avoid state leakage.
+- `mergeParams: true` on sub-routers is not needed for `GET /api/projects/:id/diagnostics` when mounted via `app.use('/api/projects/:id/diagnostics', projectDiagnosticsRouter)` because Express automatically merges params for routers created with `Router({ mergeParams: true })` or when mounted directly. Use `req.params['id']` (bracket notation) not `.id` to keep TS happy with index signature types. Also handle `string | string[]` on `req.params` values — cast with `Array.isArray(rawId) ? rawId[0] : rawId`.
+- Pre-existing TypeScript errors in `conjure-classifier.ts` (`.modelId` / `.source` on `ResolveModelResult`) are not regressions from this work — confirmed by stashing and re-running `tsc --noEmit` on the base commit.
