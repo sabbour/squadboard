@@ -2,6 +2,7 @@ import { getDb } from '../db/index.js';
 import { sweepExpiredLeases, sweepOrphanedRuns, sweepExpiredStepLeases, sweepOrphanedWorkflowRuns } from './sweeper.js';
 import { claimAndRun } from './stepper.js';
 import { tickWorkflowAdvancement } from './workflow-runner.js';
+import { sweepReviewTimeouts } from '../services/review-timeout-sweep.js';
 const TICK_INTERVAL_MS = 5_000;
 const TICK_JITTER_MS = 500; // ±500ms jitter to avoid thundering herd on multi-instance deploys
 /**
@@ -12,7 +13,8 @@ const TICK_JITTER_MS = 500; // ±500ms jitter to avoid thundering herd on multi-
  *   2. sweepOrphanedRuns()          — fail issue_runs with no heartbeat > 120 s
  *   3. sweepExpiredStepLeases()     — retry or fail expired step_runs
  *   4. sweepOrphanedWorkflowRuns()  — fail workflow_runs with no active steps
- *   5. claimAndRun()                — Stepper claims one pending run via FOR UPDATE SKIP LOCKED
+ *   5. sweepReviewTimeouts()        — apply timeout_action to expired approve steps
+ *   6. claimAndRun()                — Stepper claims one pending run via FOR UPDATE SKIP LOCKED
  *
  * Invariant 2: only the stepper (via claimAndRun) may set status='running'.
  * The dispatcher never touches status directly — it only calls sweep + wake.
@@ -65,9 +67,11 @@ export class Dispatcher {
         await sweepExpiredStepLeases(db);
         // 4. Fail workflow_runs whose steps all finished but run was never finalized
         await sweepOrphanedWorkflowRuns(db);
-        // 5. Advance active workflow_runs (fan_out completion, step transitions, etc.)
+        // 5. Apply timeout_action to expired approve step_runs (Phase 8 review policies)
+        await sweepReviewTimeouts();
+        // 6. Advance active workflow_runs (fan_out completion, step transitions, etc.)
         await tickWorkflowAdvancement();
-        // 6. Stepper: claim one pending issue_run and execute it
+        // 7. Stepper: claim one pending issue_run and execute it
         await claimAndRun(db);
     }
 }
