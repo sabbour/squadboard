@@ -29,6 +29,52 @@ function validateStepShape(step, index) {
     if (s['type'] === 'approve' && s['approvers'] !== undefined && !Array.isArray(s['approvers'])) {
         errs.push(`step[${index}]: 'approvers' must be an array`);
     }
+    if (s['type'] === 'approve' && s['approvers'] !== undefined && Array.isArray(s['approvers'])) {
+        const validKinds = new Set(['agent', 'human', 'role']);
+        for (let i = 0; i < s['approvers'].length; i++) {
+            const entry = s['approvers'][i];
+            if (typeof entry === 'string')
+                continue;
+            if (typeof entry !== 'object' || entry === null) {
+                errs.push(`step[${index}].approvers[${i}]: must be a string or {kind, ref} object`);
+                continue;
+            }
+            const obj = entry;
+            if (typeof obj['kind'] !== 'string' || !validKinds.has(obj['kind'])) {
+                errs.push(`step[${index}].approvers[${i}]: 'kind' must be one of agent | human | role`);
+            }
+            if (typeof obj['ref'] !== 'string' || !obj['ref']) {
+                errs.push(`step[${index}].approvers[${i}]: 'ref' must be a non-empty string`);
+            }
+        }
+    }
+    if (s['type'] === 'approve' && s['timeout_action'] !== undefined) {
+        const validTimeoutActions = new Set(['auto_approve', 'auto_reject', 'escalate', 'notify']);
+        if (typeof s['timeout_action'] !== 'string' || !validTimeoutActions.has(s['timeout_action'])) {
+            errs.push(`step[${index}]: 'timeout_action' must be one of auto_approve | auto_reject | escalate | notify`);
+        }
+    }
+    if (s['type'] === 'approve' && s['quorum'] !== undefined) {
+        const q = s['quorum'];
+        if (typeof q !== 'object' || q === null) {
+            errs.push(`step[${index}]: 'quorum' must be an object {n, of}`);
+        }
+        else {
+            const qo = q;
+            const n = Number(qo['n']);
+            const of = Number(qo['of']);
+            if (!Number.isInteger(n) || n < 1)
+                errs.push(`step[${index}]: 'quorum.n' must be a positive integer`);
+            if (!Number.isInteger(of) || of < n)
+                errs.push(`step[${index}]: 'quorum.of' must be an integer >= quorum.n`);
+        }
+    }
+    if (s['type'] === 'approve' && s['request_changes_policy'] !== undefined) {
+        const validPolicies = new Set(['first', 'majority', 'all']);
+        if (typeof s['request_changes_policy'] !== 'string' || !validPolicies.has(s['request_changes_policy'])) {
+            errs.push(`step[${index}]: 'request_changes_policy' must be one of first | majority | all`);
+        }
+    }
     if (s['type'] === 'fan_out') {
         const validSplitBy = new Set(['labels', 'agents', 'count']);
         if (!s['split_by'] || !validSplitBy.has(s['split_by'])) {
@@ -146,10 +192,39 @@ function parseStepRaw(s) {
             step.agent = String(s['agent']);
         if (s['prompt'] !== undefined)
             step.prompt = String(s['prompt']);
-        if (Array.isArray(s['approvers']))
-            step.approvers = s['approvers'].map(String);
+        if (Array.isArray(s['approvers'])) {
+            const rawList = s['approvers'];
+            const stringList = [];
+            const objectList = [];
+            for (const entry of rawList) {
+                if (typeof entry === 'string') {
+                    stringList.push(entry);
+                    objectList.push({ kind: 'role', ref: entry });
+                }
+                else if (typeof entry === 'object' && entry !== null) {
+                    const obj = entry;
+                    const kind = obj['kind'];
+                    const ref = String(obj['ref']);
+                    objectList.push({ kind, ref });
+                    // Mirror agent + role kinds back into the legacy string list so the
+                    // existing peer-reviewer engine (which expects string[]) still works
+                    // with new typed YAML. 'human' kind is intentionally NOT mirrored —
+                    // human reviewers don't dispatch through the agent run pipeline.
+                    if (kind === 'agent' || kind === 'role')
+                        stringList.push(ref);
+                }
+            }
+            step.approvers = stringList;
+            step.approverObjects = objectList;
+        }
         if (s['timeout'] !== undefined)
             step.timeout = String(s['timeout']);
+        if (s['timeout_action'] !== undefined) {
+            step.timeoutAction = s['timeout_action'];
+        }
+        if (s['fallback_reviewer'] !== undefined) {
+            step.fallbackReviewer = String(s['fallback_reviewer']);
+        }
         if (s['request_changes_policy'] !== undefined) {
             step.request_changes_policy = s['request_changes_policy'];
         }

@@ -386,3 +386,97 @@ export const githubSyncLog = pgTable('github_sync_log', {
 export type GithubSyncLog = typeof githubSyncLog.$inferSelect;
 export type NewGithubSyncLog = typeof githubSyncLog.$inferInsert;
 
+// ---------------------------------------------------------------------------
+// Live multi-agent sessions (Squad-IRL "run-first" slice)
+// ---------------------------------------------------------------------------
+//
+// A live_session is a free-form, multi-turn conversation against one or more
+// agents in a project. It is intentionally separate from `issue_runs` (which
+// are issue-scoped, one-shot, workflow-driven) — live sessions are the web
+// equivalent of `squad` shell sessions.
+//
+// Each session aggregates token + cost totals across its turns; events are
+// captured into live_session_events for the timeline view.
+
+export const liveSessionStatusEnum = pgEnum('live_session_status', [
+  'active',
+  'idle',
+  'completed',
+  'failed',
+  'cancelled',
+]);
+
+export const liveSessions = pgTable('live_sessions', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  projectId: uuid('project_id').notNull().references(() => projects.id, { onDelete: 'cascade' }),
+  agentId: uuid('agent_id').references(() => agents.id, { onDelete: 'set null' }),
+  agentName: text('agent_name'),                  // snapshot — survives agent rename/delete
+  title: text('title'),                           // first prompt summary, or user-supplied
+  status: liveSessionStatusEnum('status').notNull().default('active'),
+  model: text('model'),                           // SDK model id used for this session
+  sdkSessionId: text('sdk_session_id'),           // SquadClient session id (opaque)
+  inputTokens: integer('input_tokens').notNull().default(0),
+  outputTokens: integer('output_tokens').notNull().default(0),
+  costUsd: numeric('cost_usd', { precision: 12, scale: 6 }).notNull().default('0'),
+  turnCount: integer('turn_count').notNull().default(0),
+  errorMessage: text('error_message'),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+  updatedAt: timestamp('updated_at').notNull().defaultNow(),
+  completedAt: timestamp('completed_at'),
+});
+
+export const liveSessionEvents = pgTable('live_session_events', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  sessionId: uuid('session_id').notNull().references(() => liveSessions.id, { onDelete: 'cascade' }),
+  // Mirrors SessionEventType in realtime/event-bus.ts:
+  // 'session.started' | 'session.message' | 'session.delta' | 'session.tool'
+  // | 'session.usage' | 'session.error' | 'session.completed'
+  type: text('type').notNull(),
+  // Free-form payload — message body, delta chunk, tool name+args, usage tuple, etc.
+  payload: jsonb('payload').notNull().default('{}'),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+});
+
+export type LiveSession = typeof liveSessions.$inferSelect;
+export type NewLiveSession = typeof liveSessions.$inferInsert;
+export type LiveSessionEvent = typeof liveSessionEvents.$inferSelect;
+export type NewLiveSessionEvent = typeof liveSessionEvents.$inferInsert;
+
+// ---------------------------------------------------------------------------
+// Phase 8: Review policies — workflow approve-step primitives
+// ---------------------------------------------------------------------------
+
+// Named, reusable policy bundles. scope='system' rows are shipped with
+// Squadboard and seeded idempotently on bootstrap (matched by slug).
+// scope='project' rows are user-defined within a project.
+//
+// payload jsonb shape: ReviewPolicyPayload (see services/review-policy-resolver.ts)
+export const reviewPolicyPresets = pgTable('review_policy_presets', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  scope: text('scope').notNull(), // 'system' | 'project' (CHECK constraint enforced in DDL)
+  projectId: uuid('project_id').references(() => projects.id, { onDelete: 'cascade' }),
+  slug: text('slug').notNull(),   // stable identifier within (scope, projectId)
+  name: text('name').notNull(),   // display label
+  description: text('description'),
+  payload: jsonb('payload').notNull(),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+  updatedAt: timestamp('updated_at').notNull().defaultNow(),
+});
+
+// Scope-level inherited defaults. UNIQUE(scope, scopeId) guarantees a single
+// default per scope-instance. scope='board' is enum-allowed but rejected at
+// the route layer until the boards table lands (Phase 8 boards work).
+export const reviewPolicyDefaults = pgTable('review_policy_defaults', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  scope: text('scope').notNull(), // 'project' | 'board'
+  scopeId: uuid('scope_id').notNull(),
+  payload: jsonb('payload').notNull(),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+  updatedAt: timestamp('updated_at').notNull().defaultNow(),
+});
+
+export type ReviewPolicyPreset = typeof reviewPolicyPresets.$inferSelect;
+export type NewReviewPolicyPreset = typeof reviewPolicyPresets.$inferInsert;
+export type ReviewPolicyDefault = typeof reviewPolicyDefaults.$inferSelect;
+export type NewReviewPolicyDefault = typeof reviewPolicyDefaults.$inferInsert;
+

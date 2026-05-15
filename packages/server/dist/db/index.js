@@ -392,8 +392,166 @@ async function bootstrapSchema() {
       error_msg    TEXT,
       synced_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
+
+    -- Squad-IRL run-first slice: live multi-agent sessions
+    DO $$ BEGIN
+      CREATE TYPE live_session_status AS ENUM ('active', 'idle', 'completed', 'failed', 'cancelled');
+    EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+    CREATE TABLE IF NOT EXISTS live_sessions (
+      id              UUID                PRIMARY KEY DEFAULT gen_random_uuid(),
+      project_id      UUID                NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+      agent_id        UUID                REFERENCES agents(id) ON DELETE SET NULL,
+      agent_name      TEXT,
+      title           TEXT,
+      status          live_session_status NOT NULL DEFAULT 'active',
+      model           TEXT,
+      sdk_session_id  TEXT,
+      input_tokens    INTEGER             NOT NULL DEFAULT 0,
+      output_tokens   INTEGER             NOT NULL DEFAULT 0,
+      cost_usd        NUMERIC(12, 6)      NOT NULL DEFAULT 0,
+      turn_count      INTEGER             NOT NULL DEFAULT 0,
+      error_message   TEXT,
+      created_at      TIMESTAMPTZ         NOT NULL DEFAULT NOW(),
+      updated_at      TIMESTAMPTZ         NOT NULL DEFAULT NOW(),
+      completed_at    TIMESTAMPTZ
+    );
+
+    CREATE INDEX IF NOT EXISTS live_sessions_project_idx
+      ON live_sessions (project_id, created_at DESC);
+
+    CREATE TABLE IF NOT EXISTS live_session_events (
+      id          UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+      session_id  UUID        NOT NULL REFERENCES live_sessions(id) ON DELETE CASCADE,
+      type        TEXT        NOT NULL,
+      payload     JSONB       NOT NULL DEFAULT '{}'::jsonb,
+      created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+
+    CREATE INDEX IF NOT EXISTS live_session_events_session_idx
+      ON live_session_events (session_id, created_at);
+
+    -- Phase 8: Review policies — workflow approve-step primitives
+    CREATE TABLE IF NOT EXISTS review_policy_presets (
+      id           UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+      scope        TEXT        NOT NULL,
+      project_id   UUID        REFERENCES projects(id) ON DELETE CASCADE,
+      slug         TEXT        NOT NULL,
+      name         TEXT        NOT NULL,
+      description  TEXT,
+      payload      JSONB       NOT NULL,
+      created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      CONSTRAINT review_policy_presets_scope_chk
+        CHECK (scope IN ('system', 'project')),
+      CONSTRAINT review_policy_presets_scope_project_chk
+        CHECK ((scope = 'system' AND project_id IS NULL)
+            OR (scope = 'project' AND project_id IS NOT NULL))
+    );
+
+    CREATE UNIQUE INDEX IF NOT EXISTS review_policy_presets_system_slug_uniq
+      ON review_policy_presets (slug)
+      WHERE scope = 'system';
+
+    CREATE UNIQUE INDEX IF NOT EXISTS review_policy_presets_project_slug_uniq
+      ON review_policy_presets (project_id, slug)
+      WHERE scope = 'project';
+
+    CREATE TABLE IF NOT EXISTS review_policy_defaults (
+      id          UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+      scope       TEXT        NOT NULL,
+      scope_id    UUID        NOT NULL,
+      payload     JSONB       NOT NULL,
+      created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      CONSTRAINT review_policy_defaults_scope_chk
+        CHECK (scope IN ('project', 'board'))
+    );
+
+    CREATE UNIQUE INDEX IF NOT EXISTS review_policy_defaults_scope_uniq
+      ON review_policy_defaults (scope, scope_id);
   `);
+    await seedSystemReviewPolicyPresets();
     console.log('[db] schema bootstrapped');
+}
+// ---------------------------------------------------------------------------
+// System review-policy presets — seeded idempotently on every boot.
+// Match key: (scope='system', slug). Payload is overwritten so Squadboard
+// upgrades pick up new defaults without manual migration; users customise
+// by cloning a system preset to scope='project'.
+// ---------------------------------------------------------------------------
+const SYSTEM_REVIEW_PRESETS = [
+    {
+        slug: 'solo',
+        name: 'Solo Reviewer',
+        description: 'A single reviewer (typically the lead) approves. First request_changes blocks.',
+        payload: {
+            approvers: ['lead'],
+            request_changes_policy: 'first',
+            timeout: '24h',
+            timeout_action: 'notify',
+        },
+    },
+    {
+        slug: 'two_eyes',
+        name: 'Two Eyes',
+        description: 'Two reviewers must approve before advancing. Any request_changes blocks.',
+        payload: {
+            quorum: { n: 2, of: 2 },
+            request_changes_policy: 'first',
+            timeout: '24h',
+            timeout_action: 'notify',
+        },
+    },
+    {
+        slug: 'security_quorum',
+        name: 'Security Quorum',
+        description: '2-of-3 reviewers must approve. Author excluded. Escalates after timeout.',
+        payload: {
+            quorum: { n: 2, of: 3 },
+            exclude_author: true,
+            request_changes_policy: 'first',
+            timeout: '24h',
+            timeout_action: 'escalate',
+        },
+    },
+    {
+        slug: 'strict',
+        name: 'Strict (all must approve)',
+        description: 'Every reviewer must approve; only when all reviewers request_changes does the workflow rewind.',
+        payload: {
+            request_changes_policy: 'all',
+            timeout: '48h',
+            timeout_action: 'notify',
+        },
+    },
+    {
+        slug: 'advisory',
+        name: 'Advisory (auto-approve on timeout)',
+        description: 'Reviewers may comment, but the workflow advances automatically if no decision is recorded before the timeout.',
+        payload: {
+            request_changes_policy: 'first',
+            timeout: '24h',
+            timeout_action: 'auto_approve',
+        },
+    },
+];
+async function seedSystemReviewPolicyPresets() {
+    if (!_pool)
+        throw new Error('Pool not initialised');
+    for (const preset of SYSTEM_REVIEW_PRESETS) {
+        await _pool.query(`
+      INSERT INTO review_policy_presets (scope, project_id, slug, name, description, payload)
+      VALUES ('system', NULL, $1, $2, $3, $4::jsonb)
+      ON CONFLICT (slug) WHERE scope = 'system'
+      DO UPDATE SET
+        name = EXCLUDED.name,
+        description = EXCLUDED.description,
+        payload = EXCLUDED.payload,
+        updated_at = NOW()
+      `, [preset.slug, preset.name, preset.description, JSON.stringify(preset.payload)]);
+    }
+    console.log(`[db] seeded ${SYSTEM_REVIEW_PRESETS.length} system review-policy presets`);
 }
 export async function closeDb() {
     if (_pool) {

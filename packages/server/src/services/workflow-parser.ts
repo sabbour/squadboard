@@ -32,12 +32,24 @@ export interface AgentRunStep extends BaseStep {
   timeout?: string;
 }
 
+export interface TypedApprover {
+  kind: 'agent' | 'human' | 'role';
+  ref: string;
+}
+
+export type TimeoutAction = 'auto_approve' | 'auto_reject' | 'escalate' | 'notify';
+
 export interface ApproveStep extends BaseStep {
   type: 'approve';
   agent?: string;      // for compatibility with shared step access patterns
   prompt?: string;
   approvers?: string[];
+  // Typed approvers — populated alongside `approvers` for new YAML.
+  // Bare-string entries in YAML mirror into both as {kind:'role', ref:str}.
+  approverObjects?: TypedApprover[];
   timeout?: string;
+  timeoutAction?: TimeoutAction;       // default 'notify'
+  fallbackReviewer?: string;            // used when timeoutAction='escalate'
   // Demo 9: peer review configuration
   request_changes_policy?: 'first' | 'majority' | 'all'; // default 'first'
   quorum?: { n: number; of: number };   // n-of-m approvals needed; overrides approvers length
@@ -93,6 +105,48 @@ function validateStepShape(step: unknown, index: number): string[] {
   }
   if (s['type'] === 'approve' && s['approvers'] !== undefined && !Array.isArray(s['approvers'])) {
     errs.push(`step[${index}]: 'approvers' must be an array`);
+  }
+  if (s['type'] === 'approve' && s['approvers'] !== undefined && Array.isArray(s['approvers'])) {
+    const validKinds = new Set(['agent', 'human', 'role']);
+    for (let i = 0; i < (s['approvers'] as unknown[]).length; i++) {
+      const entry = (s['approvers'] as unknown[])[i];
+      if (typeof entry === 'string') continue;
+      if (typeof entry !== 'object' || entry === null) {
+        errs.push(`step[${index}].approvers[${i}]: must be a string or {kind, ref} object`);
+        continue;
+      }
+      const obj = entry as Record<string, unknown>;
+      if (typeof obj['kind'] !== 'string' || !validKinds.has(obj['kind'])) {
+        errs.push(`step[${index}].approvers[${i}]: 'kind' must be one of agent | human | role`);
+      }
+      if (typeof obj['ref'] !== 'string' || !obj['ref']) {
+        errs.push(`step[${index}].approvers[${i}]: 'ref' must be a non-empty string`);
+      }
+    }
+  }
+  if (s['type'] === 'approve' && s['timeout_action'] !== undefined) {
+    const validTimeoutActions = new Set(['auto_approve', 'auto_reject', 'escalate', 'notify']);
+    if (typeof s['timeout_action'] !== 'string' || !validTimeoutActions.has(s['timeout_action'] as string)) {
+      errs.push(`step[${index}]: 'timeout_action' must be one of auto_approve | auto_reject | escalate | notify`);
+    }
+  }
+  if (s['type'] === 'approve' && s['quorum'] !== undefined) {
+    const q = s['quorum'];
+    if (typeof q !== 'object' || q === null) {
+      errs.push(`step[${index}]: 'quorum' must be an object {n, of}`);
+    } else {
+      const qo = q as Record<string, unknown>;
+      const n = Number(qo['n']);
+      const of = Number(qo['of']);
+      if (!Number.isInteger(n) || n < 1) errs.push(`step[${index}]: 'quorum.n' must be a positive integer`);
+      if (!Number.isInteger(of) || of < n) errs.push(`step[${index}]: 'quorum.of' must be an integer >= quorum.n`);
+    }
+  }
+  if (s['type'] === 'approve' && s['request_changes_policy'] !== undefined) {
+    const validPolicies = new Set(['first', 'majority', 'all']);
+    if (typeof s['request_changes_policy'] !== 'string' || !validPolicies.has(s['request_changes_policy'] as string)) {
+      errs.push(`step[${index}]: 'request_changes_policy' must be one of first | majority | all`);
+    }
   }
   if (s['type'] === 'fan_out') {
     const validSplitBy = new Set(['labels', 'agents', 'count']);
@@ -221,8 +275,36 @@ function parseStepRaw(s: Record<string, unknown>): WorkflowStep {
     if (s['label'] !== undefined) step.label = String(s['label']);
     if (s['agent'] !== undefined) step.agent = String(s['agent'] as string);
     if (s['prompt'] !== undefined) step.prompt = String(s['prompt']);
-    if (Array.isArray(s['approvers'])) step.approvers = (s['approvers'] as unknown[]).map(String);
+    if (Array.isArray(s['approvers'])) {
+      const rawList = s['approvers'] as unknown[];
+      const stringList: string[] = [];
+      const objectList: TypedApprover[] = [];
+      for (const entry of rawList) {
+        if (typeof entry === 'string') {
+          stringList.push(entry);
+          objectList.push({ kind: 'role', ref: entry });
+        } else if (typeof entry === 'object' && entry !== null) {
+          const obj = entry as Record<string, unknown>;
+          const kind = obj['kind'] as TypedApprover['kind'];
+          const ref = String(obj['ref']);
+          objectList.push({ kind, ref });
+          // Mirror agent + role kinds back into the legacy string list so the
+          // existing peer-reviewer engine (which expects string[]) still works
+          // with new typed YAML. 'human' kind is intentionally NOT mirrored —
+          // human reviewers don't dispatch through the agent run pipeline.
+          if (kind === 'agent' || kind === 'role') stringList.push(ref);
+        }
+      }
+      step.approvers = stringList;
+      step.approverObjects = objectList;
+    }
     if (s['timeout'] !== undefined) step.timeout = String(s['timeout']);
+    if (s['timeout_action'] !== undefined) {
+      step.timeoutAction = s['timeout_action'] as TimeoutAction;
+    }
+    if (s['fallback_reviewer'] !== undefined) {
+      step.fallbackReviewer = String(s['fallback_reviewer']);
+    }
     if (s['request_changes_policy'] !== undefined) {
       step.request_changes_policy = s['request_changes_policy'] as ApproveStep['request_changes_policy'];
     }
