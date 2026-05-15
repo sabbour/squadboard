@@ -479,6 +479,73 @@ async function bootstrapSchema(): Promise<void> {
 
     CREATE UNIQUE INDEX IF NOT EXISTS review_policy_defaults_scope_uniq
       ON review_policy_defaults (scope, scope_id);
+
+    -- Phase 9: Comment thread becomes a multi-actor timeline ----------------
+    ALTER TABLE comments
+      ADD COLUMN IF NOT EXISTS author_kind   TEXT        NOT NULL DEFAULT 'human',
+      ADD COLUMN IF NOT EXISTS author_ref    TEXT,
+      ADD COLUMN IF NOT EXISTS mentions      JSONB       NOT NULL DEFAULT '[]'::jsonb,
+      ADD COLUMN IF NOT EXISTS event_kind    TEXT,
+      ADD COLUMN IF NOT EXISTS event_payload JSONB;
+
+    DO $$ BEGIN
+      ALTER TABLE comments
+        ADD CONSTRAINT comments_author_kind_chk
+        CHECK (author_kind IN ('human', 'agent', 'system'));
+    EXCEPTION WHEN duplicate_object THEN NULL;
+    END $$;
+
+    CREATE INDEX IF NOT EXISTS comments_issue_created_idx
+      ON comments (issue_id, created_at);
+
+    -- Phase 9: Deliverables — first-class artifact records ------------------
+    CREATE TABLE IF NOT EXISTS deliverables (
+      id                            UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+      issue_id                      UUID        NOT NULL REFERENCES issues(id) ON DELETE CASCADE,
+      run_id                        UUID        REFERENCES issue_runs(id) ON DELETE SET NULL,
+      step_run_id                   UUID        REFERENCES step_runs(id) ON DELETE SET NULL,
+      kind                          TEXT        NOT NULL,
+      title                         TEXT        NOT NULL,
+      summary                       TEXT,
+      payload                       JSONB       NOT NULL,
+      status                        TEXT        NOT NULL DEFAULT 'submitted',
+      produced_at                   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      superseded_by_deliverable_id  UUID        REFERENCES deliverables(id) ON DELETE SET NULL,
+      created_at                    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at                    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      CONSTRAINT deliverables_kind_chk
+        CHECK (kind IN ('text', 'files', 'links', 'structured')),
+      CONSTRAINT deliverables_status_chk
+        CHECK (status IN ('draft', 'submitted', 'approved', 'changes_requested', 'superseded'))
+    );
+
+    CREATE INDEX IF NOT EXISTS deliverables_issue_idx
+      ON deliverables (issue_id, produced_at DESC);
+
+    CREATE INDEX IF NOT EXISTS deliverables_run_idx
+      ON deliverables (run_id);
+
+    -- Phase 9: review_events extends to deliverable reviews -----------------
+    -- Make stepRunId/workflowRunId nullable + add deliverable_id column with
+    -- CHECK that exactly one of (step_run_id, deliverable_id) is set.
+    ALTER TABLE review_events
+      ALTER COLUMN step_run_id DROP NOT NULL,
+      ALTER COLUMN workflow_run_id DROP NOT NULL,
+      ADD COLUMN IF NOT EXISTS deliverable_id UUID REFERENCES deliverables(id) ON DELETE CASCADE;
+
+    DO $$ BEGIN
+      ALTER TABLE review_events
+        ADD CONSTRAINT review_events_target_chk
+        CHECK (
+          (step_run_id IS NOT NULL AND deliverable_id IS NULL) OR
+          (step_run_id IS NULL     AND deliverable_id IS NOT NULL)
+        );
+    EXCEPTION WHEN duplicate_object THEN NULL;
+    END $$;
+
+    CREATE INDEX IF NOT EXISTS review_events_deliverable_idx
+      ON review_events (deliverable_id, created_at)
+      WHERE deliverable_id IS NOT NULL;
   `);
 
   await seedSystemReviewPolicyPresets();

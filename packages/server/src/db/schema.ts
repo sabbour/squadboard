@@ -80,9 +80,15 @@ export const comments = pgTable('comments', {
   id: uuid('id').primaryKey().defaultRandom(),
   issueId: uuid('issue_id').notNull().references(() => issues.id, { onDelete: 'cascade' }),
   body: text('body').notNull(),
-  authorId: uuid('author_id'), // null = system comment
+  authorId: uuid('author_id'), // null = system or unknown
   // Demo 15: GitHub Sync
   githubCommentId: text('github_comment_id'),  // GitHub comment ID (stringified integer)
+  // Phase 9: multi-actor timeline
+  authorKind: text('author_kind').notNull().default('human'), // 'human' | 'agent' | 'system'
+  authorRef: text('author_ref'),                                // user id, agent id, or system source (nullable)
+  mentions: jsonb('mentions').notNull().default([]),            // string[] of agent ids mentioned via @
+  eventKind: text('event_kind'),                                // when authorKind='system': run.started | deliverable.submitted | review.requested_changes | column.changed | …
+  eventPayload: jsonb('event_payload'),                         // structured payload for system events
   createdAt: timestamp('created_at').notNull().defaultNow(),
   updatedAt: timestamp('updated_at').notNull().defaultNow(),
 });
@@ -210,10 +216,14 @@ export type NewStepRun = typeof stepRuns.$inferInsert;
 
 // All 4 review verbs are recorded here: approve, request_changes, comment, dismiss.
 // Invariant 1: peer_review desugars to issue_runs; review_events captures the outcome.
+// Phase 9: stepRunId becomes nullable so deliverable reviews can use this same
+// table; deliverableId joins to the deliverables table. CHECK constraint
+// (enforced in db/index.ts DDL) requires exactly one of stepRunId/deliverableId.
 export const reviewEvents = pgTable('review_events', {
   id: uuid('id').primaryKey().defaultRandom(),
-  workflowRunId: uuid('workflow_run_id').notNull().references(() => workflowRuns.id, { onDelete: 'cascade' }),
-  stepRunId: uuid('step_run_id').notNull().references(() => stepRuns.id, { onDelete: 'cascade' }),
+  workflowRunId: uuid('workflow_run_id').references(() => workflowRuns.id, { onDelete: 'cascade' }),
+  stepRunId: uuid('step_run_id').references(() => stepRuns.id, { onDelete: 'cascade' }),
+  deliverableId: uuid('deliverable_id'),       // FK to deliverables(id) added at runtime; declared in deliverables table for clarity
   issueRunId: uuid('issue_run_id').references(() => issueRuns.id), // the peer_review issueRun, null for human reviews
   reviewerAgentId: uuid('reviewer_agent_id').references(() => agents.id), // null for human reviewers
   reviewerName: text('reviewer_name'), // display name (human or agent name)
@@ -479,4 +489,42 @@ export type ReviewPolicyPreset = typeof reviewPolicyPresets.$inferSelect;
 export type NewReviewPolicyPreset = typeof reviewPolicyPresets.$inferInsert;
 export type ReviewPolicyDefault = typeof reviewPolicyDefaults.$inferSelect;
 export type NewReviewPolicyDefault = typeof reviewPolicyDefaults.$inferInsert;
+
+// ---------------------------------------------------------------------------
+// Phase 9: Deliverables — first-class artifact records produced by runs.
+// ---------------------------------------------------------------------------
+//
+// Joins issues ↔ runs ↔ artifacts. A deliverable is the reviewable form of
+// what a run produced (raw text from issueRuns.output / stepRuns.output).
+// kind drives the kind-specific viewer on the client (text → markdown,
+// files → diff/code, links → preview, structured → JSON tree).
+//
+// Status lifecycle:
+//   draft       — not yet visible to reviewers
+//   submitted   — auto-extracted from a successful run, awaiting review
+//   approved    — accepted via review action
+//   changes_requested — review_event with verb='request_changes' captured
+//   superseded  — replaced by a newer deliverable (forward-only in v1)
+//
+// supersededByDeliverableId points at the new deliverable that replaced
+// this one (if any) — set when a revision-spawn run produces a new
+// deliverable for the same issue.
+export const deliverables = pgTable('deliverables', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  issueId: uuid('issue_id').notNull().references(() => issues.id, { onDelete: 'cascade' }),
+  runId: uuid('run_id'),                               // issue_run that produced this; nullable for human-uploaded
+  stepRunId: uuid('step_run_id'),                      // step_run that produced this (workflow case); nullable
+  kind: text('kind').notNull(),                        // 'text' | 'files' | 'links' | 'structured'
+  title: text('title').notNull(),
+  summary: text('summary'),
+  payload: jsonb('payload').notNull(),                 // kind-specific shape
+  status: text('status').notNull().default('submitted'), // draft | submitted | approved | changes_requested | superseded
+  producedAt: timestamp('produced_at').notNull().defaultNow(),
+  supersededByDeliverableId: uuid('superseded_by_deliverable_id'),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+  updatedAt: timestamp('updated_at').notNull().defaultNow(),
+});
+
+export type Deliverable = typeof deliverables.$inferSelect;
+export type NewDeliverable = typeof deliverables.$inferInsert;
 
