@@ -45,6 +45,20 @@ Every demo ships with a passing E2E test. Critical durability suites land in:
 
 <!-- Append learnings below -->
 
+### 2026-05-15 — QA investigation: spam loop, agent registry, client crashes
+
+Conducted read-only investigation into four suspected issues (dispatched by Squad coordinator):
+
+1. **Issue Spam Loop (A)**: Traced four createIssue callsites: `ceremony-scheduler.ts::sweepDueSchedules()`, `consult-stream.ts::acceptProposeIssue()`, `consult-stream.ts::acceptProposeConversation()`, and `inbox.ts::publishInboxItem()`. The ceremony scheduler uses correct two-phase idempotency (tentative + canonical `nextFireAt` pattern). **consult-stream has no retry logic or title mutation** — both calls are direct pass-through to `createIssue()`. The title appending pattern observed (`... — verbal — fenster`) likely originates in a caller's error handler or retry middleware outside these files. **Verdict**: Medium-confidence needs-fix; Verbal to audit retry paths.
+
+2. **Fry Agent Dir (B)**: Found `.squad/agents/fry/` on disk with learnings from 2026-05-14 (frontend audit). **Not registered in `.squad/team.md` or `.squad/casting/registry.json`** — it's an orphan. Recommend archiving to `_alumni/` or removing if learnings are integrated elsewhere. High-confidence confirmed.
+
+3. **formatDistanceToNow Crash (C)**: **RoutingLogTable.tsx has proper guard** (lines 21–30): `Number.isNaN()` check + try/catch around `formatDistanceToNow()`. Durable fix verified. **However, 7 other callsites** (CommentList, CardDetail, DeliverableCard, AgentDetailPanel, ReviewPanel, Now.tsx) call `formatDistanceToNow()` directly without guards — they remain vulnerable if timestamps are malformed. Recommend Hockney apply the same guard pattern universally.
+
+4. **WebSocket Reconnect (D)**: ws-client.ts is **clean and verified**. Proper cleanup of handlers (set to null), idempotent cleanup method, no StrictMode races, no retry-inside-render. One socket per session, sensible backoff in `scheduleReconnect()`. No action needed.
+
+Full findings in `.squad/decisions/inbox/kujan-investigation-2026-05-15.md`.
+
 ### 2026-05-14
 Wrote `docs/acceptance-criteria.md` — 572 lines, 15 demo sections, functional + durability ACs throughout. Key insight: Demos 1–3 and 13 are UI-only or read-only — durability ACs are minimal or absent (4 demos total). Demos 4–12, 14–15 all touch the workflow engine and require invariant coverage (11 demos with durability ACs). Invariants I-2 (single-spawner) and I-3 (lease/heartbeat) appear in the most demos (6–7 each) and will be the hardest to exercise reliably in CI — they need real clock control (fake clock or time-warp) or process-kill harnesses; neither is trivially parallelizable in a shared `embedded-postgres` environment. Biggest quality risk: Demo 10 (fan-out) has the most complex durability surface — the six-step transaction (I-5) requires a kill-mid-transaction harness that no other demo needs, and it's the only place where partial rollback correctness must be proven end-to-end.
 
