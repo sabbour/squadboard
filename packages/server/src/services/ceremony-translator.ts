@@ -53,6 +53,35 @@ export interface TranslatorResult {
 }
 
 // ---------------------------------------------------------------------------
+// Phase 16 — author-from-prose / refine-with-prose
+// ---------------------------------------------------------------------------
+
+export interface ProseAuthorInput {
+  /** Free-form natural-language description of the desired ceremony. */
+  prose: string;
+  projectId: string;
+  /** Optional name hint; if absent we ask the LLM to pick one. */
+  ceremonyName?: string;
+  availableAgents?: TranslatorAvailableAgent[];
+}
+
+export interface ProseRefineInput {
+  /** Current YAML being refined (the source of truth). */
+  currentYaml: string;
+  /** Free-form natural-language refinement instruction. */
+  instruction: string;
+  projectId: string;
+  /** Identifier used for throttling — typically the ceremony id. */
+  ceremonyKey: string;
+  availableAgents?: TranslatorAvailableAgent[];
+}
+
+export interface ProseRefineResult extends TranslatorResult {
+  /** Short, human-readable summary of the diff produced by the LLM. */
+  diffSummary: string;
+}
+
+// ---------------------------------------------------------------------------
 // Errors
 // ---------------------------------------------------------------------------
 
@@ -345,4 +374,187 @@ export async function translateNarrative(
   }
 
   return result;
+}
+
+// ---------------------------------------------------------------------------
+// Phase 16 — author-from-prose
+// ---------------------------------------------------------------------------
+
+function buildProseAuthorPrompt(input: ProseAuthorInput): string {
+  const availableAgents = renderAvailableAgents(input.availableAgents);
+  const nameHint = input.ceremonyName?.trim() ?? '';
+  return [
+    'You are a workflow translator for an agent-driven kanban board. The user describes a ceremony in natural language; produce an executable ceremony definition in our YAML schema.',
+    '',
+    'Available agents on this project (use only these names; do not invent):',
+    availableAgents,
+    '',
+    'Our YAML schema supports exactly these step types:',
+    "  - agent_run: { agent: <name|template>, prompt: <string>, timeout?: <duration> }",
+    "  - approve: { approvers: [<agentName|@role>], request_changes_policy: 'first'|'majority'|'all', quorum?: {n,of}, timeout?, timeoutAction?: 'auto_approve'|'auto_reject'|'escalate'|'notify' }",
+    "  - fan_out: { split_by: 'agents'|'labels'|'count', agents?: [...], count?: N, merge_strategy: 'all'|'any'|'first', steps: [...] }",
+    "  - handoff: { to: <agentName>, message?: <string> }",
+    "  - route: { agent: <name|template>, prompt?: <string> }",
+    '',
+    'There are no engine-level control primitives (no `if`, `switch`, `for_each`, expression DSL). Mid-flow content branching is achieved by an `agent_run` emitting `nextRoute` consumed by a downstream `route` step.',
+    '',
+    'Trigger taxonomy:',
+    "  - on_issue_entry: triggerConfig = { scope: 'project'|'board'|'task', columnSlug?, labelIds? }",
+    '  - on_schedule:    triggerConfig = { cronExpr, timezone? }',
+    "  - on_event:       triggerConfig = { eventType: 'review.requested'|'deliverable.created'|'comment.posted'|'session.completed'|'agent.hired' }",
+    '  - manual:         triggerConfig = {}',
+    '',
+    nameHint
+      ? `Suggested ceremony name: ${nameHint}`
+      : 'Choose a short ceremony name (≤ 40 chars). Title-Case is fine.',
+    '',
+    'User description (natural language):',
+    '"""',
+    input.prose,
+    '"""',
+    '',
+    'Respond ONLY with a JSON object (no prose, no markdown fence) matching:',
+    '{',
+    '  "yamlContent": string,                  // valid YAML matching our schema; MUST include a top-level `name:` field',
+    '  "triggerKind": "on_issue_entry"|"on_schedule"|"on_event"|"manual",',
+    '  "triggerConfig": object,',
+    '  "warnings": string[],                   // empty array if none',
+    '  "rationale": string                     // ≤3 sentences explaining choices',
+    '}',
+    '',
+    'Constraints:',
+    '- Use only agent names from the provided list. If the description names someone not on the list, add a warning and substitute "@role" or omit.',
+    "- Default to 'manual' triggerKind if you cannot infer one from the description.",
+    '- Keep the workflow as small as possible — prefer 2-4 steps over 8.',
+    '- For each step, write a clear, action-oriented prompt — not a description.',
+  ].join('\n');
+}
+
+/**
+ * Translate a free-form prose description into an executable ceremony YAML.
+ * Used by the Phase 16 "Generate from prose" Prose tab.
+ */
+export async function translateProse(input: ProseAuthorInput): Promise<TranslatorResult> {
+  if (!input.prose || !input.prose.trim()) {
+    throw new TranslatorError('prose is empty', false);
+  }
+
+  // Throttle key: project + first 60 chars of prose (lower-cased).
+  const proseSlug = input.prose.trim().toLowerCase().slice(0, 60).replace(/\s+/g, '-');
+  const key = `${input.projectId}:prose:${proseSlug}`;
+  consumeThrottleSlot(key);
+
+  const prompt = buildProseAuthorPrompt(input);
+
+  let raw: string;
+  try {
+    raw = await callTranslator(prompt);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    throw new TranslatorError(`translator LLM call failed: ${msg}`, true);
+  }
+
+  const parsed = extractJsonObject(raw);
+  const result = normalisePayload(parsed);
+
+  const { valid, errors } = validateWorkflowYaml(result.yamlContent);
+  if (!valid) {
+    throw new TranslatorError(
+      `generated YAML failed validation: ${errors.join('; ')}`,
+      true,
+    );
+  }
+
+  return result;
+}
+
+// ---------------------------------------------------------------------------
+// Phase 16 — refine-with-prose
+// ---------------------------------------------------------------------------
+
+function buildProseRefinePrompt(input: ProseRefineInput): string {
+  const availableAgents = renderAvailableAgents(input.availableAgents);
+  return [
+    'You are a workflow refiner for an agent-driven kanban board. You will be given an existing ceremony in YAML and a free-form refinement instruction. Apply the instruction and return an updated YAML — keep the structure as similar as possible to the original.',
+    '',
+    'Available agents on this project (use only these names; do not invent):',
+    availableAgents,
+    '',
+    'Our YAML schema supports exactly these step types: agent_run, approve, fan_out, handoff, route. There are no engine-level control primitives.',
+    '',
+    'Trigger taxonomy: on_issue_entry | on_schedule | on_event | manual.',
+    '',
+    'Current ceremony YAML:',
+    '"""',
+    input.currentYaml,
+    '"""',
+    '',
+    'Refinement instruction:',
+    '"""',
+    input.instruction,
+    '"""',
+    '',
+    'Respond ONLY with a JSON object (no prose, no markdown fence) matching:',
+    '{',
+    '  "yamlContent": string,                  // updated YAML',
+    '  "triggerKind": "on_issue_entry"|"on_schedule"|"on_event"|"manual",',
+    '  "triggerConfig": object,',
+    '  "warnings": string[],                   // empty array if none',
+    '  "rationale": string,                    // ≤3 sentences explaining the change',
+    '  "diffSummary": string                   // ≤2 sentences listing what changed (e.g. "Added security review step before deploy; doubled approve timeout to 48h.")',
+    '}',
+    '',
+    'Constraints:',
+    '- Preserve the original structure and style as much as possible. Only change what the instruction asks for (plus any small fix-ups required by validation).',
+    '- Use only agent names from the provided list. If the instruction names someone not on the list, add a warning and substitute "@role" or omit.',
+    '- Do not silently change unrelated steps or trigger configuration.',
+  ].join('\n');
+}
+
+/**
+ * Apply a refinement instruction to an existing ceremony YAML and return the
+ * updated YAML plus a short diff summary. Used by the Phase 16 "Refine"
+ * Prose-tab control.
+ */
+export async function refineProse(input: ProseRefineInput): Promise<ProseRefineResult> {
+  if (!input.instruction || !input.instruction.trim()) {
+    throw new TranslatorError('instruction is empty', false);
+  }
+  if (!input.currentYaml || !input.currentYaml.trim()) {
+    throw new TranslatorError('currentYaml is empty', false);
+  }
+
+  const key = `${input.projectId}:refine:${input.ceremonyKey || 'unknown'}`;
+  consumeThrottleSlot(key);
+
+  const prompt = buildProseRefinePrompt(input);
+
+  let raw: string;
+  try {
+    raw = await callTranslator(prompt);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    throw new TranslatorError(`translator LLM call failed: ${msg}`, true);
+  }
+
+  const parsed = extractJsonObject(raw);
+  const base = normalisePayload(parsed);
+
+  const { valid, errors } = validateWorkflowYaml(base.yamlContent);
+  if (!valid) {
+    throw new TranslatorError(
+      `refined YAML failed validation: ${errors.join('; ')}`,
+      true,
+    );
+  }
+
+  let diffSummary = '(no diff summary provided)';
+  if (parsed && typeof parsed === 'object') {
+    const p = parsed as Record<string, unknown>;
+    if (typeof p.diffSummary === 'string' && p.diffSummary.trim().length > 0) {
+      diffSummary = p.diffSummary.trim().slice(0, 500);
+    }
+  }
+
+  return { ...base, diffSummary };
 }

@@ -377,6 +377,58 @@ export function useValidateCeremony() {
 }
 
 // ---------------------------------------------------------------------------
+// Phase 16 — generate / refine ceremony from prose
+// ---------------------------------------------------------------------------
+
+export interface GenerateFromProseInput {
+  prose: string
+  ceremonyName?: string
+}
+
+export interface GenerateFromProseResult {
+  yamlContent: string
+  triggerKind: TriggerKind
+  triggerConfig: Record<string, unknown>
+  rationale: string
+  warnings?: string[]
+}
+
+export function useGenerateFromProse(projectId: string) {
+  return useMutation<GenerateFromProseResult, Error, GenerateFromProseInput>({
+    mutationFn: (input) =>
+      apiFetch<GenerateFromProseResult>(
+        `/api/projects/${projectId}/ceremonies/generate-from-prose`,
+        {
+          method: 'POST',
+          body: JSON.stringify(input),
+        },
+      ),
+  })
+}
+
+export interface RefineWithProseInput {
+  instruction: string
+  currentYaml: string
+}
+
+export interface RefineWithProseResult extends GenerateFromProseResult {
+  diffSummary: string
+}
+
+export function useRefineWithProse(projectId: string, ceremonyId: string) {
+  return useMutation<RefineWithProseResult, Error, RefineWithProseInput>({
+    mutationFn: (input) =>
+      apiFetch<RefineWithProseResult>(
+        `/api/projects/${projectId}/ceremonies/${ceremonyId}/refine-with-prose`,
+        {
+          method: 'POST',
+          body: JSON.stringify(input),
+        },
+      ),
+  })
+}
+
+// ---------------------------------------------------------------------------
 // Templates
 // ---------------------------------------------------------------------------
 

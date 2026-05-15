@@ -41,6 +41,8 @@ import {
 } from '../services/ceremony-scheduler.js';
 import {
   translateNarrative,
+  translateProse,
+  refineProse,
   TranslatorError,
   TranslatorThrottledError,
   type TranslatorAvailableAgent,
@@ -575,6 +577,145 @@ ceremoniesRouter.post('/:id/translate', async (req: Request, res: Response) => {
       return;
     }
     res.status(201).json(result.body);
+  } catch (err) {
+    handleError(res, err);
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Phase 16 — author/refine ceremony from prose
+// ---------------------------------------------------------------------------
+
+/**
+ * Resolve the project's agents into the shape the translator expects.
+ * Returns an empty array if the project has no agents (the translator falls
+ * back to "@role" mentions in that case).
+ */
+async function loadAvailableAgents(projectId: string): Promise<TranslatorAvailableAgent[]> {
+  const db = getDb();
+  const rows = await db
+    .select({ name: schema.agents.name, role: schema.agents.role })
+    .from(schema.agents)
+    .where(eq(schema.agents.projectId, projectId));
+  return rows.map((a) => ({ name: a.name, role: a.role }));
+}
+
+/**
+ * POST /api/projects/:projectId/ceremonies/generate-from-prose
+ *
+ * Body: { prose: string, ceremonyName?: string }
+ *
+ * Returns: { yamlContent, triggerKind, triggerConfig, rationale, warnings }
+ *
+ * Used by the Phase 16 Prose tab "Generate" button. The endpoint never
+ * persists anything — the client previews the YAML and then either accepts
+ * (which triggers the existing PATCH or POST flow) or discards it.
+ */
+ceremoniesRouter.post('/generate-from-prose', async (req: Request, res: Response) => {
+  try {
+    const { projectId } = req.params as Record<string, string>;
+    const { prose, ceremonyName } = (req.body ?? {}) as {
+      prose?: string;
+      ceremonyName?: string;
+    };
+    if (typeof prose !== 'string' || !prose.trim()) {
+      res.status(400).json({ error: '`prose` is required' });
+      return;
+    }
+
+    const availableAgents = await loadAvailableAgents(projectId);
+
+    let result;
+    try {
+      result = await translateProse({
+        prose,
+        projectId,
+        ceremonyName: typeof ceremonyName === 'string' ? ceremonyName : undefined,
+        availableAgents,
+      });
+    } catch (err) {
+      if (err instanceof TranslatorThrottledError) {
+        res.status(429).json({ error: err.message, retryable: false });
+        return;
+      }
+      if (err instanceof TranslatorError) {
+        res.status(502).json({ error: err.message, retryable: err.retryable });
+        return;
+      }
+      throw err;
+    }
+
+    res.json({
+      yamlContent: result.yamlContent,
+      triggerKind: result.triggerKind,
+      triggerConfig: result.triggerConfig,
+      rationale: result.rationale,
+      warnings: result.warnings,
+    });
+  } catch (err) {
+    handleError(res, err);
+  }
+});
+
+/**
+ * POST /api/projects/:projectId/ceremonies/:id/refine-with-prose
+ *
+ * Body: { instruction: string, currentYaml: string }
+ *
+ * Returns: { yamlContent, triggerKind, triggerConfig, rationale,
+ *            diffSummary, warnings }
+ *
+ * Used by the Phase 16 Prose tab "Refine" panel. As with generate-from-prose
+ * the endpoint never persists — the client shows a side-by-side diff and
+ * either accepts (PATCH the ceremony) or discards.
+ */
+ceremoniesRouter.post('/:id/refine-with-prose', async (req: Request, res: Response) => {
+  try {
+    const { projectId, id } = req.params as Record<string, string>;
+    const { instruction, currentYaml } = (req.body ?? {}) as {
+      instruction?: string;
+      currentYaml?: string;
+    };
+    if (typeof instruction !== 'string' || !instruction.trim()) {
+      res.status(400).json({ error: '`instruction` is required' });
+      return;
+    }
+    if (typeof currentYaml !== 'string' || !currentYaml.trim()) {
+      res.status(400).json({ error: '`currentYaml` is required' });
+      return;
+    }
+
+    const availableAgents = await loadAvailableAgents(projectId);
+
+    let result;
+    try {
+      result = await refineProse({
+        instruction,
+        currentYaml,
+        projectId,
+        ceremonyKey: id,
+        availableAgents,
+      });
+    } catch (err) {
+      if (err instanceof TranslatorThrottledError) {
+        res.status(429).json({ error: err.message, retryable: false });
+        return;
+      }
+      if (err instanceof TranslatorError) {
+        res.status(502).json({ error: err.message, retryable: err.retryable });
+        return;
+      }
+      throw err;
+    }
+
+    res.json({
+      yamlContent: result.yamlContent,
+      triggerKind: result.triggerKind,
+      triggerConfig: result.triggerConfig,
+      rationale: result.rationale,
+      diffSummary: result.diffSummary,
+      warnings: result.warnings,
+    });
   } catch (err) {
     handleError(res, err);
   }
