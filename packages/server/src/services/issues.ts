@@ -329,11 +329,50 @@ export interface CommentInput {
 
 export async function listComments(issueId: string) {
   const db = getDb();
-  return db
+  // Enrich with agent metadata for `authorKind = 'agent'` comments so the
+  // client doesn't have to join in JS. Human + system rows pass through as-is.
+  const rows = await db
     .select()
     .from(schema.comments)
     .where(eq(schema.comments.issueId, issueId))
     .orderBy(schema.comments.createdAt);
+
+  const agentIds = Array.from(
+    new Set(
+      rows
+        .filter((r) => r.authorKind === 'agent' && typeof r.authorRef === 'string' && r.authorRef.length > 0)
+        .map((r) => r.authorRef as string),
+    ),
+  );
+
+  let agentMap = new Map<string, { id: string; name: string; role: string }>();
+  if (agentIds.length > 0) {
+    // authorRef may be either an agent UUID or an agent name (mention dispatch
+    // writes the agent name as authorRef). Look up by both.
+    const byId = await db
+      .select({ id: schema.agents.id, name: schema.agents.name, role: schema.agents.role })
+      .from(schema.agents)
+      .where(inArray(schema.agents.id, agentIds.filter((s) => /^[0-9a-f-]{36}$/i.test(s))));
+    const byName = await db
+      .select({ id: schema.agents.id, name: schema.agents.name, role: schema.agents.role })
+      .from(schema.agents)
+      .where(inArray(schema.agents.name, agentIds.filter((s) => !/^[0-9a-f-]{36}$/i.test(s))));
+    agentMap = new Map([...byId, ...byName].flatMap((a) => [
+      [a.id, a],
+      [a.name, a],
+    ]));
+  }
+
+  return rows.map((r) => {
+    const isAgent = r.authorKind === 'agent';
+    const agent = isAgent && r.authorRef ? agentMap.get(r.authorRef) : undefined;
+    return {
+      ...r,
+      authorName: agent?.name ?? (r.authorKind === 'human' ? 'You' : null),
+      authorRole: agent?.role ?? null,
+      agentId: agent?.id ?? null,
+    };
+  });
 }
 
 export async function addComment(issueId: string, input: CommentInput | string, legacyAuthorId?: string) {

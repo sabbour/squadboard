@@ -29,6 +29,23 @@ export interface WsEventMap {
   'presence.left': { userId: string; projectId: string }
   'presence.updated': { userId: string; projectId: string; issueId?: string | null }
   'presence.snapshot': { users: PresenceUser[] }
+  // Live multi-agent sessions (Squad-IRL run-first slice)
+  'session.started':   { sessionId: string; title?: string; agentName?: string; model?: string; sdkSessionId?: string }
+  'session.message':   { sessionId: string; role: 'user' | 'assistant'; messageId?: string; content: string }
+  'session.delta':     { sessionId: string; delta: string; kind?: 'reasoning' | 'message' }
+  'session.tool':      { sessionId: string; phase: string; raw?: unknown }
+  'session.usage':     { sessionId: string; inputTokens: number; outputTokens: number; model?: string | null; cost: number }
+  'session.error':     { sessionId: string; message: string }
+  'session.completed': { sessionId: string; reason: 'completed' | 'cancelled' | 'failed' }
+  'session.steered':   { sessionId: string; action: 'inject' | 'interrupt' | 'handoff' | 'invite'; actor?: string; honoured?: boolean; reason?: string; note?: string; deferred?: boolean; toAgentId?: string; agentId?: string }
+  // Multi-actor comments timeline (Phase 9)
+  'comment.created':   { issueId: string; comment: Record<string, unknown> }
+  'comment.deleted':   { issueId: string; commentId: string }
+  // Deliverables (Phase 9)
+  'deliverable.created':    { issueId: string; deliverable: Record<string, unknown>; source?: 'auto-extract' | 'manual' }
+  'deliverable.updated':    { deliverableId: string; deliverable: Record<string, unknown> }
+  'deliverable.reviewed':   { deliverableId: string; verb: string; newStatus: string; reviewerName?: string; revisionRunId?: string | null }
+  'deliverable.superseded': { deliverableId: string; supersededBy: string }
   // Connection control (sent by server)
   connected: { serverId: string }
   error: { message: string }
