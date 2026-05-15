@@ -4,14 +4,22 @@ import { useProject } from '../api/projects.ts'
 import { useBudget } from '../api/costs.ts'
 import { apiFetch } from '../api/client.ts'
 import { McpConfigPanel } from '../components/settings/McpConfigPanel.tsx'
-import { TextDescription20Regular, PlugConnected20Regular, Money20Regular, Settings20Regular } from '@fluentui/react-icons'
+import { ReviewPolicySection } from '../components/settings/ReviewPolicySection.tsx'
+import {
+  TextDescription20Regular,
+  PlugConnected20Regular,
+  Money20Regular,
+  Settings20Regular,
+  Shield20Regular,
+} from '@fluentui/react-icons'
 
-type Section = 'general' | 'mcp' | 'budget'
+type Section = 'general' | 'mcp' | 'budget' | 'reviews'
 
 const SECTIONS: { id: Section; label: string; icon: React.ReactNode }[] = [
   { id: 'general', label: 'General', icon: <TextDescription20Regular /> },
   { id: 'mcp', label: 'MCP Config', icon: <PlugConnected20Regular /> },
   { id: 'budget', label: 'Budget', icon: <Money20Regular /> },
+  { id: 'reviews', label: 'Review policy', icon: <Shield20Regular /> },
 ]
 
 function SectionHeader({ title, sub }: { title: string; sub?: string }) {
@@ -274,7 +282,7 @@ export default function Settings() {
             <>
               <SectionHeader
                 title="MCP Config"
-                sub="Connect Claude Desktop, Cursor, or any MCP-compatible AI client to your board."
+                sub="Connect VS Code (GitHub Copilot) to your board via MCP."
               />
               <McpConfigPanel projectId={projectId} />
             </>
@@ -287,6 +295,16 @@ export default function Settings() {
                 sub="Set a monthly LLM spend cap and track month-to-date usage."
               />
               <BudgetSection projectId={projectId} />
+            </>
+          )}
+
+          {activeSection === 'reviews' && (
+            <>
+              <SectionHeader
+                title="Review policy"
+                sub="Default rules for approve steps in this project's workflows. Each workflow can still override per step."
+              />
+              <ReviewPolicySection projectId={projectId} />
             </>
           )}
         </div>
