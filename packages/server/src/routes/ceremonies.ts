@@ -1044,7 +1044,11 @@ export async function runTranslateForNarrative(opts: {
 export const ceremoniesTopRouter = Router();
 
 ceremoniesTopRouter.get('/templates', (_req: Request, res: Response) => {
-  res.json({ ok: true, data: getBuiltinTemplates() });
+  try {
+    res.json({ ok: true, data: getBuiltinTemplates() });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: String(err) });
+  }
 });
 
 ceremoniesTopRouter.post('/validate', (req: Request, res: Response) => {

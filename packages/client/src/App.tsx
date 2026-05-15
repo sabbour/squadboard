@@ -20,6 +20,7 @@ import Consult from './pages/Consult.tsx'
 import Now from './pages/Now.tsx'
 import Diagnostics from './pages/Diagnostics.tsx'
 import Heartbeat from './pages/Heartbeat.tsx'
+import Templates from './pages/Templates.tsx'
 
 export default function App() {
   return (
@@ -54,6 +55,7 @@ export default function App() {
         {/* Phase 10: ceremonies replaces workflows. Legacy routes redirect via the page shims. */}
         <Route path="projects/:id/ceremonies" element={<CeremonyList />} />
         <Route path="projects/:id/ceremonies/review" element={<CeremoniesReview />} />
+        <Route path="projects/:id/ceremonies/templates" element={<Templates />} />
         <Route path="projects/:id/ceremonies/new" element={<CeremonyEditor />} />
         <Route path="projects/:id/ceremonies/:ceremonyId" element={<CeremonyEditor />} />
         <Route path="projects/:id/workflows" element={<Workflows />} />
