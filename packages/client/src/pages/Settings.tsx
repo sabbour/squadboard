@@ -1,9 +1,15 @@
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { useParams } from 'react-router'
 import { useProject, useUpdateProject } from '../api/projects.ts'
 import { useModels } from '../api/agents.ts'
 import { useBudget } from '../api/costs.ts'
 import { apiFetch } from '../api/client.ts'
+import {
+  useExportProject,
+  useImportProject,
+  useSaveProjectAsTemplate,
+  readFileAsJson,
+} from '../api/templates.ts'
 import { McpConfigPanel } from '../components/settings/McpConfigPanel.tsx'
 import { ReviewPolicySection } from '../components/settings/ReviewPolicySection.tsx'
 import PageHeader from '../components/layout/PageHeader.tsx'
@@ -16,6 +22,15 @@ import {
   Caption1,
   Body1,
   tokens,
+  Dialog,
+  DialogSurface,
+  DialogBody,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  Button,
+  Input,
+  Textarea,
 } from '@fluentui/react-components'
 import {
   TextDescription20Regular,
@@ -23,15 +38,17 @@ import {
   Money20Regular,
   Settings20Regular,
   Shield20Regular,
+  FolderArrowRight20Regular,
 } from '@fluentui/react-icons'
 
-type Section = 'general' | 'mcp' | 'budget' | 'reviews'
+type Section = 'general' | 'mcp' | 'budget' | 'reviews' | 'portability'
 
 const SECTIONS: { id: Section; label: string; icon: React.ReactNode }[] = [
   { id: 'general', label: 'General', icon: <TextDescription20Regular /> },
   { id: 'mcp', label: 'MCP Config', icon: <PlugConnected20Regular /> },
   { id: 'budget', label: 'Budget', icon: <Money20Regular /> },
   { id: 'reviews', label: 'Review policy', icon: <Shield20Regular /> },
+  { id: 'portability', label: 'Portability', icon: <FolderArrowRight20Regular /> },
 ]
 
 function SectionHeader({ title, sub }: { title: string; sub?: string }) {
@@ -276,6 +293,204 @@ function DefaultModelSection({
   )
 }
 
+function SaveProjectAsTemplateDialog({
+  open,
+  onSave,
+  onClose,
+  isPending,
+  error,
+}: {
+  open: boolean
+  onSave: (name: string, description: string) => void
+  onClose: () => void
+  isPending: boolean
+  error: string | null
+}) {
+  const [name, setName] = useState('')
+  const [description, setDescription] = useState('')
+  return (
+    <Dialog open={open} onOpenChange={(_, d) => { if (!d.open) onClose() }}>
+      <DialogSurface style={{ maxWidth: 440 }}>
+        <DialogBody>
+          <DialogTitle>Save project as template</DialogTitle>
+          <DialogContent style={{ display: 'flex', flexDirection: 'column', gap: tokens.spacingVerticalM }}>
+            <Field label="Template name" required>
+              <Input
+                value={name}
+                onChange={(_, d) => setName(d.value)}
+                placeholder="e.g., Standard SaaS project"
+                autoFocus
+              />
+            </Field>
+            <Field label="Description">
+              <Textarea
+                value={description}
+                onChange={(_, d) => setDescription(d.value)}
+                placeholder="What does this project template include?"
+                rows={3}
+              />
+            </Field>
+            {error && (
+              <Caption1 style={{ color: tokens.colorPaletteRedForeground1 }}>{error}</Caption1>
+            )}
+          </DialogContent>
+          <DialogActions>
+            <Button appearance="secondary" onClick={onClose}>Cancel</Button>
+            <Button
+              appearance="primary"
+              disabled={!name.trim() || isPending}
+              onClick={() => onSave(name.trim(), description.trim())}
+            >
+              {isPending ? 'Saving…' : 'Save template'}
+            </Button>
+          </DialogActions>
+        </DialogBody>
+      </DialogSurface>
+    </Dialog>
+  )
+}
+
+function PortabilitySection({ projectId, projectName }: { projectId: string; projectName: string }) {
+  const exportProject = useExportProject()
+  const importProject = useImportProject()
+  const saveAsTemplate = useSaveProjectAsTemplate(projectId)
+  const [showSaveDialog, setShowSaveDialog] = useState(false)
+  const [saveError, setSaveError] = useState<string | null>(null)
+  const [saveDone, setSaveDone] = useState(false)
+  const [importFeedback, setImportFeedback] = useState<string | null>(null)
+  const importFileRef = useRef<HTMLInputElement>(null)
+
+  async function handleImportFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setImportFeedback(null)
+    try {
+      const payload = await readFileAsJson(file)
+      const result = await importProject.mutateAsync({ payload })
+      setImportFeedback(`Project "${result.project.name}" imported successfully.`)
+    } catch (err) {
+      setImportFeedback(err instanceof Error ? err.message : 'Import failed')
+    }
+    e.target.value = ''
+  }
+
+  async function handleSaveTemplate(name: string, description: string) {
+    setSaveError(null)
+    try {
+      await saveAsTemplate.mutateAsync({ name, description: description || undefined })
+      setShowSaveDialog(false)
+      setSaveDone(true)
+      setTimeout(() => setSaveDone(false), 3000)
+    } catch (err) {
+      setSaveError(err instanceof Error ? err.message : 'Save failed')
+    }
+  }
+
+  const rowStyle: React.CSSProperties = {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: '12px 16px',
+    background: 'var(--surface)',
+    border: '1px solid var(--border)',
+    borderRadius: '8px',
+    gap: '16px',
+  }
+
+  const btnStyle: React.CSSProperties = {
+    background: 'var(--bg)',
+    border: '1px solid var(--border)',
+    borderRadius: '6px',
+    color: 'var(--text)',
+    padding: '6px 14px',
+    fontSize: '13px',
+    fontWeight: 500,
+    cursor: 'pointer',
+    flexShrink: 0,
+  }
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', maxWidth: 560 }}>
+      {/* Export */}
+      <div style={rowStyle}>
+        <div>
+          <Body1 style={{ display: 'block', fontWeight: tokens.fontWeightSemibold }}>Export project</Body1>
+          <Caption1 style={{ display: 'block', color: tokens.colorNeutralForeground3 }}>
+            Download this project as a portable JSON file.
+          </Caption1>
+        </div>
+        <button
+          style={{ ...btnStyle, opacity: exportProject.isPending ? 0.6 : 1, cursor: exportProject.isPending ? 'not-allowed' : 'pointer' }}
+          disabled={exportProject.isPending}
+          onClick={() => exportProject.mutate({ projectId, filename: `project-${projectName}.json` })}
+        >
+          {exportProject.isPending ? 'Exporting…' : '↓ Export'}
+        </button>
+      </div>
+
+      {/* Import */}
+      <div style={rowStyle}>
+        <div>
+          <Body1 style={{ display: 'block', fontWeight: tokens.fontWeightSemibold }}>Import project</Body1>
+          <Caption1 style={{ display: 'block', color: tokens.colorNeutralForeground3 }}>
+            Import a project from an exported JSON file.
+          </Caption1>
+        </div>
+        <button
+          style={{ ...btnStyle, opacity: importProject.isPending ? 0.6 : 1, cursor: importProject.isPending ? 'not-allowed' : 'pointer' }}
+          disabled={importProject.isPending}
+          onClick={() => importFileRef.current?.click()}
+        >
+          {importProject.isPending ? 'Importing…' : '↑ Import'}
+        </button>
+        <input
+          ref={importFileRef}
+          type="file"
+          accept=".json,application/json"
+          style={{ display: 'none' }}
+          onChange={(e) => void handleImportFile(e)}
+        />
+      </div>
+
+      {/* Save as template */}
+      <div style={rowStyle}>
+        <div>
+          <Body1 style={{ display: 'block', fontWeight: tokens.fontWeightSemibold }}>Save as template</Body1>
+          <Caption1 style={{ display: 'block', color: tokens.colorNeutralForeground3 }}>
+            Save this project structure as a reusable template.
+          </Caption1>
+        </div>
+        <button
+          style={btnStyle}
+          onClick={() => { setSaveError(null); setShowSaveDialog(true) }}
+        >
+          {saveDone ? '✓ Saved' : '☆ Save as template'}
+        </button>
+      </div>
+
+      {importFeedback && (
+        <Caption1
+          style={{
+            display: 'block',
+            color: importFeedback.toLowerCase().includes('fail') || importFeedback.toLowerCase().includes('error')
+              ? tokens.colorPaletteRedForeground1 : tokens.colorPaletteGreenForeground1,
+          }}
+        >
+          {importFeedback}
+        </Caption1>
+      )}
+
+      <SaveProjectAsTemplateDialog
+        open={showSaveDialog}
+        onSave={(name, desc) => void handleSaveTemplate(name, desc)}
+        onClose={() => setShowSaveDialog(false)}
+        isPending={saveAsTemplate.isPending}
+        error={saveError}
+      />
+    </div>
+  )
+}
+
 export default function Settings() {
   const { id: projectId = '' } = useParams<{ id: string }>()
   const { data: project, isLoading, isError } = useProject(projectId)
@@ -403,6 +618,16 @@ export default function Settings() {
                 sub="Default rules for approve steps in this project's workflows. Each workflow can still override per step."
               />
               <ReviewPolicySection projectId={projectId} />
+            </>
+          )}
+
+          {activeSection === 'portability' && (
+            <>
+              <SectionHeader
+                title="Portability"
+                sub="Export, import, and template this project for reuse across environments."
+              />
+              <PortabilitySection projectId={projectId} projectName={project.name} />
             </>
           )}
         </div>

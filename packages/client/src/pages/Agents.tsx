@@ -1,9 +1,15 @@
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { useParams } from 'react-router'
 import { useAgents, type Agent } from '../api/agents.ts'
 import { useProject } from '../api/projects.ts'
 import { apiFetch } from '../api/client.ts'
 import { useRoutingLog, useRoutingStats, useRefreshKeywords } from '../api/routing.ts'
+import {
+  useExportTeam,
+  useImportTeam,
+  useSaveTeamAsTemplate,
+  readFileAsJson,
+} from '../api/templates.ts'
 import AgentGrid from '../components/agents/AgentGrid.tsx'
 import AgentDetailPanel from '../components/agents/AgentDetailPanel.tsx'
 import HireAgentModal from '../components/agents/HireAgentModal.tsx'
@@ -13,7 +19,21 @@ import { RoutingLogTable } from '../components/routing/RoutingLogTable.tsx'
 import { RoutingStatsPanel } from '../components/routing/RoutingStatsPanel.tsx'
 import { CastPanel } from '../components/routing/CastPanel.tsx'
 import { ArrowSync20Regular, Bot20Regular, ArrowSwap20Regular, People20Regular } from '@fluentui/react-icons'
-import { Caption1, Body1, tokens } from '@fluentui/react-components'
+import {
+  Caption1,
+  Body1,
+  tokens,
+  Dialog,
+  DialogSurface,
+  DialogBody,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  Button,
+  Field,
+  Input,
+  Textarea,
+} from '@fluentui/react-components'
 import PageHeader from '../components/layout/PageHeader.tsx'
 
 interface RouteTestResult {
@@ -184,6 +204,67 @@ function TestRoutingPanel({ projectId }: { projectId: string }) {
   )
 }
 
+// ---------------------------------------------------------------------------
+// Save-as-template Dialog
+// ---------------------------------------------------------------------------
+
+function SaveAsTemplateDialog({
+  open,
+  onSave,
+  onClose,
+  isPending,
+  error,
+}: {
+  open: boolean
+  onSave: (name: string, description: string) => void
+  onClose: () => void
+  isPending: boolean
+  error: string | null
+}) {
+  const [tplName, setTplName] = useState('')
+  const [tplDesc, setTplDesc] = useState('')
+  return (
+    <Dialog open={open} onOpenChange={(_, d) => { if (!d.open) onClose() }}>
+      <DialogSurface style={{ maxWidth: 440 }}>
+        <DialogBody>
+          <DialogTitle>Save team as template</DialogTitle>
+          <DialogContent style={{ display: 'flex', flexDirection: 'column', gap: tokens.spacingVerticalM }}>
+            <Field label="Template name" required>
+              <Input
+                value={tplName}
+                onChange={(_, d) => setTplName(d.value)}
+                placeholder="e.g., Standard frontend squad"
+                autoFocus
+              />
+            </Field>
+            <Field label="Description">
+              <Textarea
+                value={tplDesc}
+                onChange={(_, d) => setTplDesc(d.value)}
+                placeholder="What does this team template include?"
+                rows={3}
+              />
+            </Field>
+            {error && (
+              <Caption1 style={{ color: tokens.colorPaletteRedForeground1 }}>{error}</Caption1>
+            )}
+          </DialogContent>
+          <DialogActions>
+            <Button appearance="secondary" onClick={onClose}>Cancel</Button>
+            <Button
+              appearance="primary"
+              disabled={!tplName.trim() || isPending}
+              onClick={() => onSave(tplName.trim(), tplDesc.trim())}
+            >
+              {isPending ? 'Saving…' : 'Save template'}
+            </Button>
+          </DialogActions>
+        </DialogBody>
+      </DialogSurface>
+    </Dialog>
+  )
+}
+
 export default function Agents() {
   const { id: projectId = '' } = useParams<{ id: string }>()
   const { data: project } = useProject(projectId)
@@ -193,9 +274,42 @@ export default function Agents() {
   const [showHireTeamModal, setShowHireTeamModal] = useState(false)
   const [activeTab, setActiveTab] = useState<'agents' | 'routing'>('agents')
 
+  // Team portability
+  const exportTeam = useExportTeam()
+  const importTeam = useImportTeam()
+  const saveAsTemplate = useSaveTeamAsTemplate(projectId)
+  const [showSaveTemplateDialog, setShowSaveTemplateDialog] = useState(false)
+  const [saveTemplateError, setSaveTemplateError] = useState<string | null>(null)
+  const [importFeedback, setImportFeedback] = useState<string | null>(null)
+  const importFileRef = useRef<HTMLInputElement>(null)
+
   const { data: routingLog = [], isLoading: logLoading } = useRoutingLog(projectId)
   const { data: routingStats, isLoading: statsLoading } = useRoutingStats(projectId)
   const refreshKeywords = useRefreshKeywords(projectId)
+
+  async function handleImportTeamFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setImportFeedback(null)
+    try {
+      const payload = await readFileAsJson(file)
+      const result = await importTeam.mutateAsync({ projectId, payload })
+      setImportFeedback(`Imported ${result.imported} agents.`)
+    } catch (err) {
+      setImportFeedback(err instanceof Error ? err.message : 'Import failed')
+    }
+    e.target.value = ''
+  }
+
+  async function handleSaveTemplate(name: string, description: string) {
+    setSaveTemplateError(null)
+    try {
+      await saveAsTemplate.mutateAsync({ name, description: description || undefined })
+      setShowSaveTemplateDialog(false)
+    } catch (err) {
+      setSaveTemplateError(err instanceof Error ? err.message : 'Save failed')
+    }
+  }
 
   const TAB_STYLE = (active: boolean): React.CSSProperties => ({
     background: 'none',
@@ -261,6 +375,75 @@ export default function Agents() {
             )}
             {activeTab === 'agents' && (
               <>
+                {/* Team portability */}
+                <button
+                  onClick={() => exportTeam.mutate({ projectId, filename: `team-${project?.name ?? projectId}.json` })}
+                  disabled={exportTeam.isPending}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    background: 'var(--bg)',
+                    border: '1px solid var(--border)',
+                    borderRadius: 'var(--radius)',
+                    color: 'var(--text)',
+                    padding: '7px 14px',
+                    fontSize: '13px',
+                    fontWeight: 500,
+                    cursor: exportTeam.isPending ? 'not-allowed' : 'pointer',
+                    opacity: exportTeam.isPending ? 0.6 : 1,
+                  }}
+                  title="Export team as JSON"
+                >
+                  ↓ Export team
+                </button>
+                <button
+                  onClick={() => importFileRef.current?.click()}
+                  disabled={importTeam.isPending}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    background: 'var(--bg)',
+                    border: '1px solid var(--border)',
+                    borderRadius: 'var(--radius)',
+                    color: 'var(--text)',
+                    padding: '7px 14px',
+                    fontSize: '13px',
+                    fontWeight: 500,
+                    cursor: importTeam.isPending ? 'not-allowed' : 'pointer',
+                    opacity: importTeam.isPending ? 0.6 : 1,
+                  }}
+                  title="Import team from JSON file"
+                >
+                  ↑ Import team
+                </button>
+                <input
+                  ref={importFileRef}
+                  type="file"
+                  accept=".json,application/json"
+                  style={{ display: 'none' }}
+                  onChange={(e) => void handleImportTeamFile(e)}
+                />
+                <button
+                  onClick={() => { setSaveTemplateError(null); setShowSaveTemplateDialog(true) }}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    background: 'var(--bg)',
+                    border: '1px solid var(--border)',
+                    borderRadius: 'var(--radius)',
+                    color: 'var(--text)',
+                    padding: '7px 14px',
+                    fontSize: '13px',
+                    fontWeight: 500,
+                    cursor: 'pointer',
+                  }}
+                  title="Save current team roster as a reusable template"
+                >
+                  ☆ Save as template
+                </button>
                 <button
                   onClick={() => setShowHireTeamModal(true)}
                   style={{
@@ -414,6 +597,33 @@ export default function Agents() {
           onClose={() => setShowHireTeamModal(false)}
         />
       )}
+
+      {/* Team portability modals */}
+      {importFeedback && (
+        <div style={{
+          position: 'fixed', bottom: 24, right: 24, zIndex: 9999,
+          background: 'var(--surface)',
+          border: '1px solid var(--border)',
+          borderRadius: 'var(--radius)',
+          padding: '10px 16px',
+          fontSize: '13px',
+          color: importFeedback.toLowerCase().includes('fail') || importFeedback.toLowerCase().includes('error')
+            ? tokens.colorPaletteRedForeground1 : tokens.colorPaletteGreenForeground1,
+          cursor: 'pointer',
+        }}
+          onClick={() => setImportFeedback(null)}
+        >
+          {importFeedback} ✕
+        </div>
+      )}
+
+      <SaveAsTemplateDialog
+        open={showSaveTemplateDialog}
+        onSave={(name, desc) => void handleSaveTemplate(name, desc)}
+        onClose={() => setShowSaveTemplateDialog(false)}
+        isPending={saveAsTemplate.isPending}
+        error={saveTemplateError}
+      />
     </div>
   )
 }

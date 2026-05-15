@@ -35,6 +35,7 @@ import {
   type CeremonyKind,
 } from '../api/ceremonies.ts'
 import { useAgents } from '../api/agents.ts'
+import { useSaveWorkflowAsTemplate, triggerTextDownload } from '../api/templates.ts'
 import {
   Subtitle1,
   Caption1,
@@ -42,7 +43,14 @@ import {
   Badge,
   Button,
   Card,
+  Dialog,
+  DialogSurface,
+  DialogBody,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
   Dropdown,
+  Field,
   Label,
   Option,
   Radio,
@@ -188,6 +196,36 @@ export default function CeremonyEditor() {
   const [convertToast, setConvertToast] = useState<string | null>(null)
 
   const { data: agents } = useAgents(projectId)
+  const saveWorkflowAsTemplate = useSaveWorkflowAsTemplate(projectId)
+  const [showSaveTemplateDialog, setShowSaveTemplateDialog] = useState(false)
+  const [templateName, setTemplateName] = useState('')
+  const [templateDescription, setTemplateDescription] = useState('')
+  const [saveTemplateError, setSaveTemplateError] = useState<string | null>(null)
+  const [saveTemplateDone, setSaveTemplateDone] = useState(false)
+
+  async function handleSaveAsTemplate() {
+    if (!templateName.trim()) return
+    setSaveTemplateError(null)
+    try {
+      await saveWorkflowAsTemplate.mutateAsync({
+        ceremonyId: ceremonyId!,
+        name: templateName.trim(),
+        description: templateDescription.trim() || undefined,
+      })
+      setShowSaveTemplateDialog(false)
+      setTemplateName('')
+      setTemplateDescription('')
+      setSaveTemplateDone(true)
+      setTimeout(() => setSaveTemplateDone(false), 3000)
+    } catch (e: unknown) {
+      setSaveTemplateError(e instanceof Error ? e.message : 'Save failed')
+    }
+  }
+
+  function handleExportYaml() {
+    const filename = `${name.replace(/[^a-z0-9]+/gi, '-').toLowerCase() || 'ceremony'}.yaml`
+    triggerTextDownload(yaml, filename, 'text/yaml')
+  }
 
   // Hydrate from server.
   useEffect(() => {
@@ -455,6 +493,30 @@ export default function CeremonyEditor() {
           <Button onClick={handleRunNow} icon={<Play16Regular />} disabled={readOnly}>
             Run now
           </Button>
+          {!isNew && (
+            <>
+              <Button
+                appearance="outline"
+                size="medium"
+                onClick={() => { setSaveTemplateError(null); setTemplateName(name); setTemplateDescription(description); setShowSaveTemplateDialog(true) }}
+                disabled={isNew || readOnly}
+              >
+                ☆ Save as template
+              </Button>
+              <Button
+                appearance="outline"
+                size="medium"
+                onClick={handleExportYaml}
+              >
+                ↓ Export YAML
+              </Button>
+              {saveTemplateDone && (
+                <Caption1 style={{ color: tokens.colorPaletteGreenForeground1 }}>
+                  ✓ Template saved
+                </Caption1>
+              )}
+            </>
+          )}
           <Button appearance="primary" onClick={handleSave} disabled={readOnly}>
             Save
           </Button>
@@ -932,6 +994,48 @@ export default function CeremonyEditor() {
           )}
         </div>
       </div>
+
+      {/* Save-as-template Dialog */}
+      {showSaveTemplateDialog && (
+        <Dialog open onOpenChange={(_, d) => { if (!d.open) setShowSaveTemplateDialog(false) }}>
+          <DialogSurface style={{ maxWidth: 440 }}>
+            <DialogBody>
+              <DialogTitle>Save ceremony as template</DialogTitle>
+              <DialogContent style={{ display: 'flex', flexDirection: 'column', gap: tokens.spacingVerticalM }}>
+                <Field label="Template name" required>
+                  <Input
+                    value={templateName}
+                    onChange={(_, d) => setTemplateName(d.value)}
+                    placeholder="e.g., Weekly triage sweep"
+                    autoFocus
+                  />
+                </Field>
+                <Field label="Description">
+                  <Textarea
+                    value={templateDescription}
+                    onChange={(_, d) => setTemplateDescription(d.value)}
+                    placeholder="What does this ceremony do?"
+                    rows={3}
+                  />
+                </Field>
+                {saveTemplateError && (
+                  <Caption1 style={{ color: tokens.colorPaletteRedForeground1 }}>{saveTemplateError}</Caption1>
+                )}
+              </DialogContent>
+              <DialogActions>
+                <Button appearance="secondary" onClick={() => setShowSaveTemplateDialog(false)}>Cancel</Button>
+                <Button
+                  appearance="primary"
+                  disabled={!templateName.trim() || saveWorkflowAsTemplate.isPending}
+                  onClick={() => void handleSaveAsTemplate()}
+                >
+                  {saveWorkflowAsTemplate.isPending ? 'Saving…' : 'Save template'}
+                </Button>
+              </DialogActions>
+            </DialogBody>
+          </DialogSurface>
+        </Dialog>
+      )}
     </div>
   )
 }

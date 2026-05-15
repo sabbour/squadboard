@@ -1,16 +1,18 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router'
 import { Button, Title2, Title3, Body1, Dialog, DialogSurface, DialogBody, DialogTitle, DialogContent, DialogActions, tokens } from '@fluentui/react-components'
-import { Folder20Regular } from '@fluentui/react-icons'
+import { Folder20Regular, DocumentCopy20Regular } from '@fluentui/react-icons'
 import { useProjects } from '../api/projects.ts'
 import { useDiscoverSquad, useRegisterSquad, useInitSquad, useCreateSquad } from '../api/squad.ts'
 import type { SquadDirectory } from '../api/squad.ts'
+import { useTemplates, useInstantiateProjectTemplate } from '../api/templates.ts'
 import ProjectCard from '../components/ProjectCard.tsx'
 
 export default function ProjectPicker() {
   const navigate = useNavigate()
   const { data: projects, isLoading, isError } = useProjects()
   const [showModal, setShowModal] = useState(false)
+  const [showFromTemplate, setShowFromTemplate] = useState(false)
 
   const hasProjects = projects && projects.length > 0
 
@@ -23,12 +25,21 @@ export default function ProjectPicker() {
             Select a project to open its board, or connect a new .squad/ directory.
           </Body1>
         </div>
-        <Button
-          appearance="primary"
-          onClick={() => setShowModal(true)}
-        >
-          Add Project
-        </Button>
+        <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+          <Button
+            appearance="outline"
+            icon={<DocumentCopy20Regular />}
+            onClick={() => setShowFromTemplate(true)}
+          >
+            Create from template
+          </Button>
+          <Button
+            appearance="primary"
+            onClick={() => setShowModal(true)}
+          >
+            Add Project
+          </Button>
+        </div>
       </div>
 
       {isLoading && (
@@ -69,7 +80,116 @@ export default function ProjectPicker() {
           onCreated={(id) => void navigate(`/projects/${id}/board`)}
         />
       )}
+
+      {showFromTemplate && (
+        <CreateFromTemplateModal
+          onClose={() => setShowFromTemplate(false)}
+          onCreated={(id) => void navigate(`/projects/${id}/board`)}
+        />
+      )}
     </div>
+  )
+}
+
+function CreateFromTemplateModal({
+  onClose,
+  onCreated,
+}: {
+  onClose: () => void
+  onCreated: (id: string) => void
+}) {
+  const { data: templates = [], isLoading, isError } = useTemplates('project')
+  const instantiate = useInstantiateProjectTemplate()
+  const [selectedId, setSelectedId] = useState<string | null>(null)
+  const [name, setName] = useState('')
+  const [error, setError] = useState<string | null>(null)
+
+  async function handleCreate() {
+    if (!selectedId || !name.trim()) return
+    setError(null)
+    try {
+      const result = await instantiate.mutateAsync({ templateId: selectedId, name: name.trim() })
+      onCreated(result.project.id)
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : 'Failed to create project')
+    }
+  }
+
+  return (
+    <Dialog open onOpenChange={(_, d) => { if (!d.open) onClose() }}>
+      <DialogSurface style={{ maxWidth: 540, width: '100%' }}>
+        <DialogBody>
+          <DialogTitle>Create project from template</DialogTitle>
+          <DialogContent style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+            {isLoading && (
+              <Body1 style={{ color: 'var(--text-muted)' }}>Loading templates…</Body1>
+            )}
+            {isError && (
+              <Body1 style={{ color: 'var(--danger)' }}>Failed to load templates.</Body1>
+            )}
+            {!isLoading && !isError && templates.length === 0 && (
+              <Body1 style={{ color: 'var(--text-muted)' }}>
+                No project templates yet. Save a project as a template from Settings → Portability.
+              </Body1>
+            )}
+            {!isLoading && templates.length > 0 && (
+              <>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: '240px', overflowY: 'auto' }}>
+                  {templates.map((tpl) => (
+                    <button
+                      key={tpl.id}
+                      onClick={() => { setSelectedId(tpl.id); setName(tpl.name) }}
+                      style={{
+                        display: 'flex',
+                        flexDirection: 'column',
+                        alignItems: 'flex-start',
+                        background: selectedId === tpl.id ? 'rgba(56,139,253,0.12)' : 'var(--bg)',
+                        border: `1px solid ${selectedId === tpl.id ? tokens.colorBrandStroke1 : 'var(--border)'}`,
+                        borderRadius: 'var(--radius)',
+                        padding: '10px 14px',
+                        color: 'var(--text)',
+                        textAlign: 'left',
+                        width: '100%',
+                        cursor: 'pointer',
+                      }}
+                    >
+                      <span style={{ fontWeight: 500 }}>{tpl.name}</span>
+                      {tpl.description && (
+                        <span style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '2px' }}>{tpl.description}</span>
+                      )}
+                    </button>
+                  ))}
+                </div>
+                <div>
+                  <label style={{ fontSize: '12px', color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>
+                    Project name <span style={{ color: 'var(--danger)' }}>*</span>
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="my-new-project"
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === 'Enter') void handleCreate() }}
+                    style={inputStyle}
+                  />
+                </div>
+              </>
+            )}
+            {error && <p style={{ color: 'var(--danger)', fontSize: '13px', margin: 0 }}>{error}</p>}
+          </DialogContent>
+          <DialogActions>
+            <Button appearance="secondary" onClick={onClose}>Cancel</Button>
+            <Button
+              appearance="primary"
+              disabled={!selectedId || !name.trim() || instantiate.isPending}
+              onClick={() => void handleCreate()}
+            >
+              {instantiate.isPending ? 'Creating…' : 'Create project'}
+            </Button>
+          </DialogActions>
+        </DialogBody>
+      </DialogSurface>
+    </Dialog>
   )
 }
 
