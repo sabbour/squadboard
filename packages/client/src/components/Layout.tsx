@@ -29,6 +29,8 @@ import {
   ChatHelp24Regular,
   ChatHelp20Regular,
   Eye24Regular,
+  Heart24Regular,
+  HeartPulse24Regular,
 } from '@fluentui/react-icons'
 import type { OnNavItemSelectData } from '@fluentui/react-components'
 import CaptureModal from './inbox/CaptureModal.tsx'
@@ -164,12 +166,15 @@ export default function Layout() {
   function getSelectedValue(): string {
     if (location.pathname === '/' || location.pathname === '') return 'projects'
     if (location.pathname.startsWith('/now')) return 'now'
+    if (location.pathname.startsWith('/diagnostics')) return 'diagnostics'
+    if (location.pathname.startsWith('/heartbeat')) return 'heartbeat'
     if (id) {
       // Match longest segment first so 'consult' isn't shadowed by 'flow' etc.
       const matches = PROJECT_NAV_ITEMS
         .filter((item) => location.pathname.includes(`/${item.segment}`))
         .sort((a, b) => b.segment.length - a.segment.length)
       if (matches[0]) return matches[0].segment
+      if (location.pathname.includes('/diagnostics')) return 'diagnostics'
       if (location.pathname.includes('/settings')) return 'settings'
     } else if (location.pathname.startsWith('/consult')) {
       // No project is selected but we are inside the global Consult page.
@@ -184,6 +189,10 @@ export default function Layout() {
       void navigate('/')
     } else if (value === 'now') {
       void navigate('/now')
+    } else if (value === 'diagnostics') {
+      void navigate(id ? `/projects/${id}/diagnostics` : '/diagnostics')
+    } else if (value === 'heartbeat') {
+      void navigate('/heartbeat')
     } else if (value === 'consult' && !id) {
       // Cross-project Consult — when no project is selected.
       void navigate('/consult/new')
@@ -217,6 +226,15 @@ export default function Layout() {
           </NavItem>
           <NavItem icon={<ChatHelp24Regular />} value="consult">
             Consult
+          </NavItem>
+
+          {/* Phase 3: System / Operations — Diagnostics and Heartbeat */}
+          <NavSectionHeader>SYSTEM</NavSectionHeader>
+          <NavItem icon={<HeartPulse24Regular />} value="diagnostics">
+            Diagnostics
+          </NavItem>
+          <NavItem icon={<Heart24Regular />} value="heartbeat">
+            Heartbeat
           </NavItem>
 
           {id && (

@@ -18,6 +18,8 @@ import Tools from './pages/Tools.tsx'
 import McpServers from './pages/McpServers.tsx'
 import Consult from './pages/Consult.tsx'
 import Now from './pages/Now.tsx'
+import Diagnostics from './pages/Diagnostics.tsx'
+import Heartbeat from './pages/Heartbeat.tsx'
 
 export default function App() {
   return (
@@ -31,6 +33,10 @@ export default function App() {
         <Route path="consult" element={<Navigate to="/consult/new" replace />} />
         <Route path="consult/new" element={<Consult />} />
         <Route path="consult/:sessionId" element={<Consult />} />
+        {/* Phase 3: system-level pages — diagnostics and heartbeat */}
+        <Route path="diagnostics" element={<Diagnostics />} />
+        <Route path="heartbeat" element={<Heartbeat />} />
+        <Route path="projects/:id/diagnostics" element={<Diagnostics />} />
         <Route path="projects/:id" element={<Navigate to="dashboard" replace />} />
         <Route path="projects/:id/dashboard" element={<Dashboard />} />
         <Route path="projects/:id/inbox" element={<Inbox />} />

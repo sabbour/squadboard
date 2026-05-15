@@ -35,6 +35,7 @@ import activityRouter from './routes/activity.js';
 import { curatedSkillsRouter, projectSkillsRouter, agentSkillsRouter } from './routes/skills.js';
 import { projectToolsRouter, agentToolsRouter } from './routes/tools.js';
 import { projectMcpRouter, agentMcpRouter } from './routes/mcp.js';
+import { diagnosticsRouter, projectDiagnosticsRouter } from './routes/diagnostics.js';
 import { createMcpHttpRouter } from './mcp/http-transport.js';
 import { dispatcher } from './engine/dispatcher.js';
 // Phase 10: side-effect import — registers the on_event ceremony listener
@@ -136,6 +137,9 @@ async function main(): Promise<void> {
   app.use('/api/projects/:id/analytics', analyticsRouter);
   // Demo 15: GitHub sync endpoints
   app.use('/api/projects/:id/github', githubSyncRouter);
+  // Phase 3 Doctor: diagnostics
+  app.use('/api/diagnostics', diagnosticsRouter);
+  app.use('/api/projects/:id/diagnostics', projectDiagnosticsRouter);
   // Demo 9: peer review endpoints (not project-scoped)
   app.use('/api/workflow-runs', workflowRunsRouter);
   app.use('/api/step-runs', stepRunsRouter);
