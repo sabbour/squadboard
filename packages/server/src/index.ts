@@ -16,6 +16,7 @@ import labelsRouter from './routes/labels.js';
 import { issueRunsRouter, projectRunsRouter } from './routes/runs.js';
 import routingRouter from './routes/routing.js';
 import { workflowsRouter, issueWorkflowRouter, workflowRunsRouter, stepRunsRouter, workflowTemplatesRouter } from './routes/workflows.js';
+import { ceremoniesRouter, ceremoniesTopRouter } from './routes/ceremonies.js';
 import costsRouter from './routes/costs.js';
 import analyticsRouter from './routes/analytics.js';
 import githubSyncRouter from './routes/github-sync.js';
@@ -80,8 +81,30 @@ async function main(): Promise<void> {
   app.use('/api/projects/:projectId/cast', castRouter);
   app.use('/api/projects/:projectId/review-policies', reviewPoliciesRouter);
   app.use('/api/starters', startersRouter);
+  // Phase 10: ceremonies — primary surface (workflows = legacy alias).
+  app.use('/api/projects/:projectId/ceremonies', ceremoniesRouter);
+  app.use('/api/ceremonies', ceremoniesTopRouter);
+  // Legacy workflows mounts: kept functional for now AND additionally issue
+  // a 301 to the canonical /ceremonies/* URL via a forwarding middleware
+  // mounted *first*. Express runs middleware in registration order, so the
+  // redirect fires before the legacy router gets a chance to handle the
+  // request. axios + fetch follow 301 transparently while preserving method.
+  app.use('/api/projects/:projectId/workflows', (req, res, next) => {
+    if (req.method === 'GET' || req.method === 'HEAD') {
+      res.redirect(301, req.originalUrl.replace('/workflows', '/ceremonies'));
+      return;
+    }
+    next();
+  });
   app.use('/api/projects/:projectId/workflows', workflowsRouter);
   app.use('/api/projects/:projectId/issues/:issueId/workflow', issueWorkflowRouter);
+  app.use('/api/workflows/templates', (req, res, next) => {
+    if (req.method === 'GET' || req.method === 'HEAD') {
+      res.redirect(301, req.originalUrl.replace('/api/workflows/templates', '/api/ceremonies/templates'));
+      return;
+    }
+    next();
+  });
   app.use('/api/workflows/templates', workflowTemplatesRouter);
   app.use('/api/projects/:id/costs', costsRouter);
   app.use('/api/projects/:id/analytics', analyticsRouter);
