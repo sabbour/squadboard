@@ -133,7 +133,8 @@ router.get('/log', async (req: Request, res: Response) => {
       .orderBy(desc(schema.routingLog.decidedAt))
       .limit(100);
 
-    res.json(rows);
+    // Map decidedAt → timestamp for the client's RoutingLogEntry shape
+    res.json(rows.map((r) => ({ ...r, timestamp: r.decidedAt })));
   } catch (err) {
     handleError(res, err);
   }
