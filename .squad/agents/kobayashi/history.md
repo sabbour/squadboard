@@ -105,3 +105,19 @@ Key learnings:
 - `extractOutput()` checks `result.data.content` as primary path (matching actual SDK shape), then falls back to top-level `content`, `text`, `message` fields
 - Token fallback: if no GITHUB_TOKEN, `useLoggedInUser: true` (relies on VS Code / `gh auth`)
 - Commit `12372450`. All 16 pre-existing TS errors unchanged; zero new errors from this change.
+
+### 2026-05-15 — Ceremony create page UX + Conjure entrypoint
+
+**Conjure wiring strategy chosen: Option A** — the Phase 16 `generate-from-prose` endpoint (`ded0a28b`) already exists and returns `{ yamlContent, triggerKind, triggerConfig, rationale, warnings }`. The YAML is parseable client-side via `parseSteps()` (from `services/ceremony-graph.ts`) to extract name, description, steps, and header extras. No new server service needed. Wired through `useGenerateFromProse(projectId)` (already in `api/ceremonies.ts`) directly into `CeremonyEditor.tsx`.
+
+**Page clarity pattern applied (first-time-friendly create UX):**
+- `PageHeader` replaces bespoke header for new ceremonies (consistent with all other in-project pages).
+- Dismissible intro card (`<Card>` + `<Body1>`) explains what a ceremony is. Persisted via `localStorage` key `squadboard.ceremonyEditor.introDismissed`.
+- `FormulatePanel` mounted at the top of create mode (isNew only). On success: parses YAML → populates name/trigger/steps, switches to Visual tab.
+- Trigger picker replaced with `<RadioGroup>` showing both the option name and a one-line human description (e.g., "Schedule — Run on a recurring schedule (cron expression).").
+- Step kind `<Dropdown>` expanded: common kinds show descriptions; advanced kinds collapsed under `── Advanced ──` divider.
+- Sensible defaults on create: `kind='workflow'`, `triggerKind='manual'`, single empty `agent_run` step.
+- Empty state for steps: Fluent `<Card>` with guidance text pointing to both "Add step" and "Formulate with AI".
+- Field helper `<Caption1>` text added (description field, kind field, cron expression).
+
+**New-user vs power-user split:** keyed on `ceremonyId` route param being absent (`isNew = !ceremonyId || ceremonyId === 'new'`). Conjure panel, PageHeader, intro card, and name field above the body are all gated on `isNew`. The edit-mode header (name input + badges + run/validate buttons) is unchanged.

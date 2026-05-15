@@ -27,6 +27,7 @@ import {
   useValidateCeremony,
   usePreviewCron,
   useConvertCeremony,
+  useGenerateFromProse,
   useCeremonySchedules,
   useCreateSchedule,
   useDeleteSchedule,
@@ -37,10 +38,15 @@ import { useAgents } from '../api/agents.ts'
 import {
   Subtitle1,
   Caption1,
+  Body1,
   Badge,
   Button,
+  Card,
   Dropdown,
+  Label,
   Option,
+  Radio,
+  RadioGroup,
   Input,
   Textarea,
   Spinner,
@@ -49,6 +55,7 @@ import {
   Switch,
   TabList,
   Tab,
+  tokens,
   type SelectTabData,
   type SelectTabEvent,
 } from '@fluentui/react-components'
@@ -60,6 +67,7 @@ import {
   Play16Regular,
   Checkmark16Regular,
   Warning16Regular,
+  Dismiss16Regular,
 } from '@fluentui/react-icons'
 import VisualCanvas from '../components/ceremony/VisualCanvas.tsx'
 import ProseTab from '../components/ceremony/ProseTab.tsx'
@@ -73,6 +81,8 @@ import {
   type CeremonyStep,
   type StepKind,
 } from '../services/ceremony-graph.ts'
+import PageHeader from '../components/layout/PageHeader.tsx'
+import FormulatePanel from '../components/formulate/FormulatePanel.tsx'
 
 // ---------------------------------------------------------------------------
 // Phase 16: the single source of truth for editor state is now the
@@ -80,19 +90,22 @@ import {
 // Code, Visual, and Prose tabs all read/write the same in-memory list.
 // ---------------------------------------------------------------------------
 
-const STEP_TYPE_OPTIONS: { value: StepKind; label: string }[] = [
-  { value: 'agent_run', label: 'Agent run' },
-  { value: 'route', label: 'Route' },
-  { value: 'approve', label: 'Peer review' },
-  { value: 'fan_out', label: 'Fan out' },
-  { value: 'handoff', label: 'Handoff' },
+const STEP_TYPE_OPTIONS: { value: StepKind; label: string; description: string; advanced?: boolean }[] = [
+  { value: 'agent_run', label: 'Agent run', description: 'Run an agent with a prompt. Most common.' },
+  { value: 'route', label: 'Route', description: 'Pick a column / agent based on rules.' },
+  { value: 'approve', label: 'Peer review', description: "Have another agent review the prior step's output." },
+  { value: 'fan_out', label: 'Fan out', description: 'Spawn multiple parallel branches.' },
+  { value: 'handoff', label: 'Handoff', description: 'Transfer context to another agent.', advanced: true },
 ]
 
-const TRIGGER_KIND_OPTIONS: { value: TriggerKind; label: string }[] = [
-  { value: 'on_issue_entry', label: 'On issue entry' },
-  { value: 'on_schedule', label: 'On schedule (cron)' },
-  { value: 'on_event', label: 'On event' },
-  { value: 'manual', label: 'Manual (run on demand)' },
+const COMMON_STEP_OPTIONS = STEP_TYPE_OPTIONS.filter((o) => !o.advanced)
+const ADVANCED_STEP_OPTIONS = STEP_TYPE_OPTIONS.filter((o) => o.advanced)
+
+const TRIGGER_KIND_OPTIONS: { value: TriggerKind; label: string; description: string }[] = [
+  { value: 'manual', label: 'Manual', description: 'Run on demand. You click a button to start it.' },
+  { value: 'on_schedule', label: 'Schedule', description: 'Run on a recurring schedule (cron expression).' },
+  { value: 'on_event', label: 'Event', description: 'Run when a specific event happens (e.g., issue created, deliverable submitted).' },
+  { value: 'on_issue_entry', label: 'Issue entry', description: 'Run when an issue enters a board column.' },
 ]
 
 const EVENT_TYPE_OPTIONS = [
@@ -126,12 +139,6 @@ function parseSteps(yaml: string): { header: CeremonyHeader; steps: CeremonyStep
 
 const DEFAULT_STEPS: CeremonyStep[] = [
   { ...blankStep('agent_run'), label: 'Run primary agent' },
-  {
-    ...(blankStep('approve') as Extract<CeremonyStep, { kind: 'approve' }>),
-    label: 'Human review',
-    request_changes_policy: 'first',
-    timeout: '24h',
-  },
 ]
 
 // ---------------------------------------------------------------------------
@@ -152,17 +159,25 @@ export default function CeremonyEditor() {
   const validateCeremony = useValidateCeremony()
   const previewCron = usePreviewCron(projectId)
   const convertCeremony = useConvertCeremony(projectId)
+  const generateFromProse = useGenerateFromProse(projectId)
 
   // Editor state (initialised from the loaded ceremony or defaults).
   const [name, setName] = useState('New Ceremony')
   const [description, setDescription] = useState<string>('')
   const [headerExtras, setHeaderExtras] = useState<Record<string, unknown>>({})
-  const [kind, setKind] = useState<CeremonyKind>('ceremony')
+  const [kind, setKind] = useState<CeremonyKind>('workflow')
   const [triggerKind, setTriggerKind] = useState<TriggerKind>('manual')
   const [triggerConfig, setTriggerConfig] = useState<Record<string, unknown>>({})
   const [steps, setSteps] = useState<CeremonyStep[]>(DEFAULT_STEPS)
   const [showAdvancedFor, setShowAdvancedFor] = useState<Set<number>>(new Set())
   const [activeTab, setActiveTab] = useState<'code' | 'visual' | 'prose'>('code')
+
+  // Intro card dismiss — persisted in localStorage.
+  const [introDismissed, setIntroDismissed] = useState(
+    () => localStorage.getItem('squadboard.ceremonyEditor.introDismissed') === '1',
+  )
+  // Conjure/Formulate model badge.
+  const [formulateModelUsed, setFormulateModelUsed] = useState<{ model: string; via: string } | null>(null)
 
   const [saveErr, setSaveErr] = useState<string | null>(null)
   const [saveOk, setSaveOk] = useState(false)
@@ -347,61 +362,160 @@ export default function CeremonyEditor() {
     }
   }, [isNew, ceremonyId, convertCeremony, navigate, projectId])
 
+  const handleFormulate = useCallback(async (prose: string) => {
+    setFormulateModelUsed(null)
+    try {
+      const result = await generateFromProse.mutateAsync({ prose })
+      const parsed = parseSteps(result.yamlContent)
+      if (parsed.header.name?.trim()) setName(parsed.header.name)
+      if (parsed.header.description) setDescription(parsed.header.description)
+      setHeaderExtras(parsed.header.extras)
+      setSteps(parsed.steps)
+      setTriggerKind(result.triggerKind)
+      setTriggerConfig(result.triggerConfig)
+      setFormulateModelUsed({ model: 'AI', via: 'generate-from-prose' })
+      setActiveTab('visual')
+    } catch {
+      // Error surfaced via generateFromProse.error in the FormulatePanel.
+    }
+  }, [generateFromProse])
+
   if (!isNew && isLoading) {
     return <div style={{ padding: 32 }}><Spinner label="Loading ceremony…" /></div>
   }
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-      {/* ── Header ─────────────────────────────────────────────────────── */}
-      <div
-        style={{
-          padding: '12px 20px',
-          borderBottom: '1px solid var(--border)',
-          display: 'flex',
-          alignItems: 'center',
-          gap: 12,
-          flexShrink: 0,
-        }}
-      >
-        <Button appearance="subtle" onClick={() => navigate(`/projects/${projectId}/ceremonies`)}>
-          ← Ceremonies
-        </Button>
-        <Input
-          value={name}
-          onChange={(_, d) => setName(d.value)}
-          disabled={readOnly}
-          placeholder="Ceremony name"
-          style={{ minWidth: 220, fontWeight: 600 }}
+      {/* ── Header ──────────────────────────────────────────────────────── */}
+      {isNew ? (
+        <PageHeader
+          title="New ceremony"
+          description="Ceremonies are scheduled or triggered automations — a sequence of steps that runs on a schedule, an event, or on demand."
+          actions={
+            <>
+              <Button appearance="subtle" onClick={() => navigate(`/projects/${projectId}/ceremonies`)}>
+                ← Ceremonies
+              </Button>
+              {saveOk && (
+                <Caption1 style={{ color: tokens.colorPaletteGreenForeground1, display: 'flex', alignItems: 'center', gap: 4 }}>
+                  <Checkmark16Regular /> Saved
+                </Caption1>
+              )}
+              {saveErr && (
+                <Caption1 style={{ color: tokens.colorPaletteRedForeground1, display: 'flex', alignItems: 'center', gap: 4 }} title={saveErr}>
+                  <Warning16Regular /> {saveErr.slice(0, 60)}
+                </Caption1>
+              )}
+              <Button appearance="primary" onClick={handleSave}>Create</Button>
+            </>
+          }
         />
-        <Badge appearance="filled" color={kind === 'narrative' ? 'warning' : kind === 'workflow' ? 'subtle' : 'brand'}>
-          kind: {kind}
-        </Badge>
-        <Badge appearance="outline" color="informative">
-          trigger: {triggerKind}
-        </Badge>
+      ) : (
+        <div
+          style={{
+            padding: '12px 20px',
+            borderBottom: '1px solid var(--border)',
+            display: 'flex',
+            alignItems: 'center',
+            gap: 12,
+            flexShrink: 0,
+          }}
+        >
+          <Button appearance="subtle" onClick={() => navigate(`/projects/${projectId}/ceremonies`)}>
+            ← Ceremonies
+          </Button>
+          <Input
+            value={name}
+            onChange={(_, d) => setName(d.value)}
+            disabled={readOnly}
+            placeholder="Ceremony name"
+            style={{ minWidth: 220, fontWeight: 600 }}
+          />
+          <Badge appearance="filled" color={kind === 'narrative' ? 'warning' : kind === 'workflow' ? 'subtle' : 'brand'}>
+            kind: {kind}
+          </Badge>
+          <Badge appearance="outline" color="informative">
+            trigger: {triggerKind}
+          </Badge>
 
-        <div style={{ flex: 1 }} />
+          <div style={{ flex: 1 }} />
 
-        {saveOk && (
-          <Caption1 style={{ color: '#3fb950', display: 'flex', alignItems: 'center', gap: 4 }}>
-            <Checkmark16Regular /> Saved
+          {saveOk && (
+            <Caption1 style={{ color: '#3fb950', display: 'flex', alignItems: 'center', gap: 4 }}>
+              <Checkmark16Regular /> Saved
+            </Caption1>
+          )}
+          {saveErr && (
+            <Caption1 style={{ color: '#f85149', display: 'flex', alignItems: 'center', gap: 4 }} title={saveErr}>
+              <Warning16Regular /> {saveErr.slice(0, 60)}
+            </Caption1>
+          )}
+          <Button onClick={handleValidate} disabled={readOnly}>Validate</Button>
+          <Button onClick={handleRunNow} icon={<Play16Regular />} disabled={readOnly}>
+            Run now
+          </Button>
+          <Button appearance="primary" onClick={handleSave} disabled={readOnly}>
+            Save
+          </Button>
+        </div>
+      )}
+
+      {/* ── Create-mode: dismissible intro card ──────────────────────── */}
+      {isNew && !introDismissed && (
+        <div style={{ padding: '12px 24px 0' }}>
+          <Card style={{ position: 'relative', background: tokens.colorNeutralBackground2 }}>
+            <div style={{ padding: '12px 36px 12px 14px' }}>
+              <Body1 style={{ display: 'block', color: tokens.colorNeutralForeground1 }}>
+                A ceremony is a re-runnable workflow — a sequence of steps that fires on a schedule, an event, or on
+                demand. Use ceremonies for things you do regularly (standups, triage sweeps, weekly digests). Each
+                ceremony has a <strong>trigger</strong> (when to fire) and <strong>steps</strong> (what to do).
+              </Body1>
+            </div>
+            <Button
+              appearance="subtle"
+              icon={<Dismiss16Regular />}
+              size="small"
+              aria-label="Dismiss intro"
+              style={{ position: 'absolute', top: 8, right: 8 }}
+              onClick={() => {
+                localStorage.setItem('squadboard.ceremonyEditor.introDismissed', '1')
+                setIntroDismissed(true)
+              }}
+            />
+          </Card>
+        </div>
+      )}
+
+      {/* ── Create-mode: Conjure / Formulate panel ──────────────────────── */}
+      {isNew && (
+        <div style={{ padding: '12px 24px 0' }}>
+          <FormulatePanel
+            placeholder="Describe your ceremony in plain language…"
+            hint="e.g., 'Every Monday at 9 am, run a triage agent over open issues and post a digest to the team channel.'"
+            isPending={generateFromProse.isPending}
+            errorMessage={generateFromProse.error?.message ?? null}
+            modelUsed={formulateModelUsed}
+            onFormulate={(prose) => void handleFormulate(prose)}
+          />
+        </div>
+      )}
+
+      {/* ── Create-mode: ceremony name field ───────────────────────────────── */}
+      {isNew && (
+        <div style={{ padding: '12px 24px 0', display: 'flex', flexDirection: 'column', gap: 4 }}>
+          <Label htmlFor="ceremony-name-input" weight="semibold">Name</Label>
+          <Input
+            id="ceremony-name-input"
+            value={name}
+            onChange={(_, d) => setName(d.value)}
+            placeholder="e.g., Weekly triage sweep"
+            style={{ maxWidth: 480 }}
+          />
+          <Caption1 style={{ color: tokens.colorNeutralForeground3 }}>
+            Give your ceremony a short, memorable name.
           </Caption1>
-        )}
-        {saveErr && (
-          <Caption1 style={{ color: '#f85149', display: 'flex', alignItems: 'center', gap: 4 }} title={saveErr}>
-            <Warning16Regular /> {saveErr.slice(0, 60)}
-          </Caption1>
-        )}
-        <Button onClick={handleValidate} disabled={readOnly}>Validate</Button>
-        <Button onClick={handleRunNow} icon={<Play16Regular />} disabled={readOnly || isNew}>
-          Run now
-        </Button>
-        <Button appearance="primary" onClick={handleSave} disabled={readOnly}>
-          {isNew ? 'Create' : 'Save'}
-        </Button>
-      </div>
-
+        </div>
+      )}
       {/* Validation errors banner */}
       {validationErrors.length > 0 && (
         <MessageBar intent="error">
@@ -433,23 +547,26 @@ export default function CeremonyEditor() {
         >
           <Subtitle1>Trigger</Subtitle1>
 
-          <label style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: 12 }}>
-            Trigger kind
-            <Dropdown
-              value={TRIGGER_KIND_OPTIONS.find((o) => o.value === triggerKind)?.label}
-              selectedOptions={[triggerKind]}
-              onOptionSelect={(_, d) => {
-                setTriggerKind(d.optionValue as TriggerKind)
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+            <Label weight="semibold">When should this ceremony fire?</Label>
+            <RadioGroup
+              value={triggerKind}
+              onChange={(_, d) => {
+                setTriggerKind(d.value as TriggerKind)
                 setTriggerConfig({})
                 setCronPreview(null)
               }}
               disabled={readOnly}
             >
               {TRIGGER_KIND_OPTIONS.map((o) => (
-                <Option key={o.value} value={o.value}>{o.label}</Option>
+                <Radio
+                  key={o.value}
+                  value={o.value}
+                  label={`${o.label} — ${o.description}`}
+                />
               ))}
-            </Dropdown>
-          </label>
+            </RadioGroup>
+          </div>
 
           <TriggerConfigForm
             triggerKind={triggerKind}
@@ -465,28 +582,35 @@ export default function CeremonyEditor() {
           <hr style={{ border: 0, borderTop: '1px solid var(--border)', margin: '8px 0' }} />
 
           <Subtitle1>Metadata</Subtitle1>
-          <label style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: 12 }}>
-            Description
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+            <Label weight="semibold" htmlFor="ceremony-desc-side">Description</Label>
             <Textarea
+              id="ceremony-desc-side"
               value={description}
               onChange={(_, d) => setDescription(d.value)}
               disabled={readOnly}
               rows={3}
             />
-          </label>
-          <label style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: 12 }}>
-            Kind
+            <Caption1 style={{ color: tokens.colorNeutralForeground3 }}>
+              Optional — shown in the ceremony list.
+            </Caption1>
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+            <Label weight="semibold">Kind</Label>
             <Dropdown
               value={kind}
               selectedOptions={[kind]}
               onOptionSelect={(_, d) => setKind(d.optionValue as CeremonyKind)}
               disabled={readOnly}
             >
-              {(['ceremony', 'workflow', 'review_policy', 'narrative'] as CeremonyKind[]).map((k) => (
+              {(['workflow', 'ceremony', 'review_policy', 'narrative'] as CeremonyKind[]).map((k) => (
                 <Option key={k} value={k}>{k}</Option>
               ))}
             </Dropdown>
-          </label>
+            <Caption1 style={{ color: tokens.colorNeutralForeground3 }}>
+              Use <strong>workflow</strong> for most automations. <strong>narrative</strong> is documentation-only.
+            </Caption1>
+          </div>
 
           {/* Schedules side-pane (only meaningful for on_schedule). */}
           {triggerKind === 'on_schedule' && !isNew && (
@@ -551,9 +675,15 @@ export default function CeremonyEditor() {
 
               <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                 {steps.length === 0 && (
-                  <Caption1 style={{ color: 'var(--text-muted)' }}>
-                    No steps yet — click “Add step” to get started.
-                  </Caption1>
+                  <Card style={{ background: tokens.colorNeutralBackground2 }}>
+                    <div style={{ padding: '16px 18px', display: 'flex', flexDirection: 'column', gap: 6 }}>
+                      <Body1 style={{ color: tokens.colorNeutralForeground2 }}>No steps yet.</Body1>
+                      <Caption1 style={{ color: tokens.colorNeutralForeground3 }}>
+                        Click <strong>+ Add step</strong> to add a step manually, or use{' '}
+                        <strong>Formulate with AI</strong> above to draft a full ceremony from a description.
+                      </Caption1>
+                    </div>
+                  </Card>
                 )}
 
                 {steps.map((step, i) => (
@@ -587,14 +717,18 @@ export default function CeremonyEditor() {
                         aria-label="Move down"
                       />
                       <Dropdown
-                        value={STEP_TYPE_OPTIONS.find((o) => o.value === step.kind)?.label}
+                        value={STEP_TYPE_OPTIONS.find((o) => o.value === step.kind)?.label ?? step.kind}
                         selectedOptions={[step.kind]}
                         onOptionSelect={(_, d) => changeStepKind(i, d.optionValue as StepKind)}
                         disabled={readOnly}
                         style={{ minWidth: 140 }}
                       >
-                        {STEP_TYPE_OPTIONS.map((o) => (
-                          <Option key={o.value} value={o.value}>{o.label}</Option>
+                        {COMMON_STEP_OPTIONS.map((o) => (
+                          <Option key={o.value} value={o.value}>{`${o.label} — ${o.description}`}</Option>
+                        ))}
+                        <Option disabled value="__advanced_divider__">── Advanced ──</Option>
+                        {ADVANCED_STEP_OPTIONS.map((o) => (
+                          <Option key={o.value} value={o.value}>{`${o.label} — ${o.description}`}</Option>
                         ))}
                       </Dropdown>
                       <Input
@@ -867,15 +1001,18 @@ function TriggerConfigForm({
   if (triggerKind === 'on_schedule') {
     return (
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-        <label style={{ fontSize: 12 }}>
-          cron expression
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+          <Label weight="semibold">Cron expression</Label>
           <Input
             value={(triggerConfig.cronExpr as string) ?? ''}
             onChange={(_, d) => set('cronExpr', d.value)}
-            placeholder="e.g. */5 * * * *"
+            placeholder="0 9 * * 1"
             disabled={disabled}
           />
-        </label>
+          <Caption1 style={{ color: tokens.colorNeutralForeground3 }}>
+            Standard 5-field cron, e.g. <code>0 9 * * 1</code> = every Monday at 9 am UTC.
+          </Caption1>
+        </div>
         <label style={{ fontSize: 12 }}>
           timezone
           <Dropdown
