@@ -98,6 +98,12 @@ function validateStepShape(step, index) {
         if (s['split_by'] === 'agents' && (!Array.isArray(s['agents']) || s['agents'].length === 0)) {
             errs.push(`step[${index}]: fan_out 'agents' must be a non-empty array when split_by='agents'`);
         }
+        if (s['mode'] !== undefined) {
+            const validModes = new Set(['serial', 'parallel']);
+            if (typeof s['mode'] !== 'string' || !validModes.has(s['mode'])) {
+                errs.push(`step[${index}]: fan_out 'mode' must be one of serial | parallel`);
+            }
+        }
     }
     if (s['type'] === 'handoff') {
         if (typeof s['to'] !== 'string' || !s['to']) {
@@ -173,6 +179,10 @@ function parseStepRaw(s) {
             on_child_failure: s['on_child_failure'] !== undefined
                 ? s['on_child_failure']
                 : 'fail_fast',
+            // Phase 15: spawn mode (default 'serial' = pre-Phase-15 behaviour).
+            mode: s['mode'] !== undefined
+                ? s['mode']
+                : 'serial',
             steps: childSteps,
         };
     }

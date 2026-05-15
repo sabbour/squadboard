@@ -64,6 +64,18 @@ export interface FanOutStep extends BaseStep {
   agents?: string[];           // used when split_by='agents' or as round-robin pool for 'count'
   merge_strategy: 'all' | 'any' | 'first'; // when to consider the fan_out complete
   on_child_failure?: 'continue' | 'fail_fast'; // default 'fail_fast'
+  /**
+   * Phase 15: spawn mode for the children's first LLM session.
+   *
+   *   serial   — default; the dispatcher claims each child one tick at a
+   *              time (~5 s minimum gap). Byte-identical to pre-Phase-15
+   *              behaviour.
+   *   parallel — engine immediately calls SDK spawnParallel() after the
+   *              materialisation transaction commits, spawning all
+   *              children's sessions concurrently with error isolation.
+   *              The dispatcher still owns retries / sweep / heartbeat.
+   */
+  mode?: 'serial' | 'parallel';
   steps: WorkflowStep[];      // inline child workflow steps
 }
 
@@ -170,6 +182,12 @@ function validateStepShape(step: unknown, index: number): string[] {
     if (s['split_by'] === 'agents' && (!Array.isArray(s['agents']) || (s['agents'] as unknown[]).length === 0)) {
       errs.push(`step[${index}]: fan_out 'agents' must be a non-empty array when split_by='agents'`);
     }
+    if (s['mode'] !== undefined) {
+      const validModes = new Set(['serial', 'parallel']);
+      if (typeof s['mode'] !== 'string' || !validModes.has(s['mode'] as string)) {
+        errs.push(`step[${index}]: fan_out 'mode' must be one of serial | parallel`);
+      }
+    }
   }
   if (s['type'] === 'handoff') {
     if (typeof s['to'] !== 'string' || !s['to']) {
@@ -257,6 +275,10 @@ function parseStepRaw(s: Record<string, unknown>): WorkflowStep {
       on_child_failure: s['on_child_failure'] !== undefined
         ? (s['on_child_failure'] as FanOutStep['on_child_failure'])
         : 'fail_fast',
+      // Phase 15: spawn mode (default 'serial' = pre-Phase-15 behaviour).
+      mode: s['mode'] !== undefined
+        ? (s['mode'] as FanOutStep['mode'])
+        : 'serial',
       steps: childSteps,
     } satisfies FanOutStep;
   }
