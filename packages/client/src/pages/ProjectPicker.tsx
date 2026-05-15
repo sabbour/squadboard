@@ -32,7 +32,7 @@ export default function ProjectPicker() {
       </div>
 
       {isLoading && (
-        <p style={{ color: 'var(--text-muted)' }}>Loading projects…</p>
+        <Body1 style={{ display: 'block', color: tokens.colorNeutralForeground3, marginBottom: tokens.spacingVerticalM }}>Loading projects…</Body1>
       )}
 
       {isError && (

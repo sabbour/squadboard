@@ -12,7 +12,10 @@ import { useState } from 'react'
 import { useParams } from 'react-router'
 import {
   Badge,
+  Body1,
+  Body1Strong,
   Button,
+  Caption1,
   Dialog,
   DialogActions,
   DialogBody,
@@ -97,10 +100,10 @@ export default function McpServers() {
       />
 
       <div style={{ flex: 1, overflow: 'auto', padding: '24px', maxWidth: '1100px', width: '100%', margin: '0 auto' }}>
-        {isLoading && <p style={{ color: 'var(--text-muted)' }}>Loading…</p>}
+        {isLoading && <Body1 style={{ color: tokens.colorNeutralForeground3 }}>Loading…</Body1>}
         {!isLoading && servers.length === 0 && (
           <div style={{ textAlign: 'center', padding: '48px 16px', color: 'var(--text-muted)' }}>
-            <p style={{ fontSize: '14px', marginBottom: '12px' }}>No MCP servers configured.</p>
+            <Body1 style={{ display: 'block', marginBottom: tokens.spacingVerticalM }}>No MCP servers configured.</Body1>
             <Button appearance="primary" onClick={() => setShowCreate(true)}>Add a server</Button>
           </div>
         )}
@@ -140,18 +143,18 @@ function McpRow({ server, testing, result, onEdit, onDelete, onTest }: {
     }}>
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
-          <span style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text)' }}>{server.name}</span>
+          <Body1Strong style={{ color: tokens.colorNeutralForeground1 }}>{server.name}</Body1Strong>
           <Badge appearance="outline" color={server.enabled ? 'success' : 'subtle'}>
             {server.enabled ? 'enabled' : 'disabled'}
           </Badge>
           <Badge appearance="outline">{server.transport}</Badge>
         </div>
         {server.description && (
-          <p style={{ fontSize: '12px', color: 'var(--text-muted)', margin: '0 0 6px' }}>{server.description}</p>
+          <Caption1 style={{ display: 'block', color: tokens.colorNeutralForeground3, margin: '0 0 6px' }}>{server.description}</Caption1>
         )}
-        <div style={{ fontSize: '11px', color: 'var(--text-muted)', fontFamily: 'ui-monospace,monospace', marginTop: '4px' }}>
+        <Caption1 style={{ display: 'block', color: tokens.colorNeutralForeground3, fontFamily: tokens.fontFamilyMonospace, marginTop: '4px' }}>
           {server.transport === 'http' ? server.url : `${server.command ?? ''} ${server.args.join(' ')}`}
-        </div>
+        </Caption1>
         {server.headers.length > 0 && (
           <div style={{ marginTop: '8px', display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
             {server.headers.map((h) => (

@@ -12,6 +12,10 @@ import {
   Option,
   Field,
   Spinner,
+  Subtitle2,
+  Caption1,
+  Body1,
+  tokens,
 } from '@fluentui/react-components'
 import {
   TextDescription20Regular,
@@ -32,9 +36,13 @@ const SECTIONS: { id: Section; label: string; icon: React.ReactNode }[] = [
 
 function SectionHeader({ title, sub }: { title: string; sub?: string }) {
   return (
-    <div style={{ marginBottom: '16px' }}>
-      <h2 style={{ fontSize: '15px', fontWeight: 600, color: 'var(--text)', margin: 0 }}>{title}</h2>
-      {sub && <p style={{ fontSize: '12px', color: 'var(--text-muted)', margin: '4px 0 0' }}>{sub}</p>}
+    <div style={{ marginBottom: tokens.spacingVerticalL }}>
+      <Subtitle2 as="h2" style={{ display: 'block', color: tokens.colorNeutralForeground1 }}>{title}</Subtitle2>
+      {sub && (
+        <Caption1 style={{ display: 'block', color: tokens.colorNeutralForeground3, marginTop: tokens.spacingVerticalXXS }}>
+          {sub}
+        </Caption1>
+      )}
     </div>
   )
 }
@@ -70,7 +78,7 @@ function BudgetSection({ projectId }: { projectId: string }) {
   }
 
   if (isLoading) {
-    return <div style={{ color: 'var(--text-muted)', fontSize: '13px' }}>Loading budget…</div>
+    return <Caption1 style={{ display: 'block', color: tokens.colorNeutralForeground3 }}>Loading budget…</Caption1>
   }
 
   const mtd = budget?.mtdSpend ?? 0
@@ -95,14 +103,14 @@ function BudgetSection({ projectId }: { projectId: string }) {
         }}
       >
         <div>
-          <div style={{ fontSize: '22px', fontWeight: 700, color: overBudget ? '#f85149' : 'var(--text)', fontFamily: 'monospace' }}>
+          <div style={{ fontSize: '22px', fontWeight: tokens.fontWeightBold, color: overBudget ? '#f85149' : tokens.colorNeutralForeground1, fontFamily: tokens.fontFamilyMonospace }}>
             ${mtd.toFixed(2)}
           </div>
-          <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '2px' }}>Month-to-date spend</div>
+          <Caption1 style={{ display: 'block', color: tokens.colorNeutralForeground3, marginTop: tokens.spacingVerticalXXS }}>Month-to-date spend</Caption1>
         </div>
         {budgetAmt != null && (
           <div style={{ textAlign: 'right' }}>
-            <div style={{ fontSize: '14px', color: overBudget ? '#f85149' : '#3fb950', fontWeight: 600 }}>
+            <div style={{ fontSize: '14px', color: overBudget ? '#f85149' : '#3fb950', fontWeight: tokens.fontWeightSemibold }}>
               {pct.toFixed(1)}% of ${budgetAmt.toFixed(2)}
             </div>
             {/* Mini progress bar */}
@@ -122,12 +130,14 @@ function BudgetSection({ projectId }: { projectId: string }) {
 
       {/* Budget input */}
       <div>
-        <label style={{ display: 'block', fontSize: '12px', color: 'var(--text-muted)', marginBottom: '6px' }}>
-          Monthly budget (USD)
+        <label>
+          <Caption1 style={{ display: 'block', color: tokens.colorNeutralForeground3, marginBottom: tokens.spacingVerticalSNudge }}>
+            Monthly budget (USD)
+          </Caption1>
         </label>
         <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
           <div style={{ position: 'relative' }}>
-            <span style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)', fontSize: '13px' }}>$</span>
+            <span style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', color: tokens.colorNeutralForeground3, fontSize: '13px' }}>$</span>
             <input
               type="number"
               min="0"
@@ -169,9 +179,9 @@ function BudgetSection({ projectId }: { projectId: string }) {
         {error && (
           <p style={{ fontSize: '11px', color: '#f85149', margin: '6px 0 0' }}>{error}</p>
         )}
-        <p style={{ fontSize: '11px', color: 'var(--text-muted)', margin: '6px 0 0' }}>
+        <Caption1 style={{ display: 'block', color: tokens.colorNeutralForeground3, margin: '6px 0 0' }}>
           Set to 0 to disable budget alerts.
-        </p>
+        </Caption1>
       </div>
     </div>
   )
@@ -218,21 +228,23 @@ function DefaultModelSection({
         marginTop: '12px',
       }}
     >
-      <label
-        style={{
-          fontSize: '11px',
-          color: 'var(--text-muted)',
-          textTransform: 'uppercase',
-          letterSpacing: '0.05em',
-          fontWeight: 600,
-        }}
-      >
-        Default model
+      <label>
+        <Caption1
+          style={{
+            display: 'block',
+            color: tokens.colorNeutralForeground3,
+            textTransform: 'uppercase',
+            letterSpacing: '0.05em',
+            fontWeight: tokens.fontWeightSemibold,
+          }}
+        >
+          Default model
+        </Caption1>
       </label>
-      <p style={{ fontSize: '11px', color: 'var(--text-muted)', margin: 0 }}>
+      <Caption1 style={{ display: 'block', color: tokens.colorNeutralForeground3, margin: 0 }}>
         Used when an agent's model is "auto" and the request doesn't specify one.
         Resolution chain: <em>session → agent → project → built-in fallback</em>.
-      </p>
+      </Caption1>
       {isLoading ? (
         <Spinner size="tiny" label="Loading models…" />
       ) : (
@@ -270,7 +282,11 @@ export default function Settings() {
   const [activeSection, setActiveSection] = useState<Section>('general')
 
   if (isLoading) {
-    return <div style={{ padding: '32px', color: 'var(--text-muted)' }}>Loading…</div>
+    return (
+      <div style={{ padding: '32px' }}>
+        <Body1 style={{ color: tokens.colorNeutralForeground3 }}>Loading…</Body1>
+      </div>
+    )
   }
 
   if (isError || !project) {
@@ -286,7 +302,7 @@ export default function Settings() {
     cursor: 'pointer',
     background: active ? 'rgba(56,139,253,0.1)' : 'transparent',
     color: active ? 'var(--text)' : 'var(--text-muted)',
-    fontWeight: active ? 500 : 400,
+    fontWeight: active ? tokens.fontWeightMedium : tokens.fontWeightRegular,
     fontSize: '13px',
     border: 'none',
     width: '100%',
@@ -346,13 +362,15 @@ export default function Settings() {
                   maxWidth: '480px',
                 }}
               >
-                <label style={{ fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: 600 }}>
-                  Project name
+                <label>
+                  <Caption1 style={{ display: 'block', color: tokens.colorNeutralForeground3, textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: tokens.fontWeightSemibold }}>
+                    Project name
+                  </Caption1>
                 </label>
-                <p style={{ fontSize: '15px', fontWeight: 600, color: 'var(--text)', margin: 0 }}>{project.name}</p>
-                <p style={{ fontSize: '11px', color: 'var(--text-muted)', margin: '4px 0 0' }}>
-                  Squad path: <code style={{ fontFamily: 'monospace', color: 'var(--text-muted)' }}>{project.squadPath}</code>
-                </p>
+                <Subtitle2 style={{ display: 'block', color: tokens.colorNeutralForeground1, margin: 0 }}>{project.name}</Subtitle2>
+                <Caption1 style={{ display: 'block', color: tokens.colorNeutralForeground3, margin: '4px 0 0' }}>
+                  Squad path: <code style={{ fontFamily: tokens.fontFamilyMonospace, color: tokens.colorNeutralForeground3 }}>{project.squadPath}</code>
+                </Caption1>
               </div>
               <DefaultModelSection projectId={projectId} current={project.defaultModel ?? null} />
             </>

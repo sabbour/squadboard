@@ -10,7 +10,7 @@
 
 import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router'
-import { Button, tokens } from '@fluentui/react-components'
+import { Body1, Body1Strong, Button, Caption1, tokens } from '@fluentui/react-components'
 import { Open16Regular, Delete16Regular, ArrowRight16Regular } from '@fluentui/react-icons'
 import {
   useDiscardInboxItem,
@@ -82,8 +82,8 @@ export default function Inbox() {
 
       <div style={{ flex: 1, overflow: 'auto', padding: '24px', maxWidth: '960px', width: '100%', margin: '0 auto', boxSizing: 'border-box' }}>
         {isLoading && (
-          <div style={{ color: tokens.colorNeutralForeground3, padding: '32px', textAlign: 'center' }}>
-            Loading inbox…
+          <div style={{ padding: '32px', textAlign: 'center' }}>
+            <Body1 style={{ color: tokens.colorNeutralForeground3 }}>Loading inbox…</Body1>
           </div>
         )}
 
@@ -97,10 +97,10 @@ export default function Inbox() {
             borderRadius: '8px',
           }}
         >
-          <p style={{ margin: 0, fontSize: '14px' }}>Your inbox is empty.</p>
-          <p style={{ margin: '8px 0 0', fontSize: '12px' }}>
+          <Body1 style={{ display: 'block' }}>Your inbox is empty.</Body1>
+          <Caption1 style={{ display: 'block', marginTop: tokens.spacingVerticalS }}>
             Press <kbd style={kbdStyle}>c</kbd> anywhere to capture an idea.
-          </p>
+          </Caption1>
         </div>
       )}
 
@@ -110,17 +110,17 @@ export default function Inbox() {
           if (list.length === 0) return null
           return (
             <section key={group.status} style={{ marginBottom: '24px' }}>
-              <h2
+              <Caption1
+                as="h2"
                 style={{
-                  fontSize: '12px',
-                  fontWeight: 600,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: tokens.spacingHorizontalS,
                   color: tokens.colorNeutralForeground2,
                   textTransform: 'uppercase',
                   letterSpacing: '0.5px',
-                  margin: '0 0 8px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '8px',
+                  margin: `0 0 ${tokens.spacingVerticalS}`,
+                  fontWeight: tokens.fontWeightSemibold,
                 }}
               >
                 <span
@@ -137,7 +137,7 @@ export default function Inbox() {
                 <span style={{ fontSize: '11px', color: tokens.colorNeutralForeground3 }}>
                   {list.length} item{list.length === 1 ? '' : 's'}
                 </span>
-              </h2>
+              </Caption1>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                 {list.map((item) => (
                   <article
@@ -154,28 +154,27 @@ export default function Inbox() {
                   >
                     <div style={{ flex: 1, minWidth: 0 }}>
                       {item.formulatedTitle && (
-                        <div
+                        <Body1Strong
                           style={{
-                            fontSize: '14px',
-                            fontWeight: 600,
+                            display: 'block',
                             color: tokens.colorNeutralForeground1,
-                            marginBottom: '4px',
+                            marginBottom: tokens.spacingVerticalXXS,
                           }}
                         >
                           {item.formulatedTitle}
-                        </div>
+                        </Body1Strong>
                       )}
-                      <div
+                      <Caption1
                         style={{
-                          fontSize: '12px',
+                          display: 'block',
                           color: tokens.colorNeutralForeground2,
-                          marginBottom: '6px',
+                          marginBottom: tokens.spacingVerticalSNudge,
                           lineHeight: '1.4',
                         }}
                       >
                         {truncate(item.originalDraft, 200)}
-                      </div>
-                      <div style={{ display: 'flex', gap: '12px', fontSize: '11px', color: tokens.colorNeutralForeground3 }}>
+                      </Caption1>
+                      <div style={{ display: 'flex', gap: tokens.spacingHorizontalM, fontSize: '11px', color: tokens.colorNeutralForeground3 }}>
                         <span>📁 {projectName(item.suggestedProjectId)}</span>
                         {item.suggestedColumn && <span>↳ {item.suggestedColumn}</span>}
                         {item.confidence && <span>· {item.confidence} confidence</span>}

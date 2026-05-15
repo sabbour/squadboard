@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router'
-import { tokens, Button, Tooltip } from '@fluentui/react-components'
+import { tokens, Button, Body1Strong, Caption1, Tooltip } from '@fluentui/react-components'
 import { Lightbulb20Regular } from '@fluentui/react-icons'
 import { type Issue } from '../../api/issues.ts'
 import { useLabels } from '../../api/labels.ts'
@@ -105,9 +105,8 @@ export default function CardDetail({ projectId, issue, onClose, initialTab }: Ca
               padding: '16px 20px 12px',
             }}
           >
-            <span
+            <Caption1
               style={{
-                fontSize: '11px',
                 color: tokens.colorNeutralForeground2,
                 background: tokens.colorNeutralBackground3,
                 border: `1px solid ${tokens.colorNeutralStroke1}`,
@@ -116,7 +115,7 @@ export default function CardDetail({ projectId, issue, onClose, initialTab }: Ca
               }}
             >
               {COLUMN_LABELS[issue.column] ?? issue.column}
-            </span>
+            </Caption1>
             <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
               <Tooltip content="Consult about this issue (open Ask)" relationship="label">
                 <Button
@@ -175,7 +174,7 @@ export default function CardDetail({ projectId, issue, onClose, initialTab }: Ca
                     color: activeTab === tab ? tokens.colorNeutralForeground1 : tokens.colorNeutralForeground2,
                     padding: '6px 12px',
                     fontSize: '12px',
-                    fontWeight: activeTab === tab ? 600 : 400,
+                    fontWeight: activeTab === tab ? tokens.fontWeightSemibold : tokens.fontWeightRegular,
                     cursor: 'pointer',
                     marginBottom: '-1px',
                   }}
@@ -193,7 +192,7 @@ export default function CardDetail({ projectId, issue, onClose, initialTab }: Ca
           {activeTab === 'overview' && (
             <>
               {/* Title */}
-              <h2 style={{ fontSize: '16px', fontWeight: 600, color: tokens.colorNeutralForeground1, lineHeight: '1.4' }}>
+              <h2 style={{ fontSize: '16px', fontWeight: tokens.fontWeightSemibold, color: tokens.colorNeutralForeground1, lineHeight: '1.4' }}>
                 {issue.title}
               </h2>
 
@@ -202,20 +201,20 @@ export default function CardDetail({ projectId, issue, onClose, initialTab }: Ca
                 {issue.assignee && (
                   <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                     <Avatar name={issue.assignee.name} avatarUrl={issue.assignee.avatarUrl} size={20} />
-                    <span style={{ fontSize: '12px', color: tokens.colorNeutralForeground2 }}>{issue.assignee.name}</span>
+                    <Caption1 style={{ color: tokens.colorNeutralForeground2 }}>{issue.assignee.name}</Caption1>
                   </div>
                 )}
-                <span style={{ fontSize: '12px', color: tokens.colorNeutralForeground2 }}>
+                <Caption1 style={{ color: tokens.colorNeutralForeground2 }}>
                   {formatDistanceToNow(new Date(issue.createdAt), { addSuffix: true })}
-                </span>
+                </Caption1>
               </div>
 
               {/* Labels */}
               {issue.labels.length > 0 && (
                 <div>
-                  <p style={{ fontSize: '11px', color: tokens.colorNeutralForeground2, marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                  <Caption1 as="p" style={{ display: 'block', color: tokens.colorNeutralForeground2, marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                     Labels
-                  </p>
+                  </Caption1>
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
                     {issue.labels.map((label) => (
                       <LabelBadge key={label.id} name={label.name} color={label.color} />
@@ -227,9 +226,9 @@ export default function CardDetail({ projectId, issue, onClose, initialTab }: Ca
               {/* Available labels picker */}
               {labels && labels.length > 0 && (
                 <div>
-                  <p style={{ fontSize: '11px', color: tokens.colorNeutralForeground2, marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                  <Caption1 as="p" style={{ display: 'block', color: tokens.colorNeutralForeground2, marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                     All Labels
-                  </p>
+                  </Caption1>
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
                     {labels.map((label) => (
                       <LabelBadge key={label.id} name={label.name} color={label.color} />
@@ -241,9 +240,9 @@ export default function CardDetail({ projectId, issue, onClose, initialTab }: Ca
               {/* Body / description */}
               {issue.body && (
                 <div>
-                  <p style={{ fontSize: '11px', color: tokens.colorNeutralForeground2, marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                  <Caption1 as="p" style={{ display: 'block', color: tokens.colorNeutralForeground2, marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                     Description
-                  </p>
+                  </Caption1>
                   <div
                     style={{
                       background: tokens.colorNeutralBackground2,
@@ -264,9 +263,9 @@ export default function CardDetail({ projectId, issue, onClose, initialTab }: Ca
               {/* Active run output panel */}
               {activeRun && (
                 <div>
-                  <p style={{ fontSize: '11px', color: tokens.colorNeutralForeground2, marginBottom: '8px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                  <Caption1 as="p" style={{ display: 'block', color: tokens.colorNeutralForeground2, marginBottom: '8px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                     Active Run
-                  </p>
+                  </Caption1>
                   <RunOutputPanel
                     projectId={projectId}
                     run={activeRun}
@@ -278,9 +277,9 @@ export default function CardDetail({ projectId, issue, onClose, initialTab }: Ca
               {/* Workflow section */}
               <div>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
-                  <p style={{ fontSize: '11px', color: tokens.colorNeutralForeground2, textTransform: 'uppercase', letterSpacing: '0.05em', margin: 0 }}>
+                  <Caption1 as="p" style={{ display: 'block', color: tokens.colorNeutralForeground2, textTransform: 'uppercase', letterSpacing: '0.05em', margin: 0 }}>
                     Workflow
-                  </p>
+                  </Caption1>
                   <button
                     onClick={() => setShowAttachModal(true)}
                     style={{
@@ -309,13 +308,13 @@ export default function CardDetail({ projectId, issue, onClose, initialTab }: Ca
                     }}
                   >
                     <div>
-                      <p style={{ fontSize: '13px', color: tokens.colorNeutralForeground1, margin: 0, fontWeight: 500 }}>
+                      <Body1Strong style={{ display: 'block', color: tokens.colorNeutralForeground1, margin: 0 }}>
                         ⚙ {issue.attachedWorkflowName ?? 'Workflow'}
-                      </p>
+                      </Body1Strong>
                       {workflowRun && (
-                        <p style={{ fontSize: '11px', color: tokens.colorNeutralForeground2, margin: '2px 0 0' }}>
+                        <Caption1 style={{ display: 'block', color: tokens.colorNeutralForeground2, margin: '2px 0 0' }}>
                           Status: {workflowRun.status} · Step {(workflowRun.currentStepIndex ?? 0) + 1}
-                        </p>
+                        </Caption1>
                       )}
                     </div>
                     {/* Start button — only if attached but no run yet */}
@@ -339,7 +338,7 @@ export default function CardDetail({ projectId, issue, onClose, initialTab }: Ca
                     )}
                   </div>
                 ) : (
-                  <p style={{ fontSize: '12px', color: tokens.colorNeutralForeground2 }}>No workflow attached.</p>
+                  <Caption1 style={{ color: tokens.colorNeutralForeground2 }}>No workflow attached.</Caption1>
                 )}
 
                 {/* Review panels for approve steps */}
@@ -372,9 +371,9 @@ export default function CardDetail({ projectId, issue, onClose, initialTab }: Ca
 
               {/* Comments */}
               <div>
-                <p style={{ fontSize: '11px', color: tokens.colorNeutralForeground2, marginBottom: '12px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                <Caption1 as="p" style={{ display: 'block', color: tokens.colorNeutralForeground2, marginBottom: '12px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                   Comments
-                </p>
+                </Caption1>
                 <CommentList projectId={projectId} issueId={issue.id} />
               </div>
 

@@ -13,6 +13,7 @@ import { useProjectFlow } from '../api/flow.ts'
 import AgentLeaderboard from '../components/dashboard/AgentLeaderboard.tsx'
 import WorkflowHealth from '../components/dashboard/WorkflowHealth.tsx'
 import PageHeader from '../components/layout/PageHeader.tsx'
+import { Caption1, Body1, tokens } from '@fluentui/react-components'
 
 // ---------------------------------------------------------------------------
 // Stat card
@@ -37,16 +38,26 @@ function StatCard({ label, value, sub, subColor, accent }: StatCardProps) {
         padding: '18px 20px',
       }}
     >
-      <div style={{ fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '8px', fontWeight: 500 }}>
+      <Caption1
+        style={{
+          display: 'block',
+          fontSize: '11px',
+          color: tokens.colorNeutralForeground3,
+          textTransform: 'uppercase',
+          letterSpacing: '0.05em',
+          marginBottom: tokens.spacingVerticalS,
+          fontWeight: tokens.fontWeightMedium,
+        }}
+      >
         {label}
-      </div>
-      <div style={{ fontSize: '26px', fontWeight: 700, color: 'var(--text)', lineHeight: 1 }}>
+      </Caption1>
+      <div style={{ fontSize: '26px', fontWeight: tokens.fontWeightBold, color: tokens.colorNeutralForeground1, lineHeight: 1 }}>
         {value}
       </div>
       {sub && (
-        <div style={{ fontSize: '11px', marginTop: '6px', color: subColor ?? 'var(--text-muted)' }}>
+        <Caption1 style={{ display: 'block', fontSize: '11px', marginTop: tokens.spacingVerticalSNudge, color: subColor ?? tokens.colorNeutralForeground3 }}>
           {sub}
-        </div>
+        </Caption1>
       )}
     </div>
   )
@@ -205,10 +216,20 @@ function ThroughputChart({ days }: { days: ThroughputDay[] }) {
 // ---------------------------------------------------------------------------
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <div style={{ marginBottom: '32px' }}>
-      <h2 style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '14px' }}>
+    <div style={{ marginBottom: tokens.spacingVerticalXXXL }}>
+      <Caption1
+        as="h2"
+        style={{
+          display: 'block',
+          color: tokens.colorNeutralForeground3,
+          textTransform: 'uppercase',
+          letterSpacing: '0.06em',
+          fontWeight: tokens.fontWeightSemibold,
+          marginBottom: tokens.spacingVerticalM,
+        }}
+      >
         {title}
-      </h2>
+      </Caption1>
       {children}
     </div>
   )
@@ -311,7 +332,7 @@ export default function Dashboard() {
         {/* Section 1 — Overview cards */}
         <Section title="Overview">
           {overviewLoading ? (
-            <div style={{ color: 'var(--text-muted)', fontSize: '13px' }}>Loading…</div>
+            <Body1 style={{ display: 'block', color: tokens.colorNeutralForeground3 }}>Loading…</Body1>
           ) : (
             <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
               <StatCard
@@ -342,7 +363,7 @@ export default function Dashboard() {
         {/* Section 2 — Throughput chart */}
         <Section title="Throughput — last 30 days">
           {throughputLoading ? (
-            <div style={{ color: 'var(--text-muted)', fontSize: '13px' }}>Loading…</div>
+            <Body1 style={{ display: 'block', color: tokens.colorNeutralForeground3 }}>Loading…</Body1>
           ) : (
             <div
               style={{
@@ -360,7 +381,7 @@ export default function Dashboard() {
         {/* Section 3 — Agent leaderboard */}
         <Section title="Agent leaderboard">
           {agentsLoading ? (
-            <div style={{ color: 'var(--text-muted)', fontSize: '13px' }}>Loading…</div>
+            <Body1 style={{ display: 'block', color: tokens.colorNeutralForeground3 }}>Loading…</Body1>
           ) : (
             <div
               style={{
@@ -378,7 +399,7 @@ export default function Dashboard() {
         {/* Section 4 — Workflow health */}
         <Section title="Workflow health">
           {workflowsLoading ? (
-            <div style={{ color: 'var(--text-muted)', fontSize: '13px' }}>Loading…</div>
+            <Body1 style={{ display: 'block', color: tokens.colorNeutralForeground3 }}>Loading…</Body1>
           ) : (
             <WorkflowHealth
               workflows={workflowStats?.workflows ?? []}

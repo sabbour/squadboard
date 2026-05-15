@@ -13,6 +13,7 @@ import { RoutingLogTable } from '../components/routing/RoutingLogTable.tsx'
 import { RoutingStatsPanel } from '../components/routing/RoutingStatsPanel.tsx'
 import { CastPanel } from '../components/routing/CastPanel.tsx'
 import { ArrowSync20Regular, Bot20Regular, ArrowSwap20Regular, People20Regular } from '@fluentui/react-icons'
+import { Caption1, Body1, tokens } from '@fluentui/react-components'
 import PageHeader from '../components/layout/PageHeader.tsx'
 
 interface RouteTestResult {
@@ -84,7 +85,7 @@ function TestRoutingPanel({ projectId }: { projectId: string }) {
           color: 'var(--text)',
           padding: '10px 16px',
           fontSize: '13px',
-          fontWeight: 600,
+          fontWeight: tokens.fontWeightSemibold,
           cursor: 'pointer',
           display: 'flex',
           alignItems: 'center',
@@ -92,14 +93,14 @@ function TestRoutingPanel({ projectId }: { projectId: string }) {
           textAlign: 'left',
         }}
       >
-        <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{open ? '▾' : '▸'}</span>
+        <span style={{ fontSize: '11px', color: tokens.colorNeutralForeground3 }}>{open ? '▾' : '▸'}</span>
         🧪 Test Routing
       </button>
 
       {open && (
         <div style={{ padding: '16px', background: 'var(--surface)', display: 'flex', flexDirection: 'column', gap: '10px' }}>
           <div>
-            <label style={{ fontSize: '11px', color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>
+            <label style={{ fontSize: '11px', color: tokens.colorNeutralForeground3, display: 'block', marginBottom: '4px' }}>
               Issue title
             </label>
             <input
@@ -111,7 +112,7 @@ function TestRoutingPanel({ projectId }: { projectId: string }) {
             />
           </div>
           <div>
-            <label style={{ fontSize: '11px', color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>
+            <label style={{ fontSize: '11px', color: tokens.colorNeutralForeground3, display: 'block', marginBottom: '4px' }}>
               Labels (comma-separated)
             </label>
             <input
@@ -156,24 +157,24 @@ function TestRoutingPanel({ projectId }: { projectId: string }) {
                 background: result.matched ? 'rgba(46,160,67,0.1)' : 'rgba(139,148,158,0.1)',
                 border: `1px solid ${result.matched ? 'rgba(46,160,67,0.3)' : 'var(--border)'}`,
                 fontSize: '13px',
-                color: 'var(--text)',
+                color: tokens.colorNeutralForeground1,
               }}
             >
               {result.matched ? (
                 <>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <span style={{ color: '#3fb950', fontWeight: 600 }}>✓ Routed to: </span>
-                    <span style={{ fontWeight: 600 }}>{result.agentName}</span>
+                    <span style={{ color: '#3fb950', fontWeight: tokens.fontWeightSemibold }}>✓ Routed to: </span>
+                    <span style={{ fontWeight: tokens.fontWeightSemibold }}>{result.agentName}</span>
                     {result.tier && <RoutingTierBadge tier={result.tier} showLabel />}
                   </div>
                   {result.matchedRule && (
-                    <div style={{ marginTop: '4px', fontSize: '11px', color: 'var(--text-muted)' }}>
+                    <div style={{ marginTop: '4px', fontSize: '11px', color: tokens.colorNeutralForeground3 }}>
                       {result.matchedRule}
                     </div>
                   )}
                 </>
               ) : (
-                <span style={{ color: 'var(--text-muted)' }}>No rule matched → Tier 2</span>
+                <span style={{ color: tokens.colorNeutralForeground3 }}>No rule matched → Tier 2</span>
               )}
             </div>
           )}
@@ -203,7 +204,7 @@ export default function Agents() {
     color: active ? 'var(--text)' : 'var(--text-muted)',
     padding: '6px 14px',
     fontSize: '13px',
-    fontWeight: active ? 600 : 400,
+    fontWeight: active ? tokens.fontWeightSemibold : tokens.fontWeightRegular,
     cursor: 'pointer',
     marginBottom: '-1px',
   })
@@ -219,7 +220,7 @@ export default function Agents() {
               <span
                 style={{
                   fontSize: '12px',
-                  fontWeight: 600,
+                  fontWeight: tokens.fontWeightSemibold,
                   padding: '2px 8px',
                   borderRadius: '12px',
                   background: 'rgba(139,148,158,0.15)',
@@ -330,8 +331,8 @@ export default function Agents() {
         {activeTab === 'agents' && (
           <>
             {isLoading && (
-              <div style={{ color: 'var(--text-muted)', fontSize: '13px', textAlign: 'center', paddingTop: '48px' }}>
-                Loading agents…
+              <div style={{ textAlign: 'center', paddingTop: '48px' }}>
+                <Body1 style={{ color: tokens.colorNeutralForeground3 }}>Loading agents…</Body1>
               </div>
             )}
             {isError && (
@@ -352,9 +353,9 @@ export default function Agents() {
           <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
             {/* Cast — try the full 3-tier router on a hypothetical issue */}
             <div>
-              <p style={{ fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '12px', fontWeight: 600 }}>
+              <Caption1 as="p" style={{ display: 'block', color: tokens.colorNeutralForeground3, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: tokens.spacingVerticalM, fontWeight: tokens.fontWeightSemibold }}>
                 Cast Issue
-              </p>
+              </Caption1>
               <CastPanel
                 projectId={projectId}
                 onUseAgent={(agentId) => {
@@ -366,23 +367,23 @@ export default function Agents() {
 
             {/* Stats */}
             <div>
-              <p style={{ fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '12px', fontWeight: 600 }}>
+              <Caption1 as="p" style={{ display: 'block', color: tokens.colorNeutralForeground3, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: tokens.spacingVerticalM, fontWeight: tokens.fontWeightSemibold }}>
                 Routing Stats
-              </p>
+              </Caption1>
               {routingStats ? (
                 <RoutingStatsPanel stats={routingStats} isLoading={statsLoading} />
               ) : statsLoading ? (
                 <RoutingStatsPanel stats={{ tier1Count: 0, tier2Count: 0, tier3Count: 0, triageCount: 0, total: 0 }} isLoading />
               ) : (
-                <p style={{ fontSize: '12px', color: 'var(--text-muted)' }}>No routing data yet.</p>
+                <Caption1 style={{ color: tokens.colorNeutralForeground3 }}>No routing data yet.</Caption1>
               )}
             </div>
 
             {/* Log */}
             <div>
-              <p style={{ fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '12px', fontWeight: 600 }}>
+              <Caption1 as="p" style={{ display: 'block', color: tokens.colorNeutralForeground3, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: tokens.spacingVerticalM, fontWeight: tokens.fontWeightSemibold }}>
                 Routing Log
-              </p>
+              </Caption1>
               <RoutingLogTable entries={routingLog} isLoading={logLoading} />
             </div>
           </div>

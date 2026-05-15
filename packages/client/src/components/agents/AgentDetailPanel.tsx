@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { formatDistanceToNow } from 'date-fns'
+import { Subtitle2, Caption1, tokens } from '@fluentui/react-components'
 import { type Agent, useAgent, useUpdateAgent } from '../../api/agents.ts'
 import StatusBadge from './StatusBadge.tsx'
 import CharterEditor from './CharterEditor.tsx'
@@ -106,7 +107,7 @@ export default function AgentDetailPanel({ projectId, agent, onClose }: AgentDet
               background: avatarBg,
               color: '#0d1117',
               fontSize: '16px',
-              fontWeight: 700,
+              fontWeight: tokens.fontWeightBold,
               flexShrink: 0,
               userSelect: 'none',
             }}
@@ -116,8 +117,8 @@ export default function AgentDetailPanel({ projectId, agent, onClose }: AgentDet
 
           {/* Name + role */}
           <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontWeight: 600, fontSize: '15px', color: 'var(--text)' }}>{current.name}</div>
-            <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '2px' }}>{current.role}</div>
+            <Subtitle2 style={{ display: 'block', color: tokens.colorNeutralForeground1 }}>{current.name}</Subtitle2>
+            <Caption1 style={{ display: 'block', color: tokens.colorNeutralForeground3, marginTop: tokens.spacingVerticalXXS }}>{current.role}</Caption1>
           </div>
 
           <StatusBadge status={current.status} />
@@ -159,7 +160,7 @@ export default function AgentDetailPanel({ projectId, agent, onClose }: AgentDet
                 borderBottom: `2px solid ${tab === t ? 'var(--accent)' : 'transparent'}`,
                 color: tab === t ? 'var(--text)' : 'var(--text-muted)',
                 fontSize: '13px',
-                fontWeight: tab === t ? 500 : 400,
+                fontWeight: tab === t ? tokens.fontWeightMedium : tokens.fontWeightRegular,
                 cursor: 'pointer',
                 textTransform: 'capitalize',
                 marginBottom: '-1px',

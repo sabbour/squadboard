@@ -17,3 +17,25 @@
   - **Hardcoded hex:** 103× `#8b949e` (muted text), 80× `#30363d` (borders), 63× `#e6edf3` (foreground) — all have direct token equivalents.
   - **Phase order for Keyser:** Icons (P0, ~2h) → Panels/Modals (P0, ~4h) → Toast/Toolbar (P1) → Cards/Buttons (P1) → Badges (P1) → Tables/Data (P2) → Typography/Tokens (P2).
   - **NavDrawer caveat:** Nav components are in `@fluentui/react-components/unstable`. Recommended stable approach: keep `<nav>` wrapper, use `makeStyles` with tokens, swap emoji for icons.
+
+## Learnings — 2026-05-15 Typography + Spacing Sweep
+
+- **Fluent2 Typography Component Map:**
+  - `Title2` → top-level landing page titles (e.g. ProjectPicker "Projects")
+  - `Subtitle1` → in-project page titles (used inside `PageHeader` with `size="standard"`)
+  - `Subtitle2` → card/panel/drawer section titles (AgentDetailPanel agent name, SectionHeader in Settings)
+  - `Body1Strong` → primary item labels (skill name, tool name, issue title); renders ~14px semibold
+  - `Body1` → body copy, loading states (~14px regular)
+  - `Caption1` → secondary metadata, captions, small muted labels; replaces raw `fontSize: '11px'`/`'12px'`
+  - `Caption1` with `textTransform: 'uppercase'` + `fontWeight: tokens.fontWeightSemibold` → section category labels (replaces `<h2>` with raw font-size)
+  - All components default to `display: inline` — always add `style={{ display: 'block' }}` or `as="div"/"p"` when block layout is needed.
+
+- **When to use Strong variants:** Use `<Body1Strong>` instead of `<Body1>` + `fontWeight: 600` whenever the *entire* text run is semibold. Reserve explicit `fontWeight: tokens.fontWeightSemibold` for mixed-weight inline contexts.
+
+- **The orphan global stylesheet trap:** `globals.css` had a `body { font-family: ...; font-size: 14px; line-height: 1.5; }` rule. This wins over FluentProvider's `webLightTheme` typography cascade because CSS specificity. Removing those rules (keeping only `-webkit-font-smoothing: antialiased`) lets Fluent2 own the type scale cleanly. The fix is always: *remove body-level font rules; let FluentProvider be the only source of truth.*
+
+- **FluentProvider check habit:** Confirm `FluentProvider` wraps the app in `main.tsx` before any token migration. If it's missing, ALL `tokens.*` values fall back to undefined — worst possible outcome.
+
+- **var(--*) coexistence:** `var(--surface)`, `var(--border)`, `var(--bg)`, `var(--accent)` are layout/structural colors that predate Fluent2 tokens — they're fine to keep. Only text-color `var(--text)` / `var(--text-muted)` should be migrated to `tokens.colorNeutralForeground*`.
+
+- **Canon artifact:** `.squad/decisions/inbox/fenster-typography-canon.md` — full table of typography components, spacing tokens, color tokens, and global CSS guidance for this project.

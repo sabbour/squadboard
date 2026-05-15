@@ -1,6 +1,6 @@
 import { Draggable } from '@hello-pangea/dnd'
 import { useState } from 'react'
-import { tokens } from '@fluentui/react-components'
+import { Body1, tokens } from '@fluentui/react-components'
 import { type Issue } from '../../api/issues.ts'
 import { useIssueRuns } from '../../api/runs.ts'
 import LabelBadge from '../LabelBadge.tsx'
@@ -73,17 +73,17 @@ export default function IssueCard({ issue, index, projectId, isSelected, onSelec
             onClick={() => onOpen(issue)}
             style={{ cursor: 'pointer', paddingRight: '20px' }}
           >
-            <p
+            <Body1
               style={{
-                fontSize: '13px',
-                fontWeight: 500,
+                display: 'block',
+                fontWeight: tokens.fontWeightMedium,
                 color: tokens.colorNeutralForeground1,
                 lineHeight: '1.4',
                 marginBottom: issue.labels.length > 0 ? '8px' : '0',
               }}
             >
               {issue.title}
-            </p>
+            </Body1>
 
             {/* Labels */}
             {issue.labels.length > 0 && (

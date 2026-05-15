@@ -12,6 +12,7 @@ import {
   tokens,
   Title2,
   Body1,
+  Body1Strong,
   Caption1,
   Badge,
 } from '@fluentui/react-components'
@@ -113,7 +114,7 @@ function SessionList({
           alignItems: 'center',
         }}
       >
-        <strong style={{ fontSize: '13px' }}>Sessions</strong>
+        <Body1Strong>Sessions</Body1Strong>
         <Button
           size="small"
           appearance="primary"
@@ -165,7 +166,7 @@ function SessionList({
               <span
                 style={{
                   fontSize: '13px',
-                  fontWeight: 600,
+                  fontWeight: tokens.fontWeightSemibold,
                   overflow: 'hidden',
                   textOverflow: 'ellipsis',
                   whiteSpace: 'nowrap',
@@ -378,7 +379,7 @@ function SessionView({
           <div
             style={{
               fontSize: '14px',
-              fontWeight: 600,
+              fontWeight: tokens.fontWeightSemibold,
               overflow: 'hidden',
               textOverflow: 'ellipsis',
               whiteSpace: 'nowrap',

@@ -9,7 +9,10 @@
 import { useState } from 'react'
 import { useParams } from 'react-router'
 import {
+  Body1,
+  Body1Strong,
   Button,
+  Caption1,
   Dialog,
   DialogActions,
   DialogBody,
@@ -21,6 +24,7 @@ import {
   Input,
   Option,
   Textarea,
+  tokens,
 } from '@fluentui/react-components'
 import { useProject } from '../api/projects.ts'
 import { useMcpServers } from '../api/mcp.ts'
@@ -79,18 +83,18 @@ export default function Tools() {
       />
 
       <div style={{ flex: 1, overflow: 'auto', padding: '24px', maxWidth: '1100px', width: '100%', margin: '0 auto' }}>
-        {isLoading && <p style={{ color: 'var(--text-muted)' }}>Loading…</p>}
+        {isLoading && <Body1 style={{ color: tokens.colorNeutralForeground3 }}>Loading…</Body1>}
         {!isLoading && tools.length === 0 && (
           <div style={{ textAlign: 'center', padding: '48px 16px', color: 'var(--text-muted)' }}>
-            <p style={{ fontSize: '14px', marginBottom: '12px' }}>No tools yet.</p>
+            <Body1 style={{ display: 'block', marginBottom: tokens.spacingVerticalM }}>No tools yet.</Body1>
             <Button appearance="primary" onClick={() => setShowCreate(true)}>Create the first tool</Button>
           </div>
         )}
         {Array.from(grouped.entries()).sort(([a], [b]) => a.localeCompare(b)).map(([cat, items]) => (
           <section key={cat} style={{ marginBottom: '24px' }}>
-            <div style={{ fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--text-muted)', marginBottom: '8px', fontWeight: 600 }}>
+            <Caption1 style={{ display: 'block', textTransform: 'uppercase', letterSpacing: '0.05em', color: tokens.colorNeutralForeground3, marginBottom: tokens.spacingVerticalS, fontWeight: tokens.fontWeightSemibold }}>
               {cat}
-            </div>
+            </Caption1>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
               {items.map((t) => <ToolRow key={t.id} tool={t} onEdit={() => setEditing(t)} onDelete={() => confirmDelete(t)} />)}
             </div>
@@ -112,14 +116,14 @@ function ToolRow({ tool, onEdit, onDelete }: { tool: Tool; onEdit: () => void; o
     }}>
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
-          <span style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text)' }}>{tool.name}</span>
-          <code style={{ fontSize: '11px', color: 'var(--text-muted)', fontFamily: 'ui-monospace,monospace' }}>{tool.key}</code>
+          <Body1Strong style={{ color: tokens.colorNeutralForeground1 }}>{tool.name}</Body1Strong>
+          <code style={{ fontSize: '11px', color: tokens.colorNeutralForeground3, fontFamily: tokens.fontFamilyMonospace }}>{tool.key}</code>
         </div>
-        <p style={{ fontSize: '12px', color: 'var(--text-muted)', margin: '0' }}>{tool.description}</p>
+        <Caption1 style={{ display: 'block', color: tokens.colorNeutralForeground3, margin: '0' }}>{tool.description}</Caption1>
         {tool.mcpServerId && (
-          <p style={{ fontSize: '11px', color: 'var(--text-muted)', margin: '4px 0 0' }}>
-            via MCP server <code style={{ fontFamily: 'ui-monospace,monospace' }}>{tool.mcpServerId.slice(0, 8)}…</code>
-          </p>
+          <Caption1 style={{ display: 'block', color: tokens.colorNeutralForeground3, margin: '4px 0 0' }}>
+            via MCP server <code style={{ fontFamily: tokens.fontFamilyMonospace }}>{tool.mcpServerId.slice(0, 8)}…</code>
+          </Caption1>
         )}
       </div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>

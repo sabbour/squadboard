@@ -63,7 +63,7 @@ const useStyles = makeStyles({
   },
   projectName: {
     padding: '4px 12px 8px',
-    fontWeight: 700,
+    fontWeight: tokens.fontWeightBold,
     fontSize: '14px',
     color: tokens.colorNeutralForeground1,
     overflow: 'hidden',

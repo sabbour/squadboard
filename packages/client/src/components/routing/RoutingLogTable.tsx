@@ -2,6 +2,7 @@ import { type RoutingLogEntry } from '../../api/routing.ts'
 import { RoutingTierBadge } from './RoutingTierBadge.tsx'
 import { formatDistanceToNow } from 'date-fns'
 import {
+  Body1,
   Table,
   TableHeader,
   TableHeaderCell,
@@ -9,6 +10,7 @@ import {
   TableRow,
   TableCell,
   TableCellLayout,
+  tokens,
 } from '@fluentui/react-components'
 
 interface RoutingLogTableProps {
@@ -30,17 +32,17 @@ function safeRelativeTime(value: unknown): string {
 export function RoutingLogTable({ entries, isLoading }: RoutingLogTableProps) {
   if (isLoading) {
     return (
-      <div style={{ color: 'var(--text-muted)', fontSize: '13px', padding: '24px', textAlign: 'center' }}>
+      <Body1 style={{ display: 'block', color: tokens.colorNeutralForeground3, padding: '24px', textAlign: 'center' }}>
         Loading routing log…
-      </div>
+      </Body1>
     )
   }
 
   if (entries.length === 0) {
     return (
-      <div style={{ color: 'var(--text-muted)', fontSize: '13px', padding: '24px', textAlign: 'center' }}>
+      <Body1 style={{ display: 'block', color: tokens.colorNeutralForeground3, padding: '24px', textAlign: 'center' }}>
         No routing events yet — routes will appear here as issues are processed.
-      </div>
+      </Body1>
     )
   }
 
@@ -61,7 +63,7 @@ export function RoutingLogTable({ entries, isLoading }: RoutingLogTableProps) {
           {entries.map((entry) => (
             <TableRow key={entry.id}>
               <TableCell>
-                <TableCellLayout style={{ color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>
+                <TableCellLayout style={{ color: tokens.colorNeutralForeground3, whiteSpace: 'nowrap' }}>
                   {safeRelativeTime(entry.timestamp)}
                 </TableCellLayout>
               </TableCell>
@@ -82,16 +84,16 @@ export function RoutingLogTable({ entries, isLoading }: RoutingLogTableProps) {
                 <RoutingTierBadge tier={entry.tier} showLabel />
               </TableCell>
               <TableCell>
-                <TableCellLayout style={{ color: 'var(--text-muted)', fontFamily: 'monospace', fontSize: '11px' }}>
-                  {entry.matchedRule ?? <span style={{ color: 'var(--text-muted)', opacity: 0.6 }}>—</span>}
+                <TableCellLayout style={{ color: tokens.colorNeutralForeground3, fontFamily: tokens.fontFamilyMonospace, fontSize: '11px' }}>
+                  {entry.matchedRule ?? <span style={{ color: tokens.colorNeutralForeground3, opacity: 0.6 }}>—</span>}
                 </TableCellLayout>
               </TableCell>
               <TableCell>
-                {entry.agentName ?? <span style={{ color: 'var(--text-muted)' }}>Unassigned</span>}
+                {entry.agentName ?? <span style={{ color: tokens.colorNeutralForeground3 }}>Unassigned</span>}
               </TableCell>
               <TableCell style={{ textAlign: 'right' }}>
-                <TableCellLayout style={{ color: 'var(--text-muted)', fontFamily: 'monospace', fontSize: '11px' }}>
-                  {entry.score != null ? entry.score.toFixed(2) : <span style={{ color: 'var(--text-muted)', opacity: 0.6 }}>—</span>}
+                <TableCellLayout style={{ color: tokens.colorNeutralForeground3, fontFamily: tokens.fontFamilyMonospace, fontSize: '11px' }}>
+                  {entry.score != null ? entry.score.toFixed(2) : <span style={{ color: tokens.colorNeutralForeground3, opacity: 0.6 }}>—</span>}
                 </TableCellLayout>
               </TableCell>
             </TableRow>

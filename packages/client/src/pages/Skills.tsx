@@ -14,7 +14,10 @@
 import { useState } from 'react'
 import { useParams } from 'react-router'
 import {
+  Body1,
+  Body1Strong,
   Button,
+  Caption1,
   Dialog,
   DialogActions,
   DialogBody,
@@ -92,18 +95,18 @@ export default function Skills() {
       />
 
       <div style={{ flex: 1, overflow: 'auto', padding: '24px', maxWidth: '1100px', width: '100%', margin: '0 auto' }}>
-        {isLoading && <p style={{ color: 'var(--text-muted)' }}>Loading…</p>}
+        {isLoading && <Body1 style={{ color: tokens.colorNeutralForeground3 }}>Loading…</Body1>}
         {!isLoading && skills.length === 0 && (
           <div style={{ textAlign: 'center', padding: '48px 16px', color: 'var(--text-muted)' }}>
-            <p style={{ fontSize: '14px', marginBottom: '12px' }}>No skills yet.</p>
+            <Body1 style={{ display: 'block', marginBottom: tokens.spacingVerticalM }}>No skills yet.</Body1>
             <Button appearance="secondary" onClick={() => setShowCurated(true)}>Browse the curated library</Button>
           </div>
         )}
         {Array.from(grouped.entries()).sort(([a], [b]) => a.localeCompare(b)).map(([cat, items]) => (
           <section key={cat} style={{ marginBottom: '24px' }}>
-            <div style={{ fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--text-muted)', marginBottom: '8px', fontWeight: 600 }}>
+            <Caption1 style={{ display: 'block', textTransform: 'uppercase', letterSpacing: '0.05em', color: tokens.colorNeutralForeground3, marginBottom: tokens.spacingVerticalS, fontWeight: tokens.fontWeightSemibold }}>
               {cat}
-            </div>
+            </Caption1>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
               {items.map((s) => (
                 <SkillRow key={s.id} skill={s} onEdit={() => setEditing(s)} onDelete={() => confirmDelete(s)} />
@@ -140,14 +143,14 @@ function SkillRow({ skill, onEdit, onDelete }: { skill: Skill; onEdit: () => voi
     }}>
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
-          <span style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text)' }}>{skill.name}</span>
-          <code style={{ fontSize: '11px', color: 'var(--text-muted)', fontFamily: 'ui-monospace,monospace' }}>{skill.key}</code>
+          <Body1Strong style={{ color: tokens.colorNeutralForeground1 }}>{skill.name}</Body1Strong>
+          <code style={{ fontSize: '11px', color: tokens.colorNeutralForeground3, fontFamily: tokens.fontFamilyMonospace }}>{skill.key}</code>
           {skill.curatedKey && (
             <span style={{ fontSize: '10px', padding: '1px 6px', borderRadius: '8px', background: tokens.colorBrandBackground2, color: tokens.colorBrandForeground1 }}>curated</span>
           )}
         </div>
         {skill.description && (
-          <p style={{ fontSize: '12px', color: 'var(--text-muted)', margin: '0 0 6px' }}>{skill.description}</p>
+          <Caption1 style={{ display: 'block', color: tokens.colorNeutralForeground3, margin: '0 0 6px' }}>{skill.description}</Caption1>
         )}
         <details style={{ fontSize: '12px' }}>
           <summary style={{ cursor: 'pointer', color: 'var(--text-muted)' }}>Prompt addendum</summary>

@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useCostSummary, useBudget, type CostSource } from '../../api/costs.ts'
 import { Warning20Regular } from '@fluentui/react-icons'
 import {
+  Body1,
   Table,
   TableHeader,
   TableHeaderCell,
@@ -11,6 +12,7 @@ import {
   TableCellLayout,
   TabList,
   Tab,
+  tokens,
   type SelectTabData,
   type SelectTabEvent,
 } from '@fluentui/react-components'
@@ -40,9 +42,9 @@ function BudgetBar({ percent, budgetUsd, spend }: { percent: number; budgetUsd: 
   const color = percent > 95 ? '#f85149' : percent > 80 ? '#d29922' : '#3fb950'
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', color: 'var(--text-muted)' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', color: tokens.colorNeutralForeground3 }}>
         <span>MTD spend vs. budget</span>
-        <span style={{ color: percent > 95 ? '#f85149' : 'var(--text)' }}>
+        <span style={{ color: percent > 95 ? '#f85149' : tokens.colorNeutralForeground1 }}>
           {fmtShort(spend)} / {fmtShort(budgetUsd)} ({percent.toFixed(0)}%)
         </span>
       </div>
@@ -86,7 +88,7 @@ export default function CostDashboard({ projectId }: CostDashboardProps) {
 
   if (summaryLoading || budgetLoading) {
     return (
-      <div style={{ padding: '32px', color: 'var(--text-muted)', fontSize: '13px' }}>Loading cost data…</div>
+      <Body1 style={{ display: 'block', padding: '32px', color: tokens.colorNeutralForeground3 }}>Loading cost data…</Body1>
     )
   }
 

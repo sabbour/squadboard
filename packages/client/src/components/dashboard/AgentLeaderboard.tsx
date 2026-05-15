@@ -1,5 +1,6 @@
 import type { AgentStat } from '../../api/analytics.ts'
 import {
+  Body1,
   Table,
   TableHeader,
   TableHeaderCell,
@@ -7,6 +8,7 @@ import {
   TableRow,
   TableCell,
   TableCellLayout,
+  tokens,
 } from '@fluentui/react-components'
 
 interface Props {
@@ -24,7 +26,7 @@ function SuccessBadge({ rate }: { rate: number }) {
         padding: '2px 8px',
         borderRadius: '10px',
         fontSize: '11px',
-        fontWeight: 600,
+        fontWeight: tokens.fontWeightSemibold,
         background: bg,
         color,
         minWidth: '44px',
@@ -54,9 +56,9 @@ function fmtCost(usd: number | null | undefined): string {
 export default function AgentLeaderboard({ agents }: Props) {
   if (agents.length === 0) {
     return (
-      <div style={{ padding: '24px', color: 'var(--text-muted)', fontSize: '13px' }}>
+      <Body1 style={{ display: 'block', padding: '24px', color: tokens.colorNeutralForeground3 }}>
         No agents found for this project.
-      </div>
+      </Body1>
     )
   }
 
@@ -80,23 +82,23 @@ export default function AgentLeaderboard({ agents }: Props) {
         <TableBody>
           {sorted.map((agent, idx) => (
             <TableRow key={agent.id}>
-              <TableCell style={{ width: '32px', color: 'var(--text-muted)' }}>{idx + 1}</TableCell>
+              <TableCell style={{ width: '32px', color: tokens.colorNeutralForeground3 }}>{idx + 1}</TableCell>
               <TableCell>
-                <TableCellLayout style={{ fontWeight: 500 }}>{agent.name}</TableCellLayout>
+                <TableCellLayout style={{ fontWeight: tokens.fontWeightMedium }}>{agent.name}</TableCellLayout>
               </TableCell>
               <TableCell style={{ textAlign: 'right' }}>
                 <strong>{agent.runsThisWeek}</strong>
-                <span style={{ color: 'var(--text-muted)', marginLeft: '4px' }}>
+                <span style={{ color: tokens.colorNeutralForeground3, marginLeft: '4px' }}>
                   / {agent.runsTotal} total
                 </span>
               </TableCell>
               <TableCell style={{ textAlign: 'right' }}>
                 <SuccessBadge rate={agent.successRate} />
               </TableCell>
-              <TableCell style={{ textAlign: 'right', fontFamily: 'monospace' }}>
+              <TableCell style={{ textAlign: 'right', fontFamily: tokens.fontFamilyMonospace }}>
                 {fmtCost(agent.avgCostUsd)}
               </TableCell>
-              <TableCell style={{ textAlign: 'right', fontFamily: 'monospace' }}>
+              <TableCell style={{ textAlign: 'right', fontFamily: tokens.fontFamilyMonospace }}>
                 {fmt(agent.avgDurationMs)}
               </TableCell>
             </TableRow>
