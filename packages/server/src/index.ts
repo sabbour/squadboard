@@ -26,6 +26,7 @@ import rolesRouter from './routes/roles.js';
 import castingRouter from './routes/casting.js';
 import castRouter from './routes/cast.js';
 import reviewPoliciesRouter from './routes/review-policies.js';
+import inboxRouter from './routes/inbox.js';
 import { dispatcher } from './engine/dispatcher.js';
 import { initWebSocketServer } from './realtime/ws-server.js';
 import { listPresence } from './realtime/presence.js';
@@ -57,6 +58,7 @@ async function main(): Promise<void> {
   app.use(express.json());
 
   app.use('/api/health', healthRouter);
+  app.use('/api/inbox', inboxRouter);
   app.use('/api/projects', projectsRouter);
   app.use('/api/squad', squadRouter);
   app.use('/api/projects/:projectId/agents', agentsRouter);

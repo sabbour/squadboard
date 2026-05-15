@@ -537,6 +537,37 @@ async function bootstrapSchema() {
     CREATE INDEX IF NOT EXISTS review_events_deliverable_idx
       ON review_events (deliverable_id, created_at)
       WHERE deliverable_id IS NOT NULL;
+
+    -- Phase 14: Quick capture (AI-formulated inbox) -----------------------
+    CREATE TABLE IF NOT EXISTS inbox_items (
+      id                    UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+      user_id               UUID,
+      original_draft        TEXT        NOT NULL,
+      formulated_title      TEXT,
+      formulated_body       TEXT,
+      suggested_labels      JSONB       NOT NULL DEFAULT '[]'::jsonb,
+      suggested_project_id  UUID        REFERENCES projects(id) ON DELETE SET NULL,
+      suggested_column      TEXT,
+      confidence            TEXT,
+      rationale             TEXT,
+      status                TEXT        NOT NULL DEFAULT 'captured',
+      published_issue_id    UUID        REFERENCES issues(id) ON DELETE SET NULL,
+      created_at            TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at            TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+
+    DO $$ BEGIN
+      ALTER TABLE inbox_items
+        ADD CONSTRAINT inbox_items_status_chk
+        CHECK (status IN ('captured', 'formulated', 'published', 'discarded'));
+    EXCEPTION WHEN duplicate_object THEN NULL;
+    END $$;
+
+    CREATE INDEX IF NOT EXISTS inbox_items_status_created_idx
+      ON inbox_items (status, created_at DESC);
+
+    CREATE INDEX IF NOT EXISTS inbox_items_user_idx
+      ON inbox_items (user_id, created_at DESC);
   `);
     await seedSystemReviewPolicyPresets();
     console.log('[db] schema bootstrapped');

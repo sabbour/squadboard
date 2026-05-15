@@ -18,6 +18,9 @@ export const projects = pgTable('projects', {
   githubAppId: text('github_app_id'),                  // numeric GitHub App ID as string
   githubAppInstallationId: text('github_app_installation_id'), // installation ID for this repo
   githubAppPrivateKey: text('github_app_private_key'), // PEM private key, plaintext (hacking phase)
+  // Project-level default model used by the auto-model resolution chain
+  // (sdk/model-defaults.ts). Null means "use BUILTIN_FALLBACK".
+  defaultModel: text('default_model'),
   createdAt: timestamp('created_at').notNull().defaultNow(),
   updatedAt: timestamp('updated_at').notNull().defaultNow(),
 });
@@ -527,4 +530,44 @@ export const deliverables = pgTable('deliverables', {
 
 export type Deliverable = typeof deliverables.$inferSelect;
 export type NewDeliverable = typeof deliverables.$inferInsert;
+
+// ---------------------------------------------------------------------------
+// Phase 14: Quick capture (AI-formulated inbox)
+// ---------------------------------------------------------------------------
+//
+// A user types a brief, raw idea into the global "+ Capture" button or a
+// per-project FAB. We store the raw draft, then call an LLM to formulate a
+// clean issue (title, body, suggested labels/project/column, confidence,
+// rationale). The user reviews the formulated draft and either publishes it
+// to a project board (creating a real `issues` row) or saves it for later /
+// discards it.
+//
+// userId is nullable for the single-user mode shipped in v1. Future auth
+// will wire this to a `users` table.
+//
+// Status transitions:
+//   captured  → formulated → published    (terminal — issue created)
+//                         → discarded     (soft delete)
+//
+// publishedIssueId is set when status='published' so the inbox can link
+// straight to the resulting board card.
+export const inboxItems = pgTable('inbox_items', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  userId: uuid('user_id'),
+  originalDraft: text('original_draft').notNull(),
+  formulatedTitle: text('formulated_title'),
+  formulatedBody: text('formulated_body'),
+  suggestedLabels: jsonb('suggested_labels').notNull().default([]),
+  suggestedProjectId: uuid('suggested_project_id').references(() => projects.id, { onDelete: 'set null' }),
+  suggestedColumn: text('suggested_column'),
+  confidence: text('confidence'),
+  rationale: text('rationale'),
+  status: text('status').notNull().default('captured'),
+  publishedIssueId: uuid('published_issue_id').references(() => issues.id, { onDelete: 'set null' }),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+  updatedAt: timestamp('updated_at').notNull().defaultNow(),
+});
+
+export type InboxItem = typeof inboxItems.$inferSelect;
+export type NewInboxItem = typeof inboxItems.$inferInsert;
 
