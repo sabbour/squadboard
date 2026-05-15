@@ -31,6 +31,7 @@ import { getDb } from '../db/index.js';
 import { parseWorkflowYaml } from './workflow-parser.js';
 import { loadProjectDefault, resolvePolicyForStep, } from './review-policy-resolver.js';
 import { eventBus } from '../realtime/event-bus.js';
+import { appendSystemComment } from './issues.js';
 const TIMEOUT_NOTIFY_MARKER = '[timeout-notify]';
 // Marker used in stepRuns.reviewComment to record that we already emitted
 // a `notify` for this step's deadline. Prevents the sweep from spamming
@@ -95,6 +96,18 @@ async function applyTimeoutAction(row, step, policy, deadline) {
                 deadline: deadline.toISOString(),
                 policy,
             });
+            await appendSystemComment({
+                issueId: row.workflowRun.issueId,
+                eventKind: 'review.timeout.notify',
+                summary: `Review step ${stepRun.stepIndex + 1} timed out at ${deadline.toISOString()} (policy: notify) — no automated action.`,
+                eventPayload: {
+                    workflowRunId: row.workflowRun.id,
+                    stepRunId: stepRun.id,
+                    stepIndex: stepRun.stepIndex,
+                    deadline: deadline.toISOString(),
+                    timeoutAction: policy.timeout_action,
+                },
+            }).catch((e) => console.warn(`[review-timeout] system-comment notify failed:`, e));
             console.log(`[review-timeout] notify: workflow_run=${row.workflowRun.id} step_run=${stepRun.id} deadline=${deadline.toISOString()}`);
             return { fired: true, policy, deadline, mutated: true };
         }
@@ -119,6 +132,17 @@ async function applyTimeoutAction(row, step, policy, deadline) {
                 deadline: deadline.toISOString(),
                 policy,
             });
+            await appendSystemComment({
+                issueId: row.workflowRun.issueId,
+                eventKind: 'review.timeout.auto_approve',
+                summary: `Review step ${stepRun.stepIndex + 1} auto-approved after timeout at ${deadline.toISOString()}.`,
+                eventPayload: {
+                    workflowRunId: row.workflowRun.id,
+                    stepRunId: stepRun.id,
+                    stepIndex: stepRun.stepIndex,
+                    deadline: deadline.toISOString(),
+                },
+            }).catch((e) => console.warn(`[review-timeout] system-comment auto_approve failed:`, e));
             console.log(`[review-timeout] auto_approve: workflow_run=${row.workflowRun.id} step_run=${stepRun.id} stepIndex=${stepRun.stepIndex}`);
             return { fired: true, policy, deadline, mutated: true };
         }
@@ -145,6 +169,17 @@ async function applyTimeoutAction(row, step, policy, deadline) {
                 deadline: deadline.toISOString(),
                 policy,
             });
+            await appendSystemComment({
+                issueId: row.workflowRun.issueId,
+                eventKind: 'review.timeout.auto_reject',
+                summary: `Review step ${stepRun.stepIndex + 1} auto-rejected after timeout at ${deadline.toISOString()}; workflow run failed.`,
+                eventPayload: {
+                    workflowRunId: row.workflowRun.id,
+                    stepRunId: stepRun.id,
+                    stepIndex: stepRun.stepIndex,
+                    deadline: deadline.toISOString(),
+                },
+            }).catch((e) => console.warn(`[review-timeout] system-comment auto_reject failed:`, e));
             console.log(`[review-timeout] auto_reject: workflow_run=${row.workflowRun.id} failed (step_run=${stepRun.id})`);
             return { fired: true, policy, deadline, mutated: true };
         }
@@ -171,6 +206,18 @@ async function applyTimeoutAction(row, step, policy, deadline) {
                 deadline: deadline.toISOString(),
                 policy,
             });
+            await appendSystemComment({
+                issueId: row.workflowRun.issueId,
+                eventKind: 'review.timeout.escalate',
+                summary: `Review step ${stepRun.stepIndex + 1} escalated after timeout at ${deadline.toISOString()} (fallback: ${policy.fallback_reviewer ?? 'unspecified'}).`,
+                eventPayload: {
+                    workflowRunId: row.workflowRun.id,
+                    stepRunId: stepRun.id,
+                    stepIndex: stepRun.stepIndex,
+                    fallbackReviewer: policy.fallback_reviewer,
+                    deadline: deadline.toISOString(),
+                },
+            }).catch((e) => console.warn(`[review-timeout] system-comment escalate failed:`, e));
             console.warn(`[review-timeout] escalate (v1: notify-only): workflow_run=${row.workflowRun.id} step_run=${stepRun.id} fallback=${policy.fallback_reviewer ?? 'none'}`);
             return { fired: true, policy, deadline, mutated: true };
         }

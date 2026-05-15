@@ -5,7 +5,7 @@ import { getDb, schema } from '../db/index.js';
 // ---------------------------------------------------------------------------
 export async function listIssues(projectId, filters = {}) {
     const db = getDb();
-    const { issues, issueLabels } = schema;
+    const { issues, issueLabels, labels } = schema;
     const conditions = [
         eq(issues.projectId, projectId),
         eq(issues.archived, 0),
@@ -29,7 +29,22 @@ export async function listIssues(projectId, filters = {}) {
         const taggedIds = new Set(tagged.map((r) => r.issueId));
         rows = rows.filter((r) => taggedIds.has(r.id));
     }
-    return rows;
+    // Batch-fetch labels for all issues
+    const issueIds = rows.map((r) => r.id);
+    const labelRows = issueIds.length > 0
+        ? await db
+            .select({ issueId: issueLabels.issueId, label: labels })
+            .from(issueLabels)
+            .innerJoin(labels, eq(issueLabels.labelId, labels.id))
+            .where(inArray(issueLabels.issueId, issueIds))
+        : [];
+    const labelsByIssueId = new Map();
+    for (const row of labelRows) {
+        const existing = labelsByIssueId.get(row.issueId) ?? [];
+        existing.push(row.label);
+        labelsByIssueId.set(row.issueId, existing);
+    }
+    return rows.map((r) => ({ ...r, labels: labelsByIssueId.get(r.id) ?? [] }));
 }
 export async function getIssue(projectId, id) {
     const db = getDb();
@@ -226,9 +241,6 @@ export async function bulkAction(projectId, action, issueIds, payload) {
     }
     throw Object.assign(new Error(`Unknown action: ${action}`), { status: 400 });
 }
-// ---------------------------------------------------------------------------
-// Comments
-// ---------------------------------------------------------------------------
 export async function listComments(issueId) {
     const db = getDb();
     return db
@@ -237,14 +249,58 @@ export async function listComments(issueId) {
         .where(eq(schema.comments.issueId, issueId))
         .orderBy(schema.comments.createdAt);
 }
-export async function addComment(issueId, body, authorId) {
-    if (!body?.trim()) {
+export async function addComment(issueId, input, legacyAuthorId) {
+    // Backward-compat: callers that passed (issueId, body, authorId) still work.
+    const payload = typeof input === 'string'
+        ? { body: input, authorId: legacyAuthorId ?? null }
+        : input;
+    if (!payload.body?.trim()) {
         throw Object.assign(new Error('`body` is required'), { status: 400 });
     }
+    const authorKind = payload.authorKind ?? 'human';
+    if (!['human', 'agent', 'system'].includes(authorKind)) {
+        throw Object.assign(new Error('`authorKind` must be human|agent|system'), { status: 400 });
+    }
+    const mentions = Array.isArray(payload.mentions) ? payload.mentions.filter((m) => typeof m === 'string') : [];
     const db = getDb();
     const [created] = await db
         .insert(schema.comments)
-        .values({ issueId, body: body.trim(), authorId: authorId ?? null })
+        .values({
+        issueId,
+        body: payload.body.trim(),
+        authorId: payload.authorId ?? null,
+        authorKind,
+        authorRef: payload.authorRef ?? null,
+        mentions,
+    })
+        .returning();
+    return created;
+}
+/**
+ * Append a structured `system` comment to an issue thread.
+ *
+ * Use for run-lifecycle events, deliverable submissions, review verdicts,
+ * heartbeat notifications, etc. The body is the human-readable summary
+ * shown inline; eventKind + eventPayload give the UI enough metadata to
+ * render the entry with the right icon and link to the underlying thing.
+ *
+ * Idempotent at the call-site: heartbeats that fire repeatedly should
+ * gate their own emit with a marker (see review-timeout-sweep).
+ */
+export async function appendSystemComment(opts) {
+    const db = getDb();
+    const [created] = await db
+        .insert(schema.comments)
+        .values({
+        issueId: opts.issueId,
+        body: opts.summary,
+        authorId: null,
+        authorKind: 'system',
+        authorRef: opts.authorRef ?? opts.eventKind,
+        mentions: [],
+        eventKind: opts.eventKind,
+        eventPayload: (opts.eventPayload ?? {}),
+    })
         .returning();
     return created;
 }

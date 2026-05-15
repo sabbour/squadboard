@@ -27,6 +27,21 @@ class EventBus extends EventEmitter {
         const event = { type, projectId, payload };
         this.emit('event', event);
     }
+    /** Emit a live-session event scoped to a project. */
+    emitSessionEvent(type, projectId, payload) {
+        const event = { type, projectId, payload };
+        this.emit('event', event);
+    }
+    /** Emit a comment-thread event scoped to a project. */
+    emitCommentEvent(type, projectId, payload) {
+        const event = { type, projectId, payload };
+        this.emit('event', event);
+    }
+    /** Emit a deliverable-lifecycle event scoped to a project. */
+    emitDeliverableEvent(type, projectId, payload) {
+        const event = { type, projectId, payload };
+        this.emit('event', event);
+    }
 }
 export const eventBus = new EventBus();
 // Increase limit for large deployments with many WS subscribers

@@ -17,6 +17,10 @@ function handleError(res, err) {
     console.error('[issues] unhandled error:', err);
     res.status(500).json({ error: 'Internal server error' });
 }
+/** Adds `column` as an alias for `status` so the client can use `issue.column`. */
+function serialize(issue) {
+    return { ...issue, column: issue.status };
+}
 // ---------------------------------------------------------------------------
 // Issues
 // ---------------------------------------------------------------------------
@@ -30,7 +34,7 @@ router.get('/', async (req, res) => {
             labelId: label,
             search,
         });
-        res.json(rows);
+        res.json(rows.map(serialize));
     }
     catch (err) {
         handleError(res, err);
@@ -40,8 +44,8 @@ router.get('/', async (req, res) => {
 router.post('/', async (req, res) => {
     try {
         const { projectId } = req.params;
-        const { title, body, status, assigneeId, labels } = req.body;
-        const created = await issuesService.createIssue(projectId, { title, body, status, assigneeId });
+        const { title, body, status, column, assigneeId, labels } = req.body;
+        const created = await issuesService.createIssue(projectId, { title, body, status: status ?? column, assigneeId });
         // Tier 1 auto-routing: resolve a rule and create an issue_run (Invariant 1)
         let autoRoutedTo = null;
         try {
@@ -71,8 +75,8 @@ router.post('/', async (req, res) => {
             // Routing failure must not fail issue creation
             console.error('[issues] auto-routing error (non-fatal):', routingErr);
         }
-        res.status(201).json({ ...created, autoRoutedTo });
-        eventBus.emitIssueEvent('issue.created', projectId, { issue: created });
+        res.status(201).json(serialize({ ...created, autoRoutedTo }));
+        eventBus.emitIssueEvent('issue.created', projectId, { issue: serialize(created) });
     }
     catch (err) {
         handleError(res, err);
@@ -103,7 +107,7 @@ router.get('/:id', async (req, res) => {
             res.status(404).json({ error: 'Issue not found' });
             return;
         }
-        res.json(issue);
+        res.json(serialize(issue));
     }
     catch (err) {
         handleError(res, err);
@@ -113,7 +117,8 @@ router.get('/:id', async (req, res) => {
 router.patch('/:id', async (req, res) => {
     try {
         const { projectId, id } = req.params;
-        const { title, body, status, assigneeId, version } = req.body;
+        const { title, body, status, column, assigneeId, version } = req.body;
+        const resolvedStatus = status ?? column;
         // Optimistic concurrency check (OQ #6): if client sends `version`, enforce it.
         if (version !== undefined) {
             const db = getDb();
@@ -123,8 +128,8 @@ router.patch('/:id', async (req, res) => {
                 patch.title = title.trim();
             if (body !== undefined)
                 patch.body = body;
-            if (status !== undefined)
-                patch.status = status;
+            if (resolvedStatus !== undefined)
+                patch.status = resolvedStatus;
             if ('assigneeId' in req.body)
                 patch.assigneeId = assigneeId ?? null;
             const [updated] = await db
@@ -146,18 +151,18 @@ router.patch('/:id', async (req, res) => {
                 res.status(409).json({ error: 'conflict', currentVersion: current.version });
                 return;
             }
-            eventBus.emitIssueEvent('issue.updated', projectId, { issue: updated });
-            res.json(updated);
+            eventBus.emitIssueEvent('issue.updated', projectId, { issue: serialize(updated) });
+            res.json(serialize(updated));
             return;
         }
         // No version provided — legacy path, no concurrency check
-        const updated = await issuesService.updateIssue(projectId, id, { title, body, status, assigneeId });
+        const updated = await issuesService.updateIssue(projectId, id, { title, body, status: resolvedStatus, assigneeId });
         if (!updated) {
             res.status(404).json({ error: 'Issue not found' });
             return;
         }
-        eventBus.emitIssueEvent('issue.updated', projectId, { issue: updated });
-        res.json(updated);
+        eventBus.emitIssueEvent('issue.updated', projectId, { issue: serialize(updated) });
+        res.json(serialize(updated));
     }
     catch (err) {
         handleError(res, err);
@@ -183,23 +188,23 @@ router.delete('/:id', async (req, res) => {
 router.patch('/:id/move', async (req, res) => {
     try {
         const { projectId, id } = req.params;
-        const { status, position } = req.body;
-        if (!status) {
+        const { status, column, position } = req.body;
+        const newStatus = (status ?? column);
+        if (!newStatus) {
             res.status(400).json({ error: '`status` is required' });
             return;
         }
-        const moved = await issuesService.moveIssue(projectId, id, status, position);
+        const moved = await issuesService.moveIssue(projectId, id, newStatus, position);
         if (!moved) {
             res.status(404).json({ error: 'Issue not found' });
             return;
         }
         eventBus.emitIssueEvent('issue.moved', projectId, {
             issueId: id,
-            fromStatus: moved.status !== status ? moved.status : status, // status already updated
-            toStatus: status,
+            column: newStatus, // client expects `column`
             position: moved.position,
         });
-        res.json(moved);
+        res.json(serialize(moved));
     }
     catch (err) {
         handleError(res, err);
@@ -242,9 +247,19 @@ router.get('/:id/comments', async (req, res) => {
 // POST /api/projects/:projectId/issues/:id/comments
 router.post('/:id/comments', async (req, res) => {
     try {
-        const { id } = req.params;
-        const { body, authorId } = req.body;
-        const created = await issuesService.addComment(id, body, authorId);
+        const { projectId, id } = req.params;
+        const { body, authorId, authorKind, authorRef, mentions } = req.body;
+        const created = await issuesService.addComment(id, {
+            body,
+            authorId: authorId ?? null,
+            authorKind: authorKind ?? 'human',
+            authorRef: authorRef ?? null,
+            mentions: Array.isArray(mentions) ? mentions : [],
+        });
+        eventBus.emitCommentEvent('comment.created', projectId, {
+            issueId: id,
+            comment: created,
+        });
         res.status(201).json(created);
     }
     catch (err) {
@@ -254,12 +269,16 @@ router.post('/:id/comments', async (req, res) => {
 // DELETE /api/projects/:projectId/issues/:id/comments/:commentId
 router.delete('/:id/comments/:commentId', async (req, res) => {
     try {
-        const { id, commentId } = req.params;
+        const { projectId, id, commentId } = req.params;
         const deleted = await issuesService.deleteComment(id, commentId);
         if (!deleted) {
             res.status(404).json({ error: 'Comment not found' });
             return;
         }
+        eventBus.emitCommentEvent('comment.deleted', projectId, {
+            issueId: id,
+            commentId,
+        });
         res.json(deleted);
     }
     catch (err) {

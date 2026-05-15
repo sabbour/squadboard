@@ -26,11 +26,39 @@ export type PresenceEventType =
   | 'presence.left'
   | 'presence.moved';
 
+/**
+ * Live multi-agent session events.
+ * Surfaced to the browser by the WS server so the LiveSession UI can
+ * stream agent transcripts, tool calls, and completion in real time.
+ */
+export type SessionEventType =
+  | 'session.started'
+  | 'session.message'
+  | 'session.delta'
+  | 'session.tool'
+  | 'session.usage'
+  | 'session.error'
+  | 'session.completed'
+  | 'session.steered';
+
+export type CommentEventType =
+  | 'comment.created'
+  | 'comment.deleted';
+
+export type DeliverableEventType =
+  | 'deliverable.created'
+  | 'deliverable.updated'
+  | 'deliverable.reviewed'
+  | 'deliverable.superseded';
+
 export type BusEventType =
   | IssueEventType
   | RunEventType
   | WorkflowEventType
-  | PresenceEventType;
+  | PresenceEventType
+  | SessionEventType
+  | CommentEventType
+  | DeliverableEventType;
 
 export interface BusEvent {
   type: BusEventType;
@@ -61,6 +89,24 @@ class EventBus extends EventEmitter {
 
   /** Emit a presence event scoped to a project. */
   emitPresenceEvent(type: PresenceEventType, projectId: string, payload: unknown): void {
+    const event: BusEvent = { type, projectId, payload };
+    this.emit('event', event);
+  }
+
+  /** Emit a live-session event scoped to a project. */
+  emitSessionEvent(type: SessionEventType, projectId: string, payload: unknown): void {
+    const event: BusEvent = { type, projectId, payload };
+    this.emit('event', event);
+  }
+
+  /** Emit a comment-thread event scoped to a project. */
+  emitCommentEvent(type: CommentEventType, projectId: string, payload: unknown): void {
+    const event: BusEvent = { type, projectId, payload };
+    this.emit('event', event);
+  }
+
+  /** Emit a deliverable-lifecycle event scoped to a project. */
+  emitDeliverableEvent(type: DeliverableEventType, projectId: string, payload: unknown): void {
     const event: BusEvent = { type, projectId, payload };
     this.emit('event', event);
   }

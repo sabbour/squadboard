@@ -19,6 +19,7 @@ import { resolveRoute } from './router.js';
 import { parseWorkflowYaml } from '../services/workflow-parser.js';
 import { createPeerReviewRuns, collectReviewDecisions, shouldBlock, isQuorumMet, injectReviewerFeedback, recordApproval, } from './peer-reviewer.js';
 import { materializeFanOut, checkFanOutCompletion } from './fan-out.js';
+import { appendSystemComment } from '../services/issues.js';
 // ---------------------------------------------------------------------------
 // createWorkflowRun
 // ---------------------------------------------------------------------------
@@ -393,6 +394,20 @@ async function handleApproveStep(wfRun, stepRun, stepDef) {
             .where(eq(workflowRuns.id, wfRun.id));
         console.log(`[workflow-runner] approve step ${stepRun.stepIndex} for workflow_run ${wfRun.id} ` +
             `initiated with ${reviewerAgentIds.length} reviewer(s), policy=${policy}`);
+        await appendSystemComment({
+            issueId: wfRun.issueId,
+            eventKind: 'review.opened',
+            summary: `Review step ${stepRun.stepIndex + 1} opened with ${reviewerAgentIds.length} reviewer(s) (policy: ${policy}${quorum ? `, quorum ${quorum.n}-of-${quorum.of}` : ''}${excludeAuthor ? ', author excluded' : ''}).`,
+            eventPayload: {
+                workflowRunId: wfRun.id,
+                stepRunId: stepRun.id,
+                stepIndex: stepRun.stepIndex,
+                reviewerCount: reviewerAgentIds.length,
+                policy,
+                quorum,
+                excludeAuthor,
+            },
+        }).catch((e) => console.warn(`[workflow-runner] system-comment review.opened failed:`, e));
         return;
     }
     // -----------------------------------------------------------------------
@@ -417,6 +432,24 @@ async function handleApproveStep(wfRun, stepRun, stepDef) {
             // Re-queue the prior agent_run step with reviewer feedback injected.
             await injectReviewerFeedback(stepRun.id, wfRun.id, decisions);
             await requeuePriorStep(wfRun, stepRun);
+            const requestChangesCount = decisions.filter((d) => d.decision === 'request_changes').length;
+            await appendSystemComment({
+                issueId: wfRun.issueId,
+                eventKind: 'review.requested_changes',
+                summary: `Review step ${stepRun.stepIndex + 1} requested changes (${requestChangesCount} of ${decisions.length} reviewer(s)) — prior step re-queued.`,
+                eventPayload: {
+                    workflowRunId: wfRun.id,
+                    stepRunId: stepRun.id,
+                    stepIndex: stepRun.stepIndex,
+                    decisions: decisions.map((d) => ({
+                        agentId: d.agentId,
+                        decision: d.decision,
+                        comment: d.comment ?? null,
+                    })),
+                    policy,
+                    quorum,
+                },
+            }).catch((e) => console.warn(`[workflow-runner] system-comment requested_changes failed:`, e));
         }
         else {
             // All reviewers approved (and quorum met if configured) — advance.
@@ -426,6 +459,23 @@ async function handleApproveStep(wfRun, stepRun, stepDef) {
                 .set({ status: 'completed', updatedAt: new Date() })
                 .where(eq(stepRuns.id, stepRun.id));
             await advanceToNextStep(wfRun.id, wfRun.currentStepIndex ?? 0);
+            const approvalCount = decisions.filter((d) => d.decision === 'approve').length;
+            await appendSystemComment({
+                issueId: wfRun.issueId,
+                eventKind: 'review.approved',
+                summary: `Review step ${stepRun.stepIndex + 1} approved (${approvalCount} of ${decisions.length} reviewer(s)).`,
+                eventPayload: {
+                    workflowRunId: wfRun.id,
+                    stepRunId: stepRun.id,
+                    stepIndex: stepRun.stepIndex,
+                    decisions: decisions.map((d) => ({
+                        agentId: d.agentId,
+                        decision: d.decision,
+                    })),
+                    policy,
+                    quorum,
+                },
+            }).catch((e) => console.warn(`[workflow-runner] system-comment review.approved failed:`, e));
         }
     }
 }
