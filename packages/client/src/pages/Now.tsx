@@ -9,25 +9,14 @@
  */
 
 import { useNavigate } from 'react-router'
-import { formatDistanceToNow } from 'date-fns'
 import { Eye24Regular } from '@fluentui/react-icons'
 import PageHeader from '../components/layout/PageHeader.tsx'
 import { useNowFeed, type NowLiveSession, type NowIssueRun, type NowWorkflowRun } from '../api/activity.ts'
+import { safeRelativeTime } from '../utils/dates.ts'
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
-
-function safeRelativeTime(value: unknown): string {
-  if (value == null) return '—'
-  const d = new Date(value as string | number | Date)
-  if (Number.isNaN(d.getTime())) return '—'
-  try {
-    return formatDistanceToNow(d, { addSuffix: true })
-  } catch {
-    return '—'
-  }
-}
 
 // ---------------------------------------------------------------------------
 // Status badge

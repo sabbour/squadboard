@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
-import { formatDistanceToNow } from 'date-fns'
 import { Subtitle2, Caption1, tokens } from '@fluentui/react-components'
 import { type Agent, useAgent, useUpdateAgent } from '../../api/agents.ts'
+import { safeRelativeTime } from '../../utils/dates.ts'
 import StatusBadge from './StatusBadge.tsx'
 import CharterEditor from './CharterEditor.tsx'
 import AgentCapabilities from './AgentCapabilities.tsx'
@@ -221,13 +221,13 @@ export default function AgentDetailPanel({ projectId, agent, onClose }: AgentDet
                 <div>
                   <p style={labelStyle}>Created</p>
                   <span style={{ fontSize: '13px', color: 'var(--text)' }}>
-                    {formatDistanceToNow(new Date(current.createdAt), { addSuffix: true })}
+                    {safeRelativeTime(current.createdAt)}
                   </span>
                 </div>
                 <div>
                   <p style={labelStyle}>Last Updated</p>
                   <span style={{ fontSize: '13px', color: 'var(--text)' }}>
-                    {formatDistanceToNow(new Date(current.updatedAt), { addSuffix: true })}
+                    {safeRelativeTime(current.updatedAt)}
                   </span>
                 </div>
               </div>

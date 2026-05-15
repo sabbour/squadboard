@@ -7,7 +7,7 @@ import {
 import { useReviewDeliverable } from '../../api/deliverables.ts'
 import { useAgents, type Agent } from '../../api/agents.ts'
 import { ReviewDecisionBadge } from './ReviewDecisionBadge.tsx'
-import { formatDistanceToNow } from 'date-fns'
+import { safeRelativeTime } from '../../utils/dates.ts'
 import Avatar from '../Avatar.tsx'
 import {
   CheckmarkCircle20Regular,
@@ -166,7 +166,7 @@ export function ReviewPanel({ reviewGroup, target, allowHumanOverride = true }: 
                       {verbCfg.icon} {verbCfg.label}
                     </span>
                     <span style={{ fontSize: '11px', color: 'var(--text-muted)', marginLeft: 'auto' }}>
-                      {formatDistanceToNow(new Date(event.createdAt), { addSuffix: true })}
+                      {safeRelativeTime(event.createdAt)}
                     </span>
                   </div>
                   {event.comment && (

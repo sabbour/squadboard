@@ -19,7 +19,7 @@ import { ReviewPanel } from '../reviews/ReviewPanel.tsx'
 import DeliverableList from '../deliverables/DeliverableList.tsx'
 import { useDeliverables } from '../../api/deliverables.ts'
 import IssueFlowDag from '../flow/IssueFlowDag.tsx'
-import { formatDistanceToNow } from 'date-fns'
+import { safeRelativeTime } from '../../utils/dates.ts'
 import IssueBodyMarkdown from '../issues/IssueBodyMarkdown.tsx'
 import { useIssueAttachments } from '../../api/issue-attachments.ts'
 
@@ -208,7 +208,7 @@ export default function CardDetail({ projectId, issue, onClose, initialTab }: Ca
                   </div>
                 )}
                 <Caption1 style={{ color: tokens.colorNeutralForeground2 }}>
-                  {formatDistanceToNow(new Date(issue.createdAt), { addSuffix: true })}
+                  {safeRelativeTime(issue.createdAt)}
                 </Caption1>
               </div>
 

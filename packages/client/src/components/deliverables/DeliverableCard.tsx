@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { tokens } from '@fluentui/react-components'
-import { formatDistanceToNow } from 'date-fns'
+import { safeRelativeTime } from '../../utils/dates.ts'
 import {
   type Deliverable,
   type DeliverableKind,
@@ -80,8 +80,8 @@ export default function DeliverableCard({ projectId, deliverable }: DeliverableC
   const status = STATUS_TONE[deliverable.status]
   const kindLabel = KIND_LABELS[deliverable.kind]
   const producedRel = deliverable.producedAt
-    ? formatDistanceToNow(new Date(deliverable.producedAt), { addSuffix: true })
-    : formatDistanceToNow(new Date(deliverable.createdAt), { addSuffix: true })
+    ? safeRelativeTime(deliverable.producedAt)
+    : safeRelativeTime(deliverable.createdAt)
 
   async function onPickReviewer(agent: Agent | null) {
     setPickerError(null)

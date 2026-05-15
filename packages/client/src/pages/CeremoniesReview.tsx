@@ -44,6 +44,7 @@ import {
   type Ceremony,
 } from '../api/ceremonies.ts'
 import PageHeader from '../components/layout/PageHeader.tsx'
+import { safeAbsoluteTime } from '../utils/dates.ts'
 
 export default function CeremoniesReview() {
   const { id } = useParams<{ id: string }>()
@@ -199,7 +200,7 @@ function DraftRow({
         )}
       </div>
       <Caption1 style={{ color: 'var(--text-muted)', display: 'block' }}>
-        {new Date(draft.updatedAt).toLocaleString()}
+        {safeAbsoluteTime(draft.updatedAt)}
       </Caption1>
     </button>
   )

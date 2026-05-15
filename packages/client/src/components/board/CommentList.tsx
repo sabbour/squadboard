@@ -3,7 +3,7 @@ import { tokens } from '@fluentui/react-components'
 import Avatar from '../Avatar.tsx'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
-import { formatDistanceToNow } from 'date-fns'
+import { safeRelativeTime } from '../../utils/dates.ts'
 import {
   PlayCircle20Regular,
   CheckmarkCircle20Regular,
@@ -77,7 +77,7 @@ function HumanComment({ comment }: { comment: Comment }) {
             {comment.authorName ?? 'Anonymous'}
           </span>
           <span style={{ fontSize: '11px', color: tokens.colorNeutralForeground2 }}>
-            {formatDistanceToNow(new Date(comment.createdAt), { addSuffix: true })}
+            {safeRelativeTime(comment.createdAt)}
           </span>
         </div>
         <div
@@ -139,7 +139,7 @@ function AgentComment({ comment }: { comment: Comment }) {
             agent{role ? ` · ${role}` : ''}
           </span>
           <span style={{ fontSize: '11px', color: tokens.colorNeutralForeground2 }}>
-            {formatDistanceToNow(new Date(comment.createdAt), { addSuffix: true })}
+            {safeRelativeTime(comment.createdAt)}
           </span>
         </div>
         <div
@@ -181,7 +181,7 @@ function SystemEvent({ comment }: { comment: Comment }) {
         <span>{comment.body}</span>
       </div>
       <span style={{ fontSize: '11px', color: tokens.colorNeutralForeground3, flexShrink: 0 }}>
-        {formatDistanceToNow(new Date(comment.createdAt), { addSuffix: true })}
+        {safeRelativeTime(comment.createdAt)}
       </span>
     </div>
   )

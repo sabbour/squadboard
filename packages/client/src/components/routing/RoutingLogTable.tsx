@@ -1,6 +1,6 @@
 import { type RoutingLogEntry } from '../../api/routing.ts'
 import { RoutingTierBadge } from './RoutingTierBadge.tsx'
-import { formatDistanceToNow } from 'date-fns'
+import { safeRelativeTime } from '../../utils/dates.ts'
 import {
   Body1,
   Table,
@@ -16,17 +16,6 @@ import {
 interface RoutingLogTableProps {
   entries: RoutingLogEntry[]
   isLoading?: boolean
-}
-
-function safeRelativeTime(value: unknown): string {
-  if (value == null) return '—'
-  const d = new Date(value as string | number | Date)
-  if (Number.isNaN(d.getTime())) return '—'
-  try {
-    return formatDistanceToNow(d, { addSuffix: true })
-  } catch {
-    return '—'
-  }
 }
 
 export function RoutingLogTable({ entries, isLoading }: RoutingLogTableProps) {

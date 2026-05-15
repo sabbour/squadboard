@@ -10,6 +10,7 @@ import {
 import { ArrowSync24Regular, Checkmark24Regular, Warning24Regular, Dismiss24Regular } from '@fluentui/react-icons'
 import { useDiagnostics, useRunDiagnostics, type DiagnosticCheck } from '../api/diagnostics.ts'
 import PageHeader from '../components/layout/PageHeader.tsx'
+import { safeAbsoluteTime } from '../utils/dates.ts'
 
 // ---------------------------------------------------------------------------
 // Status icon
@@ -167,7 +168,7 @@ export default function Diagnostics() {
                 marginBottom: tokens.spacingVerticalL,
               }}
             >
-              Generated {new Date(data.generatedAt).toLocaleString()} · total {data.durationMs} ms
+              Generated {safeAbsoluteTime(data.generatedAt)} · total {data.durationMs} ms
             </Caption1>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: tokens.spacingVerticalM }}>

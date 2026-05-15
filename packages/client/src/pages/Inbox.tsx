@@ -21,6 +21,7 @@ import {
 import { useProjects } from '../api/projects.ts'
 import CaptureModal from '../components/inbox/CaptureModal.tsx'
 import PageHeader from '../components/layout/PageHeader.tsx'
+import { safeAbsoluteTime } from '../utils/dates.ts'
 
 const STATUS_GROUPS: { status: InboxStatus; label: string; tone: string }[] = [
   { status: 'captured', label: 'Captured', tone: '#6e7681' },
@@ -178,7 +179,7 @@ export default function Inbox() {
                         <span>📁 {projectName(item.suggestedProjectId)}</span>
                         {item.suggestedColumn && <span>↳ {item.suggestedColumn}</span>}
                         {item.confidence && <span>· {item.confidence} confidence</span>}
-                        <span>· {new Date(item.createdAt).toLocaleString()}</span>
+                        <span>· {safeAbsoluteTime(item.createdAt)}</span>
                       </div>
                     </div>
                     {item.status !== 'discarded' && item.status !== 'published' && (

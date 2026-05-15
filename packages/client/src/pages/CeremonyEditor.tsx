@@ -83,6 +83,7 @@ import {
 } from '../services/ceremony-graph.ts'
 import PageHeader from '../components/layout/PageHeader.tsx'
 import FormulatePanel from '../components/formulate/FormulatePanel.tsx'
+import { safeAbsoluteTime } from '../utils/dates.ts'
 
 // ---------------------------------------------------------------------------
 // Phase 16: the single source of truth for editor state is now the
@@ -1031,7 +1032,7 @@ function TriggerConfigForm({
         </Button>
         {cronPreview && (
           <ul style={{ margin: 0, paddingLeft: 18, fontSize: 12 }}>
-            {cronPreview.map((t) => <li key={t}>{new Date(t).toLocaleString()}</li>)}
+            {cronPreview.map((t) => <li key={t}>{safeAbsoluteTime(t)}</li>)}
           </ul>
         )}
         {cronPreviewErr && (
@@ -1125,7 +1126,7 @@ function SchedulesPanel({ projectId, ceremonyId }: { projectId: string; ceremony
           <span style={{ color: 'var(--text-muted)' }}>{s.timezone}</span>
           <span style={{ color: s.enabled ? '#3fb950' : '#999' }}>{s.enabled ? 'on' : 'off'}</span>
           <span style={{ color: 'var(--text-muted)', flex: 1 }}>
-            next: {new Date(s.nextFireAt).toLocaleString()}
+            next: {safeAbsoluteTime(s.nextFireAt)}
           </span>
           <Button
             appearance="subtle"
