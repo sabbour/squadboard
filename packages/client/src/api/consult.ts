@@ -112,6 +112,14 @@ export function useConsultSession(sessionId: string | null) {
     queryKey: ['consultSession', sessionId],
     queryFn: () => apiFetch<ConsultSessionDetail>(`/api/consult/${sessionId}`),
     enabled: Boolean(sessionId),
+    // Poll while the session is live so missed WS events don't leave the
+    // transcript permanently stale.  Stop polling once the session is in a
+    // terminal state.
+    refetchInterval: (query) => {
+      const status = query.state.data?.status
+      if (status === 'completed' || status === 'failed' || status === 'cancelled') return false
+      return 3000
+    },
   })
 }
 

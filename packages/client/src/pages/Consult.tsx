@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, useRef } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 import { useParams, useNavigate, useSearchParams } from 'react-router'
 import {
   Button,
@@ -395,6 +396,7 @@ function NewSessionView({
   prefillName?: string
 }) {
   const styles = useStyles()
+  const qc = useQueryClient()
   const [mode, setMode] = useState<ConsultMode>('agent')
   const [agentId, setAgentId] = useState<string>('')
   const [model, setModel] = useState<string>('')
@@ -437,6 +439,10 @@ function NewSessionView({
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ content: firstMessage.trim() }),
         })
+        // Mark the detail query stale so SessionView refetches immediately on mount,
+        // catching the case where the WS subscription isn't yet active when the
+        // assistant message completes.
+        void qc.invalidateQueries({ queryKey: ['consultSession', session.id] })
       } catch (err) {
         console.warn('failed to post first message', err)
       }
