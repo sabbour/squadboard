@@ -59,6 +59,11 @@ export async function syncAgentsFromDisk(projectId, squadPath) {
             .where(and(eq(schema.agents.projectId, projectId), eq(schema.agents.name, agentName)))
             .limit(1);
         if (existing.length === 0) {
+            // INSERT new agent row.
+            // We deliberately omit `id`, `createdAt`, and `updatedAt` from the
+            // values payload so the database defaults (`defaultRandom()` /
+            // `defaultNow()`) own those columns. Never pass the entity wholesale
+            // here — Drizzle would write every supplied column on conflict.
             await db.insert(schema.agents).values({
                 projectId,
                 name: agentName,
@@ -77,15 +82,25 @@ export async function syncAgentsFromDisk(projectId, squadPath) {
             const roleChanged = row.role !== meta.role;
             const modelChanged = (row.model ?? undefined) !== (meta.model ?? undefined);
             if (hashChanged || roleChanged || modelChanged) {
-                await db
-                    .update(schema.agents)
-                    .set({
+                // UPDATE branch: scope `.set({...})` to MUTABLE fields ONLY.
+                //
+                // INVARIANT: `createdAt` (and `id`) MUST NEVER appear in this set
+                // clause. Re-stamping `createdAt` on every project-open / file
+                // watcher tick would silently overwrite the agent's true creation
+                // time — every page refresh would make the agent look "just hired".
+                //
+                // The mutable-fields whitelist is typed below so a TS error fires
+                // if somebody adds `createdAt` (or `id`) to the set payload.
+                const mutableFields = {
                     role: meta.role,
                     model: meta.model ?? null,
                     charterHash: newHash ?? null,
                     historyPath: historyExists ? historyPath : row.historyPath,
                     updatedAt: new Date(),
-                })
+                };
+                await db
+                    .update(schema.agents)
+                    .set(mutableFields)
                     .where(eq(schema.agents.id, row.id));
                 updated++;
             }
@@ -100,6 +115,7 @@ export async function syncAgentsFromDisk(projectId, squadPath) {
     await Promise.all(allRows
         .filter((r) => !seenNames.has(r.name) && r.status === 'active')
         .map(async (r) => {
+        // Whitelist set fields — never re-stamp `createdAt` on retire.
         await db
             .update(schema.agents)
             .set({ status: 'retired', updatedAt: new Date() })
