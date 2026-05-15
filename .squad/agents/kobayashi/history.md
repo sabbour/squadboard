@@ -58,4 +58,21 @@ Three tiers (first match wins):
 - New endpoint contracts documented for Keyser implementation
 - Also merged carryover: kobayashi-fs-migration.md (3 callsites in agent-sync.ts migrated to SDK)
 
+---
+
+## Wave 6 Update (2026-05-15T10:36:00Z)
+
+**Run:** kobayashi-4
+**Model:** claude-sonnet-4.6
+**Task:** Local universe registry — Hire Team picker missing Seinfeld (and The Office, The Simpsons)
+
+**Outcome:**
+- Created `packages/server/src/services/local-universes.ts`: `LocalUniverseId` union, `LocalUniverseTemplate`/`LocalUniverseCharacter` interfaces, `LOCAL_UNIVERSES` record with 15 Office + 10 Seinfeld + 14 Simpsons characters (39 total), plus `getLocalUniverseIds()`, `getLocalUniverse()`, `isLocalUniverseId()` helpers.
+- Modified `casting-engine.ts`: `ExtendedUniverseId` type, `listUniverses()` now returns 5 universes (2 SDK + 3 local), `castTeam()` dispatches to local two-phase casting path for local ids.
+- Modified `hire-formulator.ts`: team prompt now lists all 5 universe ids with tone guidance.
+- Modified `packages/client/src/api/agents.ts`: `CastingUniverseId` widened to include the 3 new ids.
+- Both `tsc --noEmit` checks clean.
+- Code commit: `785db624`
+- Decision: `.squad/decisions/inbox/kobayashi-local-universe-registry.md` (commit `7354cab7`)
+
 **Status:** COMPLETE — API stable for client. Ready for Keyser Batch B.
