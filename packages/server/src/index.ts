@@ -31,6 +31,7 @@ import inboxRouter from './routes/inbox.js';
 import { projectFlowRouter, issueFlowRouter } from './routes/flow.js';
 import { curatedSkillsRouter, projectSkillsRouter, agentSkillsRouter } from './routes/skills.js';
 import { projectToolsRouter, agentToolsRouter } from './routes/tools.js';
+import { projectMcpRouter, agentMcpRouter } from './routes/mcp.js';
 import { dispatcher } from './engine/dispatcher.js';
 // Phase 10: side-effect import — registers the on_event ceremony listener
 // against the in-process event bus.
@@ -88,6 +89,9 @@ async function main(): Promise<void> {
   // Phase 13: tools registry — project CRUD + per-agent assignment.
   app.use('/api/projects/:projectId/agents/:agentId/tools', agentToolsRouter);
   app.use('/api/projects/:projectId/tools', projectToolsRouter);
+  // Phase 13: MCP servers — encrypted-headers registry + per-agent assignment.
+  app.use('/api/projects/:projectId/agents/:agentId/mcp-servers', agentMcpRouter);
+  app.use('/api/projects/:projectId/mcp-servers', projectMcpRouter);
   app.use('/api/projects/:projectId/routing', routingRouter);
   app.use('/api/models', modelsRouter);
   app.use('/api/roles', rolesRouter);

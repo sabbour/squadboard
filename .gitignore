@@ -6,3 +6,5 @@
 .squad/.scratch/
 # Squad: SubSquad activation file (local to this machine)
 .squad-workstream
+# Phase 13: per-project AES-256-GCM secret key for MCP header encryption
+.squad/.secret-key
