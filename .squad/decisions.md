@@ -2245,3 +2245,76 @@ Gate rules follow the same reject-authority pattern already established for Kuja
 - **Silicon Valley** was added proactively. If it proves noisy for non-tech projects, the LRU penalty will naturally deprioritise it.
 - **Finance threshold rule** (cross-functional rule #5) asks the coordinator to prompt the user for a spending threshold when Finance joins — this is deliberate, not an oversight. The threshold is project-specific and cannot be defaulted here.
 - **Legal + Security "Compliance" overlap** is resolved by token priority: "Legal" and "Counsel" are distinct first-match tokens. A role string of "Compliance Officer" would match Legal (⚖️) since Legal appears higher in the table. If the intent is Security compliance, the role string should include "Security" or "Auth".
+
+---
+
+## 2026-05-15T18:00:22Z: User directive — Drop upstream PRs to bradygaster/squad from queue
+
+**By:** Ahmed Sabbour (via Copilot)
+**What:** Remove the upstream-PRs queue item. We are NOT submitting PRs to `bradygaster/squad` for: (a) governance docs (non-tech roles + universe additions), (b) SDK type loosening + `engine.registerUniverse()`, (c) character data donation. Scope stays internal.
+**Why:** User scope decision — keep our extensions local; do not propose them upstream at this time.
+
+---
+
+## 2026-05-15T18:08:24Z: User directives — UX consistency + queued asks
+
+**By:** Ahmed Sabbour (via Copilot)
+
+**Standing directives:**
+1. **Project switcher preserves category.** When the user switches projects via the top dropdown, the destination should be the same category page (boards → boards, flow → flow, etc.) for the new project — not a reset to the default.
+2. **System category menu sits last in the sidebar.** Always anchored to the bottom of the navigation order. Project-scoped categories sort above it.
+3. **All pages must adhere to Fluent2.** When in doubt about spacing/padding/typography, look up the Fluent2 reference and follow it.
+
+**Queued asks:**
+- 🔌 Expose Squadboard's API as **MCP server endpoints** so external CLI (e.g., the Squad CLI) and other AI agents can drop into and interact with the running Squadboard. Hockney's domain — queued for after Conjure backend ships.
+- 🩺 **Diagnostics: `.squad/` directory shape check is buggy** — currently reports `missing directory: .squad/agents/; missing directory: .squad/log/; missing file: .squad/routing.md; missing file: .squad/decisions.md` even though all of those exist. Likely a CWD / team-root resolution mismatch in the health check (similar to the Worktree Awareness pattern). Hockney's domain — queued for after Conjure backend ships.
+
+---
+
+## 2026-05-15: Hockney — Conjure classify endpoint (Phase 1)
+
+**Author:** Hockney
+**Date:** 2026-05-15
+**Status:** Shipped (local commit only — not pushed)
+
+**Scope:** Phase 1 of replacing the free-form Capture inbox with **Conjure** — a universal smart-create surface that takes any prose prompt and routes it to the right creation flow with a pre-filled draft. Phase 1 deliverable is the **backend classify endpoint only**. Frontend integration (modal, FAB rewire, deprecating `CaptureModal`) is out of scope this wave and owned by Keyser after Fenster's design lands.
+
+**Endpoint:** `POST /api/conjure/classify`
+
+**Classifier strategy:** **Option C (hybrid)** — rule-based first, LLM only for ambiguous cases. Rationale: determinism over cleverness, zero runtime cost on hot path, graceful degradation, tunable threshold.
+
+**6 Phase 1 intents:** project, issue, team, agent, skill, tool (with draft contracts defined).
+
+**What's NOT in scope (Phase 2):** inbox-item, consult, ceremony, mcp-server (10 kinds in locked-in proposal, Phase 1 ships 6).
+
+**Commit:** `feat(server): add /api/conjure/classify endpoint for intent routing` (SHA to be filled in by Hockney's history).
+
+**File map:**
+- `packages/server/src/services/conjure-classifier.ts` — rewritten (was broken/unused), ~350 lines
+- `packages/server/src/routes/conjure.ts` — new, ~75 lines
+- `packages/server/src/index.ts` — mount `/api/conjure`, +5 lines
+
+**Verification:** `tsc --noEmit` clean; 13/13 sample prompts classified correctly offline; edge cases handled.
+
+---
+
+## 2026-05-15: McManus — Casting reference trim + non-tech charter templates
+
+**Author:** McManus
+**Date:** 2026-05-15
+**Status:** Shipped (commits `10f659bf`, `db12a997`)
+
+**What:**
+1. **Casting reference trimmed from 20 → 17 universes.** Dropped Mad Men, Succession, and Silicon Valley from `.squad/templates/casting-reference.md`.
+2. **Per-role charter templates added for 7 non-tech roles** under `.squad/templates/non-tech-charters/` (PM, Designer, Founder, Sales, Marketing, Customer Success, Research) plus an index README.
+
+**Why:**
+- **Trim:** Coordinator/picker symmetry — 3 dropped universes don't earn their keep in the casting reference and never appeared in the runtime picker. Removing them improves alignment.
+- **Templates:** Reusable starting points for next non-tech hire. Each follows the same structural shape as tech charters (Identity, What I Own, How I Work, Boundaries, Voice, Model, Collaboration) but role-specific. `{Name}` placeholder for casting to fill.
+
+**Files affected:**
+- Commit `10f659bf`: `.squad/templates/casting-reference.md`, `.github/agents/squad.agent.md`
+- Commit `db12a997`: `.squad/templates/non-tech-charters/` (8 files: README + 7 role templates)
+
+**Invariants preserved:** One universe per assignment, casting algorithm (size_fit + shape_fit + resonance_fit + LRU), charter shape across team, `{Name}` placeholder literal.
+
