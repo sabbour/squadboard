@@ -8,12 +8,14 @@ import Workflows from './pages/Workflows.tsx'
 import WorkflowEditor from './pages/WorkflowEditor.tsx'
 import Settings from './pages/Settings.tsx'
 import Dashboard from './pages/Dashboard.tsx'
+import Inbox from './pages/Inbox.tsx'
 
 export default function App() {
   return (
     <Routes>
       <Route element={<Layout />}>
         <Route index element={<ProjectPicker />} />
+        <Route path="inbox" element={<Inbox />} />
         <Route path="projects/:id" element={<Navigate to="dashboard" replace />} />
         <Route path="projects/:id/dashboard" element={<Dashboard />} />
         <Route path="projects/:id/board" element={<Board />} />

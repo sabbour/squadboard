@@ -8,6 +8,7 @@ import {
   NavDrawerFooter,
   NavItem,
   NavSectionHeader,
+  Button,
   makeStyles,
   tokens,
 } from '@fluentui/react-components'
@@ -19,8 +20,11 @@ import {
   ArrowSync24Regular,
   Money24Regular,
   Settings24Regular,
+  Add20Regular,
+  Mail20Regular,
 } from '@fluentui/react-icons'
 import type { OnNavItemSelectData } from '@fluentui/react-components'
+import CaptureModal from './inbox/CaptureModal.tsx'
 
 const useStyles = makeStyles({
   root: {
@@ -59,6 +63,16 @@ const useStyles = makeStyles({
     textOverflow: 'ellipsis',
     whiteSpace: 'nowrap',
   },
+  topBar: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    gap: '8px',
+    padding: '8px 16px',
+    borderBottom: `1px solid ${tokens.colorNeutralStroke1}`,
+    background: tokens.colorNeutralBackground1,
+    flexShrink: 0,
+  },
 })
 
 const PROJECT_NAV_ITEMS = [
@@ -76,6 +90,7 @@ export default function Layout() {
   const styles = useStyles()
 
   const [projectName, setProjectName] = useState<string | null>(null)
+  const [captureOpen, setCaptureOpen] = useState(false)
 
   useEffect(() => {
     if (!id) { setProjectName(null); return }
@@ -83,6 +98,28 @@ export default function Layout() {
       .then((p) => setProjectName(p.name))
       .catch(() => setProjectName(null))
   }, [id])
+
+  // Phase 14: pressing 'c' anywhere opens the quick-capture modal as long
+  // as the user isn't typing in another input.
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.key !== 'c' || e.ctrlKey || e.metaKey || e.altKey) return
+      const target = e.target as HTMLElement | null
+      const tag = target?.tagName
+      if (
+        target?.isContentEditable ||
+        tag === 'INPUT' ||
+        tag === 'TEXTAREA' ||
+        tag === 'SELECT'
+      ) {
+        return
+      }
+      e.preventDefault()
+      setCaptureOpen(true)
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [])
 
   function getSelectedValue(): string {
     if (location.pathname === '/' || location.pathname === '') return 'projects'
@@ -150,8 +187,28 @@ export default function Layout() {
 
       {/* Main content */}
       <main className={styles.main}>
+        <div className={styles.topBar}>
+          <Button
+            appearance="subtle"
+            icon={<Mail20Regular />}
+            onClick={() => navigate('/inbox')}
+            title="Inbox"
+          >
+            Inbox
+          </Button>
+          <Button
+            appearance="primary"
+            icon={<Add20Regular />}
+            onClick={() => setCaptureOpen(true)}
+            title="Quick capture (press c)"
+          >
+            Capture
+          </Button>
+        </div>
         <Outlet />
       </main>
+
+      <CaptureModal open={captureOpen} onClose={() => setCaptureOpen(false)} />
     </div>
   )
 }

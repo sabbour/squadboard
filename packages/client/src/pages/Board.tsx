@@ -10,6 +10,7 @@ import BulkActionBar from '../components/board/BulkActionBar.tsx'
 import CreateIssueModal from '../components/board/CreateIssueModal.tsx'
 import PresenceBar from '../components/board/PresenceBar.tsx'
 import ConflictToast from '../components/board/ConflictToast.tsx'
+import CaptureFab from '../components/inbox/CaptureFab.tsx'
 import { useRealtimeBoard } from '../realtime/useRealtimeBoard.ts'
 
 export default function Board() {
@@ -182,6 +183,9 @@ export default function Board() {
           onDismiss={() => setShowConflict(false)}
         />
       )}
+
+      {/* Phase 14: per-project quick-capture FAB */}
+      <CaptureFab projectId={projectId} />
     </div>
   )
 }
