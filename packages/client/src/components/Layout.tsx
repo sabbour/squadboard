@@ -23,6 +23,9 @@ import {
   Add20Regular,
   Mail20Regular,
   Flowchart24Regular,
+  BookStar24Regular,
+  Wrench24Regular,
+  PlugConnected24Regular,
 } from '@fluentui/react-icons'
 import type { OnNavItemSelectData } from '@fluentui/react-components'
 import CaptureModal from './inbox/CaptureModal.tsx'
@@ -81,6 +84,9 @@ const PROJECT_NAV_ITEMS = [
   { label: 'Board', segment: 'board', icon: <ClipboardTaskListLtr24Regular /> },
   { label: 'Flow', segment: 'flow', icon: <Flowchart24Regular /> },
   { label: 'Agents', segment: 'agents', icon: <Bot24Regular /> },
+  { label: 'Skills', segment: 'skills', icon: <BookStar24Regular /> },
+  { label: 'Tools', segment: 'tools', icon: <Wrench24Regular /> },
+  { label: 'MCP Servers', segment: 'mcp-servers', icon: <PlugConnected24Regular /> },
   { label: 'Ceremonies', segment: 'ceremonies', icon: <ArrowSync24Regular /> },
   { label: 'Costs', segment: 'costs', icon: <Money24Regular /> },
 ]

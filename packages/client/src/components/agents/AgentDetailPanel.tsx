@@ -3,6 +3,7 @@ import { formatDistanceToNow } from 'date-fns'
 import { type Agent, useAgent, useUpdateAgent } from '../../api/agents.ts'
 import StatusBadge from './StatusBadge.tsx'
 import CharterEditor from './CharterEditor.tsx'
+import AgentCapabilities from './AgentCapabilities.tsx'
 
 interface AgentDetailPanelProps {
   projectId: string
@@ -26,7 +27,7 @@ function getInitials(name: string): string {
     .slice(0, 2)
 }
 
-type Tab = 'overview' | 'charter'
+type Tab = 'overview' | 'charter' | 'capabilities'
 
 export default function AgentDetailPanel({ projectId, agent, onClose }: AgentDetailPanelProps) {
   const [tab, setTab] = useState<Tab>('overview')
@@ -147,7 +148,7 @@ export default function AgentDetailPanel({ projectId, agent, onClose }: AgentDet
             borderBottom: '1px solid var(--border)',
           }}
         >
-          {(['overview', 'charter'] as Tab[]).map((t) => (
+          {(['overview', 'charter', 'capabilities'] as Tab[]).map((t) => (
             <button
               key={t}
               onClick={() => setTab(t)}
@@ -258,6 +259,10 @@ export default function AgentDetailPanel({ projectId, agent, onClose }: AgentDet
 
           {tab === 'charter' && (
             <CharterEditor projectId={projectId} agentId={current.id} />
+          )}
+
+          {tab === 'capabilities' && (
+            <AgentCapabilities projectId={projectId} agentId={current.id} />
           )}
         </div>
 

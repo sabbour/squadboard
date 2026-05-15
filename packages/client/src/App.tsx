@@ -13,6 +13,9 @@ import Settings from './pages/Settings.tsx'
 import Dashboard from './pages/Dashboard.tsx'
 import Inbox from './pages/Inbox.tsx'
 import ProjectFlow from './pages/ProjectFlow.tsx'
+import Skills from './pages/Skills.tsx'
+import Tools from './pages/Tools.tsx'
+import McpServers from './pages/McpServers.tsx'
 
 export default function App() {
   return (
@@ -25,6 +28,9 @@ export default function App() {
         <Route path="projects/:id/board" element={<Board />} />
         <Route path="projects/:id/flow" element={<ProjectFlow />} />
         <Route path="projects/:id/agents" element={<Agents />} />
+        <Route path="projects/:id/skills" element={<Skills />} />
+        <Route path="projects/:id/tools" element={<Tools />} />
+        <Route path="projects/:id/mcp-servers" element={<McpServers />} />
         <Route path="projects/:id/costs" element={<Costs />} />
         {/* Phase 10: ceremonies replaces workflows. Legacy routes redirect via the page shims. */}
         <Route path="projects/:id/ceremonies" element={<CeremonyList />} />
