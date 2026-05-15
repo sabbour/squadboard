@@ -425,19 +425,23 @@ export default function CeremonyEditor() {
   const handleConvert = useCallback(async () => {
     if (isNew) return
     try {
-      await convertCeremony.mutateAsync(ceremonyId!)
-      setConvertToast('Ceremony converted.')
+      const result = await convertCeremony.mutateAsync(ceremonyId!)
+      const draftId = (result as { draftCeremonyId?: string } | undefined)?.draftCeremonyId
+      if (draftId) {
+        setConvertToast('Translated — opening draft for review.')
+        setTimeout(() => {
+          navigate(`/projects/${projectId}/ceremonies/review`)
+        }, 600)
+      } else {
+        setConvertToast('Ceremony converted.')
+        setTimeout(() => setConvertToast(null), 4000)
+      }
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err)
-      // 501 surfaces as a fetch error containing the body
-      if (/not yet implemented|Phase 11|501/i.test(msg)) {
-        setConvertToast('Coming in Phase 11')
-      } else {
-        setConvertToast(msg)
-      }
-      setTimeout(() => setConvertToast(null), 4000)
+      setConvertToast(msg)
+      setTimeout(() => setConvertToast(null), 6000)
     }
-  }, [isNew, ceremonyId, convertCeremony])
+  }, [isNew, ceremonyId, convertCeremony, navigate, projectId])
 
   if (!isNew && isLoading) {
     return <div style={{ padding: 32 }}><Spinner label="Loading ceremony…" /></div>
