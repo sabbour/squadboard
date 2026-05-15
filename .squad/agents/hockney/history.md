@@ -191,3 +191,172 @@ Anchor filter fix (r3, commit 4ecb5525): `resolveAnchorIssue()` now excludes fan
 
 **Status:** COMPLETE — Flow API and templates backend ready for Phase 19 integration and Keyser client work.
 
+---
+
+## 2026-05-15 — Conjure classify endpoint (Phase 1)
+
+**Commit:** `9e6bf984` — `feat(server): add /api/conjure/classify endpoint for intent routing`
+
+**Task:** Replace the free-form Capture inbox with a smart-create surface that
+takes any prose prompt and routes the user to the right creation flow with a
+pre-filled draft. Phase 1 = backend classify endpoint only; frontend follows
+(Keyser).
+
+**Endpoint:** `POST /api/conjure/classify`
+- Request: `{ prompt, context?, hint?, useLlm? }`
+- Response: `{ ok, data: { intent, confidence, draft, routing: { destination, presentation, fallbacks }, rationale, strategy } }`
+- 6 intents: `project | issue | team | agent | skill | tool`
+- Errors: 400 missing prompt, 413 oversized (>10k chars), 500 unhandled
+
+**Classifier strategy chosen: Option C (hybrid)**
+- Rule-based scorer first — weighted regex signals per intent, soft-saturated to 0..1 confidence.
+- LLM disambiguation (`runFormulator` + `extractJsonObject`) fires only when rule confidence < 0.55 AND `useLlm !== false`.
+- LLM call wrapped in try/catch — missing GITHUB_TOKEN / SDK / model never breaks the surface; degrades to best rule candidate.
+- Default ambiguous fallback: `issue` (per locked-in design — board captures default to issues).
+- Phase 1 happy path is rule-based-only: 13/13 of the sample prompts in the brief classified correctly at confidence ≥ 0.55, so the LLM never fires.
+
+**Files:**
+- `packages/server/src/services/conjure-classifier.ts` — rewrote (was 200 lines of broken/unused code with two pre-existing TS errors). New file ~556 lines: `classifyAndDraft()` + rule scorer + 6 draft builders + routing table + LLM fallback. Test-only `__test__` export for unit-test reach-in.
+- `packages/server/src/routes/conjure.ts` — new, ~75 lines. Thin wrapper around `classifyAndDraft()` with input validation + standard `{ ok, error }` envelope.
+- `packages/server/src/index.ts` — mounted `app.use('/api/conjure', conjureRouter)` between MCP HTTP and presence endpoints.
+
+**Decision filed:** `.squad/decisions/inbox/hockney-conjure-classify.md` — endpoint shape, classifier strategy, intent/draft contract, Phase 2 roadmap (storage, accuracy tuning, multi-artifact suggestion strip, top-3 candidates).
+
+**Side benefit:** The two pre-existing TS errors in `conjure-classifier.ts` (`ResolveModelResult.modelId` / `.source`) that have been polluting `tsc --noEmit` output for several waves are now gone. `cd packages/server && npx tsc --noEmit` is fully clean (exit 0, no errors).
+
+**Verification:** Rule classifier smoke test (offline, `useLlm: false`) on 13 sample prompts from the brief → 13/13 correct intent classification. Edge cases: empty → 400; vague ("something about AKS") → defaults to `issue` conf=0.2; mixed ("fix the team build pipeline") → top `issue`, fallback `team`.
+
+**NOT done (deferred to Phase 2 / other waves):**
+- Frontend integration (Keyser, after Fenster's design)
+- Removing CaptureFAB / CaptureModal (Keyser)
+- `event_log` persistence of classify invocations (additive — needs telemetry plan first)
+- Re-introducing the 4 dropped kinds (`inbox-item`, `consult`, `ceremony`, `mcp-server`) — currently folded into the 6
+- Top-3 candidates with full per-candidate drafts (currently fallbacks return only intent IDs)
+
+**Coordination note:** Saw that `templatesRouter`, `teamPortabilityRouter`, `projectPortabilityRouter` are imported in `index.ts` but never mounted on the Express app — looks like a pre-existing gap from Phase 19 work (mine, originally). Out of scope for this commit; flagging here for a follow-up.
+
+**Staging discipline:** Per-file `git add --` only. Confirmed via `git diff --cached --name-status` that exactly 3 files were staged (M index.ts, A routes/conjure.ts, A services/conjure-classifier.ts). No `.squad/` log files, no node_modules, no other agents' work swept in. Decision file lives in `.squad/decisions/inbox/` which is gitignored — not committed (matches existing inbox convention).
+
+**Status:** COMPLETE — endpoint live in main, ready for Keyser to wire up the modal once Fenster's design lands.
+
+
+---
+
+## 2026-05-15 — MCP starter tools + diagnostics false-negative fix
+
+Two-task wave under one prompt. Both complete.
+
+### Task A — MCP server (Phase 1 starter tools)
+
+The MCP plumbing was already in place from earlier waves: `createMcpServer()`
+factory in `packages/server/src/mcp/server.ts`, stdio entry point
+(`mcp/index.ts`), and Streamable HTTP transport (`mcp/http-transport.ts`)
+mounted on the live Express app at `/mcp`. Phase 18 had already dropped the
+`squadboard_*` prefix on tool names because the server name (`squadboard`)
+already namespaces.
+
+So the wave was *additive* — wire the four tools the brief asked for into the
+existing factory, not stand up a new package.
+
+**Tools added (4):**
+- `list_projects` — every project + a resolved `.squad/` path so an external
+  CLI can pick a `projectId` to pass to other tools.
+- `list_inbox` — Conjure / quick-capture queue, filterable by `status` /
+  `projectId`. Trims long bodies into a `originalDraftPreview` for list view.
+- `capture` — drops a free-form prompt through `classifyAndDraft()` (the
+  Conjure classifier I shipped in `9e6bf984`). When `intent='issue'` AND
+  `projectId` is provided, materialises the card immediately and returns
+  `{ action: 'issue_created', issue, classification }`. For other intents
+  returns `{ action: 'draft_only', classification }` so the caller can route
+  the user into the matching create flow.
+- `get_routing` — reads the resolved `.squad/routing.md` for the project.
+  Uses the same `resolveSquadDir()` helper as the diagnostics fix below.
+
+**Wiring choice — in-process, not HTTP:** all 4 tools call services /
+Drizzle directly (`getDb()`, `inboxService.listInboxItems`,
+`classifyAndDraft`). No HTTP roundtrip to localhost. Matches the existing
+7 tools' pattern; faster; no double serialisation.
+
+**Total tool count:** 11 (was 7). All registered via `TOOLS` array →
+auto-listed on `/mcp/health` and via MCP `list_tools`.
+
+**README:** new `packages/server/src/mcp/README.md` (~140 lines) with
+`.copilot/mcp-config.json` and Claude Desktop install snippets, tool
+table, transport notes, and what's deferred (auth, multi-project routing
+in stdio, prompts/resources MCP primitives).
+
+**Build:** `tsc --noEmit` → 0 errors. `dist/mcp/index.js` already in the
+existing build pipeline.
+
+### Task B — Diagnostics false-negative fix
+
+**Root cause** (verified against live `/api/projects` data):
+- `projects.path` is stored inconsistently across the table.
+  - `foo` project: `/home/asabbour/GitWSL/EMU/foo/.squad` — points AT `.squad/`.
+  - other projects: `/home/asabbour/.squadboard/projects/<slug>` — point at the project ROOT.
+- `checkSquadDirShape()` blindly did `join(projectPath, '.squad')`, which for
+  `foo` resolved to `/home/asabbour/GitWSL/EMU/foo/.squad/.squad/` — doesn't
+  exist, so EVERY child collection check (`agents/`, `log/`, `routing.md`,
+  `decisions.md`) failed simultaneously. Hence the screenshot.
+- The `.squad/` parent `access()` check at the top of the function actually
+  also failed in the `foo` case — but caught by the outer `try/catch` and
+  reported as a single warn — which is why Ahmed's screenshot showed all 4
+  inner checks in the SAME diagnostic line.
+
+**Fix:** new tolerant resolver `resolveSquadDir(storedPath)` exported from
+`services/diagnostics.ts`:
+1. `path.resolve()` to absolute (so a relative `projects.path` can't pivot
+   off `process.cwd()` silently — was a CWD/team-root mismatch suspect per
+   the Worktree Awareness pattern, ruled out but the fix preserves
+   correctness either way).
+2. If `basename === '.squad'` AND it exists → use as-is, `projectRoot` is
+   parent.
+3. Else if `<path>/.squad/` exists → use that.
+4. Else → `{ ok: false, reason }` so the caller surfaces ONE clear
+   "project path is wrong" diagnostic + remediation instead of N
+   cascading "missing collection" errors.
+
+Applied to both:
+- `checkSquadDirShape()` — when `ok=false`, returns single `status: 'fail'`
+  with remediation; when `ok=true`, the existing required-collection /
+  required-file loop runs against the resolved `squadDir`.
+- `checkDiskWriteable()` — only adds the `.squad/` write target when
+  `resolveSquadDir().ok` is true. Otherwise `checkSquadDirShape` already
+  surfaces the actionable error; no need to double-report.
+
+The MCP `get_routing` tool also reuses `resolveSquadDir`, so the fix
+benefits both surfaces.
+
+**Verification:** ran the resolver against the three live `projects.path`
+values (`/.../foo/.squad`, two `/.../.squadboard/projects/<slug>`):
+- foo → `ok: true, squadDir: /home/asabbour/GitWSL/EMU/foo/.squad`. ✅
+- other two → `ok: false, reason: "no .squad/ directory found at ... or ..."`
+  — single, clear, actionable. (Their `.squad/` was indeed never created.)
+
+**Files touched (4 total):**
+- `packages/server/src/services/diagnostics.ts` — +`resolveSquadDir`,
+  rewrote `checkSquadDirShape` body, updated `checkDiskWriteable`.
+- `packages/server/src/mcp/server.ts` — +4 TOOLS entries, +4 handlers,
+  +4 switch cases, imports for new services.
+- `packages/server/src/mcp/README.md` — new file.
+
+**Decision filed:** `.squad/decisions/inbox/hockney-mcp-and-diagnostics.md`.
+
+**Status:** COMPLETE. `tsc --noEmit` clean. Local commits only — not pushed.
+
+### Learnings
+
+1. **Read what's already there before adding a new package.** The brief
+   suggested standing up `packages/mcp/` for the MCP server. A 30-second
+   look at `packages/server/src/mcp/` showed the whole stdio + HTTP
+   apparatus was already built (Phase 18). Extending the existing factory
+   was the right call — same lifecycle, same DB pool, same build.
+2. **`projects.path` semantics are inconsistent across the table.** The
+   schema comment says ".squad/ directory" but seeders / project-create
+   flows have stored both layouts. Future writers should either (a) pick
+   one layout and migrate, or (b) keep using `resolveSquadDir()`. Logged
+   in the decision doc as a follow-up.
+3. **Cascading false-negatives mask the actual bug.** When a parent check
+   fails, don't run dependent child checks — they generate noise. Pattern
+   is now: resolve once, fail-fast with remediation, only descend when the
+   parent is healthy.

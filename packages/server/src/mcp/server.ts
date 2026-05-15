@@ -21,10 +21,15 @@ import {
   CallToolRequestSchema,
   ListToolsRequestSchema,
 } from '@modelcontextprotocol/sdk/types.js';
+import { readFile } from 'node:fs/promises';
+import { join } from 'node:path';
 import { getDb } from '../db/index.js';
-import { issues, issueRuns, agents, issueLabels } from '../db/schema.js';
+import { issues, issueRuns, agents, issueLabels, projects } from '../db/schema.js';
 import { eq, and } from 'drizzle-orm';
 import { handleSlashCommand } from './slash-handler.js';
+import { classifyAndDraft, type ConjureIntent } from '../services/conjure-classifier.js';
+import * as inboxService from '../services/inbox.js';
+import { resolveSquadDir } from '../services/diagnostics.js';
 
 // ---------------------------------------------------------------------------
 // Tool definitions
@@ -153,6 +158,81 @@ export const TOOLS = [
         },
       },
       required: ['command'],
+    },
+  },
+  {
+    name: 'list_projects',
+    description:
+      'List all Squadboard projects. Returns id, name, and resolved squad path. ' +
+      'Useful for an external CLI to discover which projectId to pass to other tools.',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {},
+      required: [],
+    },
+  },
+  {
+    name: 'list_inbox',
+    description:
+      'List items in the Squadboard inbox (Conjure / quick-capture queue). ' +
+      'Filter by status (captured | formulated | published | discarded) and/or projectId. ' +
+      "projectId may be omitted if the request includes an 'x-project-id' header; pass no filters for the global inbox.",
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        projectId: { type: 'string', description: 'UUID of the project (optional; filters by suggestedProjectId).' },
+        status: {
+          type: 'string',
+          enum: ['captured', 'formulated', 'published', 'discarded'],
+          description: 'Filter by inbox status (optional).',
+        },
+        limit: { type: 'number', description: 'Max rows to return (default 50).' },
+      },
+      required: [],
+    },
+  },
+  {
+    name: 'capture',
+    description:
+      'Drop a free-form prompt into Squadboard. Routes the prompt through the Conjure ' +
+      'classifier (intent: project | issue | team | agent | skill | tool) and, when the ' +
+      'intent resolves to a board card (issue), creates the issue immediately. For other ' +
+      'intents Conjure returns a draft + routing hint without persisting — surface that to ' +
+      'the user so they can confirm. ' +
+      "projectId may be omitted if the request includes an 'x-project-id' header.",
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        prompt: { type: 'string', description: 'The free-form prose to capture.' },
+        projectId: {
+          type: 'string',
+          description:
+            'UUID of the project to land the resulting card in. Optional if x-project-id header set OR if the user just wants a draft back.',
+        },
+        hint: {
+          type: 'string',
+          enum: ['project', 'issue', 'team', 'agent', 'skill', 'tool'],
+          description: 'Optional pre-classified intent (skips part of the Conjure router).',
+        },
+        useLlm: {
+          type: 'boolean',
+          description: 'If false, never call the LLM (rule-based only). Defaults to true.',
+        },
+      },
+      required: ['prompt'],
+    },
+  },
+  {
+    name: 'get_routing',
+    description:
+      "Return the contents of the project's .squad/routing.md file. " +
+      "projectId may be omitted if the request includes an 'x-project-id' header.",
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        projectId: { type: 'string', description: 'UUID of the project (optional if x-project-id header set).' },
+      },
+      required: [],
     },
   },
 ];
@@ -438,6 +518,209 @@ async function handleSlashCommandTool(args: ToolArgs): Promise<unknown> {
   return result;
 }
 
+async function handleListProjects(): Promise<unknown> {
+  const db = getDb();
+  const rows = await db
+    .select({
+      id: projects.id,
+      name: projects.name,
+      path: projects.path,
+      defaultModel: projects.defaultModel,
+      createdAt: projects.createdAt,
+    })
+    .from(projects)
+    .limit(200);
+
+  const enriched = await Promise.all(
+    rows.map(async (row) => {
+      try {
+        const resolved = await resolveSquadDir(row.path);
+        return {
+          ...row,
+          squadDir: resolved.ok ? resolved.squadDir : null,
+          squadDirOk: resolved.ok,
+          squadDirError: resolved.ok ? null : resolved.reason,
+        };
+      } catch (err) {
+        return {
+          ...row,
+          squadDir: null,
+          squadDirOk: false,
+          squadDirError: err instanceof Error ? err.message : String(err),
+        };
+      }
+    }),
+  );
+
+  return { projects: enriched, count: enriched.length };
+}
+
+async function handleListInbox(args: ToolArgs, extra: Extra): Promise<unknown> {
+  const { status, limit } = args as { status?: inboxService.InboxStatus; limit?: number };
+  const projectId = resolveProjectId(args as { projectId?: string }, extra);
+
+  const rows = await inboxService.listInboxItems({
+    status,
+    projectId: projectId ?? undefined,
+    limit: typeof limit === 'number' && limit > 0 ? Math.min(limit, 200) : 50,
+  });
+
+  // Trim payload — drop the long original/formulated bodies for list view.
+  const summary = rows.map((row) => ({
+    id: row.id,
+    status: row.status,
+    suggestedProjectId: row.suggestedProjectId,
+    suggestedColumn: row.suggestedColumn,
+    formulatedTitle: row.formulatedTitle,
+    confidence: row.confidence,
+    publishedIssueId: row.publishedIssueId,
+    createdAt: row.createdAt,
+    originalDraftPreview:
+      row.originalDraft.length > 200
+        ? `${row.originalDraft.slice(0, 200)}…`
+        : row.originalDraft,
+  }));
+
+  return { inbox: summary, count: summary.length };
+}
+
+async function handleCapture(args: ToolArgs, extra: Extra): Promise<unknown> {
+  const db = getDb();
+  const { prompt, hint, useLlm } = args as {
+    prompt?: string;
+    hint?: ConjureIntent;
+    useLlm?: boolean;
+  };
+  const projectId = resolveProjectId(args as { projectId?: string }, extra);
+
+  if (!prompt || typeof prompt !== 'string' || !prompt.trim()) {
+    return { error: 'missing_prompt', hint: 'Pass a non-empty `prompt` string.' };
+  }
+
+  let classification;
+  try {
+    classification = await classifyAndDraft({
+      prompt,
+      hint: hint ?? null,
+      useLlm: useLlm === false ? false : true,
+      context: projectId ? { currentProjectId: projectId, currentProjectName: null } : null,
+    });
+  } catch (err) {
+    return {
+      error: 'classify_failed',
+      message: err instanceof Error ? err.message : String(err),
+    };
+  }
+
+  // For 'issue' intent + a projectId, materialize the card immediately so the
+  // external CLI gets a concrete URL to show. Other intents return draft +
+  // routing hint only — they need a UI confirmation step.
+  if (classification.intent === 'issue' && projectId) {
+    const draft = classification.draft as { title?: string; body?: string };
+    const title = (draft.title ?? prompt.slice(0, 80)).trim() || 'Untitled';
+    const body = (draft.body ?? '').toString();
+
+    try {
+      const [created] = await db
+        .insert(issues)
+        .values({
+          projectId,
+          title,
+          body,
+          status: 'backlog',
+          position: 0,
+          archived: 0,
+        })
+        .returning({
+          id: issues.id,
+          title: issues.title,
+          status: issues.status,
+          createdAt: issues.createdAt,
+        });
+
+      return {
+        action: 'issue_created',
+        issue: created,
+        classification: {
+          intent: classification.intent,
+          confidence: classification.confidence,
+          rationale: classification.rationale,
+          strategy: classification.strategy,
+        },
+      };
+    } catch (err) {
+      // Fall through to draft response so the caller still sees the conjure
+      // output even if the insert failed (e.g. bad projectId).
+      return {
+        action: 'issue_create_failed',
+        error: err instanceof Error ? err.message : String(err),
+        classification,
+      };
+    }
+  }
+
+  return {
+    action: 'draft_only',
+    note:
+      classification.intent === 'issue'
+        ? 'Issue draft ready — pass projectId (or set x-project-id header) to materialize on the board.'
+        : `Conjure routed this prompt to "${classification.intent}". Take the draft + routing hint into the matching create flow.`,
+    classification,
+  };
+}
+
+async function handleGetRouting(args: ToolArgs, extra: Extra): Promise<unknown> {
+  const db = getDb();
+  const projectId = resolveProjectId(args as { projectId?: string }, extra);
+
+  if (!projectId) {
+    return { error: 'missing_project_id', hint: 'Pass projectId in args, or set the x-project-id header.' };
+  }
+
+  const [project] = await db
+    .select({ id: projects.id, name: projects.name, path: projects.path })
+    .from(projects)
+    .where(eq(projects.id, projectId))
+    .limit(1);
+
+  if (!project) {
+    return { error: 'project_not_found', projectId };
+  }
+
+  const resolved = await resolveSquadDir(project.path);
+  if (!resolved.ok) {
+    return {
+      error: 'squad_dir_unresolved',
+      projectId,
+      reason: resolved.reason,
+      storedPath: project.path,
+    };
+  }
+
+  const routingMdPath = join(resolved.squadDir, 'routing.md');
+  try {
+    const contents = await readFile(routingMdPath, 'utf8');
+    return {
+      projectId,
+      projectName: project.name,
+      path: routingMdPath,
+      bytes: contents.length,
+      contents,
+    };
+  } catch (err) {
+    const code = (err as NodeJS.ErrnoException).code;
+    if (code === 'ENOENT') {
+      return { error: 'routing_md_missing', projectId, path: routingMdPath };
+    }
+    return {
+      error: 'read_failed',
+      projectId,
+      path: routingMdPath,
+      message: err instanceof Error ? err.message : String(err),
+    };
+  }
+}
+
 // ---------------------------------------------------------------------------
 // MCP server bootstrap
 // ---------------------------------------------------------------------------
@@ -479,6 +762,18 @@ export function createMcpServer(): Server {
           break;
         case 'slash_command':
           result = await handleSlashCommandTool(toolArgs as ToolArgs);
+          break;
+        case 'list_projects':
+          result = await handleListProjects();
+          break;
+        case 'list_inbox':
+          result = await handleListInbox(toolArgs as ToolArgs, extra as Extra);
+          break;
+        case 'capture':
+          result = await handleCapture(toolArgs as ToolArgs, extra as Extra);
+          break;
+        case 'get_routing':
+          result = await handleGetRouting(toolArgs as ToolArgs, extra as Extra);
           break;
         default:
           return {
