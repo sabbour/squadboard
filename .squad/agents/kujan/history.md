@@ -73,3 +73,30 @@ Key decisions:
 - **Bulk selection**: marked `test.fixme` — UI selection is Shift+click only; no checkbox exposed on `IssueCard` yet.
 - **Agent discovery from `.squad/`**: marked `test.fixme` — requires seed fixtures on the test machine.
 - **Demo coverage**: Demos 1 ✓ (full), Demo 2 ✓ (partial — move via drag is fixme), Demo 3 ✓ (hire + routing tabs). Demos 4–15 not yet covered.
+
+### 2026-05-15 — Wave 10 E1 gate: verification, regressions fixed, committed
+
+Completed the Wave 10 E1 gate sweep (Steps 1–8) on commit `c9c2c44c`.
+
+**Build:** `pnpm -r build` across cli/server/client — ALL GREEN. One non-blocking Vite chunk-size warning (client bundle >500 KB).
+
+**Unit tests:** No test runner exists yet (no Vitest config in any package). Noted as test-pyramid gap.
+
+**E2E suite (pre-fix):** 4/27 passing. Two confirmed Wave 10 regressions:
+1. B7 (07-team-portability): server returned HTML (SPA fallback) — `teamPortabilityRouter`, `projectPortabilityRouter`, `templatesRouter` all imported but never mounted with `app.use()`.
+2. B9 (09-disabled-agent): `assertColumnExists('todo')` failed on fresh projects — `POST /api/squad/create` does NOT seed `column_meta`; `GET /columns` does (via `seedDefaults()`).
+
+**Fixes:**
+- `packages/server/src/index.ts`: Added 3 missing `app.use()` mounts after conjure router.
+- `packages/e2e/tests/09-disabled-agent.spec.ts`: Call `GET /columns` in test setup to seed defaults; pass `column: 'backlog'` to `createIssue()`.
+- `.gitignore`: Added log files and playwright artifact dirs.
+
+**E2E post-fix (on fresh build, port 3009):** 11/11 B7+B8+B9 tests GREEN. UI browser tests (01–04) remain failing — pre-existing environment issue (WSL inotify + Chromium headless), not Wave 10 regressions.
+
+**AC smoke-walk:** All 21 ACs verified via source code inspection. No failures found.
+
+**Key WSL constraint learned:** `tsx watch` does NOT pick up file changes on Windows-mapped WSL2 paths (`/home/asabbour/GitWSL/...`) because inotify doesn't fire for cross-FS writes. Workaround: build then start `node dist/index.js` on a separate port for verification. Ahmed must restart the dev server after pulling commits to see route changes take effect.
+
+**Router mounting discipline:** Any router that is `import`ed but missing an `app.use()` mount silently falls through to the SPA fallback (`res.sendFile('index.html')`). Tests will see `SyntaxError: Unexpected token '<'` when parsing the HTML response as JSON. Always grep `index.ts` for unmatched imports after adding a new router file.
+
+**Column seeding:** Fresh projects from `POST /api/squad/create` have zero `column_meta` rows. `GET /api/projects/:id/columns` auto-seeds 5 default columns via `seedDefaults()`. Always call this in test setup before creating issues, or issue creation will fail with "Column does not exist for this project".
