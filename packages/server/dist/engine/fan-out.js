@@ -265,7 +265,7 @@ async function loadFanOutChildren(childWorkflowRunIds, projectId, db) {
         return [];
     // Get the project's default model + path (squad path) once.
     const projectRows = await db.execute(sql `
-    SELECT default_model, path FROM projects WHERE id = ${projectId} LIMIT 1
+    SELECT default_model, path FROM projects WHERE id = ${projectId}::uuid LIMIT 1
   `);
     const project = projectRows.rows[0];
     const projectDefaultModel = project?.default_model ?? null;
@@ -273,10 +273,10 @@ async function loadFanOutChildren(childWorkflowRunIds, projectId, db) {
     // Pull the first step_run for each child (step_index = 0). For agent_run
     // steps, the materialiser pre-creates an issue_run so we have a path to
     // the workspace and resolved_agent_id.
-    // Build a parameterised list for the IN(...) clause via drizzle's sql.
-    const idLiterals = childWorkflowRunIds
-        .map((id) => sql `${id}`)
-        .reduce((acc, lit, i) => (i === 0 ? lit : sql `${acc}, ${lit}`));
+    // Each id is cast individually to uuid because drizzle's array binding for
+    // ANY(...) interpolates as a Postgres record, not a uuid[].
+    // Also cast sr.resolved_agent_id (text) when joining to agents.id (uuid).
+    const idLiterals = sql.join(childWorkflowRunIds.map((id) => sql `${id}::uuid`), sql `, `);
     const rows = await db.execute(sql `
     SELECT
       sr.id                AS step_run_id,
@@ -295,7 +295,7 @@ async function loadFanOutChildren(childWorkflowRunIds, projectId, db) {
     FROM step_runs sr
     JOIN workflow_runs wr ON wr.id = sr.workflow_run_id
     JOIN issues i         ON i.id = wr.issue_id
-    LEFT JOIN agents a    ON a.id = sr.resolved_agent_id
+    LEFT JOIN agents a    ON a.id = sr.resolved_agent_id::uuid
     WHERE sr.workflow_run_id IN (${idLiterals})
       AND sr.step_index = 0
     ORDER BY sr.created_at
@@ -312,7 +312,7 @@ async function loadFanOutChildren(childWorkflowRunIds, projectId, db) {
         let workspacePath = projectSquadPath;
         if (r.issue_run_id) {
             const wsRows = await db.execute(sql `
-        SELECT workspace_path FROM issue_runs WHERE id = ${r.issue_run_id} LIMIT 1
+        SELECT workspace_path FROM issue_runs WHERE id = ${r.issue_run_id}::uuid LIMIT 1
       `);
             const ws = wsRows.rows[0];
             if (ws?.workspace_path)

@@ -50,6 +50,7 @@ export async function createAgentSession(options) {
             model: resolved.model,
             systemMessage: { mode: 'replace', content: charter },
             workingDirectory: options.workspacePath,
+            onPermissionRequest: () => ({ kind: 'approved' }),
         });
         const result = await client.sendAndWait(session, { prompt: options.task });
         const output = extractOutput(result);

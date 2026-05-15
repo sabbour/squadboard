@@ -253,6 +253,7 @@ function buildDependencies(childByTag) {
                 model: config.model || BUILTIN_FALLBACK,
                 systemMessage: { mode: 'replace', content: charter },
                 workingDirectory: child.workspacePath,
+                onPermissionRequest: () => ({ kind: 'approved' }),
             });
             // SDK contract for spawnParallel.createSession:
             //   - return { sessionId, sendMessage(opts) }
