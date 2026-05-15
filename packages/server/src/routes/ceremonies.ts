@@ -916,5 +916,90 @@ ceremoniesTopRouter.post('/validate', (req: Request, res: Response) => {
   res.json(result);
 });
 
+/**
+ * POST /api/ceremonies/import-narrative
+ *
+ * One-call import: takes a markdown ceremony definition, creates the
+ * kind='narrative' parent row + initial version, and immediately runs the
+ * translator to produce a draft executable ceremony.
+ *
+ * Body: { projectId, name, markdown, description? }
+ *
+ * Response shape:
+ *   On success ............ { narrativeId, draftCeremonyId, yamlContent,
+ *                             triggerKind, triggerConfig, rationale, warnings }
+ *   On translate failure .. { narrativeId, error, retryable }
+ *                            (status 200 — the narrative WAS created; only
+ *                             the translation failed and can be retried via
+ *                             /api/projects/:projectId/ceremonies/:id/translate)
+ */
+ceremoniesTopRouter.post('/import-narrative', async (req: Request, res: Response) => {
+  const body = req.body as {
+    projectId?: string;
+    name?: string;
+    markdown?: string;
+    description?: string | null;
+  };
+  const { projectId, name, markdown, description } = body;
+
+  if (typeof projectId !== 'string' || !projectId.trim()) {
+    res.status(400).json({ error: '`projectId` is required' });
+    return;
+  }
+  if (typeof markdown !== 'string' || !markdown.trim()) {
+    res.status(400).json({ error: '`markdown` is required' });
+    return;
+  }
+
+  const finalName =
+    typeof name === 'string' && name.trim()
+      ? name.trim()
+      : (extractFirstMarkdownHeading(markdown) ?? 'Imported ceremony');
+
+  try {
+    const db = getDb();
+
+    const slug = slugify(finalName);
+    const [narrative] = await db
+      .insert(schema.workflows)
+      .values({
+        projectId,
+        name: finalName,
+        slug,
+        description: typeof description === 'string' ? description : null,
+        triggerKind: 'manual',
+        triggerConfig: {},
+        kind: 'narrative',
+        status: 'draft',
+      })
+      .returning();
+
+    await db.insert(schema.workflowVersions).values({
+      workflowId: narrative.id,
+      version: 1,
+      yamlContent: markdown,
+      isActive: true,
+    });
+
+    const result = await runTranslateForNarrative({ projectId, narrativeId: narrative.id });
+
+    if (result.kind === 'ok') {
+      res.json(result.body);
+      return;
+    }
+
+    // The narrative was successfully created; only the translation failed.
+    // Return 200 so the caller can decide whether to retry — the resource
+    // exists and is addressable via /api/projects/:projectId/ceremonies/:id.
+    res.status(200).json({
+      narrativeId: narrative.id,
+      error: result.body.error,
+      retryable: result.body.retryable,
+    });
+  } catch (err) {
+    handleError(res, err);
+  }
+});
+
 // Re-export sql for unused-import suppression in TS strict mode
 void sql;
