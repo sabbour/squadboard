@@ -227,6 +227,24 @@ function FeedRowView({
     return <Pill icon="🎛" label={fmtSteered(row.payload, agentLookup)} time={time} tone="neutral" />
   }
 
+  // Phase 5 — consult.request / consult.response / consult.error
+  if (row.type === 'consult.request') {
+    const fromAgent = pickStr(row.payload, 'fromAgent') ?? agentName ?? 'Agent'
+    const question = pickStr(row.payload, 'question') ?? ''
+    return <ConsultRow direction="request" label={fromAgent} text={question} time={time} />
+  }
+
+  if (row.type === 'consult.response') {
+    const fromAgent = pickStr(row.payload, 'fromAgent') ?? agentName ?? 'Agent'
+    const answer = pickStr(row.payload, 'answer') ?? ''
+    return <ConsultRow direction="response" label={fromAgent} text={answer} time={time} />
+  }
+
+  if (row.type === 'consult.error') {
+    const msg = pickStr(row.payload, 'message') ?? 'consult error'
+    return <Pill icon="💬⚠" label={msg} time={time} tone="danger" />
+  }
+
   return null
 }
 
@@ -358,6 +376,64 @@ function Pill({
       <span>{icon}</span>
       <span>{label}</span>
       <span style={{ opacity: 0.6 }}>· {time}</span>
+    </div>
+  )
+}
+
+/**
+ * Phase 5 — Inline consult row.
+ *
+ * Consult requests are left-aligned (the agent asking), responses are
+ * right-aligned (the answer coming back). Both use a neutral tinted background
+ * distinct from the regular assistant bubble so users can tell them apart at
+ * a glance. No new surface is introduced — everything stays in the existing
+ * transcript scroll region.
+ */
+function ConsultRow({
+  direction,
+  label,
+  text,
+  time,
+}: {
+  direction: 'request' | 'response'
+  label: string
+  text: string
+  time: string
+}) {
+  const isResponse = direction === 'response'
+  const icon = isResponse ? '💬↩' : '💬?'
+  return (
+    <div
+      style={{
+        alignSelf: isResponse ? 'flex-end' : 'flex-start',
+        maxWidth: '85%',
+        background: tokens.colorNeutralBackground3,
+        border: `1px dashed ${tokens.colorNeutralStroke2}`,
+        borderRadius: '10px',
+        padding: '8px 14px',
+        fontSize: '13px',
+        lineHeight: 1.5,
+        whiteSpace: 'pre-wrap',
+        wordBreak: 'break-word',
+        color: tokens.colorNeutralForeground1,
+      }}
+    >
+      <div
+        style={{
+          fontSize: '11px',
+          color: tokens.colorNeutralForeground3,
+          marginBottom: '4px',
+          display: 'flex',
+          gap: '6px',
+          alignItems: 'baseline',
+        }}
+      >
+        <span>{icon}</span>
+        <strong>{label}</strong>
+        <span style={{ opacity: 0.7 }}>{isResponse ? 'answered' : 'asked'}</span>
+        <span>· {time}</span>
+      </div>
+      {text || <em style={{ opacity: 0.6 }}>(empty)</em>}
     </div>
   )
 }

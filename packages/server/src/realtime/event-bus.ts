@@ -30,6 +30,10 @@ export type PresenceEventType =
  * Live multi-agent session events.
  * Surfaced to the browser by the WS server so the LiveSession UI can
  * stream agent transcripts, tool calls, and completion in real time.
+ *
+ * Phase 5 additions: consult.request / consult.response / consult.error are
+ * routed through the same session topic so the activity feed can render
+ * consult exchanges inline alongside regular assistant messages.
  */
 export type SessionEventType =
   | 'session.started'
@@ -39,7 +43,10 @@ export type SessionEventType =
   | 'session.usage'
   | 'session.error'
   | 'session.completed'
-  | 'session.steered';
+  | 'session.steered'
+  | 'consult.request'
+  | 'consult.response'
+  | 'consult.error';
 
 export type CommentEventType =
   | 'comment.created'
@@ -58,6 +65,14 @@ export type DeliverableEventType =
  * from serial fan-outs.
  */
 export type FanOutEventType = 'fan_out.parallel_spawn';
+
+/**
+ * Phase 3 Heartbeat: sweep lifecycle telemetry emitted by engine/heartbeat.ts.
+ * Payload is scoped to `__heartbeat__` (server-wide, not project-scoped).
+ */
+export type HeartbeatEventType =
+  | 'heartbeat.sweep.completed'
+  | 'heartbeat.sweep.error';
 
 /**
  * Phase 17: Ask / Consult mode events. Routed to a per-consult room
@@ -87,7 +102,8 @@ export type BusEventType =
   | CommentEventType
   | DeliverableEventType
   | FanOutEventType
-  | ConsultEventType;
+  | ConsultEventType
+  | HeartbeatEventType;
 
 export interface BusEvent {
   type: BusEventType;
@@ -159,6 +175,15 @@ class EventBus extends EventEmitter {
    */
   emitConsultEvent(type: ConsultEventType, consultSessionId: string, payload: unknown): void {
     const event: BusEvent = { type, projectId: `consult:${consultSessionId}`, payload };
+    this.emit('event', event);
+  }
+  /**
+   * Phase 3 Heartbeat: sweep telemetry event. Scope key is `__heartbeat__`
+   * (server-wide; not project-scoped). type is 'heartbeat.sweep.completed'
+   * or 'heartbeat.sweep.error'.
+   */
+  emitHeartbeatEvent(type: HeartbeatEventType, payload: unknown): void {
+    const event: BusEvent = { type, projectId: '__heartbeat__', payload };
     this.emit('event', event);
   }
   /**

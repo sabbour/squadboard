@@ -26,7 +26,7 @@ export interface LiveSession {
 export interface LiveSessionEvent {
   id: string
   sessionId: string
-  type: 'session.started' | 'session.message' | 'session.delta' | 'session.tool' | 'session.usage' | 'session.error' | 'session.completed'
+  type: 'session.started' | 'session.message' | 'session.delta' | 'session.tool' | 'session.usage' | 'session.error' | 'session.completed' | 'consult.request' | 'consult.response' | 'consult.error'
   payload: Record<string, unknown>
   createdAt: string
 }

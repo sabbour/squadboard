@@ -45,3 +45,19 @@ Shipped three defensive guards: (a) `createIssue` 60-s dedup check, (b) ceremony
 
 The spam loop defensive guards shipped (3 guards: dedup, sweep backoff, concurrency + title) are stop-gaps. The actual loop driver is `resolveAnchorIssue` in `ceremony-scheduler.ts` (line 131), which picks the most-recently-created issue as the ceremony's anchor. After fan-out materializes children (e.g., `Foo — verbal`), that child becomes the newest issue. On the next cron tick, a new ceremony run anchors to the child, which itself fans out again, creating grandchildren (`Foo — verbal — verbal`). **P0 Fix:** Exclude fan-out child issues from anchor selection by filtering `NOT EXISTS (SELECT 1 FROM issue_links WHERE child_issue_id = issues.id AND link_type = 'fan_out')`. This fix is deferred to next session pending full workflow test coverage (to prevent false negatives). Root cause analysis and defensive guards documented in `.squad/decisions.md` under "spam loop — confirmed root cause" entry. Owners: Verbal (P0 fix investigation) + Kujan (durability test coverage).
 
+
+---
+
+## 2026-05-15T08:21:46.164-07:00 — p5-consult: Consult events wired into live session stream
+
+**Task:** Wire `@bradygaster/squad-sdk/sharing/consult` SDK events into the live session stream so consult requests/responses flow as session events and render inline in AgentActivityFeed.
+
+**Files changed:**
+- `packages/server/src/realtime/event-bus.ts` — added `consult.request`, `consult.response`, `consult.error` to `SessionEventType`
+- `packages/server/src/sdk/squad-stream.ts` — added `onConsultRequest()`, `onConsultResponse()` handlers; expanded `publish()` type union; registered SDK listeners in `attachListeners()`
+- `packages/client/src/api/sessions.ts` — added three new event types to `LiveSessionEvent.type` union
+- `packages/client/src/components/sessions/AgentActivityFeed.tsx` — added `ConsultRow` component + rendering branches for all three event types
+
+**Decision record:** `.squad/decisions/inbox/verbal-consult-stream-wiring.md`
+
+**Outcome:** SDK notes — `sharing/consult.d.ts` doesn't exist in SDK 0.9.4; wiring is forward-compatible. TypeScript clean on both packages (3 pre-existing server errors in McManus's heartbeat/sweeps territory untouched).
