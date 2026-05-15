@@ -42,10 +42,10 @@ const useStyles = makeStyles({
   main: {
     flex: '1',
     minWidth: 0,
+    minHeight: 0,
     display: 'flex',
     flexDirection: 'column',
     overflow: 'auto',
-    height: 0,
   },
   navDrawer: {
     borderRight: `1px solid ${tokens.colorNeutralStroke1}`,
