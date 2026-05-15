@@ -805,8 +805,8 @@ async function bootstrapSchema(): Promise<void> {
     CREATE INDEX IF NOT EXISTS consult_proposals_status_idx
       ON consult_proposals (status);
 
-    -- Phase 8 vertical slice: column metadata overlay (2026-05-15)
-    -- Stores per-project display overrides for the 5 hard-coded columns.
+    -- Phase dynamic-columns: column_meta is the source of truth for project columns.
+    -- New columns: semantic (roll-up bucket) and is_default (new-issue landing column).
     CREATE TABLE IF NOT EXISTS column_meta (
       id          UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
       project_id  UUID        NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
@@ -815,6 +815,8 @@ async function bootstrapSchema(): Promise<void> {
       description TEXT,
       color       TEXT        NOT NULL,
       position    INTEGER     NOT NULL DEFAULT 0,
+      semantic    TEXT        NOT NULL DEFAULT 'custom',
+      is_default  BOOLEAN     NOT NULL DEFAULT false,
       created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       updated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
@@ -851,6 +853,43 @@ async function bootstrapSchema(): Promise<void> {
 
     CREATE INDEX IF NOT EXISTS templates_kind_name_idx
       ON templates (kind, name);
+  `);
+
+  // ---------------------------------------------------------------------------
+  // Phase dynamic-columns: idempotent migration from column_status enum → TEXT
+  // Runs on every server start; all steps are no-ops once applied.
+  // ---------------------------------------------------------------------------
+  await _pool.query(`
+    -- Step 1: If the Postgres column_status enum still exists, migrate issues.status
+    -- to plain TEXT (enum→text is implicit in Postgres; USING clause is explicit for safety).
+    DO $$ BEGIN
+      IF EXISTS (SELECT 1 FROM pg_type WHERE typname = 'column_status') THEN
+        ALTER TABLE issues ALTER COLUMN status TYPE TEXT USING status::TEXT;
+        ALTER TABLE issues ALTER COLUMN status SET DEFAULT 'backlog';
+        DROP TYPE column_status;
+      END IF;
+    END $$;
+
+    -- Step 2: Add semantic and is_default columns to column_meta if not present.
+    ALTER TABLE column_meta
+      ADD COLUMN IF NOT EXISTS semantic    TEXT    NOT NULL DEFAULT 'custom',
+      ADD COLUMN IF NOT EXISTS is_default  BOOLEAN NOT NULL DEFAULT false;
+
+    -- Step 3: Backfill semantic roll-up values for the 5 seed columns.
+    UPDATE column_meta SET semantic = 'backlog'     WHERE column_id = 'backlog'     AND semantic = 'custom';
+    UPDATE column_meta SET semantic = 'ready'       WHERE column_id = 'todo'        AND semantic = 'custom';
+    UPDATE column_meta SET semantic = 'in_progress' WHERE column_id = 'in_progress' AND semantic = 'custom';
+    UPDATE column_meta SET semantic = 'review'      WHERE column_id = 'in_review'   AND semantic = 'custom';
+    UPDATE column_meta SET semantic = 'done'        WHERE column_id = 'done'        AND semantic = 'custom';
+
+    -- Step 4: Backfill is_default=true on the backlog column for every project
+    -- that does not yet have any column marked as default.
+    UPDATE column_meta
+    SET    is_default = true
+    WHERE  column_id  = 'backlog'
+    AND    project_id NOT IN (
+      SELECT DISTINCT project_id FROM column_meta WHERE is_default = true
+    );
   `);
 
   await seedSystemReviewPolicyPresets();

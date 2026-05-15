@@ -64,14 +64,16 @@ export type NewAgent = typeof agents.$inferInsert;
 // Board data layer — Demo 2
 // ---------------------------------------------------------------------------
 
-export const columnStatusEnum = pgEnum('column_status', ['backlog', 'todo', 'in_progress', 'in_review', 'done']);
+// columnStatusEnum removed — issues.status is now plain TEXT so columns are
+// per-project add/removable. The Postgres 'column_status' enum is dropped via
+// the bootstrap migration in db/index.ts (idempotent, detects IF EXISTS).
 
 export const issues = pgTable('issues', {
   id: uuid('id').primaryKey().defaultRandom(),
   projectId: uuid('project_id').notNull().references(() => projects.id, { onDelete: 'cascade' }),
   title: text('title').notNull(),
   body: text('body').default(''),
-  status: columnStatusEnum('status').notNull().default('backlog'),
+  status: text('status').notNull().default('backlog'),
   assigneeId: uuid('assignee_id'), // references agents.id later
   position: integer('position').notNull().default(0),
   archived: integer('archived').notNull().default(0), // 0 = active, 1 = archived (soft delete)
@@ -123,10 +125,11 @@ export type Label = typeof labels.$inferSelect;
 export type NewLabel = typeof labels.$inferInsert;
 
 // ---------------------------------------------------------------------------
-// Column metadata overlay — Phase 8 vertical slice (2026-05-15)
-// Stores per-project display overrides for the 5 hard-coded column_status enum
-// values. Does NOT replace the enum; Phase 8 proper will do that later.
-// Color is stored as a 6-digit hex string (e.g. '#1f6feb').
+// Column metadata — source of truth for which columns a project has.
+// Phase dynamic-columns: column_status enum dropped; this table now fully
+// owns project column definitions (add/remove/reorder). Color is a 6-digit
+// hex string (e.g. '#1f6feb'). semantic maps to analytics/GitHub sync
+// roll-up buckets; is_default marks where new issues land.
 // ---------------------------------------------------------------------------
 export const columnMeta = pgTable(
   'column_meta',
@@ -135,11 +138,15 @@ export const columnMeta = pgTable(
     projectId: uuid('project_id')
       .notNull()
       .references(() => projects.id, { onDelete: 'cascade' }),
-    columnId: text('column_id').notNull(), // 'backlog'|'todo'|'in_progress'|'in_review'|'done'
+    columnId: text('column_id').notNull(),
     label: text('label').notNull(),
     description: text('description'),
     color: text('color').notNull(),        // '#rrggbb' hex
     position: integer('position').notNull().default(0),
+    /** Roll-up bucket for analytics, GitHub sync, and dashboard semantics. */
+    semantic: text('semantic').notNull().default('custom'),  // 'backlog'|'ready'|'in_progress'|'review'|'done'|'custom'
+    /** True on exactly one column per project — new issues land here. */
+    isDefault: boolean('is_default').notNull().default(false),
     createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
   },
