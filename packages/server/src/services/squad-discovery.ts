@@ -1,4 +1,5 @@
 import fs from 'node:fs/promises';
+import type { Dirent } from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 import { SquadDirectory, TeamMember, ValidationResult } from '../types/squad.js';
@@ -17,7 +18,7 @@ async function scanForSquadDirs(
 ): Promise<void> {
   if (currentDepth > maxDepth) return;
 
-  let entries: Awaited<ReturnType<typeof fs.readdir>>;
+  let entries: Dirent[];
   try {
     entries = await fs.readdir(dir, { withFileTypes: true });
   } catch {

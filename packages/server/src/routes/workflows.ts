@@ -33,7 +33,7 @@ export const workflowsRouter = Router({ mergeParams: true });
 // GET /   — list workflows for a project
 workflowsRouter.get('/', async (req: Request, res: Response) => {
   try {
-    const { projectId } = req.params;
+    const { projectId } = req.params as Record<string, string>;
     const db = getDb();
 
     const rows = await db
@@ -50,7 +50,7 @@ workflowsRouter.get('/', async (req: Request, res: Response) => {
 // POST /   — create workflow (parse YAML, validate, version 1)
 workflowsRouter.post('/', async (req: Request, res: Response) => {
   try {
-    const { projectId } = req.params;
+    const { projectId } = req.params as Record<string, string>;
     const { yamlContent } = req.body as { yamlContent?: string };
 
     if (!yamlContent) {
@@ -102,7 +102,7 @@ workflowsRouter.post('/', async (req: Request, res: Response) => {
 // GET /:id   — get workflow + active version
 workflowsRouter.get('/:id', async (req: Request, res: Response) => {
   try {
-    const { projectId, id } = req.params;
+    const { projectId, id } = req.params as Record<string, string>;
     const db = getDb();
 
     const [workflow] = await db
@@ -132,7 +132,7 @@ workflowsRouter.get('/:id', async (req: Request, res: Response) => {
 // PUT /:id   — update (creates new version; old versions become immutable history)
 workflowsRouter.put('/:id', async (req: Request, res: Response) => {
   try {
-    const { projectId, id } = req.params;
+    const { projectId, id } = req.params as Record<string, string>;
     const { yamlContent } = req.body as { yamlContent?: string };
 
     if (!yamlContent) {
@@ -209,7 +209,7 @@ workflowsRouter.put('/:id', async (req: Request, res: Response) => {
 // DELETE /:id   — archive workflow (deactivates all versions)
 workflowsRouter.delete('/:id', async (req: Request, res: Response) => {
   try {
-    const { projectId, id } = req.params;
+    const { projectId, id } = req.params as Record<string, string>;
     const db = getDb();
 
     const [workflow] = await db
@@ -243,7 +243,7 @@ export const issueWorkflowRouter = Router({ mergeParams: true });
 // POST /   — attach workflow to issue
 issueWorkflowRouter.post('/', async (req: Request, res: Response) => {
   try {
-    const { issueId } = req.params;
+    const { issueId } = req.params as Record<string, string>;
     const { workflowVersionId } = req.body as { workflowVersionId?: string };
 
     if (!workflowVersionId) {
@@ -272,7 +272,7 @@ issueWorkflowRouter.post('/', async (req: Request, res: Response) => {
 // DELETE /   — detach workflow from issue
 issueWorkflowRouter.delete('/', async (req: Request, res: Response) => {
   try {
-    const { issueId } = req.params;
+    const { issueId } = req.params as Record<string, string>;
     const db = getDb();
 
     await db
@@ -288,7 +288,7 @@ issueWorkflowRouter.delete('/', async (req: Request, res: Response) => {
 // POST /start   — start workflow execution
 issueWorkflowRouter.post('/start', async (req: Request, res: Response) => {
   try {
-    const { issueId } = req.params;
+    const { issueId } = req.params as Record<string, string>;
     const db = getDb();
 
     const [attachment] = await db
@@ -325,7 +325,7 @@ export const workflowRunsRouter = Router();
  */
 workflowRunsRouter.get('/:id/reviews', async (req: Request, res: Response) => {
   try {
-    const { id } = req.params;
+    const { id } = req.params as Record<string, string>;
     const db = getDb();
 
     const events = await db
@@ -362,7 +362,7 @@ export const stepRunsRouter = Router();
  */
 stepRunsRouter.post('/:id/review', async (req: Request, res: Response) => {
   try {
-    const { id } = req.params;
+    const { id } = req.params as Record<string, string>;
     const { verb, body: reviewBody, suggestions } = req.body as {
       verb?: string;
       body?: string;

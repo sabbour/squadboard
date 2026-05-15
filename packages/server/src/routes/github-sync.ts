@@ -44,7 +44,7 @@ async function getProject(projectId: string) {
 
 router.get('/', async (req: Request, res: Response) => {
   try {
-    const project = await getProject(req.params.id);
+    const project = await getProject(req.params.id as string);
     if (!project) {
       res.status(404).json({ error: 'Project not found' });
       return;
@@ -83,7 +83,7 @@ router.get('/', async (req: Request, res: Response) => {
 router.put('/', async (req: Request, res: Response) => {
   try {
     const db = getDb();
-    const { id } = req.params;
+    const { id } = req.params as Record<string, string>;
     const body = req.body as {
       authType?: string;
       // PAT fields
@@ -187,7 +187,7 @@ router.put('/', async (req: Request, res: Response) => {
 router.delete('/', async (req: Request, res: Response) => {
   try {
     const db = getDb();
-    const { id } = req.params;
+    const { id } = req.params as Record<string, string>;
 
     const project = await getProject(id);
     if (!project) {
@@ -218,7 +218,7 @@ router.delete('/', async (req: Request, res: Response) => {
 
 router.post('/sync', async (req: Request, res: Response) => {
   try {
-    const { id } = req.params;
+    const { id } = req.params as Record<string, string>;
     const project = await getProject(id);
 
     if (!project) {
@@ -254,7 +254,7 @@ router.post('/sync', async (req: Request, res: Response) => {
 
 router.get('/log', async (req: Request, res: Response) => {
   try {
-    const { id } = req.params;
+    const { id } = req.params as Record<string, string>;
     const pool = getPool();
 
     const { rows } = await pool.query(
@@ -281,7 +281,7 @@ router.get('/log', async (req: Request, res: Response) => {
 
 router.post('/webhook', async (req: Request, res: Response) => {
   try {
-    const { id } = req.params;
+    const { id } = req.params as Record<string, string>;
     const project = await getProject(id);
 
     if (!project) {

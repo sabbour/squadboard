@@ -15,7 +15,7 @@ const router = Router({ mergeParams: true });
 
 function handleError(res: Response, err: unknown) {
   if (err instanceof Error && (err as NodeJS.ErrnoException & { status?: number }).status) {
-    const status = (err as { status: number }).status;
+    const status = (err as unknown as { status: number }).status;
     res.status(status).json({ error: err.message });
     return;
   }
@@ -30,7 +30,7 @@ function handleError(res: Response, err: unknown) {
 // GET /api/projects/:projectId/issues
 router.get('/', async (req: Request, res: Response) => {
   try {
-    const { projectId } = req.params;
+    const { projectId } = req.params as Record<string, string>;
     const { status, label, search } = req.query as Record<string, string>;
     const rows = await issuesService.listIssues(projectId, {
       status: status as ColumnStatus | undefined,
@@ -46,7 +46,7 @@ router.get('/', async (req: Request, res: Response) => {
 // POST /api/projects/:projectId/issues
 router.post('/', async (req: Request, res: Response) => {
   try {
-    const { projectId } = req.params;
+    const { projectId } = req.params as Record<string, string>;
     const { title, body, status, assigneeId, labels } = req.body as {
       title: string;
       body?: string;
@@ -101,7 +101,7 @@ router.post('/', async (req: Request, res: Response) => {
 // POST /api/projects/:projectId/issues/bulk
 router.post('/bulk', async (req: Request, res: Response) => {
   try {
-    const { projectId } = req.params;
+    const { projectId } = req.params as Record<string, string>;
     const { action, issueIds, status, labelIds } = req.body as {
       action: 'move' | 'label' | 'archive';
       issueIds: string[];
@@ -124,7 +124,7 @@ router.post('/bulk', async (req: Request, res: Response) => {
 // GET /api/projects/:projectId/issues/:id
 router.get('/:id', async (req: Request, res: Response) => {
   try {
-    const { projectId, id } = req.params;
+    const { projectId, id } = req.params as Record<string, string>;
     const issue = await issuesService.getIssue(projectId, id);
     if (!issue) {
       res.status(404).json({ error: 'Issue not found' });
@@ -139,7 +139,7 @@ router.get('/:id', async (req: Request, res: Response) => {
 // PATCH /api/projects/:projectId/issues/:id
 router.patch('/:id', async (req: Request, res: Response) => {
   try {
-    const { projectId, id } = req.params;
+    const { projectId, id } = req.params as Record<string, string>;
     const { title, body, status, assigneeId, version } = req.body as {
       title?: string;
       body?: string;
@@ -207,7 +207,7 @@ router.patch('/:id', async (req: Request, res: Response) => {
 // DELETE /api/projects/:projectId/issues/:id
 router.delete('/:id', async (req: Request, res: Response) => {
   try {
-    const { projectId, id } = req.params;
+    const { projectId, id } = req.params as Record<string, string>;
     const archived = await issuesService.archiveIssue(projectId, id);
     if (!archived) {
       res.status(404).json({ error: 'Issue not found' });
@@ -223,7 +223,7 @@ router.delete('/:id', async (req: Request, res: Response) => {
 // PATCH /api/projects/:projectId/issues/:id/move
 router.patch('/:id/move', async (req: Request, res: Response) => {
   try {
-    const { projectId, id } = req.params;
+    const { projectId, id } = req.params as Record<string, string>;
     const { status, position } = req.body as { status: ColumnStatus; position?: number };
     if (!status) {
       res.status(400).json({ error: '`status` is required' });
@@ -249,7 +249,7 @@ router.patch('/:id/move', async (req: Request, res: Response) => {
 // PATCH /api/projects/:projectId/issues/:id/labels
 router.patch('/:id/labels', async (req: Request, res: Response) => {
   try {
-    const { projectId, id } = req.params;
+    const { projectId, id } = req.params as Record<string, string>;
     const { labelIds } = req.body as { labelIds: string[] };
     if (!Array.isArray(labelIds)) {
       res.status(400).json({ error: '`labelIds` must be an array' });
@@ -273,7 +273,7 @@ router.patch('/:id/labels', async (req: Request, res: Response) => {
 // GET /api/projects/:projectId/issues/:id/comments
 router.get('/:id/comments', async (req: Request, res: Response) => {
   try {
-    const { id } = req.params;
+    const { id } = req.params as Record<string, string>;
     const rows = await issuesService.listComments(id);
     res.json(rows);
   } catch (err) {
@@ -284,7 +284,7 @@ router.get('/:id/comments', async (req: Request, res: Response) => {
 // POST /api/projects/:projectId/issues/:id/comments
 router.post('/:id/comments', async (req: Request, res: Response) => {
   try {
-    const { id } = req.params;
+    const { id } = req.params as Record<string, string>;
     const { body, authorId } = req.body as { body: string; authorId?: string };
     const created = await issuesService.addComment(id, body, authorId);
     res.status(201).json(created);
@@ -296,7 +296,7 @@ router.post('/:id/comments', async (req: Request, res: Response) => {
 // DELETE /api/projects/:projectId/issues/:id/comments/:commentId
 router.delete('/:id/comments/:commentId', async (req: Request, res: Response) => {
   try {
-    const { id, commentId } = req.params;
+    const { id, commentId } = req.params as Record<string, string>;
     const deleted = await issuesService.deleteComment(id, commentId);
     if (!deleted) {
       res.status(404).json({ error: 'Comment not found' });

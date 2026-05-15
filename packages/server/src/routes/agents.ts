@@ -30,7 +30,7 @@ async function resolveSquadPath(projectId: string): Promise<string | null> {
 // List agents, optionally filtered by ?status=active|disabled|retired
 // ---------------------------------------------------------------------------
 router.get('/', async (req: Request, res: Response) => {
-  const { projectId } = req.params;
+  const { projectId } = req.params as Record<string, string>;
   const { status } = req.query;
 
   const db = getDb();
@@ -61,7 +61,7 @@ router.get('/', async (req: Request, res: Response) => {
 // Body: { name, role, model?, expertise[] }
 // ---------------------------------------------------------------------------
 router.post('/', async (req: Request, res: Response) => {
-  const { projectId } = req.params;
+  const { projectId } = req.params as Record<string, string>;
   const { name, role, model, expertise } = req.body as {
     name?: string;
     role?: string;
@@ -152,7 +152,7 @@ router.post('/', async (req: Request, res: Response) => {
 // Agent details + recent history excerpt (last 20 lines of history.md)
 // ---------------------------------------------------------------------------
 router.get('/:id', async (req: Request, res: Response) => {
-  const { projectId, id } = req.params;
+  const { projectId, id } = req.params as Record<string, string>;
   const db = getDb();
 
   const [agent] = await db
@@ -182,7 +182,7 @@ router.get('/:id', async (req: Request, res: Response) => {
 // Update agent fields: role, model, status
 // ---------------------------------------------------------------------------
 router.patch('/:id', async (req: Request, res: Response) => {
-  const { projectId, id } = req.params;
+  const { projectId, id } = req.params as Record<string, string>;
   const { role, model, status } = req.body as {
     role?: string;
     model?: string;
@@ -221,7 +221,7 @@ router.patch('/:id', async (req: Request, res: Response) => {
 // Disable agent (status='disabled'); file on disk is untouched.
 // ---------------------------------------------------------------------------
 router.delete('/:id', async (req: Request, res: Response) => {
-  const { projectId, id } = req.params;
+  const { projectId, id } = req.params as Record<string, string>;
   const db = getDb();
 
   const [agent] = await db
@@ -249,7 +249,7 @@ router.delete('/:id', async (req: Request, res: Response) => {
 // Return raw charter.md content
 // ---------------------------------------------------------------------------
 router.get('/:id/charter', async (req: Request, res: Response) => {
-  const { projectId, id } = req.params;
+  const { projectId, id } = req.params as Record<string, string>;
   const db = getDb();
 
   const [agent] = await db
@@ -278,7 +278,7 @@ router.get('/:id/charter', async (req: Request, res: Response) => {
 // Body: { content: string }
 // ---------------------------------------------------------------------------
 router.patch('/:id/charter', async (req: Request, res: Response) => {
-  const { projectId, id } = req.params;
+  const { projectId, id } = req.params as Record<string, string>;
   const { content } = req.body as { content?: string };
 
   if (typeof content !== 'string') {

@@ -8,7 +8,7 @@
  * recordRunCompletion() replaces the direct status update in stepper.ts runWorker.
  */
 
-import Ajv from 'ajv';
+import { Ajv } from 'ajv';
 import { eq } from 'drizzle-orm';
 import { getDb, schema } from '../db/index.js';
 
@@ -58,7 +58,7 @@ export async function validateAgentOutput(
   }
 
   const errors = (validate.errors ?? []).map(
-    (e) => `${e.instancePath || '/'} ${e.message ?? 'unknown error'}`,
+    (e: unknown) => `${(e as { instancePath?: string }).instancePath || '/'} ${(e as { message?: string }).message ?? 'unknown error'}`,
   );
   return { valid: false, errors, rawOutput, parsedOutput };
 }

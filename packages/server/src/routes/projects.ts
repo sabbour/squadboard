@@ -33,7 +33,7 @@ router.get('/:id', async (req: Request, res: Response) => {
   const [project] = await db
     .select()
     .from(schema.projects)
-    .where(eq(schema.projects.id, req.params.id));
+    .where(eq(schema.projects.id, req.params.id as string));
 
   if (!project) {
     res.status(404).json({ error: 'Project not found' });
@@ -47,7 +47,7 @@ router.delete('/:id', async (req: Request, res: Response) => {
   const db = getDb();
   const deleted = await db
     .delete(schema.projects)
-    .where(eq(schema.projects.id, req.params.id))
+    .where(eq(schema.projects.id, req.params.id as string))
     .returning();
 
   if (deleted.length === 0) {

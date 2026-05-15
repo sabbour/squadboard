@@ -18,7 +18,7 @@ const router = Router({ mergeParams: true });
 
 function handleError(res: Response, err: unknown) {
   if (err instanceof Error && (err as NodeJS.ErrnoException & { status?: number }).status) {
-    const s = (err as { status: number }).status;
+    const s = (err as unknown as { status: number }).status;
     res.status(s).json({ error: err.message });
     return;
   }
@@ -32,7 +32,7 @@ function handleError(res: Response, err: unknown) {
 
 router.post('/reload', async (req: Request, res: Response) => {
   try {
-    const { projectId } = req.params;
+    const { projectId } = req.params as Record<string, string>;
 
     const [project] = await getDb()
       .select()
@@ -64,7 +64,7 @@ router.post('/reload', async (req: Request, res: Response) => {
 
 router.get('/rules', async (req: Request, res: Response) => {
   try {
-    const { projectId } = req.params;
+    const { projectId } = req.params as Record<string, string>;
 
     const rules = await getDb()
       .select()
@@ -84,7 +84,7 @@ router.get('/rules', async (req: Request, res: Response) => {
 
 router.post('/test', async (req: Request, res: Response) => {
   try {
-    const { projectId } = req.params;
+    const { projectId } = req.params as Record<string, string>;
     const { title, labels, body } = req.body as {
       title?: string;
       labels?: string[];
@@ -124,7 +124,7 @@ router.post('/test', async (req: Request, res: Response) => {
 
 router.get('/log', async (req: Request, res: Response) => {
   try {
-    const { projectId } = req.params;
+    const { projectId } = req.params as Record<string, string>;
 
     const rows = await getDb()
       .select()
@@ -145,7 +145,7 @@ router.get('/log', async (req: Request, res: Response) => {
 
 router.get('/stats', async (req: Request, res: Response) => {
   try {
-    const { projectId } = req.params;
+    const { projectId } = req.params as Record<string, string>;
     const db = getDb();
 
     const [totals] = await db
@@ -197,7 +197,7 @@ router.get('/stats', async (req: Request, res: Response) => {
 
 router.post('/keywords/refresh', async (req: Request, res: Response) => {
   try {
-    const { projectId } = req.params;
+    const { projectId } = req.params as Record<string, string>;
     await refreshAgentKeywords(projectId);
     res.json({ refreshed: true });
   } catch (err) {

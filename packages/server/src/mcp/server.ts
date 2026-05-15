@@ -121,7 +121,7 @@ async function handleListIssues(args: ToolArgs): Promise<unknown> {
 
   const conditions = [eq(issues.projectId, projectId), eq(issues.archived, 0)];
   if (status) {
-    conditions.push(eq(issues.status, status as Parameters<typeof eq>[1]));
+    conditions.push(eq(issues.status, status as 'backlog' | 'todo' | 'in_progress' | 'in_review' | 'done'));
   }
 
   const rows = await db

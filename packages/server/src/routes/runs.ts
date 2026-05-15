@@ -29,7 +29,7 @@ export const issueRunsRouter = Router({ mergeParams: true });
 // POST /
 issueRunsRouter.post('/', async (req: Request, res: Response) => {
   try {
-    const { issueId } = req.params;
+    const { issueId } = req.params as Record<string, string>;
     const { agentId, workspaceStrategy } = req.body as {
       agentId: string;
       workspaceStrategy?: 'scratch' | 'dir' | 'worktree';
@@ -71,7 +71,7 @@ issueRunsRouter.post('/', async (req: Request, res: Response) => {
 // GET /
 issueRunsRouter.get('/', async (req: Request, res: Response) => {
   try {
-    const { issueId } = req.params;
+    const { issueId } = req.params as Record<string, string>;
     const db = getDb();
     const rows = await db
       .select()
@@ -95,7 +95,7 @@ export const projectRunsRouter = Router({ mergeParams: true });
 // GET /:runId
 projectRunsRouter.get('/:runId', async (req: Request, res: Response) => {
   try {
-    const { runId } = req.params;
+    const { runId } = req.params as Record<string, string>;
     const db = getDb();
     const [run] = await db
       .select()
@@ -116,7 +116,7 @@ projectRunsRouter.get('/:runId', async (req: Request, res: Response) => {
 // POST /:runId/cancel
 projectRunsRouter.post('/:runId/cancel', async (req: Request, res: Response) => {
   try {
-    const { runId } = req.params;
+    const { runId } = req.params as Record<string, string>;
     const db = getDb();
 
     const [run] = await db
@@ -165,7 +165,7 @@ projectRunsRouter.post('/:runId/cancel', async (req: Request, res: Response) => 
 
 // GET /:runId/stream  — SSE output stream (1 s DB poll for Demo 4)
 projectRunsRouter.get('/:runId/stream', async (req: Request, res: Response) => {
-  const { runId } = req.params;
+  const { runId } = req.params as Record<string, string>;
   const db = getDb();
 
   // SSE headers
