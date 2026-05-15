@@ -40,6 +40,19 @@ PRD Appendix A — the Coordinator's regex routing is fine for one-shot use; its
 
 ## Learnings
 
+### 2026-05-14 — @bradygaster/squad-sdk wired as primary LLM backend
+
+Replaced `@copilot-extensions/preview-sdk` (wrong package) with `@bradygaster/squad-sdk@0.9.4` (the real SDK). Correct import path is `@bradygaster/squad-sdk/client` — the `./client` package export re-exports `SquadClient` from `adapter/client.js`. The `./adapter` export maps to types only (no `SquadClient`); `./` (main) does not export `SquadClient` at all.
+
+Key API learnings:
+- `SquadClient` options: `{ githubToken, cwd, useLoggedInUser: false }`
+- `createSession` config: `systemMessage: { mode: 'replace', content: charter }`, `workingDirectory`, `model`
+- `sendAndWait(session, { prompt: task })` — field is `prompt`, NOT `message`
+- Return type is `Promise<unknown>` — underlying copilot-sdk shape: `{ type: "assistant.message", data: { content: string } }`. Extract via `result.data.content` → `result.content` → `result.text`.
+- Always `disconnect()` in `finally` — SquadClient wraps `@github/copilot-sdk` CopilotClient which spawns a CLI process; leaking it is a resource risk.
+- The SDK downloads `@github/copilot` binaries (~73MB + ~75MB arch-specific) on `pnpm add` — expected, not a problem.
+- Commit `0c35af92`. Build: 17 pre-existing errors unchanged, zero new errors from SDK integration.
+
 ### 2026-05-14 — Copilot SDK wired as primary LLM backend
 
 Implemented McManus's `mcmanus-sdk-integration.md` plan exactly. `@copilot-extensions/preview-sdk@5.0.1` installed as a runtime dependency. `tryCopilotSdk()` added as Priority 1 backend in `squad-client.ts` — reads `GITHUB_TOKEN` or `SQUADBOARD_GITHUB_TOKEN`, calls `prompt()` with charter as system message (role='system' in messages array, NOT a top-level `system:` key — the SDK doesn't have that field). `SessionOptions.model?` added (backward-compatible). Bridge passes `input.agent.model ?? undefined` through. Backend priority: Copilot SDK → llm CLI → ollama → offline briefing. Build: 17 pre-existing TS2742 errors unchanged (these are declaration emit issues in route files); my new SDK code introduces zero errors. Key learning: `prompt()` API takes messages array with `role: 'system'` — not a `system:` top-level option. Also learned: removing `drizzle.config.ts` from tsconfig `include` unmasked ~128 underlying route type errors (Express v5 compat issues) because the drizzle rootDir violation was causing TypeScript to operate in a degraded mode. Kept original tsconfig to maintain baseline error count.
@@ -74,3 +87,21 @@ No `@sabbour/squad-sdk` import remains. `[stub output — real SDK integration i
 
 ### 2026-05-14 — Demo 5 routing compiler deepdive
 Demo 5 routing compiler: parseRoutingFile reads .squad/routing.md 3-table format (label/keyword/catchall rows). matchRule(issue) walks priority order, returns first match or null for escalation. RoutingBadge.tsx renders ⚡ Auto pill on auto-routed issue cards (shows matched rule label on hover). Agents page routing test panel: input issue title + labels, output resolved assignee. Non-fatal on parse errors (logs + continues).
+
+### 2026-05-14 — squad-client.ts simplified to ACP-only (no fallbacks)
+
+Rewrote `squad-client.ts` per Ahmed's directive. Removed:
+- `tryLlmBackend()` (llm CLI + ollama subprocess logic)
+- `buildOfflineBriefing()` (offline stub output)
+- `import { execFile } from 'node:child_process'`
+- `import { promisify } from 'node:util'`
+- All multi-tier fallback logic
+
+What remains: a single `createAgentSession()` that calls `SquadClient.createSession()` + `sendAndWait()` directly. No fallbacks — if the SDK call fails, the error surfaces immediately.
+
+Key learnings:
+- `@github/copilot-sdk` `sendAndWait()` returns `AssistantMessageEvent | undefined`
+- Confirmed shape from `/tmp/squad-sdk-inspect/node_modules/@github/copilot-sdk/dist/generated/session-events.d.ts`: `{ type: "assistant.message", data: { messageId: string, content: string } }`
+- `extractOutput()` checks `result.data.content` as primary path (matching actual SDK shape), then falls back to top-level `content`, `text`, `message` fields
+- Token fallback: if no GITHUB_TOKEN, `useLoggedInUser: true` (relies on VS Code / `gh auth`)
+- Commit `12372450`. All 16 pre-existing TS errors unchanged; zero new errors from this change.

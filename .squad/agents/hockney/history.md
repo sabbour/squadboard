@@ -99,3 +99,14 @@ Demo 6 workflow engine: YAML parser (js-yaml), WorkflowDefinition (route/agent_r
 - `POST /api/squad/create` added to `routes/squad.ts`. Validates parentPath exists, rejects if project subdir already present (409), creates project dir, delegates to same scaffold + register helpers.
 - `scaffoldSquad()` and `registerProject()` are module-private helpers in squad.ts — no new service file needed; scope is route-level only.
 - Pre-existing TS2742 build errors (all route files) remain as baseline — not introduced by this task.
+
+### 2026-05-14 — Fix all TypeScript errors in packages/server
+
+- **Root cause of TS2769 "no overload matches" in routes**: NOT Express v5 handler typing. It was Drizzle ORM's `eq()` receiving `string | string[]` from `req.params`. Express v5 changed `ParamsDictionary` from `[key: string]: string` to `[key: string]: string | string[]`, causing cascading failures wherever params were passed to Drizzle.
+- **Fix pattern**: Cast `req.params` to `Record<string, string>` at each destructuring point — `const { projectId } = req.params as Record<string, string>`. One cast per handler, covers all subsequent uses. Minimal, no logic changes.
+- **Ajv v8 + NodeNext**: `import Ajv from 'ajv'` fails with NodeNext module resolution because the default export resolves to the module namespace (no construct signatures). Fix: use named import `import { Ajv } from 'ajv'` — Ajv v8 exports the class as both default and named export.
+- **`Parameters<typeof eq>[1]` antipattern**: When used with an enum column in Drizzle, this resolves to `unknown` because the overloaded `eq` signatures don't narrow to a simple type parameter. Fix: cast directly to the explicit enum union `'backlog' | 'todo' | 'in_progress' | 'in_review' | 'done'`.
+- **Dirent type mismatch**: `Awaited<ReturnType<typeof fs.readdir>>` picks up the wrong overload (`Dirent<NonSharedBuffer>[]`) when `withFileTypes: true` is used. Fix: declare as `Dirent[]` with explicit `import type { Dirent } from 'node:fs'`.
+- **GitHubSync constructor drift**: `sync-hook.ts` was still calling the old 4-arg constructor `(projectId, token, owner, repo)` after `sync.ts` refactored it to `(projectId, client: GitHubClient)`. Fix: construct `GitHubClient` inline, pass to `GitHubSync`.
+- **TS2352 double-cast**: `(err as { status: number })` on an `Error`-narrowed value fails because `Error` and `{ status: number }` don't sufficiently overlap. Fix: go through `unknown` first: `(err as unknown as { status: number })`.
+- **Pre-existing TS2742**: All route files have `error TS2742` for inferred Router types — these are baseline failures from the pnpm symlink path issue and are explicitly excluded from fixes.

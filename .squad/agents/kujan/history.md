@@ -47,3 +47,15 @@ Every demo ships with a passing E2E test. Critical durability suites land in:
 
 ### 2026-05-14
 Wrote `docs/acceptance-criteria.md` — 572 lines, 15 demo sections, functional + durability ACs throughout. Key insight: Demos 1–3 and 13 are UI-only or read-only — durability ACs are minimal or absent (4 demos total). Demos 4–12, 14–15 all touch the workflow engine and require invariant coverage (11 demos with durability ACs). Invariants I-2 (single-spawner) and I-3 (lease/heartbeat) appear in the most demos (6–7 each) and will be the hardest to exercise reliably in CI — they need real clock control (fake clock or time-warp) or process-kill harnesses; neither is trivially parallelizable in a shared `embedded-postgres` environment. Biggest quality risk: Demo 10 (fan-out) has the most complex durability surface — the six-step transaction (I-5) requires a kill-mid-transaction harness that no other demo needs, and it's the only place where partial rollback correctness must be proven end-to-end.
+
+### 2026-05-14 — Playwright E2E setup
+Set up `packages/e2e/` with Playwright 1.60.0 (latest stable at task time, chosen over 1.49 since pnpm resolved a newer compatible version). Config targets Vite dev server at `http://localhost:5173` (not 3000 — that's the backend; Vite proxies `/api` there).
+
+28 tests across 4 spec files listed cleanly against Chromium only.
+
+Key decisions:
+- **Selector strategy**: text content + ARIA roles + `placeholder` attributes as primary. No `data-testid` attributes exist in the codebase yet — used real UI strings read directly from component source. `getByTitle('Create issue')` for the column + button, `getByPlaceholder('Issue title')` for the create modal, `getByRole('button', { name: ... })` for all CTAs.
+- **Drag-and-drop** (`@hello-pangea/dnd`): marked `test.fixme` — synthetic pointer events for DnD libs require careful setup and the column droppable IDs aren't stable enough to anchor yet.
+- **Bulk selection**: marked `test.fixme` — UI selection is Shift+click only; no checkbox exposed on `IssueCard` yet.
+- **Agent discovery from `.squad/`**: marked `test.fixme` — requires seed fixtures on the test machine.
+- **Demo coverage**: Demos 1 ✓ (full), Demo 2 ✓ (partial — move via drag is fixme), Demo 3 ✓ (hire + routing tabs). Demos 4–15 not yet covered.
