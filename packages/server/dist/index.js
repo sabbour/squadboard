@@ -29,6 +29,7 @@ import castRouter from './routes/cast.js';
 import reviewPoliciesRouter from './routes/review-policies.js';
 import inboxRouter from './routes/inbox.js';
 import { projectFlowRouter, issueFlowRouter } from './routes/flow.js';
+import { curatedSkillsRouter, projectSkillsRouter, agentSkillsRouter } from './routes/skills.js';
 import { dispatcher } from './engine/dispatcher.js';
 // Phase 10: side-effect import — registers the on_event ceremony listener
 // against the in-process event bus.
@@ -69,6 +70,11 @@ async function main() {
     // Phase 12: flow visualisation aggregators
     app.use('/api/projects/:projectId/flow', projectFlowRouter);
     app.use('/api/projects/:projectId/issues/:issueId/flow', issueFlowRouter);
+    // Phase 13: skills registry — curated library, project CRUD, per-agent assignment.
+    // Agent-scoped routes mount before project-scoped to avoid the catch-all conflict.
+    app.use('/api/skills/curated', curatedSkillsRouter);
+    app.use('/api/projects/:projectId/agents/:agentId/skills', agentSkillsRouter);
+    app.use('/api/projects/:projectId/skills', projectSkillsRouter);
     app.use('/api/projects/:projectId/routing', routingRouter);
     app.use('/api/models', modelsRouter);
     app.use('/api/roles', rolesRouter);
@@ -151,7 +157,16 @@ async function main() {
     process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
 }
 main().catch((err) => {
-    console.error('[squadboard] fatal startup error:', err);
+    const msg = err instanceof Error
+        ? `${err.message}\n${err.stack ?? ''}`
+        : err === undefined
+            ? 'rejected with undefined (likely an `await` that threw with no value — check recent error handlers)'
+            : err === null
+                ? 'rejected with null'
+                : typeof err === 'object'
+                    ? JSON.stringify(err, null, 2)
+                    : String(err);
+    console.error('[squadboard] fatal startup error:', msg);
     process.exit(1);
 });
 //# sourceMappingURL=index.js.map

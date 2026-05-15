@@ -640,6 +640,83 @@ async function bootstrapSchema(): Promise<void> {
     CREATE INDEX IF NOT EXISTS idx_ceremony_schedules_next_fire
       ON ceremony_schedules (next_fire_at)
       WHERE enabled = TRUE;
+
+    -- ---------------------------------------------------------------------
+    -- Phase 13: Skills, Tools, MCP servers — capability registries
+    -- ---------------------------------------------------------------------
+    CREATE TABLE IF NOT EXISTS skills (
+      id              UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+      project_id      UUID        NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+      key             TEXT        NOT NULL,
+      name            TEXT        NOT NULL,
+      description     TEXT,
+      category        TEXT,
+      prompt_addendum TEXT        NOT NULL,
+      curated_key     TEXT,
+      created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      CONSTRAINT skills_project_key_unique UNIQUE (project_id, key)
+    );
+
+    CREATE TABLE IF NOT EXISTS agent_skills (
+      agent_id    UUID        NOT NULL REFERENCES agents(id) ON DELETE CASCADE,
+      skill_id    UUID        NOT NULL REFERENCES skills(id) ON DELETE CASCADE,
+      assigned_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      PRIMARY KEY (agent_id, skill_id)
+    );
+
+    CREATE TABLE IF NOT EXISTS tools (
+      id              UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+      project_id      UUID        NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+      key             TEXT        NOT NULL,
+      name            TEXT        NOT NULL,
+      description     TEXT        NOT NULL,
+      category        TEXT,
+      mcp_server_id   UUID,
+      input_schema    JSONB,
+      output_schema   JSONB,
+      created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      CONSTRAINT tools_project_key_unique UNIQUE (project_id, key)
+    );
+
+    CREATE TABLE IF NOT EXISTS agent_tools (
+      agent_id    UUID        NOT NULL REFERENCES agents(id) ON DELETE CASCADE,
+      tool_id     UUID        NOT NULL REFERENCES tools(id) ON DELETE CASCADE,
+      assigned_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      PRIMARY KEY (agent_id, tool_id)
+    );
+
+    CREATE TABLE IF NOT EXISTS mcp_servers (
+      id           UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+      project_id   UUID        NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+      name         TEXT        NOT NULL,
+      description  TEXT,
+      transport    TEXT        NOT NULL,
+      url          TEXT,
+      command      TEXT,
+      args         JSONB       NOT NULL DEFAULT '[]'::jsonb,
+      headers      JSONB       NOT NULL DEFAULT '[]'::jsonb,
+      headers_iv   TEXT,
+      headers_tag  TEXT,
+      enabled      BOOLEAN     NOT NULL DEFAULT TRUE,
+      created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at   TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+
+    CREATE TABLE IF NOT EXISTS agent_mcp_servers (
+      agent_id      UUID        NOT NULL REFERENCES agents(id) ON DELETE CASCADE,
+      mcp_server_id UUID        NOT NULL REFERENCES mcp_servers(id) ON DELETE CASCADE,
+      assigned_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      PRIMARY KEY (agent_id, mcp_server_id)
+    );
+
+    -- Now that mcp_servers exists, link tools.mcp_server_id with ON DELETE SET NULL.
+    DO $$ BEGIN
+      ALTER TABLE tools
+        ADD CONSTRAINT tools_mcp_server_fk
+        FOREIGN KEY (mcp_server_id) REFERENCES mcp_servers(id) ON DELETE SET NULL;
+    EXCEPTION WHEN duplicate_object THEN NULL; END $$;
   `);
 
   await seedSystemReviewPolicyPresets();

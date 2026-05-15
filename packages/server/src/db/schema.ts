@@ -618,3 +618,95 @@ export const inboxItems = pgTable('inbox_items', {
 export type InboxItem = typeof inboxItems.$inferSelect;
 export type NewInboxItem = typeof inboxItems.$inferInsert;
 
+// ---------------------------------------------------------------------------
+// Phase 13: Skills, Tools, MCP servers — capability registries
+// ---------------------------------------------------------------------------
+//
+// Three project-scoped registries, each with a per-agent join table. Skills
+// are prompt-augmentation snippets prepended to an agent's system prompt;
+// Tools are catalogued external actions (typically backed by an MCP server);
+// MCP servers are connection definitions whose secret header values are
+// AES-256-GCM encrypted at rest using `${project.path}/.secret-key`.
+
+export const skills = pgTable('skills', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  projectId: uuid('project_id').notNull().references(() => projects.id, { onDelete: 'cascade' }),
+  key: text('key').notNull(),
+  name: text('name').notNull(),
+  description: text('description'),
+  category: text('category'),
+  promptAddendum: text('prompt_addendum').notNull(),
+  curatedKey: text('curated_key'),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+  updatedAt: timestamp('updated_at').notNull().defaultNow(),
+});
+
+export const agentSkills = pgTable('agent_skills', {
+  agentId: uuid('agent_id').notNull().references(() => agents.id, { onDelete: 'cascade' }),
+  skillId: uuid('skill_id').notNull().references(() => skills.id, { onDelete: 'cascade' }),
+  assignedAt: timestamp('assigned_at').notNull().defaultNow(),
+}, (t) => ({ pk: primaryKey({ columns: [t.agentId, t.skillId] }) }));
+
+export type Skill = typeof skills.$inferSelect;
+export type NewSkill = typeof skills.$inferInsert;
+export type AgentSkill = typeof agentSkills.$inferSelect;
+export type NewAgentSkill = typeof agentSkills.$inferInsert;
+
+export const tools = pgTable('tools', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  projectId: uuid('project_id').notNull().references(() => projects.id, { onDelete: 'cascade' }),
+  key: text('key').notNull(),
+  name: text('name').notNull(),
+  description: text('description').notNull(),
+  category: text('category'),
+  // FK to mcp_servers added at runtime once mcp_servers exists.
+  mcpServerId: uuid('mcp_server_id'),
+  inputSchema: jsonb('input_schema'),
+  outputSchema: jsonb('output_schema'),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+  updatedAt: timestamp('updated_at').notNull().defaultNow(),
+});
+
+export const agentTools = pgTable('agent_tools', {
+  agentId: uuid('agent_id').notNull().references(() => agents.id, { onDelete: 'cascade' }),
+  toolId: uuid('tool_id').notNull().references(() => tools.id, { onDelete: 'cascade' }),
+  assignedAt: timestamp('assigned_at').notNull().defaultNow(),
+}, (t) => ({ pk: primaryKey({ columns: [t.agentId, t.toolId] }) }));
+
+export type Tool = typeof tools.$inferSelect;
+export type NewTool = typeof tools.$inferInsert;
+export type AgentTool = typeof agentTools.$inferSelect;
+export type NewAgentTool = typeof agentTools.$inferInsert;
+
+export const mcpServers = pgTable('mcp_servers', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  projectId: uuid('project_id').notNull().references(() => projects.id, { onDelete: 'cascade' }),
+  name: text('name').notNull(),
+  description: text('description'),
+  transport: text('transport').notNull(), // 'http' | 'stdio'
+  url: text('url'),
+  command: text('command'),
+  args: jsonb('args').notNull().default([]),
+  // Headers stored as [{name, cipher}] — value is AES-256-GCM ciphertext (hex).
+  // Plain GET responses scrub `cipher` and return [{name, hasSecret}].
+  headers: jsonb('headers').notNull().default([]),
+  // Per-row IV + auth tag for the headers ciphertexts (single envelope across
+  // all header values to keep the schema simple). Null until first header set.
+  headersIv: text('headers_iv'),
+  headersTag: text('headers_tag'),
+  enabled: boolean('enabled').notNull().default(true),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+  updatedAt: timestamp('updated_at').notNull().defaultNow(),
+});
+
+export const agentMcpServers = pgTable('agent_mcp_servers', {
+  agentId: uuid('agent_id').notNull().references(() => agents.id, { onDelete: 'cascade' }),
+  mcpServerId: uuid('mcp_server_id').notNull().references(() => mcpServers.id, { onDelete: 'cascade' }),
+  assignedAt: timestamp('assigned_at').notNull().defaultNow(),
+}, (t) => ({ pk: primaryKey({ columns: [t.agentId, t.mcpServerId] }) }));
+
+export type McpServer = typeof mcpServers.$inferSelect;
+export type NewMcpServer = typeof mcpServers.$inferInsert;
+export type AgentMcpServer = typeof agentMcpServers.$inferSelect;
+export type NewAgentMcpServer = typeof agentMcpServers.$inferInsert;
+
