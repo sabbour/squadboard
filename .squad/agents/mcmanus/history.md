@@ -90,3 +90,7 @@ Session log: `.squad/log/2026-05-15T12:35:00Z-squad-fanout.md`
 **Smoke test results:** UUID errors: 0, dispatcher lookup failures: 0, sweeps running (acted=2). TypeScript clean (two pre-existing unrelated errors in `conjure-classifier.ts` unchanged).
 
 **Lesson:** The `'event'` channel must be treated as a typed contract: `projectId` is always a UUID. Server-wide synthetic scope keys (`__heartbeat__`, `consult:<id>`, `__global__`) belong on their own named channels. Any new server-wide emitter MUST use a separate channel or face the same crash.
+
+## Team update (2026-05-15T16:09:55Z — Wave 3)
+
+Heartbeat refactor (r2, commit ea091186): 6-sweep registry with 30s/5s intervals for lease cleanup and workflow advancement. Dispatcher deprecated-in-place for rollback safety (removed from index.ts). Hotfix (r3, commit 0fc2a64c): isolated heartbeat events to separate `'heartbeat'` EventEmitter channel + UUID guard in ceremony dispatcher. UUID errors 2→0 per tick. Rule for future contributors: `'event'` channel contract is UUID-only; server-wide events use separate named channels (e.g. `'heartbeat'`) or subscribeGlobal() pattern with pre-checks.

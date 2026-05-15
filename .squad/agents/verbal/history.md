@@ -61,3 +61,7 @@ The spam loop defensive guards shipped (3 guards: dedup, sweep backoff, concurre
 **Decision record:** `.squad/decisions/inbox/verbal-consult-stream-wiring.md`
 
 **Outcome:** SDK notes — `sharing/consult.d.ts` doesn't exist in SDK 0.9.4; wiring is forward-compatible. TypeScript clean on both packages (3 pre-existing server errors in McManus's heartbeat/sweeps territory untouched).
+
+## Team update (2026-05-15T16:09:55Z — Wave 3)
+
+Consult stream wiring (r2, commit 546081cb): 3 SessionEventType events (consult.request/response/error) now emit on existing `'event'` channel with standard routing via emitSessionEvent(). SDK listeners registered in squad-stream.ts with flexible fallback key sequences; forward-compatible for SDK evolution. AgentActivityFeed renders consult rows inline (left/right aligned, 💬?/💬↩/💬⚠ icons). Pattern: consult event types in Phase 5 live session are distinct from Phase 17 standalone consult mode (which uses consult:<sessionId> routing).

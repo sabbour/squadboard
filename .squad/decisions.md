@@ -2,6 +2,504 @@
 
 ## Active Decisions
 
+
+# Fenster Typography Canon
+**Date:** 2026-05-15
+**Author:** Fenster (UX Designer)
+**Status:** Ratified — apply app-wide
+
+---
+
+## Reference shape
+
+`packages/client/src/components/layout/PageHeader.tsx` is the gold standard.
+It uses `<Title2>` / `<Subtitle1>` for the page title (via `size` prop),
+`<Caption1>` for the eyebrow and description, and `tokens.*` for all spacing.
+Every other component should follow this lead.
+
+`FluentProvider` (with `webLightTheme`) is confirmed wrapping the entire app in
+`packages/client/src/main.tsx` — all `tokens.*` values resolve correctly.
+
+---
+
+## Typography map
+
+| Where | Component | Notes |
+|-------|-----------|-------|
+| Page title (top of a route) | `<Subtitle1 as="h1">` (or `<Title2 as="h1">` for top-level landing pages) | Built into `PageHeader` |
+| Section heading within a page | `<Caption1>` styled with `textTransform: 'uppercase'` + `fontWeight: tokens.fontWeightSemibold` | Matches GitHub/Linear label-section style |
+| Card / panel title (15-16 px) | `<Subtitle2>` | e.g. drawer header |
+| Body copy / item primary label | `<Body1Strong>` for bold labels, `<Body1>` for running text | |
+| Secondary metadata / captions | `<Caption1>` | 12 px, Segoe UI |
+| Muted small labels (11 px) | `<Caption1>` with `color: tokens.colorNeutralForeground3` | |
+| Numeric / monospace data | `<Body1Strong>` with `fontFamily: tokens.fontFamilyMonospace` | Cost figures, paths |
+
+Available Fluent2 v9 typography components (all from `@fluentui/react-components`):
+`Display`, `LargeTitle`, `Title1`, `Title2`, `Title3`, `Subtitle1`, `Subtitle2`,
+`Body1`, `Body1Strong`, `Body1Stronger`, `Body2`,
+`Caption1`, `Caption1Strong`, `Caption1Stronger`, `Caption2`, `Caption2Strong`
+
+---
+
+## Spacing map
+
+| Where | Token |
+|-------|-------|
+| Page content padding (full page) | `tokens.spacingVerticalXXL` (24 px vertical) + `tokens.spacingHorizontalXXL` (24 px horizontal) |
+| Stack gap between sections | `tokens.spacingVerticalXXL` (24 px) |
+| Stack gap between rows in a list | `tokens.spacingVerticalS` (8 px) |
+| Row padding inside a card / panel | `tokens.spacingVerticalM` (12 px) x `tokens.spacingHorizontalL` (16 px) |
+| Icon-to-text gap | `tokens.spacingHorizontalXS` (4 px) |
+| Small inline gap (badges, chips) | `tokens.spacingHorizontalS` (8 px) |
+
+Fluent2 spacing scale reference:
+- `XXS` = 2 px, `XS` = 4 px, `SNudge` = 6 px, `S` = 8 px, `MNudge` = 10 px,
+  `M` = 12 px, `L` = 16 px, `XL` = 20 px, `XXL` = 24 px, `XXXL` = 32 px
+  (same for Horizontal and Vertical variants)
+
+---
+
+## Color map (text only)
+
+| Semantic role | Token |
+|---------------|-------|
+| Primary text | `tokens.colorNeutralForeground1` |
+| Secondary text | `tokens.colorNeutralForeground2` |
+| Muted / disabled text | `tokens.colorNeutralForeground3` |
+| Placeholder | `tokens.colorNeutralForeground4` |
+
+`var(--surface)`, `var(--border)`, `var(--bg)`, `var(--accent)`, `var(--danger)`,
+`var(--success)` remain valid for **layout / structural** colors (backgrounds,
+borders). Only text colors are migrated to tokens.
+
+---
+
+## Font-weight tokens
+
+| Value | Token |
+|-------|-------|
+| 400 (regular) | `tokens.fontWeightRegular` |
+| 500 (medium) | `tokens.fontWeightMedium` |
+| 600 (semibold) | `tokens.fontWeightSemibold` |
+| 700 (bold) | `tokens.fontWeightBold` |
+
+Prefer the `<*Strong>` typography variant over an explicit `fontWeight` override
+wherever the entire text run should be semibold.
+
+---
+
+## Global CSS (packages/client/src/styles/globals.css)
+
+Rules that conflict with Fluent2 typography were removed in this sweep.
+What remains is intentional:
+
+- `box-sizing: border-box` — kept (essential layout reset)
+- `margin: 0; padding: 0` — kept on `*` (prevents browser default spacing)
+- `html, body, #root { height: 100% }` — kept (app shell requires full height)
+- `body { font-family: ...; font-size: 14px; line-height: 1.5; }` — **removed** (FluentProvider sets this)
+- `-webkit-font-smoothing: antialiased` — kept (visual quality)
+- `a { color: var(--accent); }` — kept (links are not Fluent2 managed)
+- `button { cursor: pointer; font-family: inherit; font-size: inherit; }` — kept for native `<button>` fallback
+
+---
+
+## Exclusions
+
+- `pages/CeremonyEditor.tsx` — pre-existing TS errors owned by another worker
+- `pages/Consult.tsx` — pre-existing TS errors owned by another worker
+
+
+# hockney — anchor filter applied to resolveAnchorIssue
+
+**Date:** 2026-05-15T08:21:46-07:00
+**Author:** Hockney (Backend / Workflow Engine Dev)
+**Status:** Shipped
+
+---
+
+## What was changed
+
+`resolveAnchorIssue()` in `packages/server/src/services/ceremony-scheduler.ts` now
+excludes fan-out child issues from being selected as ceremony anchors.
+
+### Filter applied
+
+```sql
+WHERE issues.project_id = $projectId
+  AND NOT EXISTS (
+    SELECT 1 FROM issue_links
+    WHERE issue_links.child_issue_id = issues.id
+      AND issue_links.link_type = 'fan_out'
+  )
+ORDER BY issues.created_at DESC
+LIMIT 1
+```
+
+In Drizzle ORM terms:
+
+```ts
+.where(
+  and(
+    eq(schema.issues.projectId, projectId),
+    not(
+      exists(
+        db.select({ id: schema.issueLinks.id })
+          .from(schema.issueLinks)
+          .where(
+            and(
+              eq(schema.issueLinks.childIssueId, schema.issues.id),
+              eq(schema.issueLinks.linkType, 'fan_out'),
+            ),
+          ),
+      ),
+    ),
+  ),
+)
+```
+
+---
+
+## Why this filter
+
+The `issue_links` table (added in Demo 10) already records every parent→child
+relationship from fan-out materialisation. `childIssueId` identifies fan-out
+children; `linkType = 'fan_out'` distinguishes them from handoff links. No schema
+migration needed — the discriminator already exists.
+
+---
+
+## No schema migration required
+
+The `issue_links.child_issue_id` + `link_type = 'fan_out'` pair is the correct
+discriminator. It was introduced in Demo 10 alongside the fan-out engine. No new
+column, no new index needed for correctness (though a GIN/BTREE index on
+`(child_issue_id, link_type)` would help at scale — P2 follow-up).
+
+---
+
+## Follow-ups
+
+| Priority | Item |
+|---|---|
+| P2 | Add `CREATE INDEX ON issue_links (child_issue_id, link_type)` to make the NOT EXISTS subquery O(log n) at scale |
+| P1 | Remaining items from Verbal's root-cause doc — see `verbal-spam-loop-rootcause.md` |
+
+
+# Decision: Standard "create" page pattern for Squadboard
+
+**Date:** 2026-05-15  
+**Author:** Kobayashi (Squad SDK Integrator)  
+**Status:** Adopted  
+**Reference:** `feat(ceremonies): Conjure entrypoint + first-time-friendly create UX`
+
+---
+
+## Decision
+
+Every "create" page in Squadboard should follow the pattern established in `CeremonyEditor.tsx`'s create-mode rendering. This pattern makes every new-artifact flow approachable for first-time users while keeping the power-user edit surface unchanged.
+
+### The pattern (5 elements)
+
+1. **`<PageHeader title="New <artifact>" description="…" />`**  
+   Replace any bespoke header with the canonical `PageHeader` component. Title = "New <artifact>". Description = one sentence explaining what this artifact is for. Actions = back button + primary create button.
+
+2. **Dismissible intro card**  
+   A Fluent2 `<Card>` immediately below the PageHeader. `<Body1>` text explains what the artifact is and when to use it. A `<Dismiss16Regular>` button in the top-right corner persists the dismissal in `localStorage` with key `squadboard.<artifactType>.introDismissed`.
+
+3. **Formulate / Conjure entrypoint at the top**  
+   `<FormulatePanel>` mounted above the form body. The `onFormulate` callback calls the relevant `generate-from-prose` or `formulate` endpoint, populates all form fields, and switches to a review tab (Visual, Preview, etc.) so the user immediately sees the AI draft.
+
+4. **Labeled pickers with one-line descriptions**  
+   For any enum/kind/type picker, prefer `<RadioGroup>` with `label={`${technicalName} — ${humanDescription}`}` over a plain `<Dropdown>`. For step/action kinds, use a grouped `<Dropdown>` with descriptions inline; collapse less-common options under an "Advanced" divider.
+
+5. **Sensible defaults on create**  
+   Pre-populate the most common values so the user can click "Create" immediately without changing anything. Document the defaults in a comment above the `useState` initializations.
+
+### What stays unchanged in edit mode
+
+The edit-mode surface (existing artifact, `ceremonyId` is set) should NOT include the PageHeader, intro card, or Formulate panel. These are first-time affordances. The existing compact header with badges, validate, run, and save buttons is the right edit-mode experience.
+
+---
+
+## Applicability to future create pages
+
+This pattern should be applied to the following create pages (where not already done):
+
+| Page | Status |
+|------|--------|
+| `CeremonyEditor.tsx` (new ceremony) | ✅ Done (2026-05-15) |
+| New skill | Apply pattern |
+| New tool | Apply pattern |
+| New MCP server | Apply pattern |
+| New agent (HireAgent dialog) | Partial — has FormulatePanel; add intro card + PageHeader |
+| New team (HireTeam dialog) | Partial — has FormulatePanel; add intro card + PageHeader |
+
+---
+
+## Rationale
+
+- Users landing on a blank create form with no framing have no idea what the artifact is, which fields are required, or what a sensible starting point looks like.
+- The Conjure / Formulate entrypoint reduces time-to-first-success from "navigate docs + fill form" to "type a sentence + review draft".
+- The intro card gives just enough context without being a wall of text — it's also dismissible so power users don't see it every time.
+- Using `RadioGroup` with descriptions instead of raw-enum `Dropdown` means users can make an informed choice without looking up documentation.
+- Sensible defaults mean users can always click "Create" immediately and refine later.
+
+
+# Decision: sdk-state-wrapper API Surface
+
+**Author:** Kobayashi (Squad SDK Integrator)  
+**Date:** 2026-05-15T08:21:46.164-07:00  
+**Phase:** p5-state-wrapper  
+**Status:** Settled
+
+---
+
+## SquadState API Surface Chosen
+
+`SquadState.fromStorage(storage, rootDir)` is used (synchronous factory) rather than the async `SquadState.create()` because:
+
+- `projects.path` in the DB is already the validated `.squad/` directory — it was written there by `linkProjectToSquad()`, which calls `validateSquadDir()` before persisting.
+- Re-validating on every cache miss is redundant I/O.
+- `fromStorage()` constructs all eight collection instances (`agents`, `routing`, `decisions`, `skills`, `team`, `templates`, `config`, `log`) immediately without hitting the filesystem.
+
+`projects.path` is the `.squad/` dir itself; `SquadState` expects its parent, so `rootDir = path.dirname(squadPath)`.
+
+`FSStorageProvider` is constructed with `rootDir` as the confinement root, preventing any path-traversal escapes out of the project directory.
+
+Collections exposed:
+| Accessor | Collection class | Primary methods |
+|---|---|---|
+| `getAgents()` | `AgentsCollection` | `.list()`, `.get(name)`, `.create()`, `.delete()` |
+| `getRouting()` | `RoutingCollection` | `.get()`, `.update()` |
+| `getDecisions()` | `DecisionsCollection` | `.list()`, `.add()` |
+| `getSkills()` | `SkillsCollection` | `.list()`, `.get(id)`, `.exists()` |
+| `getTeam()` | `TeamCollection` | `.get()`, `.update()` |
+| `getTemplates()` | `TemplatesCollection` | `.list()`, `.get(id)`, `.exists()` |
+| `getConfig()` | `ConfigCollection` | `.get()`, `.update()`, `.exists()` |
+
+`log` is accessible via `state.log` but not given a dedicated top-level accessor (it's internal plumbing; callers can reach it via `getState(id).then(s => s.log)` if needed).
+
+---
+
+## Cache Invalidation Strategy
+
+A module-level `Map<string, SquadState>` caches one instance per `projectId`.
+
+- **Hit:** returns the same in-memory instance — collections share the `FSStorageProvider`, which in turn hits the real filesystem on each collection `.get()` / `.list()` call. There is no stale-data risk for reads because the storage layer never caches file contents.
+- **Invalidation trigger:** callers invoke `invalidateState(projectId)` to evict the entry. Appropriate when the project's linked `.squad/` path changes (e.g., after `linkProjectToSquad()` with a new path).
+- **Process restart:** the Map is in-process memory only — it is rebuilt fresh on every server start.
+- **Granularity:** per-projectId, not per-collection. Evicting a single project doesn't affect others.
+
+---
+
+## SDK Quirks Discovered
+
+1. **`FSStorageProvider` constructor is optional-rootDir** — passing it confines all paths; omitting it allows the provider to touch anywhere. Always pass `rootDir` for security.
+2. **`SquadState.fromStorage` is synchronous** — it doesn't validate the `.squad/` directory exists. Validation happens at a higher layer (the DB `projects.path` column is already validated on write).
+3. **`log` collection exists on `SquadState`** but is not exported by the barrel in `state/index.d.ts` as a top-level named type import — it's accessible only via `state.log` at runtime.
+4. **Collection constructors are not exported** — `AgentsCollection` etc. can be imported by name for typing purposes but should only be *instantiated* via `SquadState`, never `new AgentsCollection(...)` directly from service code.
+
+
+# Decision: Heartbeat Bus Isolation
+
+**Date:** 2026-05-15  
+**Author:** McManus (Lead Architect)  
+**Status:** Implemented
+
+## Context
+
+`engine/heartbeat.ts` emitted `heartbeat.sweep.completed` / `heartbeat.sweep.error`
+through the shared project `EventBus` with `projectId: '__heartbeat__'` — a synthetic
+server-wide sentinel. `services/ceremony-dispatcher.ts` listens to ALL events on that
+bus and called `findMatchingCeremonies(event.projectId, ...)`, which passed
+`'__heartbeat__'` directly to a Postgres UUID column → `22P02` error every 5 s.
+
+## Decision: Option A — Separate `'heartbeat'` channel
+
+`emitHeartbeatEvent()` now emits on the `'heartbeat'` EventEmitter channel instead
+of the shared `'event'` channel. Use `eventBus.on('heartbeat', handler)` or the
+new `eventBus.onHeartbeat(handler)` helper to subscribe.
+
+**Why Option A over Option B:**
+- Heartbeat events are server-wide infrastructure telemetry, not project events.
+  Sharing the bus (even with `projectId: null`) would still require every subscriber
+  to understand and guard against the null-project convention.
+- The `'event'` channel contract is: every payload has a valid UUID `projectId`.
+  Putting a non-UUID there violates that contract for all existing subscribers.
+- No consumer was using the heartbeat bus events via WS or REST; the Heartbeat UI
+  polls `GET /api/heartbeat` (reads internal state map) — no subscriber migration needed.
+
+## Dispatcher Guard Pattern
+
+In addition to the primary fix, `ceremony-dispatcher.ts` now has **two** defensive layers:
+
+1. **Early type guard in `handleEvent`:** if `event.type.startsWith('heartbeat.')` → return immediately. This is belt-and-suspenders: heartbeat events no longer reach this handler via the `'event'` channel, but guards against future regressions.
+
+2. **UUID guard in `findMatchingCeremonies`:** validates `projectId` against
+   `/^[0-9a-f]{8}-...-[0-9a-f]{12}$/i` before issuing any DB query. Returns `[]`
+   and logs a `debug`-level warning if the projectId is not UUID-shaped. This prevents
+   ANY future synthetic sentinel (e.g. `consult:<id>`, `__global__`, etc.) from
+   crashing the Postgres query.
+
+**Rule for future contributors:** Any code that emits on the `'event'` channel MUST
+supply a genuine project UUID in `projectId`. Server-wide / cross-project events
+should use a separate named channel (e.g. `'heartbeat'`, `'global'`) or use
+`subscribeGlobal()` on the consuming side with a UUID pre-check.
+
+
+# McManus Decision Log — Heartbeat Sweep Registry (Phase 3)
+
+**Date:** 2026-05-15  
+**Author:** McManus (Lead Architect)  
+**Commit:** feat(engine): heartbeat sweep registry replaces dispatcher tick (Phase 3)
+
+---
+
+## 1. Sweep Interface Shape
+
+```typescript
+interface Sweep {
+  id: string;           // kebab-case identifier; used in routes + event payloads
+  intervalMs: number;   // milliseconds between automatic runs
+  enabled: boolean;     // runtime toggle — PATCH /api/heartbeat/sweeps/:id
+  run(): Promise<SweepResult>;
+}
+
+interface SweepResult {
+  acted: number;        // rows/records touched (reclaimed, marked, evicted, etc.)
+  errors: number;       // sub-items that failed within this pass
+  details?: string;     // optional human-readable summary for logs / UI
+}
+```
+
+**Rationale:** Kept intentionally minimal. `acted` and `errors` give the UI enough signal to colour-code sweep health without forcing each sweep to emit a custom type. `details` is a free-form string rather than a typed map to avoid over-engineering at this stage.
+
+---
+
+## 2. Per-Sweep Intervals
+
+| Sweep ID              | Interval | Replaces / Wraps                                              |
+|-----------------------|----------|---------------------------------------------------------------|
+| `stuck-issue-runs`    | 30 s     | sweepExpiredLeases + sweepOrphanedRuns + sweepExpiredStepLeases + sweepOrphanedWorkflowRuns + sweepReviewTimeouts |
+| `idle-live-sessions`  | 60 s     | New — marks `active` live_sessions with no activity in 10 min as `idle` |
+| `stale-presence`      | 30 s     | New — evicts in-memory presence records older than 60 s       |
+| `ready-workflow-steps`|  5 s     | tickWorkflowAdvancement + claimAndRun (Stepper)               |
+| `github-sync-overdue` | 60 s     | New — one-off pull for projects whose lastGithubSyncAt > 5 min ago |
+| `ceremonies-due`      |  5 s     | sweepDueSchedules() from ceremony-scheduler.ts                |
+
+**Interval rationale:**
+- 5 s for the hot paths (workflow advancement, ceremonies) to match the old dispatcher cadence.
+- 30 s for lease/presence cleanup — these are crash-recovery paths, not latency-sensitive.
+- 60 s for idle-session and GitHub sync — both tolerate a minute of lag.
+
+---
+
+## 3. Dispatcher Deprecation Strategy
+
+`dispatcher.ts` is **kept around but unused** for one release cycle. The import in `index.ts` was removed (the `dispatcher` singleton is still exported from the file but never called).  
+- A `// DEPRECATED: replaced by engine/heartbeat.ts (Phase 3). Kept for one release cycle for rollback safety.` comment was added at the top of the file.  
+- Rollback: revert `index.ts` to call `dispatcher.start()` / `dispatcher.stop()` instead of heartbeat — no other files need touching.  
+- Planned deletion: next minor release after Phase 3 ships to production without incident.
+
+---
+
+## 4. EventBus Integration
+
+Two new event types were added to `event-bus.ts`:
+
+```typescript
+type HeartbeatEventType =
+  | 'heartbeat.sweep.completed'   // payload: { sweepId, result: SweepResult, durationMs }
+  | 'heartbeat.sweep.error';      // payload: { sweepId, error: string, durationMs }
+```
+
+Both are emitted with `projectId = '__heartbeat__'` (a synthetic scope key) so they flow through the existing WS fan-out infrastructure without special-casing. Clients that want to observe sweep telemetry can subscribe with `{ projectId: '__heartbeat__' }`.
+
+The approach mirrors how consult sessions use `consult:<sessionId>` as a synthetic project key — zero infrastructure changes needed.
+
+---
+
+## 5. Functional Completeness Note
+
+The old dispatcher tick bundled 7 operations. The 6 new sweeps cover all 7:
+
+| Old tick operation         | New sweep                |
+|----------------------------|--------------------------|
+| sweepExpiredLeases         | stuck-issue-runs (30 s)  |
+| sweepOrphanedRuns          | stuck-issue-runs (30 s)  |
+| sweepExpiredStepLeases     | stuck-issue-runs (30 s)  |
+| sweepOrphanedWorkflowRuns  | stuck-issue-runs (30 s)  |
+| sweepReviewTimeouts        | stuck-issue-runs (30 s)  |
+| tickWorkflowAdvancement    | ready-workflow-steps (5 s)|
+| claimAndRun (Stepper)      | ready-workflow-steps (5 s)|
+
+No functionality was dropped.
+
+
+# Decision Record — Verbal: Consult Stream Wiring (Phase 5)
+
+**Date:** 2026-05-15T08:21:46.164-07:00  
+**Author:** Verbal (Real-time / WebSocket Dev)  
+**Task:** `p5-consult`
+
+---
+
+## Three event types settled on
+
+| Event | Scope | Payload |
+|---|---|---|
+| `consult.request` | `SessionEventType` | `{ requestId, fromAgent, question, timestamp }` |
+| `consult.response` | `SessionEventType` | `{ requestId, fromAgent, answer, timestamp }` |
+| `consult.error` | `SessionEventType` | `{ message, timestamp, requestId? }` |
+
+All three are added to `SessionEventType` in `event-bus.ts` so they route through `emitSessionEvent()` → the project WS room. No separate consult room is used for these; they flow inline with the rest of the transcript.
+
+---
+
+## How consult requests are detected in the SDK output stream
+
+`RunningLiveSession.attachListeners()` in `squad-stream.ts` registers two new listeners on the SDK `SquadSessionLike` session object:
+
+```ts
+this.session.on('consult.request',  (e) => this.onConsultRequest(e));
+this.session.on('consult.response', (e) => this.onConsultResponse(e));
+```
+
+These fire when the underlying SDK session emits those event names. The handlers use the existing `pickString()` helper to extract fields with fallback key sequences:
+
+- `requestId` ← `requestId | id | req-<Date.now()>`
+- `fromAgent` ← `fromAgent | agentName | agent | 'agent'`
+- `question` ← `question | content | text | message`
+- `answer` ← `answer | content | text | message`
+- `timestamp` ← `timestamp | new Date().toISOString()`
+
+If the SDK never emits these events (e.g. older SDK version) the listeners are simply no-ops — zero risk to the existing stream.
+
+---
+
+## SDK quirks discovered
+
+- `@bradygaster/squad-sdk/dist/sharing/consult.d.ts` does **not exist** in the installed SDK version (`0.9.4`). The sharing/consult module is not yet published. This wiring is therefore forward-compatible: listeners register now, events will flow automatically once the SDK surface ships.
+- The existing `ConsultEventType` in `event-bus.ts` (Phase 17 ask/consult mode) uses a different routing mechanism (`consult:<sessionId>` as the project key) for standalone consult sessions. The three new event types added here are distinct and scoped to the live session, not the standalone consult surface.
+
+---
+
+## WS routing
+
+No new WS code was needed. `emitSessionEvent(type, projectId, payload)` already routes to the project room (`project:<projectId>`). All clients subscribed to the live session page already receive these events.
+
+---
+
+## Client rendering
+
+`AgentActivityFeed.tsx` now renders:
+- `consult.request` → `ConsultRow` left-aligned, dashed neutral border, 💬? icon, "asked" label
+- `consult.response` → `ConsultRow` right-aligned, dashed neutral border, 💬↩ icon, "answered" label
+- `consult.error` → `Pill` danger tone, 💬⚠ icon
+
+No new chat surface; consult exchanges appear inline in the existing transcript scroll region.
+
+
 ### 2026-05-14T08:17:03Z: Project pivot — "foo" → Squadboard
 **By:** Ahmed Sabbour (via Coordinator)
 **What:** This repo is now the build for **Squadboard** — a local-first kanban + workflow board for Squad agents. Package `@sabbour/squadboard`, MIT, self-hosted.

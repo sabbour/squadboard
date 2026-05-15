@@ -143,3 +143,7 @@ Decision filed: `.squad/decisions/inbox/kobayashi-sdk-state-wrapper.md`.
 ## Recent team activity
 
 **2026-05-15 Round 2 shipped:** Hockney (attachments backend), McManus (multi-modal frontend), Verbal (Consult chat fix), Fenster (typography sweep), Kobayashi (Ceremony Conjure UX), Keyser (layout rebalance). See `.squad/decisions.md` for Fluent2 canon, image bytea architecture, create-page pattern, react-markdown rendering.
+
+## Team update (2026-05-15T16:09:55Z — Wave 3)
+
+SDK state wrapper (r1, commit 8fdbbaa9): `services/sdk-state.ts` with SquadState factory and 7 typed collection accessors (agents, routing, decisions, skills, team, templates, config). Synchronous fromStorage(storage, rootDir) factory (no re-validation; path already validated on DB write). Module-level cache per projectId with invalidateState() eviction. FSStorageProvider must receive rootDir for security confinement. Foundational shim for downstream Phase 5 work; all Phase 5 state reads depend on this wrapper. SDK quirk: collection constructors not exported; only instantiate via SquadState.

@@ -93,3 +93,22 @@ follow-ups.
 **2026-05-15T15:21:46Z — Coordination snag: Parallel commit with Keyser**
 
 Keyser's Diagnostics UI work (commit 13c34dca) accidentally swept Hockney's server files when both agents committed diagnostics changes in parallel. Functional code is verified OK; server routes and diagnostics service are intact. **Audit trail is murky** — the commit appears to contain both agents' changes under one SHA. This happened because neither agent used explicit `git add -- <path>` per-file staging; Keyser's broader staging glob swept Hockney's uncommitted work into the same commit. **Action for future parallel sessions:** Use `git add -- <path1> <path2> ...` (bracket notation) for each intentional file. Never use `git add .` or `git add <directory>/` when multiple agents have working trees. Always `git status` before committing to confirm ONLY your changes are staged.
+
+---
+
+**2026-05-15T08:21:46-07:00 — Task: p6-templates-bug — Fix workload templates page load error**
+
+**Commit:** `3e3fefad` — `fix(templates): resolve workloads page load error + empty state`
+
+**Root cause:** `Templates.tsx` never existed as a page. Navigation to the template catalog hit the catch-all redirect (`*` → `/`) and rendered nothing. `TemplatePicker.tsx` was orphaned (written but never imported anywhere). The `ceremoniesTopRouter.get('/templates')` handler also lacked a `try/catch`, leaving it without a graceful error envelope on any unexpected throw.
+
+**Changes:**
+- `packages/server/src/routes/ceremonies.ts` — Wrapped `GET /templates` in try/catch; returns `{ ok: false, error: '...' }` 500 JSON on failure instead of crashing Express.
+- `packages/client/src/pages/Templates.tsx` — New page: loading spinner → empty state (`Body1`: "No workload templates yet.") → error state (`Subtitle1`: "Couldn't load templates — try again" + Retry button) → template card grid. Never throws or renders a stack trace.
+- `packages/client/src/App.tsx` — Wired `Templates` at `/projects/:id/ceremonies/templates`.
+
+**Verification:** `cd packages/client && npx tsc --noEmit` → clean. `cd packages/server && npx tsc --noEmit` → 2 pre-existing errors in `conjure-classifier.ts` (confirmed pre-existing by stash test), none from this change.
+
+## Team update (2026-05-15T16:09:55Z — Wave 3)
+
+Anchor filter fix (r3, commit 4ecb5525): `resolveAnchorIssue()` now excludes fan-out child issues via `issue_links` table. Closes spam loop at source — no ceremony anchor will pick a recently-created child that itself has fan-out steps. Indexed by existing `(child_issue_id, link_type)` pair from Demo 10; no schema migration. P1 follow-up: persist sweep failure count to Redis for process-restart recovery.
