@@ -46,6 +46,18 @@ export interface WsEventMap {
   'deliverable.updated':    { deliverableId: string; deliverable: Record<string, unknown> }
   'deliverable.reviewed':   { deliverableId: string; verb: string; newStatus: string; reviewerName?: string; revisionRunId?: string | null }
   'deliverable.superseded': { deliverableId: string; supersededBy: string }
+  // Phase 17: Ask / Consult mode events (per-consult room: subscribeRoom('consult:<sessionId>'))
+  'consult.started':           { sessionId: string; projectId: string | null; mode: 'agent' | 'model'; agentName?: string | null; model?: string | null }
+  'consult.user_message':      { sessionId: string; messageId: string; content: string }
+  'consult.message_delta':     { sessionId: string; delta: string }
+  'consult.reasoning_delta':   { sessionId: string; delta: string }
+  'consult.message_complete':  { sessionId: string; messageId: string; sdkMessageId?: string; content: string; reasoningContent?: string | null; role: 'assistant' | 'system' | 'tool' }
+  'consult.tool_call':         { sessionId: string; toolName: string; args?: unknown; result?: unknown }
+  'consult.proposal_created':  { sessionId: string; proposal: Record<string, unknown> }
+  'consult.proposal_decided':  { sessionId: string; proposalId: string; status: 'accepted' | 'edited' | 'discarded' | 'pending'; artifact?: unknown }
+  'consult.usage':             { sessionId: string; inputTokens: number; outputTokens: number; model?: string | null; cost: number }
+  'consult.error':             { sessionId: string; message: string }
+  'consult.completed':         { sessionId: string; reason: 'completed' | 'cancelled' | 'failed' }
   // Connection control (sent by server)
   connected: { serverId: string }
   error: { message: string }
@@ -69,6 +81,12 @@ class WsClient {
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null
   private reconnectAttempts = 0
   private readonly maxBackoff = 30_000
+  /**
+   * Phase 17 Ask: extra room subscriptions beyond the primary `projectId`.
+   * Used for cross-project consult sessions whose room is `consult:<sessionId>`.
+   * Tracked separately so they survive reconnect.
+   */
+  private extraRooms = new Set<string>()
 
   // Typed handler map: { eventType: Set<handler> }
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -116,6 +134,40 @@ class WsClient {
     this.safeSend({ type: 'presence', issueId })
   }
 
+  /**
+   * Phase 17 Ask: subscribe to an additional room (e.g. 'consult:<sessionId>').
+   * Idempotent. The subscription is remembered and re-sent on reconnect.
+   * Connects with a project-less WebSocket if not already connected — useful
+   * for cross-project consult sessions opened from the global Ask launcher.
+   */
+  subscribeRoom(room: string) {
+    if (this.extraRooms.has(room)) return
+    this.extraRooms.add(room)
+    if (this.socket?.readyState === WebSocket.OPEN) {
+      this.safeSend({ type: 'subscribe', projectId: room })
+      return
+    }
+    // Lazy-connect when no project session is active. Use the room id as the
+    // primary projectId so the open handler subscribes to it; track the
+    // distinction via extraRooms (which is unioned on resub).
+    if (!this.projectId) {
+      this.projectId = room
+      this.reconnectAttempts = 0
+      this.open()
+    }
+  }
+
+  /** Phase 17 Ask: unsubscribe from an extra room. */
+  unsubscribeRoom(room: string) {
+    if (!this.extraRooms.delete(room)) return
+    if (this.socket?.readyState === WebSocket.OPEN) {
+      this.safeSend({ type: 'unsubscribe', projectId: room })
+    }
+    if (this.projectId === room && this.extraRooms.size === 0) {
+      this.disconnect()
+    }
+  }
+
   /** Send any arbitrary message to the server (no-op if not connected). */
   send(data: unknown) {
     this.safeSend(data)
@@ -152,6 +204,12 @@ class WsClient {
       this.reconnectAttempts = 0
       this.setConnectionState('connected')
       this.safeSend({ type: 'subscribe', projectId: pid })
+      // Re-subscribe any extra rooms (Phase 17 consult sessions etc.) that
+      // were registered before the socket was open or before reconnect.
+      for (const room of this.extraRooms) {
+        if (room === pid) continue
+        this.safeSend({ type: 'subscribe', projectId: room })
+      }
     }
 
     ws.onmessage = (ev: MessageEvent<string>) => {
