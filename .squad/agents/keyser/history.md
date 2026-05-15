@@ -79,3 +79,7 @@ Added `<NavSectionHeader>SYSTEM</NavSectionHeader>` above the global nav items (
 **Cache-bust mutation pattern:**
 `useRunDiagnostics` appends `?bust=${Date.now()}` to the query string to force the server to bypass any result caching, then calls `queryClient.setQueryData` with the result to update the cache optimistically without a refetch round-trip.
 
+**2026-05-15T15:21:46Z — Coordination snag: Parallel commit swept Hockney's work**
+
+When both Keyser and Hockney committed diagnostics work in parallel (Phase 3, commit 13c34dca), Keyser's staging accidentally swept Hockney's server files into the same commit. Functional code verified OK, but the audit trail is murky — one commit SHA contains both agents' changes. This happened because explicit `git add -- <path>` per-file was not used; Keyser's broader staging glob (likely `git add packages/` or similar) swept uncommitted server work. **Action for future parallel sessions:** Always use `git add -- <path1> <path2> ...` (bracket notation, one file per add) for intentional changes. Never use `git add .` or `git add <directory>/`. Always run `git status` before committing to verify ONLY your changes are staged. This prevents accidental file sweeps and keeps audit trails clean.
+

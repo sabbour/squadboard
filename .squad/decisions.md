@@ -315,3 +315,106 @@ Image domain whitelist: `IssueBodyMarkdown` overrides `img` component in ReactMa
 Toolbar: `Code24Regular` (fenced code block, wraps selection or inserts empty) + `Image24Regular` (opens `<input type="file" accept="image/*">`). Kept minimal; bold/italic deferred (engineers comfortable with raw markdown syntax).
 
 Future: Option B create-flow uploads, EditIssueModal, attachment delete button in CardDetail thumbnails, lightbox on thumbnail click, bold/italic buttons.
+
+### 2026-05-15: Kujan QA Investigation — spam loop + fry cleanup + formatDistanceToNow guards
+**By:** Kujan (Tester / QA)
+**Date:** 2026-05-15
+**Status:** Investigation complete; findings + recommendations logged
+
+**Scope:** Read-only investigation; diagnostic findings only, no code changes in Kujan's pass.
+
+**A. Issue Spam Loop — Root Cause (Medium Confidence)**
+- `ceremony-scheduler.ts::sweepDueSchedules()` appears idempotent (two-phase pattern with tentative `nextFireAt` advance, exception handling does not update to future timestamp if error occurs — but 5-min tentative prevents immediate re-fire on 5s tick).
+- `consult-stream.ts` does NOT retry with title mutation.
+- Symptom pattern (`... — verbal — verbal — fenster`) suggests looping/retry mechanism outside primary files. Most likely: **a caller of `acceptProposeIssue()` / `acceptProposeConversation()` that retries on error**, OR **background middleware that mutates titles on each attempt.**
+- **Proposed fix:** Add error logging + rethrow in sweep catch block; add unique constraint on `(projectId, title)` with partial `WHERE archived = 0` filter; add dedup check before `createIssue()` in consult flow.
+- **Owner:** Verbal (backend investigation) + McManus (ceremonies audit). **Follow-up:** Verbal to investigate retry paths and error handlers.
+
+**B. Fry Agent Directory — Orphan / Vestigial**
+- `.squad/agents/fry/` exists on disk with `history.md` (Frontend Dev learnings), but NOT in `team.md` or casting registry.
+- Status: confirmed orphan, likely one-off frontend audit.
+- **Recommendation:** Archive to `.squad/agents/_alumni/fry/` (Coordinator action). Do not add to team.md unless reactivated.
+
+**C. formatDistanceToNow Crash Guard — Partial Fix Verified**
+- `RoutingLogTable.tsx` (lines 21–30): Guard properly in place; durable fix.
+- 7 other callsites unguarded and vulnerable (CommentList.tsx lines 80, 142, 184; CardDetail.tsx:211; DeliverableCard.tsx:83–84; AgentDetailPanel.tsx:224, 230).
+- Root cause: If timestamps come back as `null`, `undefined`, or unparseable string, unguarded calls crash.
+- **Owner:** Hockney (frontend fix batch). Recommendation: Apply `safeRelativeTime()` guard pattern universally or upstream-normalize dates in API serialization.
+
+**D. WebSocket Reconnect & StrictMode — Verified OK**
+- `ws-client.ts` singleton, idempotent cleanup (nullifies handlers, closes socket, sets to null), no render-time loops, retry scheduled outside render cycle.
+- StrictMode cleanup: cleanup() method is idempotent; no racy reconnect loops.
+- **Status:** No action needed.
+
+### 2026-05-15: Diagnostics service shape (Demo 3 / System Ops)
+**By:** Hockney (Backend / Workflow Engine Dev)
+**Status:** Shipped in Phase 3
+
+**What:**
+- Created `services/diagnostics.ts` with 8 parallel checks: `sdk.client`, `sdk.models`, `github.auth`, `squad_dir.shape`, `postgres.health`, `websocket.health`, `mcp.servers`, `disk.writeable`.
+- All checks run in parallel via `Promise.all`; each individually try/catch guarded (no single failure short-circuits rest).
+- Created `routes/diagnostics.ts` with 5-second in-memory cache (global + project-scoped via `Map<projectId, result>`).
+- Registered `GET /api/diagnostics` (server-wide) and `GET /api/projects/:id/diagnostics` (project-scoped).
+
+**Rationale:**
+- Parallel execution keeps wall-clock time under slowest check (~10s SDK timeout) vs. summing all timeouts.
+- 5s cache prevents thundering-herd on doctor UI refresh button.
+- `github.auth` is warn-only (not fail) — local-first usage without `gh` CLI is supported.
+- `postgres.health` uses 50ms deadline on `pool.connect()` + `client.query()` — embedded Postgres should respond sub-millisecond; slower warrants fail.
+- `mcp.servers` skips gracefully when `mcp_servers` table absent (matches progressive schema bootstrap).
+- `disk.writeable` checks `~/.squadboard/data` + project's `.squad/` (if projectId in scope).
+- Used existing `getWebSocketServer()` from `realtime/ws-server.ts` to avoid new singleton coupling.
+
+### 2026-05-15: Top-level routes for Diagnostics and Heartbeat (Demo 3 UI)
+**By:** Keyser (Frontend Dev)
+**Status:** Shipped in Phase 3
+
+**Routes chosen:**
+- **Diagnostics:** `/diagnostics` (global) + `/projects/:id/diagnostics` (project-scoped, mirrors server endpoint).
+- **Heartbeat:** `/heartbeat` (system-level, not project-scoped).
+
+**Rationale for top-level:**
+- Rejected nested under Settings — diagnostics is operational, not configurational. Top-level route lets ops staff reach it directly without selecting a project first.
+- Rejected Dashboard panel slot — Heartbeat and Diagnostics verbose enough for own full pages; Dashboard already dense.
+- `useDiagnostics` hook reads `projectId` from `useParams`, switches between `/api/diagnostics` and `/api/projects/:id/diagnostics` automatically.
+
+**Nav placement:** New **SYSTEM** section header in sidebar (above project-scoped groups), matching existing `OPERATIONS` / `WORK` / `SQUAD` grouping convention in `Layout.tsx`.
+
+### 2026-05-15: Spam loop — confirmed root cause + three defensive guards shipped
+**By:** Verbal (Real-time / WebSocket Dev)
+**Status:** Defensive fix shipped (commit 504f4a57); root cause confirmed P0 follow-up
+
+**Root Cause (Confirmed):**
+`resolveAnchorIssue` in `ceremony-scheduler.ts` (line 131) picks the **most recently created** issue:
+```ts
+.orderBy(sql`${schema.issues.createdAt} DESC`)
+.limit(1);
+```
+Fan-out child issues (`Foo — verbal`, `Foo — fenster`) are themselves most recently created after fan-out. On next cron tick, scheduler anchors its new workflow run on `Foo — fenster` (latest child), which itself has a fan-out step in YAML. That second run creates grandchildren `Foo — fenster — verbal` / `Foo — fenster — fenster`, etc. Pattern `Foo — verbal — verbal — fenster` is a specific slice of ever-deepening tree.
+
+**Secondary compounding vector (concurrent ticks):**
+`UPDATE step_runs SET status = 'splitting'` inside `materializeFanOut` had no `AND status = 'pending'` guard. Two concurrent `advanceWorkflowRun` calls would both pass `if (stepRun.status === 'pending')` check, both enter transaction, both create child issues.
+
+**Three Guards Shipped:**
+
+1. **`services/issues.ts` — `createIssue` dedup guard:**
+   Before INSERT, query for non-archived issue with same `(projectId, title)` created within 60 seconds. If found, return existing issue + log warning. Added optional `idempotencyKey?: string` parameter (reserved for future 24-h window; not wired yet).
+   Note: `materializeFanOut` bypasses `createIssue` (raw SQL INSERTs), so guard only covers service layer + HTTP callers. Still valuable for consult-stream.
+
+2. **`services/ceremony-scheduler.ts` — loud sweep failures + 1-h backoff:**
+   Replaced silent `console.error` with structured message including consecutive failure count (module-level `Map<string, number>`).
+   On ≥2 consecutive failures for same schedule, `nextFireAt` pushed to `now + 1h` (overrides tentative 5-min placeholder). Breaks re-entry storm.
+   Failure count reset to zero on any successful fire or skip.
+
+3. **`engine/fan-out.ts` — two guards:**
+   - **Concurrency guard (Step 2, 6-step transaction):** Changed `UPDATE step_runs SET status = 'splitting' WHERE id = $1` to add `AND status = 'pending'`. If `rowCount === 0`, ROLLBACK + return `[]` — concurrent winner already claimed step.
+   - **Title compound guard (child title construction):** Before computing `childTitle = \`${issue.title} — ${target.label}\``, check if `issue.title` already ends with ` — ${target.label}`. If true, log warning + use parent title as-is, preventing double-suffix.
+
+**P0 Follow-ups Required:**
+| Priority | Item |
+|---|---|
+| P0 | **Fix `resolveAnchorIssue`** to exclude fan-out child issues (filter out issues with `issue_links` row `link_type = 'fan_out'`). **This is the actual loop driver.** |
+| P1 | Add proper `UNIQUE` index on `(project_id, title)` with partial `WHERE archived = 0` (requires Drizzle migration). |
+| P1 | Persist sweep failure count to DB (or Redis key) so process restart doesn't reset backoff. |
+| P2 | `materializeFanOut` should check `child_workflow_run_ids` is empty before creating children (additional idempotency layer post-concurrency guard). |
+| P3 | `tickWorkflowAdvancement` has no `FOR UPDATE SKIP LOCKED` on workflow runs; multi-instance deployments can both advance same run. Concurrency guard in fan-out.ts mitigates for fan-out steps only. |
