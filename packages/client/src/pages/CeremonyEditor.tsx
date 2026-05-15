@@ -63,6 +63,10 @@ import {
   Switch,
   TabList,
   Tab,
+  Accordion,
+  AccordionItem,
+  AccordionHeader,
+  AccordionPanel,
   tokens,
   type SelectTabData,
   type SelectTabEvent,
@@ -75,7 +79,6 @@ import {
   Play16Regular,
   Checkmark16Regular,
   Warning16Regular,
-  Dismiss16Regular,
 } from '@fluentui/react-icons'
 import VisualCanvas from '../components/ceremony/VisualCanvas.tsx'
 import ProseTab from '../components/ceremony/ProseTab.tsx'
@@ -181,12 +184,10 @@ export default function CeremonyEditor() {
   const [showAdvancedFor, setShowAdvancedFor] = useState<Set<number>>(new Set())
   const [activeTab, setActiveTab] = useState<'code' | 'visual' | 'prose'>('code')
 
-  // Intro card dismiss — persisted in localStorage.
-  const [introDismissed, setIntroDismissed] = useState(
-    () => localStorage.getItem('squadboard.ceremonyEditor.introDismissed') === '1',
-  )
   // Conjure/Formulate model badge.
   const [formulateModelUsed, setFormulateModelUsed] = useState<{ model: string; via: string } | null>(null)
+  // Controls progressive reveal of the manual-build structured form in create mode.
+  const [showManualForm, setShowManualForm] = useState(false)
 
   const [saveErr, setSaveErr] = useState<string | null>(null)
   const [saveOk, setSaveOk] = useState(false)
@@ -414,6 +415,7 @@ export default function CeremonyEditor() {
       setTriggerConfig(result.triggerConfig)
       setFormulateModelUsed({ model: 'AI', via: 'generate-from-prose' })
       setActiveTab('visual')
+      setShowManualForm(true)
     } catch {
       // Error surfaced via generateFromProse.error in the FormulatePanel.
     }
@@ -429,7 +431,6 @@ export default function CeremonyEditor() {
       {isNew ? (
         <PageHeader
           title="New ceremony"
-          description="Ceremonies are scheduled or triggered automations — a sequence of steps that runs on a schedule, an event, or on demand."
           actions={
             <>
               <Button appearance="subtle" onClick={() => navigate(`/projects/${projectId}/ceremonies`)}>
@@ -445,7 +446,13 @@ export default function CeremonyEditor() {
                   <Warning16Regular /> {saveErr.slice(0, 60)}
                 </Caption1>
               )}
-              <Button appearance="primary" onClick={handleSave}>Create</Button>
+              <Button
+                appearance="primary"
+                onClick={handleSave}
+                disabled={!name.trim() || name === 'New Ceremony'}
+              >
+                Create
+              </Button>
             </>
           }
         />
@@ -523,82 +530,450 @@ export default function CeremonyEditor() {
         </div>
       )}
 
-      {/* ── Create-mode: dismissible intro card ──────────────────────── */}
-      {isNew && !introDismissed && (
-        <div style={{ padding: '12px 24px 0' }}>
-          <Card style={{ position: 'relative', background: tokens.colorNeutralBackground2 }}>
-            <div style={{ padding: '12px 36px 12px 14px' }}>
-              <Body1 style={{ display: 'block', color: tokens.colorNeutralForeground1 }}>
-                A ceremony is a re-runnable workflow — a sequence of steps that fires on a schedule, an event, or on
-                demand. Use ceremonies for things you do regularly (standups, triage sweeps, weekly digests). Each
-                ceremony has a <strong>trigger</strong> (when to fire) and <strong>steps</strong> (what to do).
-              </Body1>
-            </div>
-            <Button
-              appearance="subtle"
-              icon={<Dismiss16Regular />}
-              size="small"
-              aria-label="Dismiss intro"
-              style={{ position: 'absolute', top: 8, right: 8 }}
-              onClick={() => {
-                localStorage.setItem('squadboard.ceremonyEditor.introDismissed', '1')
-                setIntroDismissed(true)
-              }}
-            />
-          </Card>
-        </div>
-      )}
-
-      {/* ── Create-mode: Conjure / Formulate panel ──────────────────────── */}
+      {/* ── Create-mode: progressive Conjure-first layout ───────────────── */}
       {isNew && (
-        <div style={{ padding: '12px 24px 0' }}>
-          <FormulatePanel
-            placeholder="Describe your ceremony in plain language…"
-            hint="e.g., 'Every Monday at 9 am, run a triage agent over open issues and post a digest to the team channel.'"
-            isPending={generateFromProse.isPending}
-            errorMessage={generateFromProse.error?.message ?? null}
-            modelUsed={formulateModelUsed}
-            onFormulate={(prose) => void handleFormulate(prose)}
-          />
-        </div>
-      )}
-
-      {/* ── Create-mode: ceremony name field ───────────────────────────────── */}
-      {isNew && (
-        <div style={{ padding: '12px 24px 0', display: 'flex', flexDirection: 'column', gap: 4 }}>
-          <Label htmlFor="ceremony-name-input" weight="semibold">Name</Label>
-          <Input
-            id="ceremony-name-input"
-            value={name}
-            onChange={(_, d) => setName(d.value)}
-            placeholder="e.g., Weekly triage sweep"
-            style={{ maxWidth: 480 }}
-          />
-          <Caption1 style={{ color: tokens.colorNeutralForeground3 }}>
-            Give your ceremony a short, memorable name.
-          </Caption1>
-        </div>
-      )}
-      {/* Validation errors banner */}
-      {validationErrors.length > 0 && (
-        <MessageBar intent="error">
-          <MessageBarBody>
-            {validationErrors.length} validation error{validationErrors.length === 1 ? '' : 's'}:{' '}
-            {validationErrors.join('; ')}
-          </MessageBarBody>
-        </MessageBar>
-      )}
-      {convertToast && (
-        <MessageBar intent={convertToast === 'Coming in Phase 11' ? 'info' : 'warning'}>
-          <MessageBarBody>{convertToast}</MessageBarBody>
-        </MessageBar>
-      )}
-
-      {/* ── Body ───────────────────────────────────────────────────────── */}
-      <div style={{ flex: 1, display: 'flex', minHeight: 0, overflow: 'hidden' }}>
-        {/* Left: Trigger + meta */}
         <div
           style={{
+            flex: 1,
+            overflow: 'auto',
+            padding: `${tokens.spacingVerticalXL} ${tokens.spacingHorizontalXXL}`,
+            display: 'flex',
+            flexDirection: 'column',
+            gap: tokens.spacingVerticalXL,
+          }}
+        >
+          {/* Hero: Formulate */}
+          <Card style={{ background: tokens.colorNeutralBackground2 }}>
+            <div
+              style={{
+                padding: `${tokens.spacingVerticalM} ${tokens.spacingHorizontalL}`,
+                display: 'flex',
+                flexDirection: 'column',
+                gap: tokens.spacingVerticalS,
+              }}
+            >
+              <Subtitle1>Describe your ceremony</Subtitle1>
+              <Caption1 style={{ color: tokens.colorNeutralForeground3 }}>
+                Tell Conjure what it does and it will draft the steps, trigger, and YAML for you.
+              </Caption1>
+              <FormulatePanel
+                placeholder="Describe your ceremony in plain language…"
+                hint="e.g., 'Every Monday at 9 am, run a triage agent over open issues and post a digest to the team channel.'"
+                isPending={generateFromProse.isPending}
+                errorMessage={generateFromProse.error?.message ?? null}
+                modelUsed={formulateModelUsed}
+                onFormulate={(prose) => void handleFormulate(prose)}
+              />
+            </div>
+          </Card>
+
+          {/* "or build it manually" toggle */}
+          <div>
+            <Button appearance="subtle" onClick={() => setShowManualForm((v) => !v)}>
+              {showManualForm ? '− Collapse manual form' : 'or build it manually →'}
+            </Button>
+          </div>
+
+          {/* Structured form — revealed on toggle or auto-expanded after Formulate */}
+          {showManualForm && (
+            <div
+              style={{
+                display: 'flex',
+                flexDirection: 'column',
+                gap: tokens.spacingVerticalL,
+              }}
+            >
+              {/* Name */}
+              <Field label="Name" required hint="Give your ceremony a short, memorable name.">
+                <Input
+                  value={name}
+                  onChange={(_, d) => setName(d.value)}
+                  placeholder="e.g., Weekly triage sweep"
+                  style={{ maxWidth: 480 }}
+                />
+              </Field>
+
+              {/* Trigger — compact Dropdown instead of radio cards */}
+              <Field
+                label="Trigger"
+                hint={TRIGGER_KIND_OPTIONS.find((o) => o.value === triggerKind)?.description ?? ''}
+              >
+                <Dropdown
+                  value={TRIGGER_KIND_OPTIONS.find((o) => o.value === triggerKind)?.label ?? triggerKind}
+                  selectedOptions={[triggerKind]}
+                  onOptionSelect={(_, d) => {
+                    setTriggerKind(d.optionValue as TriggerKind)
+                    setTriggerConfig({})
+                    setCronPreview(null)
+                  }}
+                  style={{ maxWidth: 320 }}
+                >
+                  {TRIGGER_KIND_OPTIONS.map((o) => (
+                    <Option key={o.value} value={o.value}>{o.label}</Option>
+                  ))}
+                </Dropdown>
+              </Field>
+
+              <TriggerConfigForm
+                triggerKind={triggerKind}
+                triggerConfig={triggerConfig}
+                onChange={setTriggerConfig}
+                onPreviewCron={handlePreviewCron}
+                cronPreview={cronPreview}
+                cronPreviewErr={cronPreviewErr}
+                previewLoading={previewCron.isPending}
+                disabled={false}
+              />
+
+              {/* Advanced — description + kind collapsed by default */}
+              <Accordion collapsible>
+                <AccordionItem value="advanced">
+                  <AccordionHeader expandIconPosition="end">Advanced</AccordionHeader>
+                  <AccordionPanel>
+                    <div
+                      style={{
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: tokens.spacingVerticalM,
+                        paddingTop: tokens.spacingVerticalS,
+                      }}
+                    >
+                      <Field label="Description">
+                        <Textarea
+                          value={description}
+                          onChange={(_, d) => setDescription(d.value)}
+                          rows={3}
+                        />
+                      </Field>
+                      <Field
+                        label="Kind"
+                        hint="Use workflow for most automations. narrative is documentation-only."
+                      >
+                        <Dropdown
+                          value={kind}
+                          selectedOptions={[kind]}
+                          onOptionSelect={(_, d) => setKind(d.optionValue as CeremonyKind)}
+                          style={{ maxWidth: 240 }}
+                        >
+                          {(['workflow', 'ceremony', 'review_policy', 'narrative'] as CeremonyKind[]).map(
+                            (k) => (
+                              <Option key={k} value={k}>{k}</Option>
+                            ),
+                          )}
+                        </Dropdown>
+                      </Field>
+                    </div>
+                  </AccordionPanel>
+                </AccordionItem>
+              </Accordion>
+
+              {/* Validation errors */}
+              {validationErrors.length > 0 && (
+                <MessageBar intent="error">
+                  <MessageBarBody>
+                    {validationErrors.length} validation error{validationErrors.length === 1 ? '' : 's'}:{' '}
+                    {validationErrors.join('; ')}
+                  </MessageBarBody>
+                </MessageBar>
+              )}
+
+              {/* Tabs + Step editor */}
+              <div
+                style={{
+                  border: `1px solid ${tokens.colorNeutralStroke1}`,
+                  borderRadius: tokens.borderRadiusMedium,
+                  overflow: 'hidden',
+                }}
+              >
+                <div
+                  style={{
+                    padding: `${tokens.spacingVerticalXS} ${tokens.spacingHorizontalM}`,
+                    borderBottom: `1px solid ${tokens.colorNeutralStroke1}`,
+                  }}
+                >
+                  <TabList
+                    selectedValue={activeTab}
+                    onTabSelect={(_e: SelectTabEvent, d: SelectTabData) =>
+                      setActiveTab(d.value as 'code' | 'visual' | 'prose')
+                    }
+                  >
+                    <Tab value="code">Code</Tab>
+                    <Tab value="visual">Visual</Tab>
+                    <Tab value="prose">Prose</Tab>
+                  </TabList>
+                </div>
+
+                {activeTab === 'code' && (
+                  <div style={{ padding: tokens.spacingVerticalM }}>
+                    <div
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        marginBottom: tokens.spacingVerticalM,
+                      }}
+                    >
+                      <Subtitle1>Steps ({steps.length})</Subtitle1>
+                      <Button icon={<Add16Regular />} onClick={addStep}>
+                        Add step
+                      </Button>
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                      {steps.length === 0 && (
+                        <Card style={{ background: tokens.colorNeutralBackground2 }}>
+                          <div style={{ padding: '16px 18px', display: 'flex', flexDirection: 'column', gap: 6 }}>
+                            <Body1 style={{ color: tokens.colorNeutralForeground2 }}>No steps yet.</Body1>
+                            <Caption1 style={{ color: tokens.colorNeutralForeground3 }}>
+                              Click <strong>+ Add step</strong> to add a step manually, or use{' '}
+                              <strong>Describe your ceremony</strong> above to draft from a description.
+                            </Caption1>
+                          </div>
+                        </Card>
+                      )}
+                      {steps.map((step, i) => (
+                        <div
+                          key={i}
+                          style={{
+                            border: '1px solid var(--border)',
+                            borderRadius: 6,
+                            padding: 12,
+                            background: 'var(--surface)',
+                            display: 'flex',
+                            flexDirection: 'column',
+                            gap: 8,
+                          }}
+                        >
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                            <span style={{ minWidth: 22, color: 'var(--text-muted)', fontSize: 12 }}>{i + 1}.</span>
+                            <Button
+                              appearance="subtle"
+                              icon={<ArrowUp16Regular />}
+                              onClick={() => moveStep(i, -1)}
+                              disabled={i === 0}
+                              aria-label="Move up"
+                            />
+                            <Button
+                              appearance="subtle"
+                              icon={<ArrowDown16Regular />}
+                              onClick={() => moveStep(i, 1)}
+                              disabled={i === steps.length - 1}
+                              aria-label="Move down"
+                            />
+                            <Dropdown
+                              value={STEP_TYPE_OPTIONS.find((o) => o.value === step.kind)?.label ?? step.kind}
+                              selectedOptions={[step.kind]}
+                              onOptionSelect={(_, d) => changeStepKind(i, d.optionValue as StepKind)}
+                              style={{ minWidth: 140 }}
+                            >
+                              {COMMON_STEP_OPTIONS.map((o) => (
+                                <Option key={o.value} value={o.value}>{`${o.label} — ${o.description}`}</Option>
+                              ))}
+                              <Option disabled value="__advanced_divider__">── Advanced ──</Option>
+                              {ADVANCED_STEP_OPTIONS.map((o) => (
+                                <Option key={o.value} value={o.value}>{`${o.label} — ${o.description}`}</Option>
+                              ))}
+                            </Dropdown>
+                            <Input
+                              value={step.label ?? ''}
+                              onChange={(_, d) => updateStep(i, { label: d.value })}
+                              placeholder="label"
+                              style={{ flex: 1 }}
+                            />
+                            <Button
+                              appearance="subtle"
+                              icon={<Delete16Regular />}
+                              onClick={() => deleteStep(i)}
+                              aria-label="Delete"
+                            />
+                          </div>
+                          {(step.kind === 'agent_run' || step.kind === 'route') && (
+                            <>
+                              <div style={{ display: 'flex', gap: 8 }}>
+                                <Dropdown
+                                  placeholder="Pick an agent…"
+                                  value={step.agent}
+                                  selectedOptions={step.agent ? [step.agent] : []}
+                                  onOptionSelect={(_, d) => updateStep(i, { agent: d.optionValue })}
+                                  style={{ minWidth: 200 }}
+                                >
+                                  {(agents ?? []).map((a) => (
+                                    <Option key={a.id} value={a.name}>{a.name}</Option>
+                                  ))}
+                                </Dropdown>
+                                <Caption1 style={{ color: 'var(--text-muted)', alignSelf: 'center' }}>
+                                  Templates: <code>{'${input.foo}'}</code>, <code>{'${event.payload}'}</code>
+                                </Caption1>
+                              </div>
+                              <Textarea
+                                value={step.prompt ?? ''}
+                                onChange={(_, d) => updateStep(i, { prompt: d.value })}
+                                placeholder="Prompt template (multi-line OK)"
+                                rows={3}
+                              />
+                            </>
+                          )}
+                          {step.kind === 'handoff' && (
+                            <div style={{ display: 'flex', gap: 8, flexDirection: 'column' }}>
+                              <Input
+                                value={step.to ?? ''}
+                                onChange={(_, d) => updateStep(i, { to: d.value })}
+                                placeholder="to: agent name"
+                              />
+                              <Textarea
+                                value={step.message ?? ''}
+                                onChange={(_, d) => updateStep(i, { message: d.value })}
+                                placeholder="message (optional)"
+                                rows={2}
+                              />
+                            </div>
+                          )}
+                          {step.kind === 'fan_out' && (
+                            <div style={{ display: 'flex', gap: 8, flexDirection: 'column' }}>
+                              <label style={{ fontSize: 12, display: 'flex', flexDirection: 'column', gap: 4 }}>
+                                Spawn mode
+                                <Dropdown
+                                  value={step.mode === 'parallel' ? 'parallel — spawn all children at once (SDK)' : 'serial — let dispatcher claim children one tick at a time'}
+                                  selectedOptions={[step.mode ?? 'serial']}
+                                  onOptionSelect={(_, d) => updateStep(i, { mode: d.optionValue as 'serial' | 'parallel' })}
+                                >
+                                  <Option value="serial">serial — let dispatcher claim children one tick at a time</Option>
+                                  <Option value="parallel">parallel — spawn all children at once (SDK)</Option>
+                                </Dropdown>
+                              </label>
+                              <Caption1 style={{ color: 'var(--text-muted)' }}>
+                                Other fan_out fields (<code>split_by</code>, <code>agents</code>, <code>merge_strategy</code>) are
+                                authored in the YAML preview below and round-trip untouched.
+                              </Caption1>
+                            </div>
+                          )}
+                          {step.kind === 'approve' && (
+                            <>
+                              <Button appearance="transparent" size="small" onClick={() => toggleAdvanced(i)}>
+                                {showAdvancedFor.has(i) ? '− Hide advanced' : '+ Show advanced'}
+                              </Button>
+                              {showAdvancedFor.has(i) && (
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                                  <label style={{ fontSize: 12 }}>
+                                    request_changes_policy
+                                    <Dropdown
+                                      value={step.request_changes_policy ?? 'first'}
+                                      selectedOptions={[step.request_changes_policy ?? 'first']}
+                                      onOptionSelect={(_, d) =>
+                                        updateStep(i, {
+                                          request_changes_policy: d.optionValue as 'first' | 'majority' | 'all',
+                                        })
+                                      }
+                                    >
+                                      <Option value="first">first</Option>
+                                      <Option value="majority">majority</Option>
+                                      <Option value="all">all</Option>
+                                    </Dropdown>
+                                  </label>
+                                  <label style={{ fontSize: 12 }}>
+                                    timeout
+                                    <Input
+                                      value={step.timeout ?? ''}
+                                      onChange={(_, d) => updateStep(i, { timeout: d.value })}
+                                      placeholder="e.g. 24h"
+                                    />
+                                  </label>
+                                  <label style={{ fontSize: 12 }}>
+                                    approvers (comma-separated)
+                                    <Input
+                                      value={(step.approvers ?? []).join(', ')}
+                                      onChange={(_, d) =>
+                                        updateStep(i, {
+                                          approvers: d.value.split(',').map((s) => s.trim()).filter(Boolean),
+                                        })
+                                      }
+                                      placeholder="lead, qa, security"
+                                    />
+                                  </label>
+                                </div>
+                              )}
+                            </>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                    <details style={{ marginTop: 18 }}>
+                      <summary style={{ cursor: 'pointer', color: 'var(--text-muted)', fontSize: 12 }}>
+                        Preview YAML
+                      </summary>
+                      <pre
+                        style={{
+                          background: 'var(--surface)',
+                          border: '1px solid var(--border)',
+                          borderRadius: 6,
+                          padding: 12,
+                          fontSize: 12,
+                          whiteSpace: 'pre-wrap',
+                          wordBreak: 'break-all',
+                          marginTop: 8,
+                        }}
+                      >
+                        {yaml}
+                      </pre>
+                    </details>
+                  </div>
+                )}
+
+                {activeTab === 'visual' && (
+                  <div style={{ minHeight: 400 }}>
+                    <VisualCanvas
+                      projectId={projectId}
+                      header={header}
+                      steps={steps}
+                      onChange={(next) => setSteps(next)}
+                      disabled={false}
+                    />
+                  </div>
+                )}
+
+                {activeTab === 'prose' && (
+                  <ProseTab
+                    projectId={projectId}
+                    ceremonyId={ceremonyId}
+                    currentYaml={yaml}
+                    currentName={name}
+                    onAccept={({ header: h, steps: s, triggerKind: tk, triggerConfig: tc }) => {
+                      if (h.name && h.name.trim()) setName(h.name)
+                      if (h.description) setDescription(h.description)
+                      setHeaderExtras(h.extras)
+                      setSteps(s)
+                      setTriggerKind(tk)
+                      setTriggerConfig(tc)
+                      setActiveTab('code')
+                    }}
+                    disabled={false}
+                  />
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── Edit-mode body ──────────────────────────────────────────────── */}
+      {!isNew && (
+        <>
+          {validationErrors.length > 0 && (
+            <MessageBar intent="error">
+              <MessageBarBody>
+                {validationErrors.length} validation error{validationErrors.length === 1 ? '' : 's'}:{' '}
+                {validationErrors.join('; ')}
+              </MessageBarBody>
+            </MessageBar>
+          )}
+          {convertToast && (
+            <MessageBar intent={convertToast === 'Coming in Phase 11' ? 'info' : 'warning'}>
+              <MessageBarBody>{convertToast}</MessageBarBody>
+            </MessageBar>
+          )}
+          <div style={{ flex: 1, display: 'flex', minHeight: 0, overflow: 'hidden' }}>
+            {/* Left: Trigger + meta */}
+            <div
+              style={{
             width: 380,
             borderRight: '1px solid var(--border)',
             padding: '16px 18px',
@@ -1035,6 +1410,8 @@ export default function CeremonyEditor() {
             </DialogBody>
           </DialogSurface>
         </Dialog>
+      )}
+        </>
       )}
     </div>
   )
