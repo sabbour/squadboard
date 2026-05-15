@@ -11,7 +11,7 @@
  * Drag-and-drop zone validates payload.kind matches the active tab before import.
  */
 
-import { useState, useRef, useCallback, DragEvent } from 'react'
+import { useState, useRef, DragEvent } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { useParams, useNavigate, useSearchParams } from 'react-router'
 import {
@@ -113,27 +113,31 @@ const useStyles = makeStyles({
 })
 
 // ---------------------------------------------------------------------------
-// Apply-name Dialog (shown for template kinds that need a name)
+// Apply dialog — collects name (all kinds) + squadPath (project kind only)
 // ---------------------------------------------------------------------------
 
-function ApplyNameDialog({
+function ApplyTemplateDialog({
   open,
+  kind,
   templateName,
   onApply,
   onClose,
 }: {
   open: boolean
+  kind: TemplateKind
   templateName: string
-  onApply: (name: string) => void
+  onApply: (name: string, squadPath?: string) => void
   onClose: () => void
 }) {
   const [name, setName] = useState(templateName)
+  const [squadPath, setSquadPath] = useState('')
+  const canSubmit = name.trim() && (kind !== 'project' || squadPath.trim())
   return (
     <Dialog open={open} onOpenChange={(_, d) => { if (!d.open) onClose() }}>
-      <DialogSurface style={{ maxWidth: 440 }}>
+      <DialogSurface style={{ maxWidth: 460 }}>
         <DialogBody>
           <DialogTitle>Apply template</DialogTitle>
-          <DialogContent>
+          <DialogContent style={{ display: 'flex', flexDirection: 'column', gap: tokens.spacingVerticalM }}>
             <Field label="Name for the new item" required>
               <Input
                 value={name}
@@ -142,13 +146,29 @@ function ApplyNameDialog({
                 autoFocus
               />
             </Field>
+            {kind === 'project' && (
+              <Field
+                label="Squad directory path"
+                required
+                hint="Absolute path on disk where the new project's .squad/ folder will live."
+              >
+                <Input
+                  value={squadPath}
+                  onChange={(_, d) => setSquadPath(d.value)}
+                  placeholder="/home/you/projects/my-new-project/.squad"
+                />
+              </Field>
+            )}
           </DialogContent>
           <DialogActions>
             <Button appearance="secondary" onClick={onClose}>Cancel</Button>
             <Button
               appearance="primary"
-              disabled={!name.trim()}
-              onClick={() => { onApply(name.trim()); onClose() }}
+              disabled={!canSubmit}
+              onClick={() => {
+                onApply(name.trim(), kind === 'project' ? squadPath.trim() : undefined)
+                onClose()
+              }}
             >
               Apply
             </Button>
@@ -180,14 +200,18 @@ function TemplateGrid({
   const [applyTarget, setApplyTarget] = useState<TemplateSummary | null>(null)
   const [applyError, setApplyError] = useState<string | null>(null)
 
-  async function handleApply(tpl: TemplateSummary, name?: string) {
+  async function handleApply(tpl: TemplateSummary, name?: string, squadPath?: string) {
     setApplyError(null)
     try {
       if (kind === 'team') {
         await instantiateTeam.mutateAsync({ templateId: tpl.id })
       } else if (kind === 'project') {
-        const result = await instantiateProject.mutateAsync({ templateId: tpl.id, name: name ?? tpl.name })
-        void navigate(`/projects/${result.project.id}/board`)
+        const result = await instantiateProject.mutateAsync({
+          templateId: tpl.id,
+          name: name ?? tpl.name,
+          squadPath: squadPath ?? '',
+        })
+        void navigate(`/projects/${result.id}/board`)
         return
       } else {
         await instantiateWorkflow.mutateAsync({ templateId: tpl.id, name: name ?? tpl.name })
@@ -290,10 +314,11 @@ function TemplateGrid({
       </div>
 
       {applyTarget && (
-        <ApplyNameDialog
+        <ApplyTemplateDialog
           open
+          kind={kind}
           templateName={applyTarget.name}
-          onApply={(name) => void handleApply(applyTarget, name)}
+          onApply={(name, squadPath) => void handleApply(applyTarget, name, squadPath)}
           onClose={() => setApplyTarget(null)}
         />
       )}
@@ -316,71 +341,78 @@ function DragImportZone({
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [isDragging, setIsDragging] = useState(false)
   const [feedback, setFeedback] = useState<{ type: 'ok' | 'err'; msg: string } | null>(null)
+  // For project imports, we need to collect squadPath before proceeding.
+  const [pendingPayload, setPendingPayload] = useState<unknown>(null)
+  const [squadPathInput, setSquadPathInput] = useState('')
   const importTeam = useImportTeam()
   const importProject = useImportProject()
   const importWorkflow = useImportWorkflow()
 
-  const processPayload = useCallback(
-    async (raw: unknown) => {
-      // Validate payload.kind matches active tab
-      if (
-        raw !== null &&
-        typeof raw === 'object' &&
-        'payload' in raw &&
-        raw.payload !== null &&
-        typeof raw.payload === 'object' &&
-        'kind' in raw.payload
-      ) {
-        const payloadKind = (raw.payload as Record<string, unknown>).kind
-        if (payloadKind !== activeKind) {
-          setFeedback({ type: 'err', msg: `File kind "${String(payloadKind)}" doesn't match active tab "${activeKind}".` })
-          return
-        }
+  function validateKind(raw: unknown): boolean {
+    if (
+      raw !== null &&
+      typeof raw === 'object' &&
+      'payload' in raw &&
+      (raw as Record<string, unknown>).payload !== null &&
+      typeof (raw as Record<string, unknown>).payload === 'object' &&
+      'kind' in ((raw as Record<string, unknown>).payload as Record<string, unknown>)
+    ) {
+      const payloadKind = ((raw as Record<string, unknown>).payload as Record<string, unknown>).kind
+      if (payloadKind !== activeKind) {
+        setFeedback({ type: 'err', msg: `File kind "${String(payloadKind)}" doesn't match active tab "${activeKind}".` })
+        return false
       }
+    }
+    return true
+  }
 
-      try {
-        if (activeKind === 'team') {
-          const result = await importTeam.mutateAsync({ projectId, payload: raw })
-          setFeedback({ type: 'ok', msg: `Imported ${result.imported} agents.` })
-        } else if (activeKind === 'project') {
-          const result = await importProject.mutateAsync({ payload: raw })
-          setFeedback({ type: 'ok', msg: `Project "${result.project.name}" imported.` })
-        } else {
-          await importWorkflow.mutateAsync({ projectId, payload: raw })
-          setFeedback({ type: 'ok', msg: 'Workflow imported.' })
-        }
-      } catch (e: unknown) {
-        setFeedback({ type: 'err', msg: e instanceof Error ? e.message : 'Import failed' })
+  async function doImport(raw: unknown, squadPath?: string) {
+    try {
+      if (activeKind === 'team') {
+        const result = await importTeam.mutateAsync({ projectId, payload: raw })
+        setFeedback({ type: 'ok', msg: `Imported ${result.imported} agents.` })
+      } else if (activeKind === 'project') {
+        const result = await importProject.mutateAsync({ payload: raw, squadPath: squadPath ?? '' })
+        setFeedback({ type: 'ok', msg: `Project "${result.name}" imported.` })
+        setPendingPayload(null)
+        setSquadPathInput('')
+      } else {
+        await importWorkflow.mutateAsync({ projectId, payload: raw })
+        setFeedback({ type: 'ok', msg: 'Workflow imported.' })
       }
-    },
-    [activeKind, projectId, importTeam, importProject, importWorkflow],
-  )
+    } catch (e: unknown) {
+      setFeedback({ type: 'err', msg: e instanceof Error ? e.message : 'Import failed' })
+    }
+  }
 
-  async function handleDrop(e: DragEvent<HTMLDivElement>) {
-    e.preventDefault()
-    setIsDragging(false)
+  async function ingestFile(file: File) {
     setFeedback(null)
-    const file = e.dataTransfer.files[0]
-    if (!file) return
     try {
       const raw = await readFileAsJson(file)
-      await processPayload(raw)
+      if (!validateKind(raw)) return
+      if (activeKind === 'project') {
+        // Need squadPath — park the payload and prompt
+        setPendingPayload(raw)
+        return
+      }
+      await doImport(raw)
     } catch (err) {
       setFeedback({ type: 'err', msg: err instanceof Error ? err.message : 'Invalid file' })
     }
   }
 
+  async function handleDrop(e: DragEvent<HTMLDivElement>) {
+    e.preventDefault()
+    setIsDragging(false)
+    const file = e.dataTransfer.files[0]
+    if (!file) return
+    await ingestFile(file)
+  }
+
   async function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
     if (!file) return
-    setFeedback(null)
-    try {
-      const raw = await readFileAsJson(file)
-      await processPayload(raw)
-    } catch (err) {
-      setFeedback({ type: 'err', msg: err instanceof Error ? err.message : 'Invalid file' })
-    }
-    // Reset input so the same file can be re-selected
+    await ingestFile(file)
     e.target.value = ''
   }
 
@@ -426,6 +458,50 @@ function DragImportZone({
         >
           {feedback.msg}
         </Caption1>
+      )}
+
+      {/* Squad path prompt — shown after a project file is dropped */}
+      {pendingPayload !== null && activeKind === 'project' && (
+        <div style={{
+          margin: `${tokens.spacingVerticalS} ${tokens.spacingHorizontalXXL} 0`,
+          padding: `${tokens.spacingVerticalM} ${tokens.spacingHorizontalM}`,
+          background: tokens.colorNeutralBackground2,
+          border: `1px solid ${tokens.colorNeutralStroke2}`,
+          borderRadius: tokens.borderRadiusMedium,
+          display: 'flex',
+          flexDirection: 'column',
+          gap: tokens.spacingVerticalS,
+        }}>
+          <Field
+            label="Squad directory path"
+            required
+            hint="Absolute path on disk where the new project's .squad/ folder will live."
+          >
+            <Input
+              value={squadPathInput}
+              onChange={(_, d) => setSquadPathInput(d.value)}
+              placeholder="/home/you/projects/my-new-project/.squad"
+              autoFocus
+            />
+          </Field>
+          <div style={{ display: 'flex', gap: tokens.spacingHorizontalS }}>
+            <Button
+              appearance="primary"
+              size="small"
+              disabled={!squadPathInput.trim() || importProject.isPending}
+              onClick={() => void doImport(pendingPayload, squadPathInput.trim())}
+            >
+              {importProject.isPending ? 'Importing…' : 'Import project'}
+            </Button>
+            <Button
+              appearance="subtle"
+              size="small"
+              onClick={() => { setPendingPayload(null); setSquadPathInput('') }}
+            >
+              Cancel
+            </Button>
+          </div>
+        </div>
       )}
     </div>
   )

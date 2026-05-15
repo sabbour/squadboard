@@ -355,23 +355,29 @@ function PortabilitySection({ projectId, projectName }: { projectId: string; pro
   const importProject = useImportProject()
   const saveAsTemplate = useSaveProjectAsTemplate(projectId)
   const [showSaveDialog, setShowSaveDialog] = useState(false)
+  const [showImportDialog, setShowImportDialog] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
   const [saveDone, setSaveDone] = useState(false)
   const [importFeedback, setImportFeedback] = useState<string | null>(null)
+  // Import dialog state
+  const [importSquadPath, setImportSquadPath] = useState('')
+  const [importFile, setImportFile] = useState<File | null>(null)
+  const [importError, setImportError] = useState<string | null>(null)
   const importFileRef = useRef<HTMLInputElement>(null)
 
-  async function handleImportFile(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0]
-    if (!file) return
-    setImportFeedback(null)
+  async function handleImport() {
+    if (!importFile || !importSquadPath.trim()) return
+    setImportError(null)
     try {
-      const payload = await readFileAsJson(file)
-      const result = await importProject.mutateAsync({ payload })
-      setImportFeedback(`Project "${result.project.name}" imported successfully.`)
+      const payload = await readFileAsJson(importFile)
+      const result = await importProject.mutateAsync({ payload, squadPath: importSquadPath.trim() })
+      setImportFeedback(`Project "${result.name}" imported successfully.`)
+      setShowImportDialog(false)
+      setImportFile(null)
+      setImportSquadPath('')
     } catch (err) {
-      setImportFeedback(err instanceof Error ? err.message : 'Import failed')
+      setImportError(err instanceof Error ? err.message : 'Import failed')
     }
-    e.target.value = ''
   }
 
   async function handleSaveTemplate(name: string, description: string) {
@@ -437,19 +443,11 @@ function PortabilitySection({ projectId, projectName }: { projectId: string; pro
           </Caption1>
         </div>
         <button
-          style={{ ...btnStyle, opacity: importProject.isPending ? 0.6 : 1, cursor: importProject.isPending ? 'not-allowed' : 'pointer' }}
-          disabled={importProject.isPending}
-          onClick={() => importFileRef.current?.click()}
+          style={btnStyle}
+          onClick={() => { setImportError(null); setShowImportDialog(true) }}
         >
-          {importProject.isPending ? 'Importing…' : '↑ Import'}
+          ↑ Import
         </button>
-        <input
-          ref={importFileRef}
-          type="file"
-          accept=".json,application/json"
-          style={{ display: 'none' }}
-          onChange={(e) => void handleImportFile(e)}
-        />
       </div>
 
       {/* Save as template */}
@@ -478,6 +476,67 @@ function PortabilitySection({ projectId, projectName }: { projectId: string; pro
         >
           {importFeedback}
         </Caption1>
+      )}
+
+      {/* Import project dialog — collects squadPath + JSON file */}
+      {showImportDialog && (
+        <Dialog open onOpenChange={(_, d) => { if (!d.open) setShowImportDialog(false) }}>
+          <DialogSurface style={{ maxWidth: 480 }}>
+            <DialogBody>
+              <DialogTitle>Import project</DialogTitle>
+              <DialogContent style={{ display: 'flex', flexDirection: 'column', gap: tokens.spacingVerticalM }}>
+                <Field
+                  label="Squad directory path"
+                  required
+                  hint="Absolute path on disk where the new project's .squad/ folder will live."
+                >
+                  <Input
+                    value={importSquadPath}
+                    onChange={(_, d) => setImportSquadPath(d.value)}
+                    placeholder="/home/you/projects/my-new-app/.squad"
+                    autoFocus
+                  />
+                </Field>
+                <Field label="Project JSON file" required>
+                  <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                    <Button
+                      appearance="outline"
+                      size="small"
+                      onClick={() => importFileRef.current?.click()}
+                    >
+                      {importFile ? importFile.name : 'Choose file…'}
+                    </Button>
+                    {importFile && (
+                      <Caption1 style={{ color: tokens.colorNeutralForeground3 }}>
+                        {(importFile.size / 1024).toFixed(1)} KB
+                      </Caption1>
+                    )}
+                    <input
+                      ref={importFileRef}
+                      type="file"
+                      accept=".json,application/json"
+                      style={{ display: 'none' }}
+                      onChange={(e) => { setImportFile(e.target.files?.[0] ?? null); e.target.value = '' }}
+                    />
+                  </div>
+                </Field>
+                {importError && (
+                  <Caption1 style={{ color: tokens.colorPaletteRedForeground1 }}>{importError}</Caption1>
+                )}
+              </DialogContent>
+              <DialogActions>
+                <Button appearance="secondary" onClick={() => setShowImportDialog(false)}>Cancel</Button>
+                <Button
+                  appearance="primary"
+                  disabled={!importFile || !importSquadPath.trim() || importProject.isPending}
+                  onClick={() => void handleImport()}
+                >
+                  {importProject.isPending ? 'Importing…' : 'Import'}
+                </Button>
+              </DialogActions>
+            </DialogBody>
+          </DialogSurface>
+        </Dialog>
       )}
 
       <SaveProjectAsTemplateDialog

@@ -102,14 +102,19 @@ function CreateFromTemplateModal({
   const instantiate = useInstantiateProjectTemplate()
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [name, setName] = useState('')
+  const [squadPath, setSquadPath] = useState('')
   const [error, setError] = useState<string | null>(null)
 
   async function handleCreate() {
-    if (!selectedId || !name.trim()) return
+    if (!selectedId || !name.trim() || !squadPath.trim()) return
     setError(null)
     try {
-      const result = await instantiate.mutateAsync({ templateId: selectedId, name: name.trim() })
-      onCreated(result.project.id)
+      const result = await instantiate.mutateAsync({
+        templateId: selectedId,
+        name: name.trim(),
+        squadPath: squadPath.trim(),
+      })
+      onCreated(result.id)
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Failed to create project')
     }
@@ -134,7 +139,7 @@ function CreateFromTemplateModal({
             )}
             {!isLoading && templates.length > 0 && (
               <>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: '240px', overflowY: 'auto' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: '200px', overflowY: 'auto' }}>
                   {templates.map((tpl) => (
                     <button
                       key={tpl.id}
@@ -169,9 +174,24 @@ function CreateFromTemplateModal({
                     placeholder="my-new-project"
                     value={name}
                     onChange={(e) => setName(e.target.value)}
+                    style={inputStyle}
+                  />
+                </div>
+                <div>
+                  <label style={{ fontSize: '12px', color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>
+                    Squad directory path <span style={{ color: 'var(--danger)' }}>*</span>
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="/home/you/projects/my-new-project/.squad"
+                    value={squadPath}
+                    onChange={(e) => setSquadPath(e.target.value)}
                     onKeyDown={(e) => { if (e.key === 'Enter') void handleCreate() }}
                     style={inputStyle}
                   />
+                  <span style={{ fontSize: '11px', color: 'var(--text-muted)', display: 'block', marginTop: '4px' }}>
+                    Absolute path on disk where the new project's .squad/ folder will live.
+                  </span>
                 </div>
               </>
             )}
@@ -181,7 +201,7 @@ function CreateFromTemplateModal({
             <Button appearance="secondary" onClick={onClose}>Cancel</Button>
             <Button
               appearance="primary"
-              disabled={!selectedId || !name.trim() || instantiate.isPending}
+              disabled={!selectedId || !name.trim() || !squadPath.trim() || instantiate.isPending}
               onClick={() => void handleCreate()}
             >
               {instantiate.isPending ? 'Creating…' : 'Create project'}
