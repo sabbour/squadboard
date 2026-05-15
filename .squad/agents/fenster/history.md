@@ -43,3 +43,22 @@
 ## Recent team activity
 
 **2026-05-15 Round 2 shipped:** Hockney (attachments backend), McManus (multi-modal frontend), Verbal (Consult chat fix), Fenster (typography sweep), Kobayashi (Ceremony Conjure UX), Keyser (layout rebalance). See `.squad/decisions.md` for Fluent2 canon, image bytea architecture, create-page pattern, react-markdown rendering.
+
+---
+
+## 2026-05-15 — Project name relocated to top header
+
+**Task:** The project name was hidden/clipped in the sidebar after the recent sidebar overhaul. Relocated it to the global top header bar so it is persistently visible.
+
+**Changes made:**
+- `packages/client/src/components/Layout.tsx` — the only file modified.
+  - Added `ChevronDown16Regular` icon import.
+  - Replaced ad-hoc `projectName` + `justifyContent: flex-end` styles with Fluent2-compliant `topBarLeft`, `topBarRight`, and `projectSwitcher` styles using `tokens.fontWeightSemibold`, `tokens.spacingHorizontalS`, and slot targeting (`'& .fui-Button__text'`) for truncation.
+  - Removed sidebar `projectName` div — it was the clipping culprit and was redundant.
+  - Restructured `topBar` to `space-between` layout: project switcher on the left, Inbox/Consult/Capture on the right.
+  - Project switcher is a `Button appearance="subtle"` with `ChevronDown16Regular` (after); clicking navigates to `/` (ProjectPicker page).
+  - Graceful empty state: switcher hidden when `projectName === null`.
+
+**Decision doc:** `.squad/decisions/inbox/fenster-project-name-header.md`
+
+**TypeScript:** `npx tsc --noEmit` passed clean.

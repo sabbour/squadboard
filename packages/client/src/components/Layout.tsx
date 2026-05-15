@@ -31,6 +31,7 @@ import {
   Eye24Regular,
   Heart24Regular,
   HeartPulse24Regular,
+  ChevronDown16Regular,
 } from '@fluentui/react-icons'
 import type { OnNavItemSelectData } from '@fluentui/react-components'
 import CaptureModal from './inbox/CaptureModal.tsx'
@@ -63,24 +64,33 @@ const useStyles = makeStyles({
       height: '100%',
     },
   },
-  projectName: {
-    padding: '4px 12px 8px',
-    fontWeight: tokens.fontWeightBold,
-    fontSize: '14px',
-    color: tokens.colorNeutralForeground1,
-    overflow: 'hidden',
-    textOverflow: 'ellipsis',
-    whiteSpace: 'nowrap',
-  },
   topBar: {
     display: 'flex',
     alignItems: 'center',
-    justifyContent: 'flex-end',
-    gap: '8px',
+    justifyContent: 'space-between',
     padding: '8px 16px',
     borderBottom: `1px solid ${tokens.colorNeutralStroke1}`,
     background: tokens.colorNeutralBackground1,
     flexShrink: 0,
+  },
+  topBarLeft: {
+    display: 'flex',
+    alignItems: 'center',
+    minWidth: 0,
+  },
+  topBarRight: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: tokens.spacingHorizontalS,
+  },
+  projectSwitcher: {
+    maxWidth: '240px',
+    fontWeight: tokens.fontWeightSemibold,
+    '& .fui-Button__text': {
+      overflow: 'hidden',
+      textOverflow: 'ellipsis',
+      whiteSpace: 'nowrap',
+    },
   },
 })
 
@@ -239,9 +249,6 @@ export default function Layout() {
 
           {id && (
             <>
-              {projectName && (
-                <div className={styles.projectName}>{projectName}</div>
-              )}
               {PROJECT_NAV_GROUPS.map((group) => (
                 <div key={group.heading}>
                   <NavSectionHeader>{group.heading}</NavSectionHeader>
@@ -268,30 +275,46 @@ export default function Layout() {
       {/* Main content */}
       <main className={styles.main}>
         <div className={styles.topBar}>
-          <Button
-            appearance="subtle"
-            icon={<Mail20Regular />}
-            onClick={() => navigate(id ? `/projects/${id}/inbox` : '/inbox')}
-            title="Inbox"
-          >
-            Inbox
-          </Button>
-          <Button
-            appearance="subtle"
-            icon={<ChatHelp20Regular />}
-            onClick={() => navigate(id ? `/projects/${id}/consult/new` : '/consult/new')}
-            title="Consult (press ?)"
-          >
-            Consult
-          </Button>
-          <Button
-            appearance="primary"
-            icon={<Add20Regular />}
-            onClick={() => setCaptureOpen(true)}
-            title="Quick capture (press c)"
-          >
-            Capture
-          </Button>
+          <div className={styles.topBarLeft}>
+            {projectName && (
+              <Button
+                appearance="subtle"
+                iconPosition="after"
+                icon={<ChevronDown16Regular />}
+                className={styles.projectSwitcher}
+                onClick={() => void navigate('/')}
+                title="Switch project"
+              >
+                {projectName}
+              </Button>
+            )}
+          </div>
+          <div className={styles.topBarRight}>
+            <Button
+              appearance="subtle"
+              icon={<Mail20Regular />}
+              onClick={() => navigate(id ? `/projects/${id}/inbox` : '/inbox')}
+              title="Inbox"
+            >
+              Inbox
+            </Button>
+            <Button
+              appearance="subtle"
+              icon={<ChatHelp20Regular />}
+              onClick={() => navigate(id ? `/projects/${id}/consult/new` : '/consult/new')}
+              title="Consult (press ?)"
+            >
+              Consult
+            </Button>
+            <Button
+              appearance="primary"
+              icon={<Add20Regular />}
+              onClick={() => setCaptureOpen(true)}
+              title="Quick capture (press c)"
+            >
+              Capture
+            </Button>
+          </div>
         </div>
         <Outlet />
       </main>
