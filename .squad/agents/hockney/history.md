@@ -37,112 +37,9 @@
 - **Demo 14** — MCP + slash command + idempotent create
 - **Demo 15** — GitHub sync (pushes, PRs, check runs, webhooks)
 
-## Learnings
+## Recent Learnings (2026-05-15)
 
-<!-- Append learnings below -->
-
-### 2026-05-14 — Demo 1 backend scaffold
-Demo 1 backend scaffold: Express v5 + embedded-postgres + Drizzle ORM. Monorepo with pnpm workspaces. packages/server (backend), packages/cli (npx entry). Schema: projects + settings tables. Server port 3000, health endpoint, projects CRUD stubs. Wired Kobayashi's squad discovery routes to real DB (upsert by path). CLI uses waitForPort (TCP probe, 15s timeout) before opening browser — avoids brittle sleep().
-
-### 2026-05-14 — Demo 2 backend: issues/comments/labels CRUD API
-Demo 2 backend: issues/comments/labels CRUD API. Drizzle schema additions: issues (with status enum + position), comments, labels, issue_labels. Bulk action endpoint. Move endpoint handles position recalculation.
-
-### 2026-05-14 — Demo 5 routing tier 1
-Demo 5 routing tier 1: router.ts loads rules from .squad/routing.md via Kobayashi's parseRoutingFile. Resolves by label→keyword→catchall priority. createRoutedRun inserts issue_runs with kind='agent_run' (Invariant 1: routing desugars to agent_run). Auto-routes on issue create. Hot-reload is restart-only (PRD non-goal).
-
-### 2026-05-14 — Demo 5 routing tier 1 deepdive
-Demo 5 engine completion: routing_rules table caches parsed rules (3-table format: label, keyword, catchall). POST /reload refreshes cache. GET /rules surfaces active rules. POST /test validates match logic. resolveRoute matches label→keyword→catchall priority, returns null for escalation tiers. createRoutedRun inserts issue_run with kind='agent_run' + routing context. Auto-route hook on POST /issues applies resolveRoute (non-fatal on miss).
-
-### 2026-05-14 — Demo 6 workflow engine
-Demo 6 workflow engine: YAML parser (js-yaml), WorkflowDefinition (route/agent_run/approve steps), output schema validation (ajv, Invariant 4), workflow-runner (advanceWorkflowRun, createWorkflowRun). pinnedAgentRevisions snapshotted per step at step start. workflowVersions are immutable (each update creates new version). Approval stub for Demo 9.
-
-## Learnings
-
-### 2026-05-14 — GitHub App auth fields (github-app-schema todo)
-
-- Added 4 new columns to the `projects` table in `schema.ts`: `githubAuthType`, `githubAppId`, `githubAppInstallationId`, `githubAppPrivateKey`.
-- Corresponding `ALTER TABLE projects ADD COLUMN IF NOT EXISTS` migrations appended to `bootstrapSchema()` in `db/index.ts`, placed after the Demo 15 GitHub Sync block and before the `github_sync_log` CREATE TABLE.
-- `githubAuthType` is nullable TEXT (not an enum) so no `DO $$ BEGIN ALTER TYPE ... END $$` dance is needed — 'pat' vs 'app' is validated at the app layer, not the DB layer.
-- `githubAppPrivateKey` is stored plaintext TEXT in the hacking phase; a secrets manager integration (Vault, AWS SM) is deferred to prod hardening.
-- No routes, API handlers, or client files were touched — schema-only step per task scope.
-
-### 2026-05-14 — GitHub App schema integration (backlog batch 1)
-
-- Schema additions merged into backlog batch 1 orchestration. Decision recorded to decisions.md. Integrated into team session log. Plaintext PEM storage acceptable for local dev; secrets manager path documented for production. Backward-compatible: existing NULL auth_type rows treated as 'pat'. API client logic is follow-up task (future).
-
-### 2026-05-14 — GitHub App JWT auth in GitHubClient (github-app-client todo)
-
-- Added `jose` (^6.0.0, RS256 JWT signing, pure ESM) to `packages/server/package.json`.
-- Module-level `installationTokenCache: Map<string, {token, expiresAt}>` — keyed by `${appId}:${installationId}`, invalidated 60 s before `expires_at`.
-- `GitHubClient.fromPat(token, owner, repo)` — static factory, wraps existing constructor (zero behavior change for existing callers).
-- `GitHubClient.fromApp(appId, installationId, privateKey, owner, repo)` — async factory: generates App JWT via `generateAppJwt`, POSTs to `/app/installations/{id}/access_tokens`, caches result, returns client with installation token.
-- `generateAppJwt` uses `importPKCS8` + `SignJWT` from `jose`; sets `iat=now-60, exp=now+600, iss=appId` per GitHub spec.
-- `refreshInstallationToken` is the canonical fetch path; `getInstallationToken` is the cache-check gateway (both private static).
-- Existing `new GitHubClient(token, owner, repo)` constructor kept — all current callers (sync.ts, github-sync route) work unchanged.
-- jose RS256 JWT: `importPKCS8` expects PEM string (PKCS#8 format, "-----BEGIN PRIVATE KEY-----"). GitHub App private keys downloaded from GitHub UI are PKCS#1 ("-----BEGIN RSA PRIVATE KEY-----") — downstream code must convert with `openssl pkcs8 -topk8 -nocrypt` if needed. Document this in the API route that accepts the private key.
-
-### 2026-05-14 — GitHub sync API + README for GitHub App auth (github-app-api todo)
-
-- `PUT /api/projects/:id/github` now accepts two shapes: `{ authType:'pat', token, owner, repo }` and `{ authType:'app', appId, installationId, privateKey, owner, repo }`. Missing `authType` defaults to `'pat'` for backward compat. Stores into `githubAuthType`, `githubToken`, `githubAppId`, `githubAppInstallationId`, `githubAppPrivateKey` columns; nullifies unused set on each save.
-- `GET /api/projects/:id/github` returns `authType`; App auth returns `appId` + `installationId` but never `privateKey`; PAT auth returns redacted token (last 4 chars visible).
-- `POST /api/projects/:id/github/sync` checks auth-type-appropriate config fields and calls `GitHubSync.fromProject(id, project)`.
-- `GitHubSync` constructor changed from `(projectId, token, owner, repo)` to `(projectId, client: GitHubClient)`. Static async `fromProject()` factory picks `fromPat` vs `fromApp` based on `githubAuthType`.
-- `startSyncLoop` signature simplified to `(projectId, intervalMs?)` — reads full project row from DB each tick so App installation token cache can refresh transparently.
-- `client.ts` had duplicate interface+class declarations from a prior session's botched merge; removed the dead duplicate block (lines 369–592).
-- Pre-existing TS2742 router type errors (across all route files) and `drizzle.config.ts` rootDir error remain unfixed — they are build-baseline failures, not regressions from this task.
-- README GitHub Sync section expanded: PAT + App instructions, PKCS#8 conversion command, security note on plaintext key storage, GET response field table.
-
-### 2026-05-14 — Remove project API + create/init project API
-
-- `DELETE /api/projects/:id` added to `routes/projects.ts`. Uses Drizzle `.delete().returning()` to detect 0-row case for 404. Returns 204 No Content on success. Filesystem untouched — DB-only removal.
-- `POST /api/squad/init` added to `routes/squad.ts`. Validates target dir exists (fs.stat), rejects if `.squad/` already present (409), scaffolds team.md / decisions.md / 4 empty dirs with .gitkeep, then upserts into projects table via shared `registerProject` helper and calls `linkProjectToSquad`.
-- `POST /api/squad/create` added to `routes/squad.ts`. Validates parentPath exists, rejects if project subdir already present (409), creates project dir, delegates to same scaffold + register helpers.
-- `scaffoldSquad()` and `registerProject()` are module-private helpers in squad.ts — no new service file needed; scope is route-level only.
-- Pre-existing TS2742 build errors (all route files) remain as baseline — not introduced by this task.
-
-### 2026-05-14 — Fix all TypeScript errors in packages/server
-
-- **Root cause of TS2769 "no overload matches" in routes**: NOT Express v5 handler typing. It was Drizzle ORM's `eq()` receiving `string | string[]` from `req.params`. Express v5 changed `ParamsDictionary` from `[key: string]: string` to `[key: string]: string | string[]`, causing cascading failures wherever params were passed to Drizzle.
-- **Fix pattern**: Cast `req.params` to `Record<string, string>` at each destructuring point — `const { projectId } = req.params as Record<string, string>`. One cast per handler, covers all subsequent uses. Minimal, no logic changes.
-- **Ajv v8 + NodeNext**: `import Ajv from 'ajv'` fails with NodeNext module resolution because the default export resolves to the module namespace (no construct signatures). Fix: use named import `import { Ajv } from 'ajv'` — Ajv v8 exports the class as both default and named export.
-- **`Parameters<typeof eq>[1]` antipattern**: When used with an enum column in Drizzle, this resolves to `unknown` because the overloaded `eq` signatures don't narrow to a simple type parameter. Fix: cast directly to the explicit enum union `'backlog' | 'todo' | 'in_progress' | 'in_review' | 'done'`.
-- **Dirent type mismatch**: `Awaited<ReturnType<typeof fs.readdir>>` picks up the wrong overload (`Dirent<NonSharedBuffer>[]`) when `withFileTypes: true` is used. Fix: declare as `Dirent[]` with explicit `import type { Dirent } from 'node:fs'`.
-- **GitHubSync constructor drift**: `sync-hook.ts` was still calling the old 4-arg constructor `(projectId, token, owner, repo)` after `sync.ts` refactored it to `(projectId, client: GitHubClient)`. Fix: construct `GitHubClient` inline, pass to `GitHubSync`.
-- **TS2352 double-cast**: `(err as { status: number })` on an `Error`-narrowed value fails because `Error` and `{ status: number }` don't sufficiently overlap. Fix: go through `unknown` first: `(err as unknown as { status: number })`.
-- **Pre-existing TS2742**: All route files have `error TS2742` for inferred Router types — these are baseline failures from the pnpm symlink path issue and are explicitly excluded from fixes.
-
-### 2026-05-15 — Fix "7 hours ago" UTC timestamp bug
-
-## Learnings
-
-**Root cause**: Drizzle ORM's `mapFromDriverValue` for `timestamp()` (without `withTimezone: true`) appends `"+0000"` to the raw Postgres string before passing to `new Date()`. When Postgres session TZ is PDT (UTC-7) and the raw pg string is `"2026-05-15 05:22:15-07"`, Drizzle produces `new Date("2026-05-15 05:22:15-07+0000")` — a malformed date where JS ignores the `-07` and reads `05:22 UTC` instead of `12:22 UTC`. Result: every freshly-created item shows "7 hours ago" for PDT users.
-
-**Fix**: Add `{ withTimezone: true }` to every `timestamp()` column in `schema.ts`. With `withTimezone: true`, Drizzle's `mapFromDriverValue` passes the raw string directly to `new Date(value)`, which correctly parses the `-07` offset → 12:22 UTC. ✓
-
-**`AT TIME ZONE 'UTC'` migration trick**: For existing `TIMESTAMP WITHOUT TIME ZONE` columns holding UTC data, use `ALTER TABLE t ALTER COLUMN c TYPE TIMESTAMPTZ USING c AT TIME ZONE 'UTC'` to reinterpret the stored moments correctly. Not needed here since the bootstrap already created all columns as `TIMESTAMPTZ`.
-
-**Rule**: ALL new timestamp columns in `db/schema.ts` MUST use `timestamp({ withTimezone: true })`. Plain `timestamp()` is **never** correct — even if the DB column is `TIMESTAMPTZ`, Drizzle's `mapFromDriverValue` uses the schema declaration, not the actual Postgres OID, to decide whether to append `+0000`.
-
-**Bonus fix**: `GET /api/projects/:projectId/routing/log` was returning `decidedAt` in the JSON but the client's `RoutingLogEntry` expected `timestamp`. Fixed by mapping `{ ...r, timestamp: r.decidedAt }` in the route response. The Routing Log "Time" column was silently showing `—` for all entries.
-
-## Recent team activity
-
-New decisions merged to `.squad/decisions.md`:
-- Demo 9 open question #2: `request_changes_policy` default is `'first'` (Hockney)
-- Demo 12 open question #6: Optimistic concurrency for concurrent issue edits (Verbal)
-- Demo 15 open question #8: GitHub issue mirroring OFF by default, opt-in per project (Hockney)
-
-See `.squad/decisions.md` for full details.
-
-Multi-agent fanout session completed 2026-05-15T12:35:00Z:
-- 5 agents shipped (2 keyser rounds, mcmanus, hockney, verbal)
-- 5 commits landed (42c120a0, d74c9622, d7cc2ada, 4d9fb813, base a97e2bce)
-- 2 agents in flight (fenster, kobayashi)
-
-Session log: `.squad/log/2026-05-15T12:35:00Z-squad-fanout.md`
-
-
-## Learnings — 2026-05-15: Issue Attachments (image upload + byte-serve)
+### Bytea + Image Attachment Design
 
 **Bytea pattern in Drizzle ORM:**  
 Drizzle pg-core does not ship a built-in `bytea` helper; you add it via `customType` from `drizzle-orm/pg-core`. The minimal definition is:
@@ -158,3 +55,11 @@ The pg driver returns bytea columns as Node.js `Buffer` objects automatically �
 
 **Staging discipline:**  
 On a previous commit (column-meta work) I accidentally staged untracked scratch files by using `git add packages/` instead of listing paths explicitly. Correct discipline: `git add -- <path1> <path2> ...` for each intentional file, then `git status` to confirm only those files are staged before committing. Never use `git add .` or broad directory globs in a repo with `.squad/` log files and editor artifacts.
+
+## Team Activity Log
+
+**2026-05-15 Round 2 shipped:** Hockney (attachments backend), McManus (multi-modal frontend), Verbal (Consult chat fix), Fenster (typography sweep), Kobayashi (Ceremony Conjure UX), Keyser (layout rebalance). See `.squad/decisions.md` for Fluent2 canon, image bytea architecture, create-page pattern, react-markdown rendering.
+
+## Archive
+
+For older learnings (Demo 1–15 architecture notes, GitHub App auth, TS fixes, UTC bug), see `history-archive.md`.

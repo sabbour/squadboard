@@ -39,3 +39,7 @@
 - **var(--*) coexistence:** `var(--surface)`, `var(--border)`, `var(--bg)`, `var(--accent)` are layout/structural colors that predate Fluent2 tokens — they're fine to keep. Only text-color `var(--text)` / `var(--text-muted)` should be migrated to `tokens.colorNeutralForeground*`.
 
 - **Canon artifact:** `.squad/decisions/inbox/fenster-typography-canon.md` — full table of typography components, spacing tokens, color tokens, and global CSS guidance for this project.
+
+## Recent team activity
+
+**2026-05-15 Round 2 shipped:** Hockney (attachments backend), McManus (multi-modal frontend), Verbal (Consult chat fix), Fenster (typography sweep), Kobayashi (Ceremony Conjure UX), Keyser (layout rebalance). See `.squad/decisions.md` for Fluent2 canon, image bytea architecture, create-page pattern, react-markdown rendering.

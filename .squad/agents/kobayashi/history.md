@@ -121,3 +121,7 @@ Key learnings:
 - Field helper `<Caption1>` text added (description field, kind field, cron expression).
 
 **New-user vs power-user split:** keyed on `ceremonyId` route param being absent (`isNew = !ceremonyId || ceremonyId === 'new'`). Conjure panel, PageHeader, intro card, and name field above the body are all gated on `isNew`. The edit-mode header (name input + badges + run/validate buttons) is unchanged.
+
+## Recent team activity
+
+**2026-05-15 Round 2 shipped:** Hockney (attachments backend), McManus (multi-modal frontend), Verbal (Consult chat fix), Fenster (typography sweep), Kobayashi (Ceremony Conjure UX), Keyser (layout rebalance). See `.squad/decisions.md` for Fluent2 canon, image bytea architecture, create-page pattern, react-markdown rendering.

@@ -258,3 +258,60 @@ Existing roles unchanged: McManus (Lead Architect), Keyser (Frontend Dev), Fenst
 **By:** Ahmed (via Copilot)
 **What:** Added squadboard-chore extension for housekeeping tasks that aren't bugs or features, with no docs requirement.
 **Why:** Productize the chore workflow alongside add-feature and report-bug.
+
+### 2026-05-15: Fluent2 typography + spacing consistency canon
+**By:** Fenster (UX Designer)
+**Status:** Ratified — apply app-wide
+
+Reference shape: `pages/PageHeader.tsx` uses `<Title2>` / `<Subtitle1>` for page title, `<Caption1>` for eyebrow/description, `tokens.*` for all spacing.
+
+Typography map: page title → `<Subtitle1 as="h1">`, section heading → `<Caption1>` uppercase+semibold, card title → `<Subtitle2>`, body → `<Body1Strong>` (bold labels) or `<Body1>` (running text), secondary metadata → `<Caption1>`, muted labels → `<Caption1>` with `colorNeutralForeground3`.
+
+Spacing: page padding → `spacingVerticalXXL` (24px) + `spacingHorizontalXXL`, section gap → `spacingVerticalXXL`, list row gap → `spacingVerticalS` (8px), card row padding → `spacingVerticalM` (12px) × `spacingHorizontalL` (16px), icon-to-text → `spacingHorizontalXS` (4px).
+
+Color: primary text → `colorNeutralForeground1`, secondary → `colorNeutralForeground2`, muted → `colorNeutralForeground3`, placeholder → `colorNeutralForeground4`. Layout colors remain `var(--surface)`, `var(--border)`, `var(--bg)`, `var(--accent)`, `var(--danger)`, `var(--success)`.
+
+Font-weight: 400 → `fontWeightRegular`, 500 → `fontWeightMedium`, 600 → `fontWeightSemibold`, 700 → `fontWeightBold`. Prefer `<*Strong>` variant.
+
+Global CSS: kept `box-sizing: border-box`, `margin/padding: 0` on `*`, `html/body/#root { height: 100% }`, `-webkit-font-smoothing`, `a { color: var(--accent) }`, `button fallbacks`. Removed conflicting rules (body font-family/size delegated to FluentProvider).
+
+Exclusions: `CeremonyEditor.tsx`, `Consult.tsx` (pre-existing TS errors owned by other workers).
+
+### 2026-05-15: Issue attachments — BYTEA + 5MB cap + multer
+**By:** Hockney (Backend Dev)
+**Status:** Shipped
+
+Chose BYTEA in PostgreSQL (not filesystem) for transactional atomicity, no orphaned files, zero new infrastructure, single backup/restore story. 5 MB cap (enforced at multer stream level + service layer guard). Allowed MIME types: `image/{png,jpeg,gif,webp,svg+xml}` (markdown-embeddable images, SVG included for diagrams). Error codes: `image_too_large`, `unsupported_type`.
+
+URL shape: `/api/projects/:projectId/issues/:issueId/attachments/:attachmentId` (relative in JSON responses, writable into markdown as `![alt](url)`). Attachment IDs are UUIDs; delete+re-upload → new ID, so `Cache-Control: public, max-age=31536000, immutable` is safe.
+
+Cascade: `issue_attachments.issue_id` FK has `ON DELETE CASCADE` (hard-delete issue removes all attachments). Issues use soft-delete (`archived=1`) so attachments persist until explicit removal or issue hard-delete.
+
+### 2026-05-15: Standard "create" page pattern — CeremonyEditor lead example
+**By:** Kobayashi (Squad SDK Integrator)
+**Status:** Adopted
+
+Every create page should follow CeremonyEditor's create-mode pattern:
+1. `<PageHeader title="New <artifact>" description="…" />` — canonical header.
+2. Dismissible intro card (Fluent2, `<Body1>` explanation, `<Dismiss16Regular>` button, `localStorage: squadboard.<artifactType>.introDismissed`).
+3. Formulate / Conjure entrypoint at top — `<FormulatePanel>` calls generate/formulate endpoint, populates fields, switches to review tab.
+4. Labeled pickers with descriptions — `<RadioGroup>` with `label=${technicalName} — ${humanDescription}` instead of plain `<Dropdown>`.
+5. Sensible defaults on create — pre-populate most common values so user can click "Create" immediately.
+
+Edit mode: suppress PageHeader, intro card, Formulate panel. Keep compact header with badges, validate, run, save buttons.
+
+Apply to: New skill, New tool, New MCP server, New agent (HireAgent), New team (HireTeam) — add intro card + PageHeader where missing.
+
+### 2026-05-15: Multi-modal issue bodies — react-markdown + code/image toolbar
+**By:** McManus (Lead Architect)
+**Status:** Shipped
+
+Markdown library: `react-markdown@10` + `remark-gfm@4` + `rehype-highlight` (new). Base renderer already in use, GFM tables/strikethrough/task lists free from remark-gfm (already installed), rehype-highlight is de-facto standard with first-party TS types. `highlight.js` installed as peer for CSS themes.
+
+Create-flow image tradeoff: chose **Option A** — disable image uploads in create until issue is saved. `MarkdownBodyEditor` accepts `issueId?: string`; if undefined, Image toolbar button, paste handler, drop handler are disabled. Tooltip: *"Save the issue first to attach images."* Code-block button remains active for keyboard-first users. Option B (optimistic issue creation on first paste/drop) deferred — increases complexity (modal state transition, mid-session issueId bubble-back, orphaned issue recovery).
+
+Image domain whitelist: `IssueBodyMarkdown` overrides `img` component in ReactMarkdown. Images with `src` starting with `/api/projects/` render normally. All other `src` replaced with `[external image redacted]` note (prevents malicious tracking pixels embedded in user-supplied markdown).
+
+Toolbar: `Code24Regular` (fenced code block, wraps selection or inserts empty) + `Image24Regular` (opens `<input type="file" accept="image/*">`). Kept minimal; bold/italic deferred (engineers comfortable with raw markdown syntax).
+
+Future: Option B create-flow uploads, EditIssueModal, attachment delete button in CardDetail thumbnails, lightbox on thumbnail click, bold/italic buttons.
