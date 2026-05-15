@@ -104,3 +104,27 @@
 **Decision doc:** `.squad/decisions/inbox/fenster-ceremony-pages-fluent2.md`
 
 **Status:** COMPLETE — TypeScript clean, two commits landed.
+
+---
+
+## 2026-05-15 — Conjure UX Design Spec
+
+**Task:** Replace Capture with Conjure — a smarter creation flow that classifies user intent and routes to the appropriate entity type.
+
+**Designed:**
+- Single-input → backend classifies → pre-filled per-intent form → routed creation flow
+- 6 intents: project, issue, team, agent, skill, tool
+- Icon: `Sparkle20Regular` (already in use for AI actions)
+- Keyboard shortcut: `Cmd+K` (replaces `c`)
+- Folder rename: `inbox/` → `conjure/`
+- Component renames: `CaptureFab` → `ConjureFab`, `CaptureModal` → `ConjureModal`
+- Fluent2 compliant: `<Dialog>`, `<Input>`, `<Textarea>`, `<Dropdown>`, `<Badge>`, `<MessageBar>`
+- Capture deprecation: Inbox page gets deprecation banner, no data migration needed
+
+**Spec:** `.squad/agents/fenster/conjure-design.md`
+
+**Decision doc:** `.squad/decisions/conjure/fenster-conjure-design.md`
+
+**Commit:** `4d68d06e`
+
+**Status:** DESIGN COMPLETE — ready for Keyser implementation.
