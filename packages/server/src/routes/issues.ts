@@ -2,6 +2,7 @@ import { Router } from 'express';
 import type { Request, Response } from 'express';
 import * as issuesService from '../services/issues.js';
 import type { ColumnStatus } from '../services/issues.js';
+import { formulateIssueDraft } from '../services/issue-formulator.js';
 import { and, eq, sql } from 'drizzle-orm';
 import { getDb, schema } from '../db/index.js';
 import { resolveRoute, createRoutedRun } from '../engine/router.js';
@@ -124,6 +125,29 @@ router.post('/bulk', async (req: Request, res: Response) => {
     res.json(result);
   } catch (err) {
     handleError(res, err);
+  }
+});
+
+// POST /api/projects/:projectId/issues/formulate
+// AI-formulate an issue draft from a brief prose description. Does NOT
+// persist — returns { issue: {...}, modelUsed }.
+router.post('/formulate', async (req: Request, res: Response) => {
+  try {
+    const { projectId } = req.params as Record<string, string>;
+    const { draft } = (req.body ?? {}) as { draft?: string };
+    if (!draft || typeof draft !== 'string') {
+      res.status(400).json({ ok: false, error: '`draft` is required' });
+      return;
+    }
+    const result = await formulateIssueDraft(projectId, draft);
+    res.json({ ok: true, data: result });
+  } catch (err) {
+    const status = (err as Error & { status?: number }).status ?? 500;
+    if (status >= 500) console.error('[issues/formulate] unhandled:', err);
+    res.status(status).json({
+      ok: false,
+      error: err instanceof Error ? err.message : 'Internal server error',
+    });
   }
 });
 

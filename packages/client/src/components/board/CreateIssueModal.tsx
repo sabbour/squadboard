@@ -1,8 +1,14 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { tokens } from '@fluentui/react-components'
-import { useCreateIssue, type ColumnId } from '../../api/issues.ts'
+import {
+  useCreateIssue,
+  useFormulateIssue,
+  type ColumnId,
+  type FormulateModelInfo,
+} from '../../api/issues.ts'
 import { useLabels } from '../../api/labels.ts'
 import LabelBadge from '../LabelBadge.tsx'
+import FormulatePanel from '../formulate/FormulatePanel.tsx'
 
 interface CreateIssueModalProps {
   projectId: string
@@ -26,6 +32,32 @@ export default function CreateIssueModal({ projectId, defaultColumn, onClose }: 
 
   const { data: labels } = useLabels(projectId)
   const createIssue = useCreateIssue(projectId)
+  const formulate = useFormulateIssue(projectId)
+  const [modelUsed, setModelUsed] = useState<FormulateModelInfo | null>(null)
+  const [formulateError, setFormulateError] = useState<string | null>(null)
+
+  // Keep column in sync with defaultColumn changes (e.g., user opens from different column)
+  useEffect(() => { setColumn(defaultColumn) }, [defaultColumn])
+
+  function handleFormulate(draft: string) {
+    formulate.mutate(draft, {
+      onSuccess: (result) => {
+        setTitle(result.issue.title)
+        setBody(result.issue.body)
+        setColumn(result.issue.suggestedColumn)
+        const matched = (result.issue.suggestedLabels ?? []).flatMap((name) => {
+          const found = labels?.find((l) => l.name.toLowerCase() === name.toLowerCase())
+          return found ? [found.id] : []
+        })
+        setSelectedLabelIds(matched)
+        setModelUsed(result.modelUsed)
+        setFormulateError(null)
+      },
+      onError: (err) => {
+        setFormulateError(err.message ?? 'Formulate failed')
+      },
+    })
+  }
 
   function toggleLabel(id: string) {
     setSelectedLabelIds((prev) =>
@@ -91,6 +123,16 @@ export default function CreateIssueModal({ projectId, defaultColumn, onClose }: 
 
         {/* Modal form */}
         <form onSubmit={handleSubmit} style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '14px', overflowY: 'auto' }}>
+          {/* Formulate with AI */}
+          <FormulatePanel
+            placeholder="Describe what you want and we'll draft the issue…"
+            hint="Paste a brief like 'we need OAuth login with Google and GitHub'."
+            isPending={formulate.isPending}
+            errorMessage={formulateError}
+            modelUsed={modelUsed}
+            onFormulate={handleFormulate}
+            compact
+          />
           {/* Title */}
           <div>
             <label style={{ fontSize: '12px', color: tokens.colorNeutralForeground2, display: 'block', marginBottom: '6px' }}>

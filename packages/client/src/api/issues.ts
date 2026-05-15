@@ -110,3 +110,37 @@ export function useBulkAction(projectId: string) {
     },
   })
 }
+
+// ---------------------------------------------------------------------------
+// Formulate (AI-author an issue draft from prose)
+// ---------------------------------------------------------------------------
+
+export interface FormulateModelInfo {
+  model: string
+  via: 'session' | 'agent' | 'project' | 'fallback'
+}
+
+export interface FormulatedIssueDraft {
+  title: string
+  body: string
+  suggestedColumn: ColumnId
+  suggestedLabels: string[]
+  rationale: string
+}
+
+export interface FormulateIssueResult {
+  issue: FormulatedIssueDraft
+  modelUsed: FormulateModelInfo
+}
+
+type Envelope<T> = { ok: boolean; data: T }
+
+export function useFormulateIssue(projectId: string) {
+  return useMutation<FormulateIssueResult, Error, string>({
+    mutationFn: (draft) =>
+      apiFetch<Envelope<FormulateIssueResult>>(
+        `/api/projects/${projectId}/issues/formulate`,
+        { method: 'POST', body: JSON.stringify({ draft }) },
+      ).then((r) => r.data),
+  })
+}
