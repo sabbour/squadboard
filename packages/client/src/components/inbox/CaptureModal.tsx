@@ -33,8 +33,10 @@ import {
   type FormulateModelInfo,
 } from '../../api/inbox.ts'
 import type { ColumnId } from '../../api/issues.ts'
+import { useColumnMeta } from '../../api/columns.ts'
 
-const COLUMNS: { id: ColumnId; label: string }[] = [
+// Fallback used when no project is selected (global "+ Capture" button).
+const FALLBACK_COLUMNS: { id: ColumnId; label: string }[] = [
   { id: 'backlog', label: 'Backlog' },
   { id: 'todo', label: 'Todo' },
   { id: 'in_progress', label: 'In Progress' },
@@ -85,6 +87,30 @@ export default function CaptureModal({
   const discard = useDiscardInboxItem(itemId)
   const { data: projects = [] } = useProjects()
   const { data: projectLabels = [] } = useLabels(projectId)
+  const { data: columnMeta = [] } = useColumnMeta(projectId)
+
+  // Effective column list: project's dynamic columns when a project is selected,
+  // otherwise the static fallback (for the global "+ Capture" button).
+  const columnOptions: { id: string; label: string }[] =
+    columnMeta.length > 0
+      ? columnMeta.map((c) => ({ id: c.columnId, label: c.label }))
+      : FALLBACK_COLUMNS
+
+  // When the user picks a different project, reset column to the project default (or first).
+  const prevProjectIdRef = useRef<string>('')
+  useEffect(() => {
+    if (prevProjectIdRef.current === projectId) return
+    prevProjectIdRef.current = projectId
+    if (lockedColumn) return
+    if (!projectId) {
+      setColumn('backlog')
+      return
+    }
+    if (columnMeta.length > 0) {
+      const defaultCol = columnMeta.find((c) => c.isDefault) ?? columnMeta[0]
+      setColumn(defaultCol.columnId)
+    }
+  }, [projectId, columnMeta, lockedColumn])
 
   // Reset whenever the modal opens.
   useEffect(() => {
@@ -547,7 +573,7 @@ export default function CaptureModal({
                     onChange={(e) => setColumn(e.target.value as ColumnId)}
                     style={{ ...fieldInput, cursor: lockedColumn ? 'not-allowed' : 'pointer' }}
                   >
-                    {COLUMNS.map((c) => (
+                    {columnOptions.map((c) => (
                       <option key={c.id} value={c.id}>
                         {c.label}
                       </option>
