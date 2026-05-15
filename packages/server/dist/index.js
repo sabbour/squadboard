@@ -28,6 +28,9 @@ import castRouter from './routes/cast.js';
 import reviewPoliciesRouter from './routes/review-policies.js';
 import inboxRouter from './routes/inbox.js';
 import { dispatcher } from './engine/dispatcher.js';
+// Phase 10: side-effect import — registers the on_event ceremony listener
+// against the in-process event bus.
+import './services/ceremony-dispatcher.js';
 import { initWebSocketServer } from './realtime/ws-server.js';
 import { listPresence } from './realtime/presence.js';
 import { initGitHubSyncHooks } from './github/sync-hook.js';

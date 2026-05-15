@@ -3,6 +3,7 @@ import { sweepExpiredLeases, sweepOrphanedRuns, sweepExpiredStepLeases, sweepOrp
 import { claimAndRun } from './stepper.js';
 import { tickWorkflowAdvancement } from './workflow-runner.js';
 import { sweepReviewTimeouts } from '../services/review-timeout-sweep.js';
+import { sweepDueSchedules } from '../services/ceremony-scheduler.js';
 
 const TICK_INTERVAL_MS = 5_000;
 const TICK_JITTER_MS = 500; // ±500ms jitter to avoid thundering herd on multi-instance deploys
@@ -78,6 +79,18 @@ export class Dispatcher {
 
     // 5. Apply timeout_action to expired approve step_runs (Phase 8 review policies)
     await sweepReviewTimeouts();
+
+    // 5b. Phase 10: fire any due `on_schedule` ceremonies.
+    try {
+      const result = await sweepDueSchedules();
+      if (result.scanned > 0 || result.fired > 0) {
+        console.log(
+          `[ceremony] sweep ran (${result.fired} fired / ${result.scanned} scanned, ${result.errors} errors)`,
+        );
+      }
+    } catch (err) {
+      console.error('[ceremony] sweep failed:', err);
+    }
 
     // 6. Advance active workflow_runs (fan_out completion, step transitions, etc.)
     await tickWorkflowAdvancement();
