@@ -203,11 +203,19 @@ router.get('/agents', async (req, res) => {
     `);
 
     res.json({
-      agents: rows.rows as {
+      agents: (rows.rows as Array<{
         id: string; name: string;
-        runsTotal: number; runsThisWeek: number;
-        avgCostUsd: number; avgDurationMs: number; successRate: number;
-      }[],
+        runs_total: number; runs_this_week: number;
+        avg_cost_usd: number | null; avg_duration_ms: number | null; success_rate: number | null;
+      }>).map((r) => ({
+        id: r.id,
+        name: r.name,
+        runsTotal: r.runs_total ?? 0,
+        runsThisWeek: r.runs_this_week ?? 0,
+        avgCostUsd: r.avg_cost_usd ?? 0,
+        avgDurationMs: r.avg_duration_ms ?? 0,
+        successRate: r.success_rate ?? 0,
+      })),
     });
   } catch (err: unknown) {
     console.error('[analytics] GET /agents error:', err);
@@ -250,11 +258,19 @@ router.get('/workflows', async (req, res) => {
     `);
 
     res.json({
-      workflows: rows.rows as {
+      workflows: (rows.rows as Array<{
         id: string; name: string;
-        runsTotal: number; completedRuns: number; failedRuns: number;
-        avgSteps: number; avgDurationMs: number;
-      }[],
+        runs_total: number; completed_runs: number; failed_runs: number;
+        avg_steps: number | null; avg_duration_ms: number | null;
+      }>).map((r) => ({
+        id: r.id,
+        name: r.name,
+        runsTotal: r.runs_total ?? 0,
+        completedRuns: r.completed_runs ?? 0,
+        failedRuns: r.failed_runs ?? 0,
+        avgSteps: r.avg_steps ?? 0,
+        avgDurationMs: r.avg_duration_ms ?? 0,
+      })),
     });
   } catch (err: unknown) {
     console.error('[analytics] GET /workflows error:', err);

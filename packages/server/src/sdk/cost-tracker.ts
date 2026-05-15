@@ -171,7 +171,28 @@ export async function getCostSummary(db: DrizzleDb, projectId: string): Promise<
     created_at: Date;
   };
 
-  const allRows = rows.rows as Row[];
+  // Live sessions also accrue cost via SquadClient streaming.
+  // They're not bound to issue_runs, so union them in as synthetic rows
+  // grouped under their owning agent (or 'live-session' bucket if no agent).
+  const liveRows = await db.execute(sql`
+    SELECT
+      ls.id,
+      COALESCE(ls.agent_id::text, ls.id::text) AS agent_id,
+      COALESCE(ls.agent_name, 'Live session') AS agent_name,
+      ls.model AS model_id,
+      ls.input_tokens,
+      ls.output_tokens,
+      (ls.input_tokens + ls.output_tokens) AS cost_tokens,
+      ls.cost_usd::text AS cost_usd,
+      ls.created_at
+    FROM live_sessions ls
+    WHERE ls.project_id = ${projectId}
+  `);
+
+  const allRows = [
+    ...(rows.rows as Row[]),
+    ...(liveRows.rows as Row[]),
+  ];
   const mtdRows = allRows.filter((r) => new Date(r.created_at) >= startOfMonth);
 
   function aggregate(raws: Row[]): { totalInputTokens: number; totalOutputTokens: number; totalCostUsd: number; byAgent: CostByAgent[] } {
@@ -228,7 +249,15 @@ export async function getMtdSpend(db: DrizzleDb, projectId: string): Promise<num
   startOfMonth.setUTCHours(0, 0, 0, 0);
 
   const result = await db.execute(sql`
-    SELECT COALESCE(SUM(ir.cost_usd::numeric), 0) AS total
+    SELECT
+      COALESCE(SUM(ir.cost_usd::numeric), 0)
+      + COALESCE((
+          SELECT SUM(ls.cost_usd::numeric)
+          FROM live_sessions ls
+          WHERE ls.project_id = ${projectId}
+            AND ls.created_at >= ${startOfMonth.toISOString()}
+        ), 0)
+      AS total
     FROM issue_runs ir
     JOIN issues i ON ir.issue_id = i.id
     WHERE i.project_id = ${projectId}

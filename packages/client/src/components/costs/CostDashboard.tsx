@@ -14,17 +14,20 @@ interface CostDashboardProps {
   projectId: string
 }
 
-function fmt(usd: number): string {
-  return usd.toLocaleString('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 4 })
+function fmt(usd: number | null | undefined): string {
+  const v = Number.isFinite(usd) ? Number(usd) : 0
+  return v.toLocaleString('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 4 })
 }
 
-function fmtShort(usd: number): string {
-  return usd.toLocaleString('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 2 })
+function fmtShort(usd: number | null | undefined): string {
+  const v = Number.isFinite(usd) ? Number(usd) : 0
+  return v.toLocaleString('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 2 })
 }
 
-function fmtK(n: number): string {
-  if (n >= 1000) return `${(n / 1000).toFixed(1)}k`
-  return String(n)
+function fmtK(n: number | null | undefined): string {
+  const v = Number.isFinite(n) ? Number(n) : 0
+  if (v >= 1000) return `${(v / 1000).toFixed(1)}k`
+  return String(v)
 }
 
 function BudgetBar({ percent, budgetUsd, spend }: { percent: number; budgetUsd: number; spend: number }) {

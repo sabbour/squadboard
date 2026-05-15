@@ -14,7 +14,8 @@ interface Props {
 }
 
 function SuccessBadge({ rate }: { rate: number }) {
-  const bg = rate >= 90 ? '#1a7f37' : rate >= 70 ? '#9a6700' : '#a12424'
+  const safeRate = Number.isFinite(rate) ? rate : 0
+  const bg = safeRate >= 90 ? '#1a7f37' : safeRate >= 70 ? '#9a6700' : '#a12424'
   const color = '#fff'
   return (
     <span
@@ -30,22 +31,24 @@ function SuccessBadge({ rate }: { rate: number }) {
         textAlign: 'center',
       }}
     >
-      {rate.toFixed(1)}%
+      {safeRate.toFixed(1)}%
     </span>
   )
 }
 
-function fmt(ms: number): string {
-  if (ms === 0) return '—'
-  if (ms < 1000) return `${Math.round(ms)}ms`
-  if (ms < 60_000) return `${(ms / 1000).toFixed(1)}s`
-  return `${(ms / 60_000).toFixed(1)}m`
+function fmt(ms: number | null | undefined): string {
+  const v = Number.isFinite(ms) ? Number(ms) : 0
+  if (v === 0) return '—'
+  if (v < 1000) return `${Math.round(v)}ms`
+  if (v < 60_000) return `${(v / 1000).toFixed(1)}s`
+  return `${(v / 60_000).toFixed(1)}m`
 }
 
-function fmtCost(usd: number): string {
-  if (usd === 0) return '$0.00'
-  if (usd < 0.001) return `$${(usd * 1000).toFixed(3)}m`
-  return `$${usd.toFixed(4)}`
+function fmtCost(usd: number | null | undefined): string {
+  const v = Number.isFinite(usd) ? Number(usd) : 0
+  if (v === 0) return '$0.00'
+  if (v < 0.001) return `$${(v * 1000).toFixed(3)}m`
+  return `$${v.toFixed(4)}`
 }
 
 export default function AgentLeaderboard({ agents }: Props) {

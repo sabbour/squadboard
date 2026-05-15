@@ -36,11 +36,12 @@ function PassRateBar({ completed, total }: { completed: number; total: number })
   )
 }
 
-function fmt(ms: number): string {
-  if (ms === 0) return '—'
-  if (ms < 1000) return `${Math.round(ms)}ms`
-  if (ms < 60_000) return `${(ms / 1000).toFixed(1)}s`
-  return `${(ms / 60_000).toFixed(1)}m`
+function fmt(ms: number | null | undefined): string {
+  const v = Number.isFinite(ms) ? Number(ms) : 0
+  if (v === 0) return '—'
+  if (v < 1000) return `${Math.round(v)}ms`
+  if (v < 60_000) return `${(v / 1000).toFixed(1)}s`
+  return `${(v / 60_000).toFixed(1)}m`
 }
 
 export default function WorkflowHealth({ workflows, openReviews }: Props) {

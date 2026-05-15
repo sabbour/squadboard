@@ -184,7 +184,15 @@ router.get('/agents', async (req, res) => {
       ORDER BY runs_this_week DESC, runs_total DESC
     `);
         res.json({
-            agents: rows.rows,
+            agents: rows.rows.map((r) => ({
+                id: r.id,
+                name: r.name,
+                runsTotal: r.runs_total ?? 0,
+                runsThisWeek: r.runs_this_week ?? 0,
+                avgCostUsd: r.avg_cost_usd ?? 0,
+                avgDurationMs: r.avg_duration_ms ?? 0,
+                successRate: r.success_rate ?? 0,
+            })),
         });
     }
     catch (err) {
@@ -225,7 +233,15 @@ router.get('/workflows', async (req, res) => {
       ORDER BY runs_total DESC
     `);
         res.json({
-            workflows: rows.rows,
+            workflows: rows.rows.map((r) => ({
+                id: r.id,
+                name: r.name,
+                runsTotal: r.runs_total ?? 0,
+                completedRuns: r.completed_runs ?? 0,
+                failedRuns: r.failed_runs ?? 0,
+                avgSteps: r.avg_steps ?? 0,
+                avgDurationMs: r.avg_duration_ms ?? 0,
+            })),
         });
     }
     catch (err) {
