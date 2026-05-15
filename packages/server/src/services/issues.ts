@@ -1,12 +1,57 @@
 import { and, eq, ilike, inArray, sql } from 'drizzle-orm';
-import { getDb, schema } from '../db/index.js';
+import { getDb, getPool, schema } from '../db/index.js';
 
-export type ColumnStatus = 'backlog' | 'todo' | 'in_progress' | 'in_review' | 'done';
+// ColumnStatus is widened to string — columns are now per-project dynamic.
+// Validation against column_meta happens via assertColumnExists().
+export type ColumnStatus = string;
 
 export interface ListIssuesFilters {
   status?: ColumnStatus;
   labelId?: string;
   search?: string;
+}
+
+// ---------------------------------------------------------------------------
+// Column validation helpers
+// ---------------------------------------------------------------------------
+
+/**
+ * Throws a 400 error if `columnId` is not found in the project's column_meta.
+ * Call this before any write that targets a column slug.
+ */
+export async function assertColumnExists(projectId: string, columnId: string): Promise<void> {
+  const pool = getPool();
+  const { rows } = await pool.query<{ column_id: string }>(
+    `SELECT column_id FROM column_meta WHERE project_id = $1 AND column_id = $2`,
+    [projectId, columnId],
+  );
+  if (rows.length === 0) {
+    throw Object.assign(
+      new Error(`Column '${columnId}' does not exist for this project`),
+      { status: 400 },
+    );
+  }
+}
+
+/**
+ * Returns the slug of the project's default column (is_default=true).
+ * Falls back to the lowest-position column, then to 'backlog' if the table is empty.
+ */
+async function getDefaultColumnId(projectId: string): Promise<string> {
+  const pool = getPool();
+  const { rows: defRows } = await pool.query<{ column_id: string }>(
+    `SELECT column_id FROM column_meta
+     WHERE project_id = $1 AND is_default = true
+     ORDER BY position ASC LIMIT 1`,
+    [projectId],
+  );
+  if (defRows.length > 0) return defRows[0].column_id;
+
+  const { rows: posRows } = await pool.query<{ column_id: string }>(
+    `SELECT column_id FROM column_meta WHERE project_id = $1 ORDER BY position ASC LIMIT 1`,
+    [projectId],
+  );
+  return posRows.length > 0 ? posRows[0].column_id : 'backlog';
 }
 
 // ---------------------------------------------------------------------------
@@ -110,7 +155,10 @@ export async function createIssue(projectId: string, data: {
   }
 
   const title = data.title.trim();
-  const status: ColumnStatus = data.status ?? 'backlog';
+  // Default to the project's is_default column; fall back to position-0 then 'backlog'.
+  const status: ColumnStatus = data.status ?? await getDefaultColumnId(projectId);
+  // Validate the target column exists in this project's column_meta.
+  await assertColumnExists(projectId, status);
 
   // Dedup guard: return any non-archived issue with the same (projectId, title)
   // created in the last 60 seconds instead of inserting a duplicate. This is a
@@ -216,6 +264,9 @@ export async function archiveIssue(projectId: string, id: string) {
 export async function moveIssue(projectId: string, id: string, newStatus: ColumnStatus, position?: number) {
   const db = getDb();
   const { issues } = schema;
+
+  // Validate the target column exists for this project.
+  await assertColumnExists(projectId, newStatus);
 
   const [existing] = await db
     .select()

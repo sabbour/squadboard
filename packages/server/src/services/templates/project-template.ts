@@ -82,6 +82,8 @@ export interface ColumnMetaBundle {
   description: string | null;
   color:       string;
   position:    number;
+  semantic:    string;   // 'backlog'|'ready'|'in_progress'|'review'|'done'|'custom'
+  isDefault:   boolean;
 }
 
 export interface RoutingRuleBundle {
@@ -189,6 +191,8 @@ export async function exportProject(projectId: string): Promise<ProjectPayload> 
   const columnMeta: ColumnMetaBundle[] = colRows.map((c) => ({
     columnId: c.columnId, label: c.label, description: c.description ?? null,
     color: c.color, position: c.position,
+    semantic: c.semantic ?? 'custom',
+    isDefault: c.isDefault ?? false,
   }));
 
   // Skills.
@@ -319,12 +323,14 @@ export async function importProject(
     // Column meta.
     for (const c of payload.columnMeta) {
       await client.query(`
-        INSERT INTO column_meta (project_id, column_id, label, description, color, position)
-        VALUES ($1, $2, $3, $4, $5, $6)
+        INSERT INTO column_meta (project_id, column_id, label, description, color, position, semantic, is_default)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
         ON CONFLICT (project_id, column_id) DO UPDATE
           SET label=EXCLUDED.label, description=EXCLUDED.description,
-              color=EXCLUDED.color, position=EXCLUDED.position
-      `, [projectId, c.columnId, c.label, c.description, c.color, c.position]);
+              color=EXCLUDED.color, position=EXCLUDED.position,
+              semantic=EXCLUDED.semantic, is_default=EXCLUDED.is_default
+      `, [projectId, c.columnId, c.label, c.description, c.color, c.position,
+          c.semantic ?? 'custom', c.isDefault ?? false]);
     }
 
     // Routing rules.
