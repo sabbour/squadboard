@@ -10,6 +10,7 @@ import projectsRouter from './routes/projects.js';
 import squadRouter from './routes/squad.js';
 import agentsRouter from './routes/agents.js';
 import issuesRouter from './routes/issues.js';
+import commentsMentionRouter from './routes/comments-mention.js';
 import labelsRouter from './routes/labels.js';
 import { issueRunsRouter, projectRunsRouter } from './routes/runs.js';
 import routingRouter from './routes/routing.js';
@@ -51,6 +52,7 @@ async function main() {
     app.use('/api/projects/:projectId/agents', agentsRouter);
     app.use('/api/projects/:projectId/sessions', projectSessionsRouter);
     app.use('/api/projects/:projectId/issues', issuesRouter);
+    app.use('/api/projects/:projectId/issues', commentsMentionRouter);
     app.use('/api/projects/:projectId/labels', labelsRouter);
     app.use('/api/projects/:projectId/issues/:issueId/runs', issueRunsRouter);
     app.use('/api/projects/:projectId/runs', projectRunsRouter);
