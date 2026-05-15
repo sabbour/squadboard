@@ -94,3 +94,32 @@ Session log: `.squad/log/2026-05-15T12:35:00Z-squad-fanout.md`
 ## Team update (2026-05-15T16:09:55Z — Wave 3)
 
 Heartbeat refactor (r2, commit ea091186): 6-sweep registry with 30s/5s intervals for lease cleanup and workflow advancement. Dispatcher deprecated-in-place for rollback safety (removed from index.ts). Hotfix (r3, commit 0fc2a64c): isolated heartbeat events to separate `'heartbeat'` EventEmitter channel + UUID guard in ceremony dispatcher. UUID errors 2→0 per tick. Rule for future contributors: `'event'` channel contract is UUID-only; server-wide events use separate named channels (e.g. `'heartbeat'`) or subscribeGlobal() pattern with pre-checks.
+
+---
+
+## 2026-05-15 — Polymorphic Capture ("Conjure") Design Proposal
+
+**Task:** Design proposal for turning the global "+ Capture" button into a universal intent router supporting 10 artifact types.
+
+**Delivered:** `.squad/decisions/inbox/mcmanus-polymorphic-capture.md` — 7-section design covering naming (recommended: "Conjure" + Wand icon), intent dimensions (10 kinds), classifier architecture (server-side, Haiku, <1.5s P95), hybrid routing UX (light in-place, heavy navigate), API contract (`POST /api/conjure/classify`), 3-step migration plan, and 5 open questions for the user.
+
+**Open questions surfaced:** 5.
+
+---
+
+## Wave 5 Update (2026-05-15T10:18:00Z)
+
+**Run:** mcmanus-4  
+**Model:** claude-opus-4.6  
+**Task:** Polymorphic Capture ("Conjure") design proposal + 5 open questions
+
+**Outcome:**
+- Designed universal intent-routing capture surface
+- Formulated 5 open questions; user approved all answers via Copilot
+- Naming decision: "Conjure" (with "Wand20Regular" icon)
+- Design ratified; implementation deferred to Wave 6 (pending Hockney-6 Flow API + Kobayashi-3 columns land)
+- Decision: `.squad/decisions/inbox/mcmanus-polymorphic-capture.md`
+- Answer validation: `.squad/decisions/inbox/copilot-conjure-question-answers.md`
+
+**Next:** Await Wave 6 spawn for implementation orchestration.
+

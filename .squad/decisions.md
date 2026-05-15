@@ -916,3 +916,895 @@ Fan-out child issues (`Foo — verbal`, `Foo — fenster`) are themselves most r
 | P1 | Persist sweep failure count to DB (or Redis key) so process restart doesn't reset backoff. |
 | P2 | `materializeFanOut` should check `child_workflow_run_ids` is empty before creating children (additional idempotency layer post-concurrency guard). |
 | P3 | `tickWorkflowAdvancement` has no `FOR UPDATE SKIP LOCKED` on workflow runs; multi-instance deployments can both advance same run. Concurrency guard in fan-out.ts mitigates for fan-out steps only. |
+### 2026-05-15T09:55:00Z: Conjure design — answers to McManus's 5 open questions
+**By:** Ahmed Sabbour (via Copilot, "take a best guess")
+**Context:** McManus's Polymorphic Capture proposal (`mcmanus-polymorphic-capture.md`) surfaced 5 open questions. These are the locked-in answers — implementation may proceed.
+
+**1. Project scoping for heavy artifacts (agent / team / skill / tool / ceremony)**
+→ **Project-aware with smart defaults.** If the user has a current project context (URL contains `/projects/:id`), default the new artifact to that project — no picker shown. If no project context (e.g., user is on the global Projects page), show a project picker AFTER classification with the current project pre-selected if any. Skills, tools, and MCP servers can also be cross-project (live in the personal/global library) — surface that toggle inline as a checkbox "Make available across all projects" when the kind is one of those three.
+
+**2. Multi-artifact Conjure ("I need a QA agent and a code-review ceremony")**
+→ **One-at-a-time in v1.** After the user lands on the create page, surface a dismissible "You might also want to create…" suggestion strip with up to 2 follow-up suggestions the classifier inferred. Each suggestion is a one-click "Conjure this next" button. No auto-creation. Defer true multi-artifact in one shot to v2.
+
+**3. Keyboard navigation for the candidate-chip disambiguation**
+→ **Arrow keys + enter from day one.** Tab into the chip strip, ←/→ to move, Enter to select, Esc to dismiss the strip and stay on top candidate. Standard a11y baseline — non-negotiable.
+
+**4. Fallback when the LLM endpoint is unavailable**
+→ **Manual kind picker.** A dropdown labeled "What are you creating?" with the 10 v1 kinds. Don't degrade to the old CaptureModal — clean break, no two parallel paths once Conjure ships. Show a small banner: "AI classifier offline — pick a kind manually."
+
+**5. Per-project FAB on the Board**
+→ **Conjure-aware with Issue pre-selected.** The Board FAB opens the same Conjure modal but with `hint: 'issue'` so the classifier biases heavily toward issue creation (since 95% of board captures are issues). User can clear the hint via a "this isn't an issue" link below the textarea.
+
+**Status:** APPROVED. McManus's design is unblocked. Implementation wave can spawn after Hockney r6 (Flow API) and Kobayashi r3 (column add/remove) land — to keep the parallel-agent count manageable.
+### 2026-05-15T09:34:03Z: Flow page becomes agent-centric
+**By:** Ahmed Sabbour (via Copilot)
+**What:** The Flow page (`/projects/:id/flow`) is reframed around **agent instances**, not workflow runs.
+**Required visualizations:**
+- **Instances of agents** — each running/recently-active agent appears as a node (multiple instances if the same agent is running concurrently)
+- **What they're active on** — current step / issue / run shown on the node (or in a side panel on selection)
+- **Idle vs active** — visual distinction for agents currently executing vs at rest
+- **Lineage** — directed edges showing what triggered each agent (parent run → child fan-out → grandchild). Hover/click an instance to highlight the chain that led to it
+- **Visual** — graph/canvas representation, not a list. Use the existing flow library if one is already in the client (e.g., `react-flow` if installed); otherwise propose one before adopting.
+**Status:** Design directive — Fenster owns UX, Hockney owns API surface, Keyser owns implementation.
+**Why:** User wants to see "what the team is doing right now" at a glance, with the ability to trace why any agent was activated.
+### 2026-05-15T09:34:03Z: Polymorphic Capture — smarter, intent-routed
+**By:** Ahmed Sabbour (via Copilot)
+**What:** The global **+ Capture** button (currently issue-only via CaptureModal/CaptureFab + Phase 14 quick-capture) is reframed as a **universal intent router** that takes a prose draft and decides what the user is trying to formulate.
+**Required behavior:**
+- Accept any prose input
+- Classify intent: project | issue | team | agent | skill | tool | (extensible: ceremony, workflow template, MCP server, label, …)
+- Route the user to the right surface — either inline preview (current Issue flow) OR navigate to the matching create page (e.g., HireAgentModal, HireTeamModal, CeremonyEditor) with the formulated draft pre-filled
+- Reuse the existing universal Formulate primitive (checkpoint 019) on the server
+- Confidence + ambiguity handling: if the classifier is unsure, show the top 2-3 candidates as a chip row and let the user pick
+- Needs a different name and icon — current "Capture" + flask emoji is too narrow. McManus to propose options.
+**Status:** Architectural design owned by McManus; data/API shaping by Hockney; visual + interaction design by Fenster (queued); implementation by Keyser.
+**Why:** "It should know what I want and take me to the right place" — Ahmed wants Capture to be the single-entry-point creation surface for everything in Squadboard.
+# Decision: Project Name Relocation to Top Header
+
+**Date:** 2026-05-15  
+**Author:** Fenster (UX Designer)  
+**Status:** Implemented
+
+---
+
+## What changed
+
+The active project name was previously rendered inside the sidebar's `NavDrawerBody` as a plain `<div>` with a custom font-size (`'14px'` — a Fluent2 violation). It was clipped/hidden by the sidebar's overflow at certain sidebar heights.
+
+It has been relocated to the **top header bar** (`topBar` div in `Layout.tsx`), on the **left side** of the bar — anchored to the left edge, with the action buttons (Inbox / Consult / Capture) remaining on the right.
+
+---
+
+## Placement decision
+
+**Left of the action buttons, right of the implicit sidebar boundary.**
+
+The topBar spans the full width of the `main` column (everything to the right of the sidebar). Positioning the project name at the far left of this column mirrors the convention of many multi-project tools (Linear, Notion, GitHub): app logo/nav is left, current context label is the next thing you see, global actions are right.
+
+No logo was added to the topBar — the Squadboard wordmark already sits in the sidebar header and remains there. The project name therefore acts as the "current context" breadcrumb for the main content area.
+
+---
+
+## Sidebar version: removed
+
+The old sidebar `projectName` div has been **removed entirely**. Rationale:
+
+- It was the clipping-prone element that prompted this ticket.
+- The section headers (`WORK`, `SQUAD`, `OPERATIONS`) already scope the sidebar nav items to "this project" — a redundant label above them added noise without value.
+- Keeping both (sidebar + header) would create a confusing duplication. The header is more persistent (always visible even when scrolling page content), so it's the canonical location.
+
+---
+
+## Fluent2 components used
+
+| Concern | Component / Token |
+|---|---|
+| Project switcher button | `Button` (`appearance="subtle"`, `iconPosition="after"`) |
+| Switch affordance icon | `ChevronDown16Regular` from `@fluentui/react-icons` |
+| Typography weight | `tokens.fontWeightSemibold` (Body1Strong equivalent) |
+| Right-side button gap | `tokens.spacingHorizontalS` (8 px) |
+| Truncation | `'& .fui-Button__text': { overflow: hidden, textOverflow: ellipsis, whiteSpace: nowrap }` on the `projectSwitcher` makeStyles slot |
+
+No ad-hoc `fontSize` or `px` spacing values were introduced in the new styles. The `maxWidth: '240px'` on `projectSwitcher` is a layout bound (not a typography token) — acceptable per Fluent2 canon for container sizing.
+
+---
+
+## Empty-state behaviour
+
+When `projectName === null` (either no project is selected, e.g. on `/projects`, or the project fetch failed), the switcher button is **not rendered**. The `topBarLeft` div collapses to zero width. The `justifyContent: space-between` on `topBar` then pushes the right-side buttons flush-right — identical visually to the pre-change state.
+
+---
+
+## Truncation at narrow widths
+
+The `projectSwitcher` button is constrained to `maxWidth: 240px`. At very narrow viewport widths the button will reach that cap, and the internal text span truncates with an ellipsis (`text-overflow: ellipsis`). The chevron icon remains visible. The full project name is available via the `title` attribute on the button.
+# Flow Agent API — Decision Record
+**Author:** Hockney  
+**Date:** 2026-05-15  
+**Status:** Shipped (Batch A + B committed)
+
+---
+
+## Endpoint Contracts (verbatim — Keyser builds against these)
+
+### `GET /api/projects/:id/flow/agents`
+Returns the agent-instance graph for visualisation.
+
+```
+Response: { ok: true, data: FlowAgentsResponse }
+
+FlowAgentsResponse {
+  agents: Array<{
+    agentId: string          // agents.id (UUID)
+    name: string
+    role: string
+    instances: Array<{
+      instanceId: string     // workflow_run.id | issue_run.id | live_session.id | consult_session.id
+      instanceKind: 'workflow_run' | 'issue_run' | 'live_session' | 'consult_session'
+      status: 'active' | 'idle' | 'completed' | 'failed' | 'pending'
+      currentStep?: { stepId: string; label: string; startedAt: string }
+      currentIssue?: { issueId: string; title: string }
+      startedAt: string      // ISO 8601
+      lastHeartbeatAt?: string
+      endedAt?: string
+      model?: string
+    }>
+  }>
+}
+```
+
+Every non-retired agent appears in the response regardless of whether it has
+active instances. `instances: []` means idle/undeployed — client should
+visually de-emphasise those cards.
+
+### `GET /api/projects/:id/flow/lineage`
+Returns the directed-edge set for the lineage graph.
+
+```
+Response: { ok: true, data: FlowLineageResponse }
+
+FlowLineageResponse {
+  edges: Array<{
+    fromInstanceId: string
+    toInstanceId: string
+    relation: 'fan_out' | 'split' | 'consult' | 'handoff' | 'spawn'
+    createdAt: string
+    triggerStepId?: string   // set when sourced from handoff_context
+  }>
+}
+```
+
+### `GET /api/projects/:id/flow/graph`
+Combined — use this as the primary client endpoint (single round-trip).
+
+```
+Response: { ok: true, data: { agents: FlowAgent[], edges: FlowLineageEdge[] } }
+```
+
+Internally calls `getFlowAgents()` + `getFlowLineage()` concurrently via
+`Promise.all`. If you need refresh on a heartbeat, poll this one.
+
+---
+
+## Instance Attribution Logic
+
+| Source table | Attributed to agent via |
+|---|---|
+| `workflow_runs` | Current step's `issue_runs.agent_id` if a step is running; fallback to `issues.assignee_id`; excluded if neither resolves |
+| `issue_runs` | `issue_runs.agent_id` — but only **standalone** runs (not linked to a `step_run`) |
+| `live_sessions` | `live_sessions.agent_id` (only rows where `agent_id IS NOT NULL`) |
+| `consult_sessions` | `consult_sessions.agent_id` (mode='agent' only) |
+
+**Why issue_runs linked to step_runs are excluded from the issue_run bucket:**
+An issue_run that IS a workflow step is already represented as the `currentStep`
+of its parent `workflow_run` instance. Showing it twice would duplicate the card.
+
+---
+
+## Data Gaps
+
+1. **`workflow_runs` with no step agent and no issue assignee** — excluded
+   silently. This can happen if a workflow_run was created before an agent was
+   assigned. It will appear once the routing step resolves. Document as known
+   gap in the UI with "Unassigned" placeholder.
+
+2. **`consult_sessions` (mode='model')** — excluded. These sessions have no
+   `agentId` (they talk directly to a model). They cannot appear on an
+   agent-centric flow page. If the team later wants to show them, they need a
+   "model instance" entity type.
+
+3. **`issue_run → issue_run` lineage** — no schema support. A direct handoff
+   between two standalone issue_runs (without a workflow_run) has no FK chain.
+   Current edges only cover: issue_links (fan_out/handoff), workflow_run
+   parent_workflow_run_id, and consult_session forked_from_session_id.
+
+4. **`workflow_run → consult_session` cross-source edges** — no FK. A consult
+   session doesn't store which workflow_run spawned it (if any). Would require
+   a new `triggered_by_run_id` column on `consult_sessions`. Documented as
+   Phase 13 gap.
+
+5. **`parentInstanceId` in `flow.instance.started` for issue_runs** — not
+   emitted. The issue_run ↔ step_run relationship is inverse (step_run stores
+   issueRunId), so looking it up at emit time adds a query inside the hot
+   heartbeat path. Defer until Fenster needs the visual connection.
+
+---
+
+## WebSocket Events
+
+All four events are routed through the existing project event bus
+(`emitFlowEvent` / `emitFlowHeartbeat`). Clients subscribe to the project
+room the same way they subscribe to `run.*` events.
+
+| Event | Payload | Throttle |
+|---|---|---|
+| `flow.instance.started` | `{ instanceId, agentId, kind }` | none |
+| `flow.instance.heartbeat` | `{ instanceId, status }` | 1/s per instanceId (in-memory Map in EventBus) |
+| `flow.instance.ended` | `{ instanceId, status }` | none |
+| `flow.lineage.edge.created` | `{ fromInstanceId, toInstanceId, relation, createdAt }` | none |
+
+Emit hooks live in:
+- `engine/workflow-runner.ts` — workflow_run lifecycle
+- `engine/stepper.ts` — issue_run lifecycle + 30 s heartbeat
+- `engine/fan-out.ts` — lineage edge on fan_out completion
+- `sdk/consult-stream.ts` — consult_session lifecycle
+
+---
+
+## Performance Posture
+
+- **Active instances**: always included (no cap).
+- **Completed/failed instances**: trailing 24 h window, 50 rows per source
+  type (7 sources → theoretical max ~350 rows per response before grouping).
+- **No pagination** for v1 — the cap keeps payloads reasonable for projects
+  with <200 issues/runs.
+- If a project grows past ~500 active runs, add `LIMIT` to the active CTEs
+  and expose a `?since=<ISO>` cursor. Flag this to Keyser before Phase 14.
+
+---
+
+## Commit SHAs
+
+- **Batch A** (endpoints + service): `ce01a382`
+- **Batch B** (WS events): `9a9fb8a3`
+# Hockney Phase 19 Backend — Decision Record
+**Date:** 2026-05-15T09:09:55.552-07:00
+**Author:** Hockney (backend / workflow engine dev)
+
+---
+
+## Templates table shape — kind discriminator chosen
+
+The `templates` table uses a plain `TEXT kind` column with a DB-level CHECK constraint (`kind IN ('workflow', 'team', 'project')`).  Rejected a pg ENUM because adding new kinds via `ALTER TYPE` in a live DB is hazardous; a TEXT + CHECK is easy to migrate and Drizzle doesn't need to know about it at compile time.
+
+The `payload JSONB NOT NULL` column stores kind-specific bundles:
+- `workflow`: `{ name, slug, description, triggerKind, triggerConfig, kind, yamlContent }`
+- `team`: `{ agents: AgentExport[] }` — agent row + charterContent + skill/tool/mcp key arrays
+- `project`: `{ meta, agents, ceremonies, labels, columnMeta, skills, tools, mcpServers, routingRules }`
+
+`project_id UUID REFERENCES projects(id) ON DELETE SET NULL` is nullable: NULL for built-in templates, set when saved from a user project.
+
+---
+
+## Kobayashi's SDK wrapper — used on read paths?
+
+**No.** The Phase 19 template services read directly from Postgres via Drizzle/raw SQL rather than through `sdk-state.ts`.  Reason: the SDK wrapper is optimised for the `.squad/` YAML file system (agents, routing, decisions) and doesn't cover the DB tables needed here (workflowVersions, skills, tools, mcpServers, routingRules, columnMeta, labels).  The read paths in the template services are thin DB queries — no semantic value is added by an SDK indirection.
+
+If a future need arises to merge file-system agent data (e.g., reading a charter that hasn't been synced yet), `sdk-state.ts` is the right entry point, but that is out of scope for Phase 19.
+
+---
+
+## Schema migration concerns
+
+This is a **new table** with no backfill required.  The bootstrap DDL uses `CREATE TABLE IF NOT EXISTS` so existing databases upgrade safely on next server start.  The index `templates_kind_name_idx` is also `CREATE INDEX IF NOT EXISTS`.  No existing tables are modified.
+
+**Note for users with existing dbs:** the server log will show `[db] schema bootstrapped` on next boot without any manual migration steps.
+
+---
+
+## Decision for Keyser (client)
+
+The route surface is:
+
+| Method | Path |
+|--------|------|
+| GET    | /api/templates?kind=… |
+| GET    | /api/templates/:id |
+| DELETE | /api/templates/:id |
+| POST   | /api/projects/:id/team/export |
+| POST   | /api/projects/:id/team/import |
+| POST   | /api/projects/:id/team/save-as-template |
+| POST   | /api/projects/:id/team/instantiate-template/:templateId |
+| POST   | /api/projects/:id/export |
+| POST   | /api/projects/import |
+| POST   | /api/projects/:id/save-as-template |
+| POST   | /api/projects/instantiate-template/:templateId |
+
+All responses wrap in `{ ok: boolean, data: ... }` or `{ ok: false, error: string }`.
+
+`POST /api/projects/import` requires `{ payload, name?, squadPath }` — `squadPath` is the absolute path to the new project's `.squad/` directory; the client must collect this from the user.  `POST /api/projects/instantiate-template/:templateId` similarly requires `{ name?, squadPath }`.
+# Keyser Phase 19 Client — Decisions & Contracts
+
+**Date:** 2026-05-15  
+**Commit:** 8eb337dd  
+**Author:** Keyser (Frontend Dev)
+
+---
+
+## Decision 1 — TabList URL State Contract
+
+The Templates page uses `?tab=ceremonies|workflows|teams|projects` in the URL search params to persist the active tab. Default is `ceremonies` (Hockney's original content).
+
+```
+/projects/:id/ceremonies/templates?tab=workflows
+/projects/:id/ceremonies/templates?tab=teams
+/projects/:id/ceremonies/templates?tab=projects
+```
+
+Tab values are validated — any unrecognised value falls back to `ceremonies`.
+
+---
+
+## Decision 2 — File Upload Validation Rule
+
+The drag-import zone in each user-template tab validates that the JSON file's `payload.kind` field matches the active tab's kind before calling any import API:
+
+- Workflows tab → expects `payload.kind === "workflow"`
+- Teams tab → expects `payload.kind === "team"`
+- Projects tab → expects `payload.kind === "project"`
+
+If the kinds don't match, an inline error is shown and no API call is made. Files without a `payload.kind` field are passed through (permissive — Hockney's import endpoints should enforce their own validation server-side).
+
+---
+
+## Decision 3 — Save-as-template Dialog UX
+
+All "Save as template" dialogs (Agents, Settings, CeremonyEditor) share the same UX contract:
+
+- **Name** field: required, blocks the submit button until non-empty
+- **Description** field: optional, 3-row Textarea
+- Submit label: `Save template` / `Saving…` when pending
+- Error shown inline in the dialog (Caption1, red foreground)
+- On success: dialog closes, brief toast/badge shown ("✓ Template saved" / "✓ Saved")
+
+---
+
+## Open Question for Hockney
+
+`useImportWorkflow` calls `POST /api/projects/:id/ceremonies/import` — this endpoint was NOT in the Phase 19 contract. The hook degrades gracefully (will return an API 404 error). Hockney should either:
+
+1. Ship `POST /api/projects/:id/ceremonies/import` in the route layer, OR
+2. Confirm it's out of scope and Keyser will remove `useImportWorkflow`
+
+All other endpoints match the agreed Phase 19 contract exactly.
+# Decision: Per-Project Kanban Column Add/Remove
+
+**Author:** Kobayashi (Squad SDK Integrator)  
+**Date:** 2026-05-15T09:48:00.000-07:00  
+**Requested by:** Ahmed Sabbour  
+**Status:** Shipped — commits `1a4c5d46` (Batch A) · `d87c8f45` (Batch B)
+
+---
+
+## What changed
+
+`column_meta` is now the single source of truth for what columns a project has.
+The hard-coded `column_status` Postgres enum is gone; `issues.status` is plain `TEXT`.
+Users can add and remove columns per project. The five defaults are still seeded on
+first access, but are no longer the only legal set.
+
+---
+
+## New endpoint signatures (for Keyser to build against)
+
+### 1. `POST /api/projects/:projectId/columns`
+Create a new column.
+
+**Request body:**
+```json
+{
+  "columnId": "triage",          // required — ^[a-z0-9_-]{1,40}$
+  "label": "Triage",             // required — 1–80 chars
+  "color": "#d29922",            // required — #rrggbb
+  "description": "...",          // optional string|null
+  "position": 2,                 // optional integer — inserts here, shifts others
+  "semantic": "backlog"          // optional — see enum below; default "custom"
+}
+```
+
+**Response 201:**
+```json
+{ "ok": true, "data": { <ColumnMeta> } }
+```
+
+**Errors:** 400 (invalid field), 409 (columnId already exists for project).
+
+---
+
+### 2. `DELETE /api/projects/:projectId/columns/:columnId?reassignTo=<columnId>`
+Delete a column.
+
+- If the column has **zero issues**, deletes immediately.
+- If the column has **N issues** and `reassignTo` is absent → **409**:
+  ```json
+  { "ok": false, "error": "Column has N issues; pass reassignTo=<columnId>", "count": N }
+  ```
+- If `reassignTo` is present, atomically moves all issues to that column then deletes.
+- Cannot delete the last column in a project → **409**.
+- If the deleted column was `is_default=true`, auto-promotes the lowest-position
+  remaining column to `is_default=true`.
+
+---
+
+### 3. `PATCH /api/projects/:projectId/columns/reorder`
+Atomically rewrite all column positions.
+
+**Request body:**
+```json
+{ "order": ["backlog", "triage", "todo", "in_progress", "in_review", "done"] }
+```
+
+**Response 200:**
+```json
+{ "ok": true, "data": [ <ColumnMeta>[] ordered by new position ] }
+```
+
+**Error:** 400 if `order` is missing, empty, or contains non-strings.
+
+---
+
+### 4. Extended: `PATCH /api/projects/:projectId/columns/:columnId`
+Now also accepts `semantic` and `isDefault`.
+
+```json
+{
+  "label": "...",
+  "description": "...",
+  "color": "#rrggbb",
+  "semantic": "done",
+  "isDefault": true    // atomically clears is_default on all other columns first
+}
+```
+
+---
+
+### 5. `GET /api/projects/:projectId/columns` (unchanged path, extended response)
+Now returns `semantic` and `isDefault` on every item:
+
+```json
+{
+  "ok": true,
+  "data": [
+    {
+      "id": "...", "columnId": "backlog", "label": "Backlog",
+      "description": "...", "color": "#6e7681", "position": 0,
+      "semantic": "backlog", "isDefault": true
+    }
+  ]
+}
+```
+
+---
+
+## Semantic enum — original 5 mapped
+
+| original `column_id` | new `semantic` |
+|----------------------|----------------|
+| `backlog`            | `backlog`      |
+| `todo`               | `ready`        |
+| `in_progress`        | `in_progress`  |
+| `in_review`          | `review`       |
+| `done`               | `done`         |
+| any custom column    | `custom`       |
+
+`semantic` is used for analytics roll-ups, GitHub sync label mapping, and dashboard
+"what does done mean" semantics. Multiple columns can share the same semantic.
+
+---
+
+## Migration safety (enum → text on a live DB)
+
+The bootstrap DDL (`db/index.ts → bootstrapSchema`) runs on every server start.
+The migration block is:
+
+```sql
+DO $$ BEGIN
+  IF EXISTS (SELECT 1 FROM pg_type WHERE typname = 'column_status') THEN
+    ALTER TABLE issues ALTER COLUMN status TYPE TEXT USING status::TEXT;
+    ALTER TABLE issues ALTER COLUMN status SET DEFAULT 'backlog';
+    DROP TYPE column_status;
+  END IF;
+END $$;
+```
+
+- **Idempotent:** the `IF EXISTS` guard means it's a no-op once applied.
+- **In-place:** Postgres casts enum values to their text equivalents automatically.
+  No row updates needed — `'backlog'::column_status` becomes `'backlog'::text`.
+- **Zero downtime risk on embedded Postgres:** the server owns the embedded PG
+  instance; migration runs before any route handler accepts traffic.
+- **`ADD COLUMN IF NOT EXISTS`** guards on `semantic` and `is_default` are
+  equally idempotent.
+
+---
+
+## `reassignTo` contract for DELETE
+
+- `reassignTo` is a **query parameter**, not a body field.
+  `DELETE /api/projects/:projectId/columns/:columnId?reassignTo=todo`
+- The target column must exist in the same project; 400 if not.
+- All affected issues are moved atomically inside a transaction before the column row
+  is deleted — no orphan issues possible.
+
+---
+
+## Open question for Keyser: reorder UX
+
+**Recommendation:** drag-and-drop handles (grip icon on each column chip in the
+settings panel). This is the most natural affordance — users expect to drag columns
+on a Kanban board. A number input works for accessibility fallback but should not be
+the primary interface.
+
+The `PATCH /reorder` endpoint takes a full `order` array, so either drag-and-drop
+(build the new order client-side then send one request) or a number input (send
+on blur) both integrate cleanly. **Final call is Keyser's.**
+
+---
+
+## Client hooks shipped (packages/client/src/api/columns.ts)
+
+| hook | description |
+|------|-------------|
+| `useCreateColumn(projectId)` | POST /columns |
+| `useDeleteColumn(projectId)` | DELETE /:columnId?reassignTo= |
+| `useReorderColumns(projectId)` | PATCH /reorder |
+| `useUpdateColumn(projectId)` | PATCH /:columnId (extended) |
+| `useColumnMeta(projectId)` | GET / (extended) |
+| `useResetColumns(projectId)` | POST /reset (unchanged) |
+
+All mutations invalidate `['column-meta', projectId]` on success.
+# Decision: p5-migrate-fs — SDK Collection Migration (Phase 5)
+
+**Author:** Kobayashi  
+**Date:** 2026-05-15  
+**Task:** p5-migrate-fs
+
+---
+
+## Raw-fs Callsites Migrated
+
+**Total: 3 callsites replaced in 1 file (`services/agent-sync.ts`)**
+
+| # | Original call | Replaced with |
+|---|---------------|---------------|
+| 1 | `fs.readdir(agentsDir, { withFileTypes: true })` | `(await getAgents(projectId)).list()` |
+| 2 | `fs.access(charterPath)` + `parseCharter(charterPath)` | `(await getAgents(projectId)).get(agentName).charter()` |
+| 3 | `computeCharterHash(charterPath)` (read + hash) | `computeContentHash(charterContent)` (in-memory, no fs read) |
+
+`charter-compiler.ts` was **not** changed at the callsite level — it was refactored to expose:
+- `parseCharterContent(content: string)` — pure in-memory parser (new export)
+- `computeContentHash(content)` — pure in-memory hash (new export)
+- `parseCharter(charterPath)` — still exists, now delegates to `parseCharterContent` internally
+- `computeCharterHash(charterPath)` — still exists, now delegates to `computeContentHash` internally
+
+No callers outside the two target files had to change.
+
+---
+
+## Fallback Strategy: YES — kept, and it matters
+
+The SDK-first + raw-fs-fallback pattern was **retained** for both callsites:
+
+**Why it was kept:**
+- `getAgents(projectId)` requires a live DB connection and a valid project row. If the DB is not yet seeded (cold-start) or the project row is missing, the SDK throws `ProjectNotFoundError`.
+- Charter compilation is on the critical path for agent sync, which is triggered on every `GET /agents` request. A single SDK failure must not silently kill an entire sync run.
+- The watcher (`watchAgents`) fires on every file change; if the SDK cache is cold at that moment, the fallback ensures charters still get parsed.
+
+**Fallback log prefix:** `[agent-sync]` with `console.warn` so it is observable without being alarming.
+
+---
+
+## SDK Quirks Discovered
+
+1. **`AgentsCollection.get(name)` is synchronous but `AgentHandle.charter()` is async.** The handle is created synchronously; only the IO operations are async. You must `await handle.charter()` even though `agents.get(name)` itself doesn't return a promise.
+
+2. **No SDK method to UPDATE an existing charter markdown.** `AgentsCollection.create(name, charter)` creates a new agent directory+charter; `AgentHandle.update(partial)` mutates `Agent` domain-object fields (role, status, etc.), not the raw markdown file. Consequently, `writeCharter(charterPath, meta)` in `charter-compiler.ts` was left as a raw-fs write — there is no safe SDK equivalent for in-place charter overwrites yet. Future migrations should wait for an `AgentHandle.updateCharter()` surface to appear in the SDK.
+
+3. **`AgentsCollection.list()` returns directory names, not filtered-by-charter-existence names.** An agent directory without a `charter.md` would appear in the list, then `handle.charter()` would throw. The fallback's `fs.access` guard handles this gracefully; SDK callers need to be prepared for `charter()` to reject.
+
+4. **The SquadState cache in `sdk-state.ts` is per-process.** Each `Promise.all` iteration that calls `getAgents(projectId)` re-enters the same cached `SquadState`, so there is no DB round-trip per agent — only one on cold-start. No performance concern.
+# Polymorphic Capture → "Conjure" — Design Proposal
+
+**Author:** McManus (Lead Architect)  
+**Date:** 2026-05-15  
+**Status:** PROPOSED — awaiting user approval before implementation wave  
+**Scope:** Replace the global "+ Capture" button with a universal intent-routing surface.
+
+---
+
+## 1. Naming Proposal
+
+The user said: "it probably needs a different name/icon."
+
+### Candidates
+
+| # | Name | Rationale | Icon (from `@fluentui/react-icons`) | Tooltip |
+|---|------|-----------|--------------------------------------|---------|
+| 1 | **Conjure** | Already used in the codebase (`conjure-classifier.ts`, Ceremony Conjure UX). Evokes "speak it into existence." | `Wand20Regular` — `import { Wand20Regular } from '@fluentui/react-icons'` | "Conjure anything (c)" |
+| 2 | **Summon** | Strong intent verb; implies the system figures out what you want. Slightly game-y. | `Flash20Regular` — `import { Flash20Regular } from '@fluentui/react-icons'` | "Summon a new artifact (c)" |
+| 3 | **Compose** | Familiar from email/chat; implies creation from prose. Might feel too "text-centric." | `Compose20Regular` — `import { Compose20Regular } from '@fluentui/react-icons'` | "Compose something new (c)" |
+
+### Recommendation: **Conjure**
+
+- Already has semantic presence in the server layer (`conjure-classifier.ts`, `ConjureKind`).
+- The wand icon is distinctive in Fluent — instantly differentiates from the generic `+` button.
+- Verb works as both button label ("Conjure") and action description ("Conjuring an agent…").
+- Keyboard shortcut stays `c`.
+
+Import: `import { Wand20Regular } from '@fluentui/react-icons'`  
+Button label: `Conjure`  
+Tooltip: `"Conjure anything (c)"`
+
+---
+
+## 2. Intent Dimensions (v1 Artifact Types)
+
+### Required per user (v1 MUST)
+
+| Kind | Description | Already has a create flow? |
+|------|-------------|---------------------------|
+| `project` | Spin up a new project | Partial (route exists, no formulate) |
+| `issue` | Tracked work item on the board | ✅ CaptureModal + /issues/formulate |
+| `team` | Hire a multi-agent cast | ✅ HireTeam + /agents/team/formulate |
+| `agent` | Hire a single agent | ✅ HireAgent + /agents/formulate |
+| `skill` | Reusable instruction for agents | ✅ CreateSkill page |
+| `tool` | Custom function agents can call | ✅ CreateTool page |
+
+### Recommended additions for v1
+
+| Kind | Justification |
+|------|---------------|
+| `ceremony` | Creation modal exists; ceremonies are first-class in Squadboard; Ceremony Conjure UX already shipped (Kobayashi, Phase 019). |
+| `mcp-server` | Already in `ConjureKind` enum; creation page exists. Low cost to support. |
+| `inbox-item` | Fallback — when the classifier is uncertain, default to a loose inbox capture (preserves current behavior). |
+| `consult` | Redirects to Consult chat; costs nothing since it's just a navigate-with-draft. |
+
+### Deferred to v2 (not in v1)
+
+| Kind | Why deferred |
+|------|--------------|
+| `workflow template` | No create flow yet. Needs template CRUD designed. |
+| `project template` | Same — templates are read-only presets today. |
+| `team template` | Same. |
+| `label` | Too trivial for LLM classification; keep inline creation on the board. |
+| `column` | Column management lives inside the board settings drawer. |
+| `routing rule` | Complex; needs its own design pass. |
+| `board column` | Synonym of "column"; covered by column settings. |
+
+**v1 kind count: 10** (project, issue, team, agent, skill, tool, ceremony, mcp-server, inbox-item, consult).
+
+---
+
+## 3. Classifier Architecture
+
+### Existing asset
+
+`packages/server/src/services/conjure-classifier.ts` is already 90% of what we need:
+- Exports `classifyConjure(prompt, context) → ConjureClassification`
+- Supports all 10 kinds
+- Returns `{ kind, payload, confidence, rationale, modelUsed }`
+- Delegates to `runFormulator()` (shared model-resolution infra)
+
+### Where it runs
+
+**Server-side.** The LLM call happens on the server (already the case). The client sends prose, gets back a typed classification.
+
+### Model strategy
+
+- **Default:** `claude-haiku-4.5` via the existing model-resolution stack.
+- **Bump trigger:** Only if accuracy on ambiguous prompts drops below 85% in QA testing.
+- **Cost per invocation:** ~400 input tokens + 200 output tokens ≈ $0.0001.
+
+### Latency target
+
+- **P50 < 800ms**, **P95 < 1.5s**, **P99 < 3s**.
+- Haiku is well within this on typical prompt lengths (<200 words).
+- The modal shows a spinner during classification; we do NOT block UI rendering.
+
+### Output contract (extended from current)
+
+```typescript
+interface ConjureResponse {
+  intent: ConjureKind;
+  confidence: number;
+  candidates: Array<{
+    intent: ConjureKind;
+    confidence: number;
+    reason: string;
+  }>;
+  draft: Record<string, unknown>; // per-intent payload shape
+  rationale: string;
+  modelUsed: { id: string; source: string };
+}
+```
+
+**Change from today:** Add `candidates` array (top-3 by confidence). Today the classifier returns only the winner. We'll instruct the LLM to return its top-3 in a `candidates` array alongside the primary pick.
+
+### Ambiguity handling
+
+1. If `confidence < 0.7` → show candidates as selectable chips in the modal.
+2. If `candidates[0].confidence - candidates[1].confidence < 0.15` → also show chips.
+3. Chips are labeled: "Issue", "Agent", "Ceremony", etc. User taps one → re-classify is NOT needed (we already have the draft payloads for all top-3 in `candidates`).
+4. If user doesn't pick within 5s and confidence ≥ 0.5, auto-select the top candidate but keep the chip bar visible for correction.
+
+### Heuristic fast-path (no LLM needed)
+
+For cost savings and latency, a client-side regex pre-classifier handles obvious cases:
+- Starts with "bug:" or "fix:" or "task:" → `issue` (confidence 0.95)
+- Starts with "hire " or "recruit " → `agent` or `team` (check if "team" appears)
+- Starts with "project:" or "new project" → `project` (confidence 0.95)
+
+If the heuristic fires with confidence ≥ 0.9, skip the LLM call entirely and go straight to the form. The user can always "re-classify" via a small button.
+
+---
+
+## 4. Routing UX
+
+### Options considered
+
+| Option | Summary | Pros | Cons |
+|--------|---------|------|------|
+| A — In-place preview | Modal swaps content to the matching form | No navigation; user stays put | Modal becomes mega-complex; heavy forms (agent config) crammed into overlay |
+| B — Navigate-with-draft | Modal closes → navigate to `/create/:kind?draft=...` | Clean separation; each create page owns its form | Loses user's page context if mid-work |
+| C — Hybrid | Light artifacts in-place; heavy artifacts navigate | Best of both; respects complexity budget per kind | Two code paths; slightly more to test |
+
+### Recommendation: **Option C — Hybrid**
+
+**In-place (light):** issue, inbox-item, consult, label (if ever added).  
+**Navigate (heavy):** project, team, agent, skill, tool, ceremony, mcp-server.
+
+**Justification:**
+- Issues and inbox items are the 80% use case (quick capture). Users expect typing → immediate creation without page switch. The current CaptureModal already does this; we preserve the muscle memory.
+- Agents, teams, and ceremonies have multi-field forms with file uploads, role lists, model selectors, etc. Cramming them into a modal overlay produces a claustrophobic UX. Navigation gives them room to breathe.
+- Context loss is mitigated: the draft is stashed in `sessionStorage` keyed by a unique formulation ID. If the user hits Back, the draft survives. The Conjure modal also shows a "Navigating to [Agent Creator]…" toast with an undo link (3s window).
+
+**Edge case — mid-page navigation:**
+- If the user is editing something unsaved on the current page, the navigate path triggers `beforeunload`-style prompt ("You have unsaved changes. Continue?"). This is already handled by React Router's `useBlocker` hook in our create pages.
+
+---
+
+## 5. Server Contract
+
+### Endpoint
+
+**New route:** `POST /api/conjure/classify`
+
+Rationale for a new route rather than extending `/api/inbox/:id/formulate`:
+- The inbox formulate endpoint is item-scoped (requires an existing inbox item ID).
+- Conjure classification happens BEFORE any item exists.
+- Separation of concerns: classification ≠ formulation of a specific kind.
+
+After classification, the client calls the existing per-kind formulate endpoint (`/agents/formulate`, `/issues/formulate`, etc.) if it needs deeper draft refinement. The classifier provides a "good-enough" draft; the per-kind endpoint can polish it.
+
+### Request
+
+```typescript
+POST /api/conjure/classify
+Content-Type: application/json
+
+{
+  prose: string;                  // user's free-form input
+  hint?: ConjureKind;            // optional — user already picked a kind chip
+  projectId?: string;            // current project context (nullable)
+  projectName?: string;          // display name for LLM context
+  knownProjectNames?: string[];  // for cross-project routing
+}
+```
+
+### Response
+
+```typescript
+{
+  intent: ConjureKind;
+  confidence: number;
+  candidates: [
+    { intent: ConjureKind, confidence: number, reason: string, draft: object },
+    { intent: ConjureKind, confidence: number, reason: string, draft: object },
+    { intent: ConjureKind, confidence: number, reason: string, draft: object }
+  ];
+  draft: object;       // top candidate's draft (shortcut)
+  rationale: string;
+  modelUsed: { id: string; source: string };
+}
+```
+
+### Per-intent draft shapes
+
+| Kind | Draft shape |
+|------|-------------|
+| `issue` | `{ title, body, labels?, priority?, columnSlug? }` |
+| `inbox-item` | `{ title, body, suggestedLabels? }` |
+| `consult` | `{ topic, prompt }` |
+| `agent` | `{ name, role, expertise: string[], model?, rationale? }` |
+| `team` | `{ universe, teamSize, requiredRoles: string[], rationale? }` |
+| `skill` | `{ name, description, body }` |
+| `tool` | `{ name, description, parameters? }` |
+| `mcp-server` | `{ name, transport: "stdio"|"http"|"sse", command?, url? }` |
+| `ceremony` | `{ name, prose, triggerKind }` |
+| `project` | `{ name, description }` |
+
+These mirror the existing shapes in `conjure-classifier.ts` line 93–104. No new invention needed.
+
+### Implementation note
+
+The route handler simply calls `classifyConjure()` from the existing service, extended to return top-3 candidates. Minimal new code.
+
+---
+
+## 6. Migration Plan
+
+### Step 1 — Classifier + New Modal (Feature-flagged)
+
+**What:** Ship the `POST /api/conjure/classify` route and a new `ConjureModal.tsx` component. Gate behind `FF_CONJURE_MODAL` (localStorage flag for dev, server env var for prod).
+
+**Owner:**
+- Route: **Hockney** (server)
+- Modal shell + candidate chips: **Keyser** (UI)
+- Architecture oversight: **McManus**
+
+**Duration:** 1 sprint (≤5 days)
+
+**Old CaptureModal:** untouched. Both modals exist in parallel.
+
+### Step 2 — Route all intents through ConjureModal
+
+**What:** When `FF_CONJURE_MODAL` is on, the global "Conjure" button and `c` hotkey open `ConjureModal`. Issue creation path is verified identical to current CaptureModal behavior. Other intents navigate to their respective create pages with pre-filled drafts.
+
+**Owner:**
+- Wiring + hotkey: **Keyser** (UI)
+- Visual design (modal layout, chips, transitions): **Fenster**
+- Navigate-with-draft plumbing (sessionStorage, toast): **Keyser**
+- QA parity verification: **Kujan**
+
+**Duration:** 1 sprint
+
+### Step 3 — Drop CaptureModal
+
+**What:** Remove `CaptureModal.tsx`, `CaptureFab.tsx` (or refactor FAB to open ConjureModal). Remove feature flag. Update `Layout.tsx` button label/icon.
+
+**Owner:**
+- Cleanup: **Keyser**
+- Regression pass: **Kujan**
+- Docs update: **Redfoot**
+
+**Duration:** ½ sprint (2–3 days)
+
+### Total timeline: ~2.5 sprints end-to-end.
+
+---
+
+## 7. Open Questions for the User
+
+1. **Project scoping for heavy artifacts:** Should team/agent/skill/tool/ceremony creation ALWAYS require a project context, or can a user Conjure them from the global (no-project) level and assign later?
+
+2. **Multi-artifact Conjure:** If the user types "I need a QA agent and a code-review ceremony," should we support creating multiple artifacts in one shot, or force one-at-a-time? (v1 recommendation: one-at-a-time, but surface a "You might also want…" suggestion.)
+
+3. **Keyboard-only flow for power users:** Should the candidate-chip disambiguation be navigable with arrow keys + enter (full a11y) from day one, or is mouse-click acceptable for v1?
+
+4. **Fallback when LLM is unavailable:** If the model endpoint is down, should we degrade to a "pick from a list" dropdown (manual kind selection) or show an error and fall back to old CaptureModal?
+
+5. **Per-project quick-filters:** The FAB on the Board currently always creates issues. Should the per-project FAB also become Conjure-aware, or stay issue-locked (since on the Board, 95% of captures are issues)?
+
+---
+
+## Appendix: File References
+
+| File | Role in this design |
+|------|---------------------|
+| `packages/server/src/services/conjure-classifier.ts` | Core classifier — extend to return top-3 candidates |
+| `packages/server/src/routes/inbox.ts` | Existing formulate — stays as-is for inbox items |
+| `packages/server/src/routes/agents.ts` | Existing agent/team formulate — called post-classification |
+| `packages/server/src/routes/issues.ts` | Existing issue formulate — called post-classification |
+| `packages/client/src/components/inbox/CaptureModal.tsx` | Deprecated in Step 3 |
+| `packages/client/src/components/inbox/CaptureFab.tsx` | Refactored in Step 3 |
+| `packages/client/src/components/formulate/FormulatePanel.tsx` | Reused inside ConjureModal for the prose input |
+| `packages/client/src/components/Layout.tsx` | Button label/icon updated in Step 3 |

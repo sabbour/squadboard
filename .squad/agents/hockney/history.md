@@ -170,3 +170,24 @@ Anchor filter fix (r3, commit 4ecb5525): `resolveAnchorIssue()` now excludes fan
 **Smoke test:** Dev server started, all 3 new endpoints returned `{ ok: true, data: {...} }` with correct shapes. Project "foo" returned 11 agents, fenster with 1 consult_session instance, hockney with 1 issue_run instance. Original `/flow` returned 5 columns + activeRunsCount intact.
 
 **Decision filed:** `.squad/decisions/inbox/hockney-flow-agent-api.md`
+
+---
+
+## Wave 5 Update (2026-05-15T10:18:00Z)
+
+**Run:** hockney-6  
+**Model:** claude-sonnet-4.6  
+**Task:** Flow page agent-centric API + templates backend
+
+**Outcome:**
+- Redesigned Flow page API to center on agent instances (not runs)
+- New endpoint: GET /api/projects/:id/flow/agents
+- Response model: FlowAgentsResponse (agents, instances, lineage, active/idle state)
+- Batch A (endpoints): commit `ce01a382`
+- Batch B (models): commit `9a9fb8a3`
+- Batch C (docs): commit `72511689`
+- Decisions: `.squad/decisions/inbox/hockney-flow-agent-api.md` (Keyser builds against), `.squad/decisions/inbox/hockney-phase19-backend.md` (templates table: kind TEXT + JSONB payload)
+- Templates: kind discriminator chosen (TEXT + CHECK), payload shape per kind (workflow | team | project)
+
+**Status:** COMPLETE — Flow API and templates backend ready for Phase 19 integration and Keyser client work.
+

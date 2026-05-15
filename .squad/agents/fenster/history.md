@@ -62,3 +62,21 @@
 **Decision doc:** `.squad/decisions/inbox/fenster-project-name-header.md`
 
 **TypeScript:** `npx tsc --noEmit` passed clean.
+
+---
+
+## Wave 5 Update (2026-05-15T10:18:00Z)
+
+**Run:** fenster-2  
+**Model:** claude-sonnet-4.6  
+**Task:** Project name relocation to header bar
+
+**Outcome:**
+- Relocated active project name from sidebar to top-left header
+- Placement: left of action buttons (Inbox / Consult / Capture), anchored to left edge
+- Typography: Fluent2 compliant (upgraded from custom 14px)
+- Commit: `7c0c4e93`
+- Decision: `.squad/decisions/inbox/fenster-project-name-header.md`
+
+**Status:** COMPLETE — no follow-up needed for Phase 19. Ready for next wave.
+

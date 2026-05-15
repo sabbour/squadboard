@@ -83,3 +83,63 @@ Added `<NavSectionHeader>SYSTEM</NavSectionHeader>` above the global nav items (
 
 When both Keyser and Hockney committed diagnostics work in parallel (Phase 3, commit 13c34dca), Keyser's staging accidentally swept Hockney's server files into the same commit. Functional code verified OK, but the audit trail is murky — one commit SHA contains both agents' changes. This happened because explicit `git add -- <path>` per-file was not used; Keyser's broader staging glob (likely `git add packages/` or similar) swept uncommitted server work. **Action for future parallel sessions:** Always use `git add -- <path1> <path2> ...` (bracket notation, one file per add) for intentional changes. Never use `git add .` or `git add <directory>/`. Always run `git status` before committing to verify ONLY your changes are staged. This prevents accidental file sweeps and keeps audit trails clean.
 
+
+## 2026-05-15 Phase 19 client surfaces (commit 8eb337dd)
+
+**5 surfaces shipped in one wave:**
+
+1. `api/templates.ts` (NEW) — 13 React Query hooks for full portability contract.
+2. `pages/Templates.tsx` — Extended with 4-tab TabList (Ceremonies / Workflows / Teams / Projects), URL search-param state (`?tab=`), TemplateGrid with Apply/Delete, DragImportZone with payload.kind validation.
+3. `pages/Agents.tsx` — Export team / Import team / Save as template buttons in agents-tab header.
+4. `pages/Settings.tsx` — New "Portability" sidebar section with Export / Import / Save as template rows.
+5. `pages/ProjectPicker.tsx` — "Create from template" CTA (DocumentCopy icon) beside "Add Project", opens CreateFromTemplateModal.
+6. `pages/CeremonyEditor.tsx` — "Save as template" (Dialog) + "Export YAML" (triggerTextDownload) buttons in ceremony header.
+
+**TypeScript:** `npx tsc --noEmit` passes clean — zero errors, no `any`.
+
+**Coordination note for Hockney:** `useImportWorkflow` calls `POST /api/projects/:id/ceremonies/import` which is NOT in the Phase 19 contract. The hook degrades gracefully (will 404 until Hockney ships the endpoint). Also `useSaveWorkflowAsTemplate` calls `/api/projects/:id/ceremonies/:ceremonyId/save-as-template` — Hockney should confirm this route.
+
+### Lesson (reinforced)
+**Explicit `git add -- <path>` per file; never let parallel agents' files leak into my commits.**
+Always run `git status --short -- packages/client/` first. Stage each file individually. NEVER use `git add .` or `git add packages/` or any directory pattern. This is critical when Hockney, Kobayashi and others have uncommitted server changes in the working tree simultaneously.
+
+## Phase 19 – Wave 2 (Hockney r5 contract alignment) — commit 2363ece6
+
+**Trigger:** Hockney updated 11 portability endpoints to `{ ok, data }` envelope; 2 project endpoints (`/import`, `/instantiate-template/:id`) now require `squadPath` in request body.
+
+**Changes:**
+- `api/templates.ts`: Added `ApiEnvelope<T>` + `unwrapEnvelope<T>()`; updated all hooks to unwrap; added `squadPath` param to `useImportProject` + `useInstantiateProjectTemplate`; return types simplified (no longer nested `.project`).
+- `pages/Settings.tsx`: Replaced direct-import flow with `ImportProjectDialog` collecting `squadPath` + file picker; fixed `result.name` reference.
+- `pages/ProjectPicker.tsx`: Added `squadPath` state + input to `CreateFromTemplateModal`; fixed `result.id` navigation reference.
+- `pages/Templates.tsx`:
+  - Replaced `ApplyNameDialog` with `ApplyTemplateDialog` that conditionally shows `squadPath` field for project kind.
+  - `handleApply` now accepts `(tpl, name?, squadPath?)` and passes `squadPath` to `instantiateProject`.
+  - Fixed `result.id` navigation reference (was `result.project.id`).
+  - Rewrote `DragImportZone`: project file drops now park the payload and display an inline `squadPath` prompt before calling `importProject.mutateAsync`; kind-validation factored into `validateKind()`.
+  - Removed stale `useCallback` import.
+
+**TypeScript:** Passed 0 errors before commit.
+
+**Lesson reinforced:** Explicit per-file `git add -- <path>` only; never `git add .`.
+
+---
+
+## Wave 5 Update (2026-05-15T10:18:00Z)
+
+**Run:** keyser-3 (PARTIAL)  
+**Model:** claude-sonnet-4.6  
+**Task:** Column UI Batch A (dynamic list) + Batch B (add/remove UX)
+
+**Outcome:**
+- **Batch A — COMPLETE:**
+  - Built dynamic column list component
+  - Commit: `c6dfcd6c`
+  - Renders available columns per project, supports add/remove UX
+  - Decision: `.squad/decisions/inbox/keyser-phase19-client.md` (TabList URL state contract)
+  
+- **Batch B — TIMED OUT:**
+  - No commits yet
+  - Retry scheduled as keyser-5 (in flight — not logged in this round)
+
+**Status:** PARTIAL COMPLETE — Batch A landed. Batch B retrying as keyser-5.
+
