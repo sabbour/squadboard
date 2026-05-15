@@ -16,6 +16,17 @@ interface RoutingLogTableProps {
   isLoading?: boolean
 }
 
+function safeRelativeTime(value: unknown): string {
+  if (value == null) return '—'
+  const d = new Date(value as string | number | Date)
+  if (Number.isNaN(d.getTime())) return '—'
+  try {
+    return formatDistanceToNow(d, { addSuffix: true })
+  } catch {
+    return '—'
+  }
+}
+
 export function RoutingLogTable({ entries, isLoading }: RoutingLogTableProps) {
   if (isLoading) {
     return (
@@ -51,7 +62,7 @@ export function RoutingLogTable({ entries, isLoading }: RoutingLogTableProps) {
             <TableRow key={entry.id}>
               <TableCell>
                 <TableCellLayout style={{ color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>
-                  {formatDistanceToNow(new Date(entry.timestamp), { addSuffix: true })}
+                  {safeRelativeTime(entry.timestamp)}
                 </TableCellLayout>
               </TableCell>
               <TableCell>

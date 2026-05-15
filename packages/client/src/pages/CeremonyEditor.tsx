@@ -60,7 +60,6 @@ import {
   Play16Regular,
   Checkmark16Regular,
   Warning16Regular,
-  Lightbulb16Regular,
 } from '@fluentui/react-icons'
 import VisualCanvas from '../components/ceremony/VisualCanvas.tsx'
 import ProseTab from '../components/ceremony/ProseTab.tsx'
@@ -397,17 +396,6 @@ export default function CeremonyEditor() {
         <Button onClick={handleValidate} disabled={readOnly}>Validate</Button>
         <Button onClick={handleRunNow} icon={<Play16Regular />} disabled={readOnly || isNew}>
           Run now
-        </Button>
-        <Button
-          icon={<Lightbulb16Regular />}
-          onClick={() => {
-            const url = isNew
-              ? `/projects/${projectId}/consult/new`
-              : `/projects/${projectId}/consult/new?prefill=ceremony:${ceremonyId}`
-            navigate(url)
-          }}
-        >
-          Consult
         </Button>
         <Button appearance="primary" onClick={handleSave} disabled={readOnly}>
           {isNew ? 'Create' : 'Save'}

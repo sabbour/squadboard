@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import React, { useState, useEffect } from 'react'
 import { Outlet, useParams, useNavigate, useLocation } from 'react-router'
 import { apiFetch } from '../api/client.ts'
 import squadboardLogo from '../assets/squadboard-horizontal.png'
@@ -26,6 +26,8 @@ import {
   BookStar24Regular,
   Wrench24Regular,
   PlugConnected24Regular,
+  ChatHelp24Regular,
+  ChatHelp20Regular,
 } from '@fluentui/react-icons'
 import type { OnNavItemSelectData } from '@fluentui/react-components'
 import CaptureModal from './inbox/CaptureModal.tsx'
@@ -79,17 +81,38 @@ const useStyles = makeStyles({
   },
 })
 
-const PROJECT_NAV_ITEMS = [
-  { label: 'Dashboard', segment: 'dashboard', icon: <Grid24Regular /> },
-  { label: 'Board', segment: 'board', icon: <ClipboardTaskListLtr24Regular /> },
-  { label: 'Flow', segment: 'flow', icon: <Flowchart24Regular /> },
-  { label: 'Agents', segment: 'agents', icon: <Bot24Regular /> },
-  { label: 'Skills', segment: 'skills', icon: <BookStar24Regular /> },
-  { label: 'Tools', segment: 'tools', icon: <Wrench24Regular /> },
-  { label: 'MCP Servers', segment: 'mcp-servers', icon: <PlugConnected24Regular /> },
-  { label: 'Ceremonies', segment: 'ceremonies', icon: <ArrowSync24Regular /> },
-  { label: 'Costs', segment: 'costs', icon: <Money24Regular /> },
+// Project-scoped sidebar items, grouped by intent.
+// Group 1 — Work: where you go to see and do the project's work.
+// Group 2 — Squad: who/what is on the team and what they can do.
+// Group 3 — Operations: process, recurring rituals, and reporting.
+const PROJECT_NAV_GROUPS: Array<{ heading: string; items: Array<{ label: string; segment: string; icon: React.ReactElement }> }> = [
+  {
+    heading: 'WORK',
+    items: [
+      { label: 'Dashboard', segment: 'dashboard', icon: <Grid24Regular /> },
+      { label: 'Board', segment: 'board', icon: <ClipboardTaskListLtr24Regular /> },
+      { label: 'Flow', segment: 'flow', icon: <Flowchart24Regular /> },
+    ],
+  },
+  {
+    heading: 'SQUAD',
+    items: [
+      { label: 'Agents', segment: 'agents', icon: <Bot24Regular /> },
+      { label: 'Skills', segment: 'skills', icon: <BookStar24Regular /> },
+      { label: 'Tools', segment: 'tools', icon: <Wrench24Regular /> },
+      { label: 'MCP Servers', segment: 'mcp-servers', icon: <PlugConnected24Regular /> },
+    ],
+  },
+  {
+    heading: 'OPERATIONS',
+    items: [
+      { label: 'Ceremonies', segment: 'ceremonies', icon: <ArrowSync24Regular /> },
+      { label: 'Costs', segment: 'costs', icon: <Money24Regular /> },
+    ],
+  },
 ]
+
+const PROJECT_NAV_ITEMS = PROJECT_NAV_GROUPS.flatMap((g) => g.items)
 
 export default function Layout() {
   const { id } = useParams<{ id?: string }>()
@@ -109,33 +132,46 @@ export default function Layout() {
 
   // Phase 14: pressing 'c' anywhere opens the quick-capture modal as long
   // as the user isn't typing in another input.
+  // Phase 17: pressing '?' anywhere navigates to the cross-project Ask page
+  // (or the project-scoped one when inside a project).
   useEffect(() => {
+    function isTypingTarget(target: EventTarget | null): boolean {
+      const el = target as HTMLElement | null
+      const tag = el?.tagName
+      return Boolean(
+        el?.isContentEditable ||
+          tag === 'INPUT' ||
+          tag === 'TEXTAREA' ||
+          tag === 'SELECT',
+      )
+    }
     function onKey(e: KeyboardEvent) {
-      if (e.key !== 'c' || e.ctrlKey || e.metaKey || e.altKey) return
-      const target = e.target as HTMLElement | null
-      const tag = target?.tagName
-      if (
-        target?.isContentEditable ||
-        tag === 'INPUT' ||
-        tag === 'TEXTAREA' ||
-        tag === 'SELECT'
-      ) {
-        return
+      if (e.ctrlKey || e.metaKey || e.altKey) return
+      if (isTypingTarget(e.target)) return
+      if (e.key === 'c') {
+        e.preventDefault()
+        setCaptureOpen(true)
+      } else if (e.key === '?') {
+        e.preventDefault()
+        void navigate(id ? `/projects/${id}/consult/new` : '/consult/new')
       }
-      e.preventDefault()
-      setCaptureOpen(true)
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [])
+  }, [id, navigate])
 
   function getSelectedValue(): string {
     if (location.pathname === '/' || location.pathname === '') return 'projects'
     if (id) {
-      for (const item of PROJECT_NAV_ITEMS) {
-        if (location.pathname.includes(`/${item.segment}`)) return item.segment
-      }
+      // Match longest segment first so 'consult' isn't shadowed by 'flow' etc.
+      const matches = PROJECT_NAV_ITEMS
+        .filter((item) => location.pathname.includes(`/${item.segment}`))
+        .sort((a, b) => b.segment.length - a.segment.length)
+      if (matches[0]) return matches[0].segment
       if (location.pathname.includes('/settings')) return 'settings'
+    } else if (location.pathname.startsWith('/consult')) {
+      // No project is selected but we are inside the global Consult page.
+      return 'consult'
     }
     return 'projects'
   }
@@ -144,6 +180,9 @@ export default function Layout() {
     const value = data.value as string
     if (value === 'projects') {
       void navigate('/')
+    } else if (value === 'consult' && !id) {
+      // Cross-project Consult — when no project is selected.
+      void navigate('/consult/new')
     } else if (id) {
       void navigate(`/projects/${id}/${value}`)
     }
@@ -168,17 +207,24 @@ export default function Layout() {
           <NavItem icon={<Home24Regular />} value="projects">
             Projects
           </NavItem>
+          <NavItem icon={<ChatHelp24Regular />} value="consult">
+            Consult
+          </NavItem>
 
           {id && (
             <>
-              <NavSectionHeader>PROJECT</NavSectionHeader>
               {projectName && (
                 <div className={styles.projectName}>{projectName}</div>
               )}
-              {PROJECT_NAV_ITEMS.map((item) => (
-                <NavItem key={item.segment} icon={item.icon} value={item.segment}>
-                  {item.label}
-                </NavItem>
+              {PROJECT_NAV_GROUPS.map((group) => (
+                <div key={group.heading}>
+                  <NavSectionHeader>{group.heading}</NavSectionHeader>
+                  {group.items.map((item) => (
+                    <NavItem key={item.segment} icon={item.icon} value={item.segment}>
+                      {item.label}
+                    </NavItem>
+                  ))}
+                </div>
               ))}
             </>
           )}
@@ -203,6 +249,14 @@ export default function Layout() {
             title="Inbox"
           >
             Inbox
+          </Button>
+          <Button
+            appearance="subtle"
+            icon={<ChatHelp20Regular />}
+            onClick={() => navigate(id ? `/projects/${id}/consult/new` : '/consult/new')}
+            title="Consult (press ?)"
+          >
+            Consult
           </Button>
           <Button
             appearance="primary"

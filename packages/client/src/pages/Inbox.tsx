@@ -10,9 +10,14 @@
 
 import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router'
-import { tokens } from '@fluentui/react-components'
-import { Open16Regular } from '@fluentui/react-icons'
-import { useInboxItems, type InboxItem, type InboxStatus } from '../api/inbox.ts'
+import { Button, tokens } from '@fluentui/react-components'
+import { Open16Regular, Delete16Regular, ArrowRight16Regular } from '@fluentui/react-icons'
+import {
+  useDiscardInboxItem,
+  useInboxItems,
+  type InboxItem,
+  type InboxStatus,
+} from '../api/inbox.ts'
 import { useProjects } from '../api/projects.ts'
 import CaptureModal from '../components/inbox/CaptureModal.tsx'
 import PageHeader from '../components/layout/PageHeader.tsx'
@@ -178,43 +183,18 @@ export default function Inbox() {
                       </div>
                     </div>
                     {item.status !== 'discarded' && item.status !== 'published' && (
-                      <button
-                        type="button"
-                        onClick={() => setEditingId(item.id)}
-                        style={{
-                          background: 'none',
-                          border: `1px solid ${tokens.colorNeutralStroke1}`,
-                          borderRadius: '6px',
-                          color: tokens.colorNeutralForeground1,
-                          padding: '4px 10px',
-                          fontSize: '12px',
-                          cursor: 'pointer',
-                          display: 'inline-flex',
-                          alignItems: 'center',
-                          gap: '4px',
-                          flexShrink: 0,
-                        }}
-                      >
-                        <Open16Regular /> Open
-                      </button>
+                      <InboxRowActions item={item} onOpen={() => setEditingId(item.id)} />
                     )}
                     {item.status === 'published' && item.publishedIssueId && item.suggestedProjectId && (
-                      <button
-                        type="button"
+                      <Button
+                        appearance="subtle"
+                        size="small"
+                        icon={<ArrowRight16Regular />}
+                        iconPosition="after"
                         onClick={() => navigate(`/projects/${item.suggestedProjectId}/board`)}
-                        style={{
-                          background: 'none',
-                          border: `1px solid ${tokens.colorNeutralStroke1}`,
-                          borderRadius: '6px',
-                          color: tokens.colorNeutralForeground1,
-                          padding: '4px 10px',
-                          fontSize: '12px',
-                          cursor: 'pointer',
-                          flexShrink: 0,
-                        }}
                       >
-                        View on board →
-                      </button>
+                        View on board
+                      </Button>
                     )}
                   </article>
                 ))}
@@ -229,6 +209,45 @@ export default function Inbox() {
         existingItemId={editingId}
       />
       </div>
+    </div>
+  )
+}
+
+function InboxRowActions({
+  item,
+  onOpen,
+}: {
+  item: InboxItem
+  onOpen: () => void
+}) {
+  const discard = useDiscardInboxItem(item.id)
+  return (
+    <div style={{ display: 'flex', gap: 4, flexShrink: 0 }}>
+      <Button
+        appearance="subtle"
+        size="small"
+        icon={<Open16Regular />}
+        onClick={onOpen}
+      >
+        Open
+      </Button>
+      <Button
+        appearance="subtle"
+        size="small"
+        icon={<Delete16Regular />}
+        disabled={discard.isPending}
+        onClick={() => {
+          if (
+            window.confirm(
+              'Discard this inbox item? You can find it later under Discarded.',
+            )
+          ) {
+            discard.mutate()
+          }
+        }}
+        title="Discard"
+        aria-label="Discard inbox item"
+      />
     </div>
   )
 }
