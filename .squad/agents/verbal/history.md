@@ -36,4 +36,8 @@ Session log: `.squad/log/2026-05-15T12:35:00Z-squad-fanout.md`
 
 ## Recent team activity
 
-**2026-05-15 Round 2 shipped:** Hockney (attachments backend), McManus (multi-modal frontend), Verbal (Consult chat fix), Fenster (typography sweep), Kobayashi (Ceremony Conjure UX), Keyser (layout rebalance). See `.squad/decisions.md` for Fluent2 canon, image bytea architecture, create-page pattern, react-markdown rendering.
+**2026-05-15 Spam-loop investigation + defensive fixes (autopilot):** Investigated runaway `createIssue` producing progressively-compounded titles (`Foo — verbal — verbal — fenster`). Found **two compounding vectors**:
+1. **`resolveAnchorIssue` (ceremony-scheduler.ts line 131)** uses `ORDER BY created_at DESC LIMIT 1` — it picks the newest issue in the project, which is the just-created fan-out child. Every subsequent ceremony tick runs a new workflow for a child, fanning it out again. **This is the primary loop driver.**
+2. **No `AND status = 'pending'` guard** on the `UPDATE step_runs SET status = 'splitting'` inside `materializeFanOut`'s raw SQL transaction — concurrent dispatcher ticks can both claim the same step and each create a full set of child issues.
+Shipped three defensive guards: (a) `createIssue` 60-s dedup check, (b) ceremony-scheduler loud errors + 1-h backoff on repeated failure, (c) fan-out concurrency guard (`rowCount=0` bail) + title compound guard (suffix check before appending label). Follow-up P0: fix `resolveAnchorIssue` to exclude `fan_out` child issues. See `.squad/decisions/inbox/verbal-spam-loop-rootcause.md`.
+

@@ -165,19 +165,40 @@ export async function materializeFanOut(
     await client.query('BEGIN');
 
     // ── Step 2: UPDATE parent stepRun → status='splitting' ──────────────────
-    await client.query(
+    // Guard: only claim if the step is still 'pending'. If rowCount=0, a
+    // concurrent materialization already claimed this step — bail out cleanly.
+    const claimResult = await client.query(
       `UPDATE step_runs
           SET status = 'splitting', updated_at = NOW()
-        WHERE id = $1`,
+        WHERE id = $1 AND status = 'pending'`,
       [parentStepRunId],
     );
+    if ((claimResult.rowCount ?? 0) === 0) {
+      await client.query('ROLLBACK');
+      console.warn(
+        `[fan-out] concurrent materialization detected for step_run ${parentStepRunId} — bailing out (already claimed)`,
+      );
+      return [];
+    }
 
     // ── Steps 3 + 4: INSERT child workflowRuns + step_runs ──────────────────
     const childWorkflowRunIds: string[] = [];
 
     for (const target of targets) {
-      // Create child issue (subtask)
-      const childTitle = `${issue.title} — ${target.label}`;
+      // Title compound guard: if the parent title already ends with
+      // " — <label>", a second-pass re-fan would produce a doubly-suffixed
+      // title. Log a warning and keep the parent title as-is.
+      const labelSuffix = ` — ${target.label}`;
+      let childTitle: string;
+      if (issue.title.endsWith(labelSuffix)) {
+        console.warn(
+          `[fan-out] title compound guard: parent title "${issue.title}" already ends ` +
+          `with "${labelSuffix}". Skipping re-append (possible double fan-out pass).`,
+        );
+        childTitle = issue.title;
+      } else {
+        childTitle = `${issue.title} — ${target.label}`;
+      }
       const childIssueResult = await client.query<{ id: string }>(
         `INSERT INTO issues (project_id, title, body, status, assignee_id)
          VALUES ($1, $2, $3, 'todo', $4)

@@ -24,6 +24,10 @@ import { CronExpressionParser } from 'cron-parser';
 import { getDb, schema } from '../db/index.js';
 import { createWorkflowRun } from '../engine/workflow-runner.js';
 
+// In-memory consecutive-failure tracker per schedule id.
+// Resets on process restart; a persistent counter is a follow-up.
+const sweepFailureCount = new Map<string, number>();
+
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
@@ -284,11 +288,38 @@ export async function sweepDueSchedules(now: Date = new Date()): Promise<SweepRe
 
       if (runId) result.fired += 1;
       else result.skipped += 1;
+      // Reset failure count on a clean fire/skip.
+      sweepFailureCount.delete(sched.id);
     } catch (err) {
+      const failCount = (sweepFailureCount.get(sched.id) ?? 0) + 1;
+      sweepFailureCount.set(sched.id, failCount);
+
       console.error(
-        `[ceremony] sweep error for schedule ${sched.id}:`,
+        `[ceremony] sweep error for schedule ${sched.id} (consecutive failures: ${failCount}):`,
         err,
       );
+
+      // On repeated failure, push nextFireAt to 1 h from now to prevent
+      // a re-entry storm driven by the tentative 5-min placeholder set above.
+      if (failCount >= 2) {
+        const backoffUntil = new Date(now.getTime() + 60 * 60_000);
+        try {
+          await db
+            .update(schema.ceremonySchedules)
+            .set({ nextFireAt: backoffUntil, updatedAt: new Date() })
+            .where(eq(schema.ceremonySchedules.id, sched.id));
+          console.warn(
+            `[ceremony] schedule ${sched.id} backed off until ${backoffUntil.toISOString()} ` +
+            `after ${failCount} consecutive failures`,
+          );
+        } catch (backoffErr) {
+          console.error(
+            `[ceremony] failed to write backoff for schedule ${sched.id}:`,
+            backoffErr,
+          );
+        }
+      }
+
       result.errors += 1;
     }
   }

@@ -99,6 +99,8 @@ export async function createIssue(projectId: string, data: {
   body?: string;
   status?: ColumnStatus;
   assigneeId?: string;
+  /** Optional caller-supplied idempotency key (reserved for future 24-h dedup window). */
+  idempotencyKey?: string;
 }) {
   const db = getDb();
   const { issues } = schema;
@@ -107,7 +109,33 @@ export async function createIssue(projectId: string, data: {
     throw Object.assign(new Error('`title` is required'), { status: 400 });
   }
 
+  const title = data.title.trim();
   const status: ColumnStatus = data.status ?? 'backlog';
+
+  // Dedup guard: return any non-archived issue with the same (projectId, title)
+  // created in the last 60 seconds instead of inserting a duplicate. This is a
+  // soft guard against runaway fan-out retries — it does NOT replace a unique index.
+  const sixtySecondsAgo = new Date(Date.now() - 60_000);
+  const [recent] = await db
+    .select()
+    .from(issues)
+    .where(
+      and(
+        eq(issues.projectId, projectId),
+        eq(issues.title, title),
+        eq(issues.archived, 0),
+        sql`${issues.createdAt} >= ${sixtySecondsAgo}`,
+      ),
+    )
+    .limit(1);
+
+  if (recent) {
+    console.warn(
+      `[createIssue] dedup hit — returning existing issue ${recent.id} ` +
+      `(title="${title}", project=${projectId}). Possible duplicate caller.`,
+    );
+    return recent;
+  }
 
   // Find max position in target column
   const [maxRow] = await db
@@ -121,7 +149,7 @@ export async function createIssue(projectId: string, data: {
     .insert(issues)
     .values({
       projectId,
-      title: data.title.trim(),
+      title,
       body: data.body ?? '',
       status,
       assigneeId: data.assigneeId ?? null,
