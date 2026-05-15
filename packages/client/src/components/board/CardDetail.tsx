@@ -14,6 +14,8 @@ import RunOutputPanel from '../runs/RunOutputPanel.tsx'
 import RunHistory from '../runs/RunHistory.tsx'
 import { AttachWorkflowModal } from '../workflows/AttachWorkflowModal.tsx'
 import { ReviewPanel } from '../reviews/ReviewPanel.tsx'
+import DeliverableList from '../deliverables/DeliverableList.tsx'
+import { useDeliverables } from '../../api/deliverables.ts'
 import { formatDistanceToNow } from 'date-fns'
 
 interface CardDetailProps {
@@ -22,7 +24,7 @@ interface CardDetailProps {
   onClose: () => void
 }
 
-type Tab = 'overview' | 'runs'
+type Tab = 'overview' | 'runs' | 'deliverables'
 
 export default function CardDetail({ projectId, issue, onClose }: CardDetailProps) {
   const panelRef = useRef<HTMLDivElement>(null)
@@ -33,6 +35,7 @@ export default function CardDetail({ projectId, issue, onClose }: CardDetailProp
   const { data: agents } = useAgents(projectId)
   const { data: workflowRun } = useWorkflowRun(projectId, issue.id)
   const { data: reviewGroups = [] } = useWorkflowRunReviews(workflowRun?.id ?? '')
+  const { data: deliverables } = useDeliverables(projectId, issue.id)
   const startWorkflow = useStartWorkflow(projectId, issue.id)
 
   const activeRun = runs?.find((r) => r.status === 'running' || r.status === 'pending')
@@ -129,28 +132,36 @@ export default function CardDetail({ projectId, issue, onClose }: CardDetailProp
 
           {/* Tabs */}
           <div style={{ display: 'flex', padding: '0 20px', gap: '2px' }}>
-            {(['overview', 'runs'] as Tab[]).map((tab) => (
-              <button
-                key={tab}
-                onClick={() => setActiveTab(tab)}
-                style={{
-                  background: 'none',
-                  border: 'none',
-                  borderBottom: `2px solid ${activeTab === tab ? tokens.colorBrandBackground : 'transparent'}`,
-                  color: activeTab === tab ? tokens.colorNeutralForeground1 : tokens.colorNeutralForeground2,
-                  padding: '6px 12px',
-                  fontSize: '12px',
-                  fontWeight: activeTab === tab ? 600 : 400,
-                  cursor: 'pointer',
-                  textTransform: 'capitalize',
-                  marginBottom: '-1px',
-                }}
-              >
-                {tab === 'runs' && runs && runs.length > 0
-                  ? `Runs (${runs.length})`
-                  : tab === 'runs' ? 'Runs' : 'Overview'}
-              </button>
-            ))}
+            {(['overview', 'runs', 'deliverables'] as Tab[]).map((tab) => {
+              let label: string
+              if (tab === 'overview') label = 'Overview'
+              else if (tab === 'runs')
+                label = runs && runs.length > 0 ? `Runs (${runs.length})` : 'Runs'
+              else
+                label =
+                  deliverables && deliverables.length > 0
+                    ? `Deliverables (${deliverables.length})`
+                    : 'Deliverables'
+              return (
+                <button
+                  key={tab}
+                  onClick={() => setActiveTab(tab)}
+                  style={{
+                    background: 'none',
+                    border: 'none',
+                    borderBottom: `2px solid ${activeTab === tab ? tokens.colorBrandBackground : 'transparent'}`,
+                    color: activeTab === tab ? tokens.colorNeutralForeground1 : tokens.colorNeutralForeground2,
+                    padding: '6px 12px',
+                    fontSize: '12px',
+                    fontWeight: activeTab === tab ? 600 : 400,
+                    cursor: 'pointer',
+                    marginBottom: '-1px',
+                  }}
+                >
+                  {label}
+                </button>
+              )
+            })}
           </div>
         </div>
 
@@ -351,6 +362,10 @@ export default function CardDetail({ projectId, issue, onClose }: CardDetailProp
 
           {activeTab === 'runs' && (
             <RunHistory projectId={projectId} issueId={issue.id} />
+          )}
+
+          {activeTab === 'deliverables' && (
+            <DeliverableList projectId={projectId} issueId={issue.id} />
           )}
         </div>
       </div>
