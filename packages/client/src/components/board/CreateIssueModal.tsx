@@ -9,6 +9,7 @@ import {
 import { useLabels } from '../../api/labels.ts'
 import LabelBadge from '../LabelBadge.tsx'
 import FormulatePanel from '../formulate/FormulatePanel.tsx'
+import MarkdownBodyEditor from '../issues/MarkdownBodyEditor.tsx'
 
 interface CreateIssueModalProps {
   projectId: string
@@ -165,25 +166,12 @@ export default function CreateIssueModal({ projectId, defaultColumn, onClose }: 
             <label style={{ fontSize: '12px', color: tokens.colorNeutralForeground2, display: 'block', marginBottom: '6px' }}>
               Description <span style={{ fontSize: '11px' }}>(Markdown)</span>
             </label>
-            <textarea
+            <MarkdownBodyEditor
               value={body}
-              onChange={(e) => setBody(e.target.value)}
+              onChange={setBody}
+              projectId={projectId}
               placeholder="Describe the issue… (Markdown supported)"
-              rows={4}
-              style={{
-                width: '100%',
-                background: tokens.colorNeutralBackground1,
-                border: `1px solid ${tokens.colorNeutralStroke1}`,
-                borderRadius: '6px',
-                color: tokens.colorNeutralForeground1,
-                padding: '8px 10px',
-                fontSize: '13px',
-                resize: 'vertical',
-                outline: 'none',
-                lineHeight: '1.5',
-              }}
-              onFocus={(e) => { e.currentTarget.style.borderColor = tokens.colorBrandBackground }}
-              onBlur={(e) => { e.currentTarget.style.borderColor = tokens.colorNeutralStroke1 }}
+              rows={5}
             />
           </div>
 

@@ -21,7 +21,15 @@
 
 - **2026-05-15 Phase 8 Vertical Slice — Column Metadata Overlay:** Shipped per-project column rename/describe/recolor as a focused first slice of the larger Phase 8 epic. Key pattern: **overlay table, not enum replacement.** A new `column_meta` table stores label/description/color overrides per (project_id, column_id) pair. The existing `column_status` enum is untouched; Phase 8 proper (multi-board, `board_columns` table replacing the enum, presets, pickup_behaviour, scope-resolved default workflow) can rebuild on top of this without losing user-authored column descriptions. The `column_meta` rows carry over 1:1 into `board_columns` when that migration lands. Used `withTimezone: true` on both timestamp columns to be born Hockney-compliant. Delivered: idempotent bootstrap DDL, GET/PATCH/POST-reset API routes, `useColumnMeta`/`useUpdateColumn`/`useResetColumns` hooks, KanbanColumn 4px accent border + Fluent2 Tooltip on description hover, ColumnSettingsPanel drawer with 8-swatch color picker. Gear icon added to board header to open the drawer.
 
-## Recent team activity
+- **2026-05-15 Multi-modal Issue Bodies:** Shipped `MarkdownBodyEditor` (tabbed Write/Preview, monospace textarea, fenced-code + image toolbar, drag-drop + clipboard paste) and `IssueBodyMarkdown` (react-markdown + remark-gfm + rehype-highlight renderer). Wired into `CreateIssueModal` (image upload disabled via Option A until issue saved) and `CardDetail` (body now renders markdown + attachment thumbnails). Created `useIssueAttachments` / `useUploadIssueAttachment` / `useDeleteIssueAttachment` hooks against Hockney's `/api/projects/:p/issues/:i/attachments` contract.
+
+  **Pattern — paste/drop file handling in React:** Listen for `paste` on the textarea (check `e.clipboardData.items` for `kind === 'file'`) and `drop` on the same element (check `e.dataTransfer.files`). Both call the same async upload sequence. Keep a `valueRef` updated in a `useEffect` so async callbacks always see the live markdown string, not the stale closure value. Use a unique placeholder string (`![uploading ${file.name}…]()`) so concurrent uploads don't collide on replace.
+
+  **Pattern — optimistic markdown placeholder → URL swap:** Insert placeholder at cursor position immediately (synchronous, keeps the user's focus). On `mutateAsync` resolve, call `onChange(valueRef.current.replace(placeholder, ![alt](url)))`. On reject, replace with an HTML comment and surface a timed error banner. The `valueRef` trick is critical — without it, if the user typed more text during the upload, `value` in the closure would be stale and `replace` would operate on the wrong string.
+
+  **Staging discipline lesson (from `d7cc2ada` column_meta commit):** When amending commits in a monorepo where other agents have uncommitted files in progress, `git add .` or `git add packages/` will sweep in their scratch files. Always use explicit `git add -- <path>` per file, always run `git status` to verify the staging area before `git commit`, and never stage untracked scratch files (`.server-dev.log`, `.issue_id.txt`, `.run_id*.txt`, `.squad/server.log`).
+
+
 
 New decisions merged to `.squad/decisions.md`:
 - Demo 9 open question #2: `request_changes_policy` default is `'first'` (Hockney)

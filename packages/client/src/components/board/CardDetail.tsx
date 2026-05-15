@@ -20,6 +20,8 @@ import DeliverableList from '../deliverables/DeliverableList.tsx'
 import { useDeliverables } from '../../api/deliverables.ts'
 import IssueFlowDag from '../flow/IssueFlowDag.tsx'
 import { formatDistanceToNow } from 'date-fns'
+import IssueBodyMarkdown from '../issues/IssueBodyMarkdown.tsx'
+import { useIssueAttachments } from '../../api/issue-attachments.ts'
 
 interface CardDetailProps {
   projectId: string
@@ -41,6 +43,7 @@ export default function CardDetail({ projectId, issue, onClose, initialTab }: Ca
   const { data: workflowRun } = useWorkflowRun(projectId, issue.id)
   const { data: reviewGroups = [] } = useWorkflowRunReviews(workflowRun?.id ?? '')
   const { data: deliverables } = useDeliverables(projectId, issue.id)
+  const { data: attachments } = useIssueAttachments(projectId, issue.id)
   const startWorkflow = useStartWorkflow(projectId, issue.id)
 
   const activeRun = runs?.find((r) => r.status === 'running' || r.status === 'pending')
@@ -249,13 +252,42 @@ export default function CardDetail({ projectId, issue, onClose, initialTab }: Ca
                       border: `1px solid ${tokens.colorNeutralStroke1}`,
                       borderRadius: '6px',
                       padding: '12px',
-                      fontSize: '13px',
-                      color: tokens.colorNeutralForeground1,
-                      lineHeight: '1.6',
-                      whiteSpace: 'pre-wrap',
                     }}
                   >
-                    {issue.body}
+                    <IssueBodyMarkdown value={issue.body} />
+                  </div>
+                </div>
+              )}
+
+              {/* Attachments */}
+              {attachments && attachments.length > 0 && (
+                <div>
+                  <Caption1 as="p" style={{ display: 'block', color: tokens.colorNeutralForeground2, marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                    Attachments
+                  </Caption1>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+                    {attachments.map((att) => (
+                      <a
+                        key={att.id}
+                        href={att.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        title={att.filename}
+                        style={{ display: 'block' }}
+                      >
+                        <img
+                          src={att.url}
+                          alt={att.filename}
+                          style={{
+                            width: '80px',
+                            height: '60px',
+                            objectFit: 'cover',
+                            borderRadius: '4px',
+                            border: `1px solid ${tokens.colorNeutralStroke1}`,
+                          }}
+                        />
+                      </a>
+                    ))}
                   </div>
                 </div>
               )}
