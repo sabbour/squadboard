@@ -117,8 +117,20 @@ export interface CostByModel {
   costUsd: number;
 }
 
+export type CostSource = 'run' | 'live_session' | 'consult';
+
+export interface CostBySource {
+  source: CostSource;
+  runCount: number;
+  inputTokens: number;
+  outputTokens: number;
+  costUsd: number;
+}
+
 export interface CostSummary {
   projectId: string;
+  /** Sources that were included in the totals (defaults to ['run','live_session']). */
+  sources: CostSource[];
   /** Month-to-date (calendar month of query time) */
   mtd: {
     totalInputTokens: number;
@@ -126,6 +138,7 @@ export interface CostSummary {
     totalCostUsd: number;
     byAgent: CostByAgent[];
     byModel: CostByModel[];
+    bySource: CostBySource[];
   };
   /** All-time totals */
   allTime: {
@@ -134,33 +147,29 @@ export interface CostSummary {
     totalCostUsd: number;
     byAgent: CostByAgent[];
     byModel: CostByModel[];
+    bySource: CostBySource[];
   };
 }
 
-export async function getCostSummary(db: DrizzleDb, projectId: string): Promise<CostSummary> {
+export interface CostSummaryOptions {
+  /** Which spend sources to include. Defaults to ['run','live_session']
+   *  to preserve previous billing semantics — consults are opt-in. */
+  sources?: CostSource[];
+}
+
+export async function getCostSummary(
+  db: DrizzleDb,
+  projectId: string,
+  options: CostSummaryOptions = {},
+): Promise<CostSummary> {
+  const sources: CostSource[] =
+    options.sources && options.sources.length > 0
+      ? options.sources
+      : ['run', 'live_session'];
+
   const startOfMonth = new Date();
   startOfMonth.setUTCDate(1);
   startOfMonth.setUTCHours(0, 0, 0, 0);
-
-  // Query all completed issue_runs for this project, joined with agent info
-  const rows = await db.execute(sql`
-    SELECT
-      ir.id,
-      ir.agent_id,
-      a.name          AS agent_name,
-      a.model         AS model_id,
-      ir.input_tokens,
-      ir.output_tokens,
-      ir.cost_tokens,
-      ir.cost_usd,
-      ir.created_at
-    FROM issue_runs ir
-    JOIN agents a ON ir.agent_id = a.id
-    JOIN issues i ON ir.issue_id = i.id
-    WHERE i.project_id = ${projectId}
-      AND ir.status IN ('completed', 'failed')
-    ORDER BY ir.created_at DESC
-  `);
 
   type Row = {
     id: string;
@@ -171,35 +180,84 @@ export async function getCostSummary(db: DrizzleDb, projectId: string): Promise<
     output_tokens: number | null;
     cost_usd: string | null;
     created_at: Date;
+    source: CostSource;
   };
 
-  // Live sessions also accrue cost via SquadClient streaming.
-  // They're not bound to issue_runs, so union them in as synthetic rows
-  // grouped under their owning agent (or 'live-session' bucket if no agent).
-  const liveRows = await db.execute(sql`
-    SELECT
-      ls.id,
-      COALESCE(ls.agent_id::text, ls.id::text) AS agent_id,
-      COALESCE(ls.agent_name, 'Live session') AS agent_name,
-      ls.model AS model_id,
-      ls.input_tokens,
-      ls.output_tokens,
-      (ls.input_tokens + ls.output_tokens) AS cost_tokens,
-      ls.cost_usd::text AS cost_usd,
-      ls.created_at
-    FROM live_sessions ls
-    WHERE ls.project_id = ${projectId}
-  `);
+  const allRows: Row[] = [];
 
-  const allRows = [
-    ...(rows.rows as Row[]),
-    ...(liveRows.rows as Row[]),
-  ];
+  if (sources.includes('run')) {
+    // Query all completed issue_runs for this project, joined with agent info
+    const rows = await db.execute(sql`
+      SELECT
+        ir.id,
+        ir.agent_id,
+        a.name          AS agent_name,
+        a.model         AS model_id,
+        ir.input_tokens,
+        ir.output_tokens,
+        ir.cost_tokens,
+        ir.cost_usd,
+        ir.created_at,
+        'run'::text     AS source
+      FROM issue_runs ir
+      JOIN agents a ON ir.agent_id = a.id
+      JOIN issues i ON ir.issue_id = i.id
+      WHERE i.project_id = ${projectId}
+        AND ir.status IN ('completed', 'failed')
+      ORDER BY ir.created_at DESC
+    `);
+    allRows.push(...(rows.rows as Row[]));
+  }
+
+  if (sources.includes('live_session')) {
+    // Live sessions also accrue cost via SquadClient streaming.
+    // They're not bound to issue_runs, so union them in as synthetic rows
+    // grouped under their owning agent (or 'live-session' bucket if no agent).
+    const liveRows = await db.execute(sql`
+      SELECT
+        ls.id,
+        COALESCE(ls.agent_id::text, ls.id::text) AS agent_id,
+        COALESCE(ls.agent_name, 'Live session') AS agent_name,
+        ls.model AS model_id,
+        ls.input_tokens,
+        ls.output_tokens,
+        (ls.input_tokens + ls.output_tokens) AS cost_tokens,
+        ls.cost_usd::text AS cost_usd,
+        ls.created_at,
+        'live_session'::text AS source
+      FROM live_sessions ls
+      WHERE ls.project_id = ${projectId}
+    `);
+    allRows.push(...(liveRows.rows as Row[]));
+  }
+
+  if (sources.includes('consult')) {
+    // Phase 17: Ask / Consult sessions (free-form brainstorm). These
+    // are intentionally separate from billable run + live spend so
+    // exploratory thinking doesn't pollute project run cost charts.
+    const consultRows = await db.execute(sql`
+      SELECT
+        cs.id,
+        COALESCE(cs.agent_id::text, cs.id::text) AS agent_id,
+        COALESCE(cs.agent_name, CASE WHEN cs.mode = 'model' THEN 'Model consult' ELSE 'Agent consult' END) AS agent_name,
+        cs.model AS model_id,
+        cs.input_tokens,
+        cs.output_tokens,
+        (cs.input_tokens + cs.output_tokens) AS cost_tokens,
+        cs.cost_usd::text AS cost_usd,
+        cs.created_at,
+        'consult'::text AS source
+      FROM consult_sessions cs
+      WHERE cs.project_id = ${projectId}
+    `);
+    allRows.push(...(consultRows.rows as Row[]));
+  }
   const mtdRows = allRows.filter((r) => new Date(r.created_at) >= startOfMonth);
 
-  function aggregate(raws: Row[]): { totalInputTokens: number; totalOutputTokens: number; totalCostUsd: number; byAgent: CostByAgent[]; byModel: CostByModel[] } {
+  function aggregate(raws: Row[]): { totalInputTokens: number; totalOutputTokens: number; totalCostUsd: number; byAgent: CostByAgent[]; byModel: CostByModel[]; bySource: CostBySource[] } {
     const agentMap = new Map<string, CostByAgent>();
     const modelMap = new Map<string, CostByModel>();
+    const sourceMap = new Map<CostSource, CostBySource>();
     let totalInput = 0;
     let totalOutput = 0;
     let totalCost = 0;
@@ -245,6 +303,22 @@ export async function getCostSummary(db: DrizzleDb, projectId: string): Promise<
           costUsd: cost,
         });
       }
+
+      const existingSource = sourceMap.get(r.source);
+      if (existingSource) {
+        existingSource.runCount++;
+        existingSource.inputTokens += input;
+        existingSource.outputTokens += output;
+        existingSource.costUsd += cost;
+      } else {
+        sourceMap.set(r.source, {
+          source: r.source,
+          runCount: 1,
+          inputTokens: input,
+          outputTokens: output,
+          costUsd: cost,
+        });
+      }
     }
 
     return {
@@ -253,11 +327,13 @@ export async function getCostSummary(db: DrizzleDb, projectId: string): Promise<
       totalCostUsd: totalCost,
       byAgent: Array.from(agentMap.values()),
       byModel: Array.from(modelMap.values()),
+      bySource: Array.from(sourceMap.values()),
     };
   }
 
   return {
     projectId,
+    sources,
     mtd: aggregate(mtdRows),
     allTime: aggregate(allRows),
   };

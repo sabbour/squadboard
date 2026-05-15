@@ -1,4 +1,5 @@
-import { useCostSummary, useBudget } from '../../api/costs.ts'
+import { useState } from 'react'
+import { useCostSummary, useBudget, type CostSource } from '../../api/costs.ts'
 import { Warning20Regular } from '@fluentui/react-icons'
 import {
   Table,
@@ -8,6 +9,10 @@ import {
   TableRow,
   TableCell,
   TableCellLayout,
+  TabList,
+  Tab,
+  type SelectTabData,
+  type SelectTabEvent,
 } from '@fluentui/react-components'
 
 interface CostDashboardProps {
@@ -64,8 +69,19 @@ function BudgetBar({ percent, budgetUsd, spend }: { percent: number; budgetUsd: 
   )
 }
 
+type CostTab = 'runs' | 'consult' | 'all'
+
+const TAB_TO_SOURCES: Record<CostTab, CostSource[]> = {
+  runs: ['run', 'live_session'],
+  consult: ['consult'],
+  all: ['run', 'live_session', 'consult'],
+}
+
 export default function CostDashboard({ projectId }: CostDashboardProps) {
-  const { data: summary, isLoading: summaryLoading, isError: summaryError } = useCostSummary(projectId)
+  const [tab, setTab] = useState<CostTab>('runs')
+  const { data: summary, isLoading: summaryLoading, isError: summaryError } = useCostSummary(projectId, {
+    sources: TAB_TO_SOURCES[tab],
+  })
   const { data: budget, isLoading: budgetLoading } = useBudget(projectId)
 
   if (summaryLoading || budgetLoading) {
@@ -86,6 +102,16 @@ export default function CostDashboard({ projectId }: CostDashboardProps) {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '20px', padding: '24px', maxWidth: '900px' }}>
+
+      {/* Source filter tabs */}
+      <TabList
+        selectedValue={tab}
+        onTabSelect={(_e: SelectTabEvent, data: SelectTabData) => setTab(data.value as CostTab)}
+      >
+        <Tab value="runs">Runs &amp; Live</Tab>
+        <Tab value="consult">Consult</Tab>
+        <Tab value="all">All</Tab>
+      </TabList>
 
       {/* Budget exceeded alert */}
       {overBudget && (
