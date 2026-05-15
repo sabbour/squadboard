@@ -2318,3 +2318,48 @@ Gate rules follow the same reject-authority pattern already established for Kuja
 
 **Invariants preserved:** One universe per assignment, casting algorithm (size_fit + shape_fit + resonance_fit + LRU), charter shape across team, `{Name}` placeholder literal.
 
+
+---
+
+## 2026-05-15: Keyser — UI bundle: ceremonies padding, Consult width, project-switcher category preserve, sidebar reorder, Reconnecting badge fix
+
+**Author:** Keyser
+**Date:** 2026-05-15
+**Status:** Shipped (5 commits in Wave 9)
+
+**Commits:**
+1. **`8b3f7197`** — Fluent2 spacing on CeremonyList page (padding canon compliance)
+2. **`16414e90`** — Widened Consult page layout
+3. **`d72fd8a7`** — Project switcher preserves category + System nav anchored to bottom (sidebar reorder)
+4. **`5673d57b`** — Reconnecting badge alignment + cancelled stale reconnect timer (root cause: client-side state machine, NOT server)
+
+**Team conventions ratified:**
+
+### 1. Project switcher preserves the active category
+When the user switches projects via `foo ▾` dropdown, the destination preserves the route segment (category). Examples: `/projects/foo/board` → `/projects/bar/board`; `/projects/foo/flow` → `/projects/bar/flow`.
+
+Recognised categories (in `Layout.tsx` `PROJECT_SCOPED_SEGMENTS`): dashboard, board, flow, agents, skills, tools, mcp-servers, ceremonies, costs, settings, inbox, consult, diagnostics.
+
+**Action for other agents:** Any new project-scoped top-level segment must be added to `PROJECT_SCOPED_SEGMENTS` in `Layout.tsx`.
+
+### 2. Fluent2 page padding canon
+Page content padding is `tokens.spacingVerticalXXL` (24 px) + `tokens.spacingHorizontalXXL` (24 px).
+
+**Anti-pattern A:** Single-axis token for both axes — always use both tokens explicitly.
+
+**Anti-pattern B:** List scroll containers missing padding — any `flex: 1; overflow: auto` div wrapping a DataGrid or list needs padding tokens, else content slams edges.
+
+```
+List body convention:
+paddingTop: tokens.spacingVerticalL (not XXL — header above handles spacing)
+paddingBottom: tokens.spacingVerticalXXL
+paddingLeft: tokens.spacingHorizontalXXL
+paddingRight: tokens.spacingHorizontalXXL
+```
+
+**Audit candidates:** Skills, Tools, MCP Servers, Agents, Costs pages should be checked for same violations.
+
+### 3. Sidebar bottom-anchor pattern
+For pinning a nav section (SYSTEM, settings) to the visual bottom of the sidebar: drop a `<div style={{ flex: 1 }} />` spacer in `NavDrawerBody`. No CSS overrides needed — Fluent's flex column + DrawerBody flex already handle it.
+
+**Root cause note:** Reconnecting badge alignment + stale timer were a **client-side state machine bug, NOT a server issue**. No Hockney handoff needed.

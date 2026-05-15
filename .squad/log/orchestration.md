@@ -23,3 +23,21 @@ Permanent record of deployment waves, specialist coordination, and team fanouts.
 - Keyser: Conjure frontend integration (modal, FAB rewire) — waits for Fenster design + Hockney backend.
 
 **Status:** All deliverables local-only (hacking phase, no upstream push).
+
+---
+
+## Wave 9 (2026-05-15T18:20:52Z)
+
+**Scope:** Keyser UI bundle — ceremonies padding, Consult width, project-switcher category preservation, sidebar reorder (System nav anchored to bottom), Reconnecting badge alignment + stale reconnect timer cancellation.
+
+**Specialists:**
+1. **Keyser-5 (Frontend UI)** — 5 commits in sequence: Fluent2 spacing canon (CeremonyList), Consult page width, project-switcher category preserve + System nav bottom-anchor, Reconnecting badge align + stale timer cancel. Commits: `8b3f7197`, `16414e90`, `d72fd8a7`, `5673d57b`.
+
+**Conventions ratified:**
+- **Project switcher preserves category.** When switching projects, route segment is preserved (`/projects/foo/board` → `/projects/bar/board`). New project-scoped segments must be added to `PROJECT_SCOPED_SEGMENTS` in `Layout.tsx`.
+- **Fluent2 page padding canon.** Use both vertical and horizontal tokens explicitly; list scroll containers need padding; no single-axis token tricks.
+- **Sidebar bottom-anchor.** Use `<div style={{ flex: 1 }} />` spacer in `NavDrawerBody` to pin SYSTEM menu to visual bottom. No CSS overrides needed.
+
+**Root cause discovery:** Reconnecting badge + stale timer bug was **client-side state machine**, NOT server. No handoff to Hockney required.
+
+**Status:** All deliverables local-only (hacking phase, no upstream push).
