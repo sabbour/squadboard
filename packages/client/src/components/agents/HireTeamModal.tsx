@@ -2,11 +2,14 @@ import { useState } from 'react'
 import {
   useHireTeamPropose,
   useHireTeamConfirm,
+  useFormulateTeam,
   type CastedMember,
   type CastingUniverseId,
   type CastingAgentRole,
+  type FormulateModelInfo,
 } from '../../api/agents.ts'
 import { useCastingUniverses } from '../../api/roles.ts'
+import FormulatePanel from '../formulate/FormulatePanel.tsx'
 import {
   Dialog,
   DialogSurface,
@@ -71,10 +74,27 @@ export default function HireTeamModal({ projectId, onClose }: HireTeamModalProps
   const [proposed, setProposed] = useState<CastedMember[]>([])
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [results, setResults] = useState<{ created: number; errors: string[] } | null>(null)
+  const [formulateModel, setFormulateModel] = useState<FormulateModelInfo | null>(null)
+  const [formulateRationale, setFormulateRationale] = useState<string | null>(null)
 
   const { data: universes, isLoading: universesLoading } = useCastingUniverses()
   const propose = useHireTeamPropose(projectId)
   const confirm = useHireTeamConfirm(projectId)
+  const formulate = useFormulateTeam(projectId)
+
+  function handleFormulate(draft: string) {
+    formulate.mutate(draft, {
+      onSuccess: ({ team, modelUsed }) => {
+        if (universes?.some((u) => u.id === team.universe)) {
+          setUniverse(team.universe as CastingUniverseId)
+        }
+        setTeamSize(team.teamSize)
+        setRequiredRoles(new Set(team.requiredRoles as CastingAgentRole[]))
+        setFormulateModel(modelUsed)
+        setFormulateRationale(team.rationale ?? null)
+      },
+    })
+  }
 
   function toggleRole(role: CastingAgentRole) {
     setRequiredRoles((prev) => {
@@ -123,6 +143,29 @@ export default function HireTeamModal({ projectId, onClose }: HireTeamModalProps
           <DialogContent>
             {step === 'configure' && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '20px', paddingTop: '8px' }}>
+                <FormulatePanel
+                  placeholder="e.g. a small team of 3 to ship a SaaS MVP fast — pick a famous heist crew"
+                  hint="Sketch the team in plain language; AI picks a universe, team size, and required roles."
+                  isPending={formulate.isPending}
+                  errorMessage={formulate.error?.message ?? null}
+                  modelUsed={formulateModel}
+                  onFormulate={handleFormulate}
+                  compact
+                />
+                {formulateRationale && (
+                  <div
+                    style={{
+                      fontSize: '12px',
+                      color: tokens.colorNeutralForeground2,
+                      background: tokens.colorNeutralBackground2,
+                      borderLeft: `3px solid ${tokens.colorBrandBackground}`,
+                      padding: '8px 12px',
+                      borderRadius: '4px',
+                    }}
+                  >
+                    <strong>Why this team:</strong> {formulateRationale}
+                  </div>
+                )}
                 <p style={{ margin: 0, fontSize: '13px', color: tokens.colorNeutralForeground2 }}>
                   Pick a universe of characters and Squadboard's casting engine will assemble a themed team
                   with personalities, backstories, and matching base roles.

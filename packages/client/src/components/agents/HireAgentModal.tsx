@@ -1,8 +1,9 @@
 import { useState } from 'react'
-import { useCreateAgent } from '../../api/agents.ts'
+import { useCreateAgent, useFormulateAgent, type FormulateModelInfo } from '../../api/agents.ts'
 import { useSkills, useAssignSkillsToAgent, type Skill } from '../../api/skills.ts'
 import { useTools, useAssignToolsToAgent, type Tool } from '../../api/tools.ts'
 import { useMcpServers, useAssignMcpServersToAgent, type McpServer } from '../../api/mcp.ts'
+import FormulatePanel from '../formulate/FormulatePanel.tsx'
 import {
   Dialog,
   DialogSurface,
@@ -61,9 +62,11 @@ export default function HireAgentModal({ projectId, onClose }: HireAgentModalPro
   const [pickedTools, setPickedTools] = useState<Set<string>>(new Set())
   const [pickedMcp, setPickedMcp] = useState<Set<string>>(new Set())
   const [postHireAgentId, setPostHireAgentId] = useState<string | null>(null)
+  const [formulateModel, setFormulateModel] = useState<FormulateModelInfo | null>(null)
   const styles = useStyles()
 
   const createAgent = useCreateAgent(projectId)
+  const formulate = useFormulateAgent(projectId)
   const { data: skills = [] } = useSkills(projectId)
   const { data: tools = [] } = useTools(projectId)
   const { data: mcpServers = [] } = useMcpServers(projectId)
@@ -88,6 +91,21 @@ export default function HireAgentModal({ projectId, onClose }: HireAgentModalPro
     const val = e.target.value
     setName(val)
     if (nameError) validateName(val)
+  }
+
+  function handleFormulate(draft: string) {
+    formulate.mutate(draft, {
+      onSuccess: ({ agent: drafted, modelUsed }) => {
+        setName(drafted.name)
+        setRole(drafted.role)
+        setExpertiseInput(drafted.expertise.join(', '))
+        if (drafted.model && MODELS.some((m) => m.value === drafted.model)) {
+          setModel(drafted.model)
+        }
+        setNameError('')
+        setFormulateModel(modelUsed)
+      },
+    })
   }
 
   function gotoCapabilities(e: React.FormEvent) {
@@ -147,6 +165,16 @@ export default function HireAgentModal({ projectId, onClose }: HireAgentModalPro
                 onSubmit={gotoCapabilities}
                 style={{ display: 'flex', flexDirection: 'column', gap: '16px', paddingTop: '8px' }}
               >
+                <FormulatePanel
+                  placeholder="e.g. a frontend lead who's opinionated about accessibility, loves React 19, and writes detailed PR feedback"
+                  hint="Sketch the agent in plain language; AI fills name, role, expertise, and model for you to review."
+                  isPending={formulate.isPending}
+                  errorMessage={formulate.error?.message ?? null}
+                  modelUsed={formulateModel}
+                  onFormulate={handleFormulate}
+                  compact
+                />
+
                 <Field
                   label={<>Name <span style={{ color: tokens.colorPaletteRedForeground1 }}>*</span> <span style={{ fontWeight: 400, color: tokens.colorNeutralForeground4 }}>(kebab-case)</span></>}
                   validationMessage={nameError || undefined}

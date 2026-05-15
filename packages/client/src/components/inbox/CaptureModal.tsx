@@ -19,6 +19,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { tokens, Spinner } from '@fluentui/react-components'
+import { Beaker20Regular } from '@fluentui/react-icons'
 import { useProjects } from '../../api/projects.ts'
 import { useLabels } from '../../api/labels.ts'
 import {
@@ -600,7 +601,10 @@ export default function CaptureModal({
                     Formulating…
                   </span>
                 ) : (
-                  'Formulate'
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                    <Beaker20Regular />
+                    Formulate
+                  </span>
                 )}
               </button>
             </>

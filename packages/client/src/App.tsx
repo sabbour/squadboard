@@ -16,6 +16,7 @@ import ProjectFlow from './pages/ProjectFlow.tsx'
 import Skills from './pages/Skills.tsx'
 import Tools from './pages/Tools.tsx'
 import McpServers from './pages/McpServers.tsx'
+import Consult from './pages/Consult.tsx'
 
 export default function App() {
   return (
@@ -23,6 +24,10 @@ export default function App() {
       <Route element={<Layout />}>
         <Route index element={<ProjectPicker />} />
         <Route path="inbox" element={<Inbox />} />
+        {/* Phase 17: cross-project Ask / Consult */}
+        <Route path="consult" element={<Navigate to="/consult/new" replace />} />
+        <Route path="consult/new" element={<Consult />} />
+        <Route path="consult/:sessionId" element={<Consult />} />
         <Route path="projects/:id" element={<Navigate to="dashboard" replace />} />
         <Route path="projects/:id/dashboard" element={<Dashboard />} />
         <Route path="projects/:id/inbox" element={<Inbox />} />
@@ -32,6 +37,10 @@ export default function App() {
         <Route path="projects/:id/skills" element={<Skills />} />
         <Route path="projects/:id/tools" element={<Tools />} />
         <Route path="projects/:id/mcp-servers" element={<McpServers />} />
+        {/* Phase 17: project-scoped Ask / Consult */}
+        <Route path="projects/:id/consult" element={<Navigate to="new" replace />} />
+        <Route path="projects/:id/consult/new" element={<Consult />} />
+        <Route path="projects/:id/consult/:sessionId" element={<Consult />} />
         <Route path="projects/:id/costs" element={<Costs />} />
         {/* Phase 10: ceremonies replaces workflows. Legacy routes redirect via the page shims. */}
         <Route path="projects/:id/ceremonies" element={<CeremonyList />} />
