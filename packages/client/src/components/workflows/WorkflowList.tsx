@@ -20,11 +20,11 @@ export default function WorkflowList({ projectId }: WorkflowListProps) {
   const { data: workflows, isLoading, isError } = useWorkflows(projectId)
 
   if (isLoading) {
-    return <div style={{ padding: '24px', color: 'var(--text-muted)', fontSize: '13px' }}>Loading workflows…</div>
+    return <div style={{ padding: '24px', color: 'var(--text-muted)', fontSize: '13px' }}>Loading ceremonies…</div>
   }
 
   if (isError) {
-    return <div style={{ padding: '24px', color: '#f85149', fontSize: '13px' }}>Failed to load workflows.</div>
+    return <div style={{ padding: '24px', color: '#f85149', fontSize: '13px' }}>Failed to load ceremonies.</div>
   }
 
   return (
@@ -40,14 +40,14 @@ export default function WorkflowList({ projectId }: WorkflowListProps) {
         }}
       >
         <span style={{ fontSize: '13px', color: 'var(--text-muted)' }}>
-          {workflows?.length ?? 0} workflow{workflows?.length !== 1 ? 's' : ''}
+          {workflows?.length ?? 0} ceremon{workflows?.length === 1 ? 'y' : 'ies'}
         </span>
         <Button
           appearance="primary"
           size="small"
-          onClick={() => navigate(`/projects/${projectId}/workflows/new`)}
+          onClick={() => navigate(`/projects/${projectId}/ceremonies/new`)}
         >
-          + New Workflow
+          + New Ceremony
         </Button>
       </div>
 
@@ -66,13 +66,13 @@ export default function WorkflowList({ projectId }: WorkflowListProps) {
           }}
         >
           <span style={{ fontSize: '28px' }}>⚙</span>
-          <span>No workflows yet.</span>
+          <span>No ceremonies yet.</span>
           <Button
             appearance="outline"
             size="small"
-            onClick={() => navigate(`/projects/${projectId}/workflows/new`)}
+            onClick={() => navigate(`/projects/${projectId}/ceremonies/new`)}
           >
-            Create your first workflow →
+            Create your first ceremony →
           </Button>
         </div>
       )}
@@ -82,27 +82,27 @@ export default function WorkflowList({ projectId }: WorkflowListProps) {
         <Table size="medium">
           <TableHeader>
             <TableRow>
-              {['Name', 'Steps', 'Template', 'Created'].map((h) => (
+              {['Name', 'Trigger', 'Kind', 'Created'].map((h) => (
                 <TableHeaderCell key={h}>{h}</TableHeaderCell>
               ))}
             </TableRow>
           </TableHeader>
           <TableBody>
             {workflows.map((wf) => {
-              const stepCount = countSteps(wf.yamlContent)
               return (
                 <TableRow
                   key={wf.id}
-                  onClick={() => navigate(`/projects/${projectId}/workflows/${wf.id}`)}
+                  onClick={() => navigate(`/projects/${projectId}/ceremonies/${wf.id}`)}
                   style={{ cursor: 'pointer' }}
                 >
                   <TableCell>
                     <TableCellLayout style={{ fontWeight: 500 }}>{wf.name}</TableCellLayout>
                   </TableCell>
-                  <TableCell style={{ color: 'var(--text-muted)' }}>                    {stepCount} step{stepCount !== 1 ? 's' : ''}
+                  <TableCell style={{ color: 'var(--text-muted)' }}>
+                    {wf.triggerKind ?? '—'}
                   </TableCell>
                   <TableCell style={{ color: 'var(--text-muted)', fontFamily: 'monospace', fontSize: '11px' }}>
-                    {wf.templateSlug ?? '—'}
+                    {wf.kind ?? '—'}
                   </TableCell>
                   <TableCell style={{ color: 'var(--text-muted)', fontSize: '11px' }}>
                     {new Date(wf.createdAt).toLocaleDateString()}
@@ -115,9 +115,4 @@ export default function WorkflowList({ projectId }: WorkflowListProps) {
       )}
     </div>
   )
-}
-
-/** Count steps by looking for `- type:` lines in the YAML. */
-function countSteps(yaml: string): number {
-  return (yaml.match(/^\s*-\s+type:/gm) ?? []).length
 }

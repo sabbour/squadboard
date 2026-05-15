@@ -1,66 +1,60 @@
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+/**
+ * api/workflows.ts — DEPRECATED Phase 10 shim.
+ *
+ * Re-exports the new ceremony hooks under their legacy names so any
+ * call site that hasn't been migrated yet continues to compile and run.
+ * New code MUST import from './ceremonies.ts'.
+ *
+ * Slated for removal once all importers are migrated.
+ */
+
+import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { apiFetch } from './client.ts'
+import {
+  useCeremonies,
+  useCeremony,
+  useCreateCeremony,
+  useUpdateCeremony,
+  useDeleteCeremony,
+  useRunCeremony,
+  useCeremonyTemplates,
+  useStartCeremony,
+  useCeremonyRun,
+  type Ceremony,
+  type CeremonyTemplate,
+  type WorkflowRun,
+} from './ceremonies.ts'
 
-// ---------------------------------------------------------------------------
-// Types
-// ---------------------------------------------------------------------------
+/** @deprecated Use Ceremony from api/ceremonies. */
+export type Workflow = Ceremony
+/** @deprecated Use CeremonyTemplate from api/ceremonies. */
+export type WorkflowTemplate = CeremonyTemplate
+/** @deprecated WorkflowRun is unchanged but lives in api/ceremonies now. */
+export type { WorkflowRun }
 
-export interface Workflow {
-  id: string
-  projectId: string
-  name: string
-  description?: string
-  templateSlug?: string
-  yamlContent: string
-  createdAt: string
-}
+/** @deprecated Use useCeremonies. */
+export const useWorkflows = useCeremonies
+/** @deprecated Use useCeremony. */
+export const useWorkflow = useCeremony
+/** @deprecated Use useCreateCeremony. */
+export const useCreateWorkflow = useCreateCeremony
+/** @deprecated Use useUpdateCeremony. */
+export const useUpdateWorkflow = useUpdateCeremony
+/** @deprecated Use useDeleteCeremony. */
+export const useDeleteWorkflow = useDeleteCeremony
+/** @deprecated Use useRunCeremony. */
+export const useRunWorkflow = useRunCeremony
+/** @deprecated Use useCeremonyTemplates. */
+export const useWorkflowTemplates = useCeremonyTemplates
+/** @deprecated Use useStartCeremony. */
+export const useStartWorkflow = useStartCeremony
+/** @deprecated Use useCeremonyRun. */
+export const useWorkflowRun = useCeremonyRun
 
-export interface WorkflowRun {
-  id: string
-  issueId: string
-  workflowId: string
-  status: 'pending' | 'running' | 'completed' | 'failed' | 'cancelled'
-  currentStepIndex: number
-  createdAt: string
-  updatedAt: string
-}
-
-export interface WorkflowTemplate {
-  slug: string
-  name: string
-  description: string
-}
-
-// ---------------------------------------------------------------------------
-// Project workflows
-// ---------------------------------------------------------------------------
-
-export function useWorkflows(projectId: string) {
-  return useQuery<Workflow[]>({
-    queryKey: ['workflows', projectId],
-    queryFn: () => apiFetch<Workflow[]>(`/api/projects/${projectId}/workflows`),
-    enabled: Boolean(projectId),
-  })
-}
-
-export function useCreateWorkflow(projectId: string) {
-  const queryClient = useQueryClient()
-  return useMutation<Workflow, Error, { name: string; description?: string; yamlContent: string; templateSlug?: string }>({
-    mutationFn: (input) =>
-      apiFetch<Workflow>(`/api/projects/${projectId}/workflows`, {
-        method: 'POST',
-        body: JSON.stringify(input),
-      }),
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ['workflows', projectId] })
-    },
-  })
-}
-
-// ---------------------------------------------------------------------------
-// Workflow attachment to an issue
-// ---------------------------------------------------------------------------
-
+/**
+ * @deprecated Legacy attach signature kept exact for backward compat.
+ * Use useAttachCeremony from api/ceremonies.ts in new code.
+ */
 export function useAttachWorkflow(projectId: string, issueId: string) {
   const queryClient = useQueryClient()
   return useMutation<void, Error, { workflowId: string }>({
@@ -72,74 +66,5 @@ export function useAttachWorkflow(projectId: string, issueId: string) {
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['issues', projectId] })
     },
-  })
-}
-
-// ---------------------------------------------------------------------------
-// Workflow run (start / status)
-// ---------------------------------------------------------------------------
-
-export function useStartWorkflow(projectId: string, issueId: string) {
-  const queryClient = useQueryClient()
-  return useMutation<WorkflowRun, Error, void>({
-    mutationFn: () =>
-      apiFetch<WorkflowRun>(`/api/projects/${projectId}/issues/${issueId}/workflow/run`, {
-        method: 'POST',
-      }),
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ['workflow-run', projectId, issueId] })
-      void queryClient.invalidateQueries({ queryKey: ['issues', projectId] })
-    },
-  })
-}
-
-export function useWorkflowRun(projectId: string, issueId: string) {
-  return useQuery<WorkflowRun | null>({
-    queryKey: ['workflow-run', projectId, issueId],
-    queryFn: () => apiFetch<WorkflowRun | null>(`/api/projects/${projectId}/issues/${issueId}/workflow/run`),
-    enabled: Boolean(projectId) && Boolean(issueId),
-    refetchInterval: (query) => {
-      const data = query.state.data
-      if (!data) return false
-      return data.status === 'running' || data.status === 'pending' ? 3000 : false
-    },
-  })
-}
-
-// ---------------------------------------------------------------------------
-// Single workflow (for editor)
-// ---------------------------------------------------------------------------
-
-export function useWorkflow(projectId: string, workflowId: string) {
-  return useQuery<Workflow>({
-    queryKey: ['workflows', projectId, workflowId],
-    queryFn: () => apiFetch<Workflow>(`/api/projects/${projectId}/workflows/${workflowId}`),
-    enabled: Boolean(projectId) && Boolean(workflowId),
-  })
-}
-
-export function useUpdateWorkflow(projectId: string) {
-  const queryClient = useQueryClient()
-  return useMutation<Workflow, Error, { workflowId: string; name?: string; yamlContent?: string }>({
-    mutationFn: ({ workflowId, ...body }) =>
-      apiFetch<Workflow>(`/api/projects/${projectId}/workflows/${workflowId}`, {
-        method: 'PATCH',
-        body: JSON.stringify(body),
-      }),
-    onSuccess: (wf) => {
-      void queryClient.invalidateQueries({ queryKey: ['workflows', projectId] })
-      void queryClient.invalidateQueries({ queryKey: ['workflows', projectId, wf.id] })
-    },
-  })
-}
-
-// ---------------------------------------------------------------------------
-// Bundled templates
-// ---------------------------------------------------------------------------
-
-export function useWorkflowTemplates() {
-  return useQuery<WorkflowTemplate[]>({
-    queryKey: ['workflow-templates'],
-    queryFn: () => apiFetch<WorkflowTemplate[]>('/api/workflows/templates'),
   })
 }

@@ -79,7 +79,7 @@ const PROJECT_NAV_ITEMS = [
   { label: 'Dashboard', segment: 'dashboard', icon: <Grid24Regular /> },
   { label: 'Board', segment: 'board', icon: <ClipboardTaskListLtr24Regular /> },
   { label: 'Agents', segment: 'agents', icon: <Bot24Regular /> },
-  { label: 'Workflows', segment: 'workflows', icon: <ArrowSync24Regular /> },
+  { label: 'Ceremonies', segment: 'ceremonies', icon: <ArrowSync24Regular /> },
   { label: 'Costs', segment: 'costs', icon: <Money24Regular /> },
 ]
 

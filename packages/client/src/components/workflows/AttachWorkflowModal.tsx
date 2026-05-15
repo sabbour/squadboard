@@ -85,12 +85,9 @@ export function AttachWorkflowModal({ projectId, issueId, onClose }: AttachWorkf
     setError(null)
     try {
       const created = await createWorkflow.mutateAsync({
-        name: tpl.name,
-        description: tpl.description,
-        templateSlug: tpl.slug,
         yamlContent: `template:${tpl.slug}`,
       })
-      await attachWorkflow.mutateAsync({ workflowId: created.id })
+      await attachWorkflow.mutateAsync({ workflowId: created.ceremony.id })
       onClose()
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to create workflow from template')
