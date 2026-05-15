@@ -6,6 +6,7 @@ import { eq, and } from 'drizzle-orm';
 import { getDb, schema } from '../db/index.js';
 import { parseCharter, writeCharter, computeCharterHash } from '../services/charter-compiler.js';
 import { syncAgentsFromDisk } from '../services/agent-sync.js';
+import { formulateAgentDraft, formulateTeamDraft } from '../services/hire-formulator.js';
 
 const router = Router({ mergeParams: true });
 
@@ -145,6 +146,65 @@ router.post('/', async (req: Request, res: Response) => {
     .returning();
 
   res.status(201).json({ ok: true, data: inserted });
+});
+
+// ---------------------------------------------------------------------------
+// POST /api/projects/:projectId/agents/formulate
+// AI-formulate an agent draft from a brief prose description. Does NOT
+// persist — returns { agent: {name,role,expertise,model}, modelUsed }.
+// ---------------------------------------------------------------------------
+router.post('/formulate', async (req: Request, res: Response) => {
+  try {
+    const { projectId } = req.params as Record<string, string>;
+    const { draft } = (req.body ?? {}) as { draft?: string };
+    if (!draft || typeof draft !== 'string') {
+      res.status(400).json({ ok: false, error: '`draft` is required' });
+      return;
+    }
+
+    const db = getDb();
+    const existing = await db
+      .select({ name: schema.agents.name })
+      .from(schema.agents)
+      .where(eq(schema.agents.projectId, projectId));
+    const existingNames = existing.map((r) => r.name);
+
+    const result = await formulateAgentDraft(projectId, draft, existingNames);
+    res.json({ ok: true, data: result });
+  } catch (err) {
+    const status = (err as Error & { status?: number }).status ?? 500;
+    if (status >= 500) console.error('[agents/formulate] unhandled:', err);
+    res.status(status).json({
+      ok: false,
+      error: err instanceof Error ? err.message : 'Internal server error',
+    });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// POST /api/projects/:projectId/agents/team/formulate
+// AI-formulate a team-hire configuration (universe, teamSize, requiredRoles)
+// from a brief prose description. Does NOT cast — returns the form payload
+// for the user to review and submit through the existing propose flow.
+// ---------------------------------------------------------------------------
+router.post('/team/formulate', async (req: Request, res: Response) => {
+  try {
+    const { projectId } = req.params as Record<string, string>;
+    const { draft } = (req.body ?? {}) as { draft?: string };
+    if (!draft || typeof draft !== 'string') {
+      res.status(400).json({ ok: false, error: '`draft` is required' });
+      return;
+    }
+    const result = await formulateTeamDraft(projectId, draft);
+    res.json({ ok: true, data: result });
+  } catch (err) {
+    const status = (err as Error & { status?: number }).status ?? 500;
+    if (status >= 500) console.error('[team/formulate] unhandled:', err);
+    res.status(status).json({
+      ok: false,
+      error: err instanceof Error ? err.message : 'Internal server error',
+    });
+  }
 });
 
 // ---------------------------------------------------------------------------

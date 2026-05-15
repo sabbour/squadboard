@@ -126,3 +126,35 @@ export function useUnassignSkillFromAgent(projectId: string, agentId: string) {
     onSuccess: () => qc.invalidateQueries({ queryKey: ['skills', projectId, 'agent', agentId] }),
   })
 }
+
+// ---------------------------------------------------------------------------
+// Formulate (AI-author a skill from a brief description)
+// ---------------------------------------------------------------------------
+
+export interface FormulateModelInfo {
+  model: string
+  via: 'session' | 'agent' | 'project' | 'fallback'
+}
+
+export interface FormulatedSkillDraft {
+  key: string
+  name: string
+  description: string
+  category: string
+  promptAddendum: string
+}
+
+export interface FormulateSkillResult {
+  skill: FormulatedSkillDraft
+  modelUsed: FormulateModelInfo
+}
+
+export function useFormulateSkill(projectId: string) {
+  return useMutation<FormulateSkillResult, Error, string>({
+    mutationFn: (draft) =>
+      apiFetch<Envelope<FormulateSkillResult>>(
+        `/api/projects/${projectId}/skills/formulate`,
+        { method: 'POST', body: JSON.stringify({ draft }) },
+      ).then(unwrap),
+  })
+}

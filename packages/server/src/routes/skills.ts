@@ -94,6 +94,21 @@ projectSkillsRouter.post('/clone-curated', async (req: Request, res: Response) =
   }
 });
 
+projectSkillsRouter.post('/formulate', async (req: Request, res: Response) => {
+  try {
+    const { projectId } = req.params as { projectId: string };
+    const { draft } = req.body as { draft?: string };
+    if (!draft || typeof draft !== 'string') {
+      res.status(400).json({ ok: false, error: 'draft is required' });
+      return;
+    }
+    const result = await skillsService.formulateSkill(projectId, draft);
+    res.json({ ok: true, data: result });
+  } catch (err) {
+    handleError(res, err, 'skills/formulate');
+  }
+});
+
 projectSkillsRouter.patch('/:id', async (req: Request, res: Response) => {
   try {
     const { projectId, id } = req.params as { projectId: string; id: string };

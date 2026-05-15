@@ -5,7 +5,8 @@
  * A "skill" is a prompt-augmentation snippet (`promptAddendum`) that gets
  * prepended to an agent's effective system prompt when the skill is
  * assigned. Skills can be cloned from the bundled curated library
- * (`data/curated-skills.json`) or authored from scratch.
+ * (`data/curated-skills.json`), authored from scratch, or AI-formulated
+ * from a brief draft via `formulateSkill` (see the bottom of this file).
  */
 
 import { and, eq, inArray } from 'drizzle-orm';
@@ -13,6 +14,11 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { getDb, schema } from '../db/index.js';
+import {
+  extractJsonObject,
+  runFormulator,
+  type ResolveModelResult,
+} from './formulator.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const CURATED_PATH = path.resolve(__dirname, '..', 'data', 'curated-skills.json');
@@ -213,4 +219,114 @@ export async function unassignSkillFromAgent(
     .where(and(eq(schema.agentSkills.agentId, agentId), eq(schema.agentSkills.skillId, skillId)))
     .returning({ skillId: schema.agentSkills.skillId });
   return result.length > 0;
+}
+
+// ---------------------------------------------------------------------------
+// AI Formulator — turn a brief draft into a structured skill draft the user
+// can review + accept. Returns a CreateSkillInput-shaped payload (NOT
+// persisted) plus the model that produced it.
+// ---------------------------------------------------------------------------
+
+export interface FormulatedSkillDraft {
+  key: string;
+  name: string;
+  description: string;
+  category: string;
+  promptAddendum: string;
+}
+
+export interface FormulateSkillResult {
+  skill: FormulatedSkillDraft;
+  modelUsed: ResolveModelResult;
+}
+
+const KEBAB_RE = /^[a-z][a-z0-9-]*$/;
+
+function buildSkillPrompt(draft: string, existingKeys: string[]): string {
+  const existing = existingKeys.length
+    ? existingKeys.slice(0, 50).map((k) => `- ${k}`).join('\n')
+    : '(no existing skills yet)';
+
+  return [
+    "You are a skill formulator for an agent-driven kanban board. A 'skill' is a reusable prompt-augmentation snippet that specialises an AI agent. The user gave a brief, raw idea — your job is to turn it into a clean, well-structured skill draft.",
+    '',
+    'Existing skill keys in this project (avoid collisions, never reuse):',
+    existing,
+    '',
+    "User's draft:",
+    '"""',
+    draft,
+    '"""',
+    '',
+    'Respond ONLY with a JSON object (no prose, no markdown fence) matching:',
+    '{',
+    '  "key": string,             // kebab-case, ≤40 chars, unique vs the existing keys above',
+    '  "name": string,            // human-readable, ≤60 chars',
+    '  "description": string,     // 1 sentence, ≤140 chars',
+    '  "category": string,        // 1-2 word grouping (e.g. "review", "git", "writing")',
+    '  "promptAddendum": string   // markdown — the actual prompt fragment that will be injected',
+    '}',
+    '',
+    'Guidelines for promptAddendum:',
+    '- 4-12 short bullet points or 1-3 short paragraphs. Imperative voice ("Use X.", "Avoid Y.").',
+    '- Concrete, actionable rules — not abstract goals.',
+    '- Mention the trigger ("When the user asks for X…") if context-specific.',
+  ].join('\n');
+}
+
+function normalizeSkillDraft(parsed: unknown, existingKeys: Set<string>): FormulatedSkillDraft {
+  if (!parsed || typeof parsed !== 'object') {
+    throw new Error('LLM payload was not a JSON object');
+  }
+  const p = parsed as Record<string, unknown>;
+
+  let key = typeof p.key === 'string' ? p.key.trim().toLowerCase() : '';
+  // Coerce to kebab-case if the model returned something close.
+  key = key.replace(/[\s_]+/g, '-').replace(/[^a-z0-9-]/g, '').replace(/-+/g, '-').replace(/^-|-$/g, '');
+  if (!key || !KEBAB_RE.test(key)) throw new Error('LLM produced an invalid skill key');
+  // De-duplicate by suffixing -2, -3, … if needed.
+  if (existingKeys.has(key)) {
+    let n = 2;
+    while (existingKeys.has(`${key}-${n}`)) n++;
+    key = `${key}-${n}`;
+  }
+
+  const name = typeof p.name === 'string' ? p.name.trim() : '';
+  if (!name) throw new Error('LLM payload missing `name`');
+
+  const description = typeof p.description === 'string' ? p.description.trim() : '';
+  const category = typeof p.category === 'string' ? p.category.trim().toLowerCase() : '';
+  const promptAddendum = typeof p.promptAddendum === 'string' ? p.promptAddendum.trim() : '';
+  if (!promptAddendum) throw new Error('LLM payload missing `promptAddendum`');
+
+  return {
+    key: key.slice(0, 40),
+    name: name.slice(0, 60),
+    description: description.slice(0, 140),
+    category: category.slice(0, 30),
+    promptAddendum,
+  };
+}
+
+export async function formulateSkill(
+  projectId: string,
+  draft: string,
+): Promise<FormulateSkillResult> {
+  const trimmed = (draft ?? '').trim();
+  if (!trimmed) {
+    throw Object.assign(new Error('draft is required'), { status: 400 });
+  }
+
+  const existing = await listSkills(projectId);
+  const existingKeys = existing.map((s) => s.key);
+
+  const prompt = buildSkillPrompt(trimmed, existingKeys);
+  const { raw, modelUsed } = await runFormulator({ prompt, projectId });
+  console.log(
+    `[skills] formulating draft (${trimmed.length} chars) with model=${modelUsed.model} (via ${modelUsed.via})`,
+  );
+
+  const parsed = extractJsonObject(raw);
+  const skill = normalizeSkillDraft(parsed, new Set(existingKeys));
+  return { skill, modelUsed };
 }

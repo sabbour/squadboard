@@ -98,3 +98,35 @@ export function useUnassignToolFromAgent(projectId: string, agentId: string) {
     onSuccess: () => qc.invalidateQueries({ queryKey: ['tools', projectId, 'agent', agentId] }),
   })
 }
+
+// ---------------------------------------------------------------------------
+// Formulate (AI-author a tool from a brief description)
+// ---------------------------------------------------------------------------
+
+export interface FormulateModelInfo {
+  model: string
+  via: 'session' | 'agent' | 'project' | 'fallback'
+}
+
+export interface FormulatedToolDraft {
+  key: string
+  name: string
+  description: string
+  category: string
+  inputSchema: unknown
+}
+
+export interface FormulateToolResult {
+  tool: FormulatedToolDraft
+  modelUsed: FormulateModelInfo
+}
+
+export function useFormulateTool(projectId: string) {
+  return useMutation<FormulateToolResult, Error, string>({
+    mutationFn: (draft) =>
+      apiFetch<Envelope<FormulateToolResult>>(
+        `/api/projects/${projectId}/tools/formulate`,
+        { method: 'POST', body: JSON.stringify({ draft }) },
+      ).then(unwrap),
+  })
+}

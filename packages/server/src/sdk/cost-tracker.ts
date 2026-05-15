@@ -125,6 +125,7 @@ export interface CostSummary {
     totalOutputTokens: number;
     totalCostUsd: number;
     byAgent: CostByAgent[];
+    byModel: CostByModel[];
   };
   /** All-time totals */
   allTime: {
@@ -132,6 +133,7 @@ export interface CostSummary {
     totalOutputTokens: number;
     totalCostUsd: number;
     byAgent: CostByAgent[];
+    byModel: CostByModel[];
   };
 }
 
@@ -195,8 +197,9 @@ export async function getCostSummary(db: DrizzleDb, projectId: string): Promise<
   ];
   const mtdRows = allRows.filter((r) => new Date(r.created_at) >= startOfMonth);
 
-  function aggregate(raws: Row[]): { totalInputTokens: number; totalOutputTokens: number; totalCostUsd: number; byAgent: CostByAgent[] } {
+  function aggregate(raws: Row[]): { totalInputTokens: number; totalOutputTokens: number; totalCostUsd: number; byAgent: CostByAgent[]; byModel: CostByModel[] } {
     const agentMap = new Map<string, CostByAgent>();
+    const modelMap = new Map<string, CostByModel>();
     let totalInput = 0;
     let totalOutput = 0;
     let totalCost = 0;
@@ -225,6 +228,23 @@ export async function getCostSummary(db: DrizzleDb, projectId: string): Promise<
           costUsd: cost,
         });
       }
+
+      const modelKey = r.model_id ?? 'unknown';
+      const existingModel = modelMap.get(modelKey);
+      if (existingModel) {
+        existingModel.runCount++;
+        existingModel.inputTokens += input;
+        existingModel.outputTokens += output;
+        existingModel.costUsd += cost;
+      } else {
+        modelMap.set(modelKey, {
+          modelId: modelKey,
+          runCount: 1,
+          inputTokens: input,
+          outputTokens: output,
+          costUsd: cost,
+        });
+      }
     }
 
     return {
@@ -232,6 +252,7 @@ export async function getCostSummary(db: DrizzleDb, projectId: string): Promise<
       totalOutputTokens: totalOutput,
       totalCostUsd: totalCost,
       byAgent: Array.from(agentMap.values()),
+      byModel: Array.from(modelMap.values()),
     };
   }
 

@@ -34,11 +34,14 @@ import {
   useCreateSkill,
   useCuratedSkills,
   useDeleteSkill,
+  useFormulateSkill,
   useSkills,
   useUpdateSkill,
+  type FormulateModelInfo,
   type Skill,
   type CuratedSkill,
 } from '../api/skills.ts'
+import FormulatePanel from '../components/formulate/FormulatePanel.tsx'
 
 const KEBAB_RE = /^[a-z][a-z0-9-]*$/
 
@@ -181,8 +184,26 @@ function SkillFormDialog({ projectId, skill, onClose }: { projectId: string; ski
       : EMPTY_FORM,
   )
   const [keyError, setKeyError] = useState('')
+  const [modelUsed, setModelUsed] = useState<FormulateModelInfo | null>(null)
   const create = useCreateSkill(projectId)
   const update = useUpdateSkill(projectId)
+  const formulate = useFormulateSkill(projectId)
+
+  function handleFormulate(draft: string) {
+    formulate.mutate(draft, {
+      onSuccess: ({ skill: drafted, modelUsed: info }) => {
+        setForm({
+          key: drafted.key,
+          name: drafted.name,
+          description: drafted.description,
+          category: drafted.category,
+          promptAddendum: drafted.promptAddendum,
+        })
+        setKeyError('')
+        setModelUsed(info)
+      },
+    })
+  }
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -209,33 +230,45 @@ function SkillFormDialog({ projectId, skill, onClose }: { projectId: string; ski
         <DialogBody>
           <DialogTitle>{skill ? 'Edit skill' : 'New skill'}</DialogTitle>
           <DialogContent>
-            <form id="skill-form" onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '12px', paddingTop: '8px' }}>
-              <Field label="Key (kebab-case)" validationMessage={keyError || undefined} validationState={keyError ? 'error' : 'none'}>
-                <Input
-                  value={form.key}
-                  disabled={!!skill}
-                  onChange={(e) => { setForm({ ...form, key: e.target.value }); setKeyError('') }}
-                  placeholder="e.g. code-review-checklist"
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '14px', paddingTop: '8px' }}>
+              {!skill && (
+                <FormulatePanel
+                  placeholder="e.g. a checklist skill that reminds the agent to verify tests, lint, and changelog before submitting code review"
+                  hint="Sketch a skill in plain language; AI fills the form for you to review."
+                  isPending={formulate.isPending}
+                  errorMessage={formulate.error?.message ?? null}
+                  modelUsed={modelUsed}
+                  onFormulate={handleFormulate}
                 />
-              </Field>
-              <Field label="Name">
-                <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="e.g. Code Review Checklist" />
-              </Field>
-              <Field label="Category (optional)">
-                <Input value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })} placeholder="e.g. review" />
-              </Field>
-              <Field label="Description (optional)">
-                <Input value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} placeholder="Short summary" />
-              </Field>
-              <Field label="Prompt addendum" hint="Injected into the agent's system prompt when this skill is assigned.">
-                <Textarea
-                  value={form.promptAddendum}
-                  onChange={(_, d) => setForm({ ...form, promptAddendum: d.value })}
-                  rows={8}
-                  placeholder="When the user asks for X, do Y…"
-                />
-              </Field>
-            </form>
+              )}
+              <form id="skill-form" onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                <Field label="Key (kebab-case)" validationMessage={keyError || undefined} validationState={keyError ? 'error' : 'none'}>
+                  <Input
+                    value={form.key}
+                    disabled={!!skill}
+                    onChange={(e) => { setForm({ ...form, key: e.target.value }); setKeyError('') }}
+                    placeholder="e.g. code-review-checklist"
+                  />
+                </Field>
+                <Field label="Name">
+                  <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="e.g. Code Review Checklist" />
+                </Field>
+                <Field label="Category (optional)">
+                  <Input value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })} placeholder="e.g. review" />
+                </Field>
+                <Field label="Description (optional)">
+                  <Input value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} placeholder="Short summary" />
+                </Field>
+                <Field label="Prompt addendum" hint="Injected into the agent's system prompt when this skill is assigned.">
+                  <Textarea
+                    value={form.promptAddendum}
+                    onChange={(_, d) => setForm({ ...form, promptAddendum: d.value })}
+                    rows={8}
+                    placeholder="When the user asks for X, do Y…"
+                  />
+                </Field>
+              </form>
+            </div>
           </DialogContent>
           <DialogActions>
             <Button appearance="secondary" onClick={onClose}>Cancel</Button>

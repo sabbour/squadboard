@@ -199,7 +199,7 @@ export default function Layout() {
           <Button
             appearance="subtle"
             icon={<Mail20Regular />}
-            onClick={() => navigate('/inbox')}
+            onClick={() => navigate(id ? `/projects/${id}/inbox` : '/inbox')}
             title="Inbox"
           >
             Inbox

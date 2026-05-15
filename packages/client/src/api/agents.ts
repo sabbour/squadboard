@@ -206,3 +206,56 @@ export function useHireTeamConfirm(projectId: string) {
     },
   })
 }
+
+// ---------------------------------------------------------------------------
+// Formulate (AI-author a hire-agent draft / hire-team config from prose)
+// ---------------------------------------------------------------------------
+
+export interface FormulateModelInfo {
+  model: string
+  via: 'session' | 'agent' | 'project' | 'fallback'
+}
+
+export interface FormulatedAgentDraft {
+  name: string
+  role: string
+  expertise: string[]
+  model: string
+}
+
+export interface FormulateAgentResult {
+  agent: FormulatedAgentDraft
+  modelUsed: FormulateModelInfo
+}
+
+export function useFormulateAgent(projectId: string) {
+  return useMutation<FormulateAgentResult, Error, string>({
+    mutationFn: (draft) =>
+      apiFetch<Envelope<FormulateAgentResult>>(
+        `/api/projects/${projectId}/agents/formulate`,
+        { method: 'POST', body: JSON.stringify({ draft }) },
+      ).then(unwrap),
+  })
+}
+
+export interface FormulatedTeamDraft {
+  universe: CastingUniverseId
+  teamSize: number
+  requiredRoles: CastingAgentRole[]
+  rationale: string
+}
+
+export interface FormulateTeamResult {
+  team: FormulatedTeamDraft
+  modelUsed: FormulateModelInfo
+}
+
+export function useFormulateTeam(projectId: string) {
+  return useMutation<FormulateTeamResult, Error, string>({
+    mutationFn: (draft) =>
+      apiFetch<Envelope<FormulateTeamResult>>(
+        `/api/projects/${projectId}/agents/team/formulate`,
+        { method: 'POST', body: JSON.stringify({ draft }) },
+      ).then(unwrap),
+  })
+}

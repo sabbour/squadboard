@@ -25,6 +25,7 @@ export default function App() {
         <Route path="inbox" element={<Inbox />} />
         <Route path="projects/:id" element={<Navigate to="dashboard" replace />} />
         <Route path="projects/:id/dashboard" element={<Dashboard />} />
+        <Route path="projects/:id/inbox" element={<Inbox />} />
         <Route path="projects/:id/board" element={<Board />} />
         <Route path="projects/:id/flow" element={<ProjectFlow />} />
         <Route path="projects/:id/agents" element={<Agents />} />

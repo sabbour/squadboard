@@ -6,10 +6,20 @@
  * server, but a tool row can exist without an mcpServerId (e.g. a built-in
  * SDK tool, or a tool whose backing server hasn't been registered yet).
  * Tools carry optional input/output JSON schemas for downstream UIs.
+ *
+ * AI-formulated tools (see `formulateTool` at the bottom) let users sketch
+ * a tool with a brief prose description; the model returns a structured
+ * draft (key, name, description, category, suggested input schema sketch)
+ * that the user reviews and accepts.
  */
 
 import { and, eq, inArray } from 'drizzle-orm';
 import { getDb, schema } from '../db/index.js';
+import {
+  extractJsonObject,
+  runFormulator,
+  type ResolveModelResult,
+} from './formulator.js';
 
 // ---------------------------------------------------------------------------
 // CRUD
@@ -163,4 +173,117 @@ export async function unassignToolFromAgent(
     .where(and(eq(schema.agentTools.agentId, agentId), eq(schema.agentTools.toolId, toolId)))
     .returning({ toolId: schema.agentTools.toolId });
   return result.length > 0;
+}
+
+// ---------------------------------------------------------------------------
+// AI Formulator — turn a brief draft into a structured tool draft the user
+// can review + accept. Returns a CreateToolInput-shaped payload (NOT
+// persisted) plus the model that produced it.
+// ---------------------------------------------------------------------------
+
+export interface FormulatedToolDraft {
+  key: string;
+  name: string;
+  description: string;
+  category: string;
+  inputSchema: unknown;
+}
+
+export interface FormulateToolResult {
+  tool: FormulatedToolDraft;
+  modelUsed: ResolveModelResult;
+}
+
+const TOOL_KEBAB_RE = /^[a-z][a-z0-9_-]*$/;
+
+function buildToolPrompt(draft: string, existingKeys: string[]): string {
+  const existing = existingKeys.length
+    ? existingKeys.slice(0, 50).map((k) => `- ${k}`).join('\n')
+    : '(no existing tools yet)';
+
+  return [
+    "You are a tool formulator for an agent-driven kanban board. A 'tool' is a catalogued external action that an AI agent can invoke (typically via MCP). The user gave a brief, raw description — your job is to turn it into a clean, well-structured tool draft.",
+    '',
+    'Existing tool keys in this project (avoid collisions, never reuse):',
+    existing,
+    '',
+    "User's draft:",
+    '"""',
+    draft,
+    '"""',
+    '',
+    'Respond ONLY with a JSON object (no prose, no markdown fence) matching:',
+    '{',
+    '  "key": string,                // snake_case or kebab-case, ≤40 chars, unique',
+    '  "name": string,               // human-readable, ≤60 chars',
+    '  "description": string,        // 1-2 sentences explaining what the tool does and when to use it',
+    '  "category": string,           // 1-2 word grouping (e.g. "github", "search", "filesystem")',
+    '  "inputSchema": object         // a JSON Schema sketch of the tool\'s input parameters (object with properties + required)',
+    '}',
+    '',
+    'Guidelines:',
+    '- description: clear, actionable, mentions when an agent should reach for this tool.',
+    '- inputSchema: use standard JSON Schema (type, properties, required). If unsure of inputs, return { "type": "object", "properties": {}, "required": [] }.',
+    '- Prefer well-known parameter names (owner, repo, query, path, …) for clarity.',
+  ].join('\n');
+}
+
+function normalizeToolDraft(parsed: unknown, existingKeys: Set<string>): FormulatedToolDraft {
+  if (!parsed || typeof parsed !== 'object') {
+    throw new Error('LLM payload was not a JSON object');
+  }
+  const p = parsed as Record<string, unknown>;
+
+  let key = typeof p.key === 'string' ? p.key.trim().toLowerCase() : '';
+  key = key.replace(/\s+/g, '_').replace(/[^a-z0-9_-]/g, '').replace(/[_-]+/g, (m) => m[0]).replace(/^[_-]|[_-]$/g, '');
+  if (!key || !TOOL_KEBAB_RE.test(key)) throw new Error('LLM produced an invalid tool key');
+  if (existingKeys.has(key)) {
+    let n = 2;
+    while (existingKeys.has(`${key}_${n}`)) n++;
+    key = `${key}_${n}`;
+  }
+
+  const name = typeof p.name === 'string' ? p.name.trim() : '';
+  if (!name) throw new Error('LLM payload missing `name`');
+
+  const description = typeof p.description === 'string' ? p.description.trim() : '';
+  if (!description) throw new Error('LLM payload missing `description`');
+
+  const category = typeof p.category === 'string' ? p.category.trim().toLowerCase() : '';
+
+  let inputSchema: unknown = p.inputSchema;
+  if (!inputSchema || typeof inputSchema !== 'object') {
+    inputSchema = { type: 'object', properties: {}, required: [] };
+  }
+
+  return {
+    key: key.slice(0, 40),
+    name: name.slice(0, 60),
+    description: description.slice(0, 280),
+    category: category.slice(0, 30),
+    inputSchema,
+  };
+}
+
+export async function formulateTool(
+  projectId: string,
+  draft: string,
+): Promise<FormulateToolResult> {
+  const trimmed = (draft ?? '').trim();
+  if (!trimmed) {
+    throw Object.assign(new Error('draft is required'), { status: 400 });
+  }
+
+  const existing = await listTools(projectId);
+  const existingKeys = existing.map((t) => t.key);
+
+  const prompt = buildToolPrompt(trimmed, existingKeys);
+  const { raw, modelUsed } = await runFormulator({ prompt, projectId });
+  console.log(
+    `[tools] formulating draft (${trimmed.length} chars) with model=${modelUsed.model} (via ${modelUsed.via})`,
+  );
+
+  const parsed = extractJsonObject(raw);
+  const tool = normalizeToolDraft(parsed, new Set(existingKeys));
+  return { tool, modelUsed };
 }

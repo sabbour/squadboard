@@ -2,7 +2,42 @@ import { useQuery } from '@tanstack/react-query'
 import { apiFetch } from './client.ts'
 
 // ---------------------------------------------------------------------------
-// Types
+// Server response types (raw shape from `/api/projects/:id/costs`)
+// ---------------------------------------------------------------------------
+
+export interface ServerCostByAgent {
+  agentId: string
+  agentName: string
+  runCount: number
+  inputTokens: number
+  outputTokens: number
+  costUsd: number
+}
+
+export interface ServerCostByModel {
+  modelId: string
+  runCount: number
+  inputTokens: number
+  outputTokens: number
+  costUsd: number
+}
+
+export interface ServerCostBucket {
+  totalInputTokens: number
+  totalOutputTokens: number
+  totalCostUsd: number
+  byAgent: ServerCostByAgent[]
+  byModel: ServerCostByModel[]
+}
+
+export interface ServerCostSummary {
+  projectId: string
+  mtd: ServerCostBucket
+  allTime: ServerCostBucket
+}
+
+// ---------------------------------------------------------------------------
+// Client view types (flat MTD view used by CostDashboard)
 // ---------------------------------------------------------------------------
 
 export interface AgentCost {
@@ -27,10 +62,58 @@ export interface CostSummary {
   totalMtd: number
 }
 
+export interface ServerBudget {
+  projectId: string
+  budgetUsd: number | null
+  spendUsd: number
+  percentUsed: number | null
+  isConfigured: boolean
+}
+
 export interface Budget {
   monthlyBudgetUsd: number | null
   mtdSpend: number
   percentUsed: number
+}
+
+// ---------------------------------------------------------------------------
+// Adapters — defensive against missing/null fields so the UI never crashes
+// even if the server contract drifts.
+// ---------------------------------------------------------------------------
+
+function adaptSummary(raw: ServerCostSummary | undefined | null): CostSummary {
+  const mtd = raw?.mtd ?? { totalCostUsd: 0, byAgent: [], byModel: [] }
+  const byAgent: AgentCost[] = (mtd.byAgent ?? []).map((a) => {
+    const total = Number(a.costUsd ?? 0)
+    const runs = Number(a.runCount ?? 0)
+    return {
+      agentId: a.agentId,
+      agentName: a.agentName,
+      runs,
+      totalUsd: total,
+      avgUsdPerRun: runs > 0 ? total / runs : 0,
+    }
+  })
+  const byModel: ModelCost[] = (mtd.byModel ?? []).map((m) => ({
+    model: m.modelId,
+    runs: Number(m.runCount ?? 0),
+    tokensIn: Number(m.inputTokens ?? 0),
+    tokensOut: Number(m.outputTokens ?? 0),
+    totalUsd: Number(m.costUsd ?? 0),
+  }))
+  return {
+    byAgent,
+    byModel,
+    totalMtd: Number(mtd.totalCostUsd ?? 0),
+  }
+}
+
+function adaptBudget(raw: ServerBudget | undefined | null): Budget {
+  return {
+    monthlyBudgetUsd: raw?.budgetUsd ?? null,
+    mtdSpend: Number(raw?.spendUsd ?? 0),
+    percentUsed: Number(raw?.percentUsed ?? 0),
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -40,7 +123,10 @@ export interface Budget {
 export function useCostSummary(projectId: string) {
   return useQuery<CostSummary>({
     queryKey: ['costs', projectId, 'summary'],
-    queryFn: () => apiFetch<CostSummary>(`/api/projects/${projectId}/costs`),
+    queryFn: async () => {
+      const raw = await apiFetch<ServerCostSummary>(`/api/projects/${projectId}/costs`)
+      return adaptSummary(raw)
+    },
     enabled: Boolean(projectId),
     refetchInterval: 30_000,
   })
@@ -49,7 +135,10 @@ export function useCostSummary(projectId: string) {
 export function useBudget(projectId: string) {
   return useQuery<Budget>({
     queryKey: ['costs', projectId, 'budget'],
-    queryFn: () => apiFetch<Budget>(`/api/projects/${projectId}/costs/budget`),
+    queryFn: async () => {
+      const raw = await apiFetch<ServerBudget>(`/api/projects/${projectId}/costs/budget`)
+      return adaptBudget(raw)
+    },
     enabled: Boolean(projectId),
     refetchInterval: 30_000,
   })

@@ -29,10 +29,13 @@ import { useMcpServers } from '../api/mcp.ts'
 import {
   useCreateTool,
   useDeleteTool,
+  useFormulateTool,
   useTools,
   useUpdateTool,
+  type FormulateModelInfo,
   type Tool,
 } from '../api/tools.ts'
+import FormulatePanel from '../components/formulate/FormulatePanel.tsx'
 
 const KEBAB_RE = /^[a-z_][a-z0-9_]*$/
 
@@ -148,8 +151,26 @@ function ToolFormDialog({ projectId, tool, onClose }: { projectId: string; tool?
       : EMPTY_FORM,
   )
   const [keyError, setKeyError] = useState('')
+  const [modelUsed, setModelUsed] = useState<FormulateModelInfo | null>(null)
   const create = useCreateTool(projectId)
   const update = useUpdateTool(projectId)
+  const formulate = useFormulateTool(projectId)
+
+  function handleFormulate(draft: string) {
+    formulate.mutate(draft, {
+      onSuccess: ({ tool: drafted, modelUsed: info }) => {
+        setForm({
+          key: drafted.key,
+          name: drafted.name,
+          description: drafted.description,
+          category: drafted.category,
+          mcpServerId: form.mcpServerId,
+        })
+        setKeyError('')
+        setModelUsed(info)
+      },
+    })
+  }
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -175,42 +196,54 @@ function ToolFormDialog({ projectId, tool, onClose }: { projectId: string; tool?
         <DialogBody>
           <DialogTitle>{tool ? 'Edit tool' : 'New tool'}</DialogTitle>
           <DialogContent>
-            <form id="tool-form" onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '12px', paddingTop: '8px' }}>
-              <Field label="Key (snake_case or kebab-case)" validationMessage={keyError || undefined} validationState={keyError ? 'error' : 'none'}>
-                <Input
-                  value={form.key}
-                  disabled={!!tool}
-                  onChange={(e) => { setForm({ ...form, key: e.target.value }); setKeyError('') }}
-                  placeholder="e.g. web_search"
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '14px', paddingTop: '8px' }}>
+              {!tool && (
+                <FormulatePanel
+                  placeholder="e.g. a tool that searches our internal docs and returns the top 3 matching pages with summaries"
+                  hint="Sketch a tool in plain language; AI fills the form for you to review."
+                  isPending={formulate.isPending}
+                  errorMessage={formulate.error?.message ?? null}
+                  modelUsed={modelUsed}
+                  onFormulate={handleFormulate}
                 />
-              </Field>
-              <Field label="Name">
-                <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="e.g. Web Search" />
-              </Field>
-              <Field label="Description">
-                <Textarea
-                  value={form.description}
-                  onChange={(_, d) => setForm({ ...form, description: d.value })}
-                  rows={3}
-                  placeholder="What this tool does — agent-facing summary."
-                />
-              </Field>
-              <Field label="Category (optional)">
-                <Input value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })} placeholder="e.g. research" />
-              </Field>
-              <Field label="Backing MCP server (optional)">
-                <Dropdown
-                  value={form.mcpServerId ? mcpServers.find((s) => s.id === form.mcpServerId)?.name ?? '' : 'None'}
-                  selectedOptions={form.mcpServerId ? [form.mcpServerId] : ['']}
-                  onOptionSelect={(_, d) => setForm({ ...form, mcpServerId: (d.optionValue as string) ?? '' })}
-                >
-                  <Option value="">None</Option>
-                  {mcpServers.map((s) => (
-                    <Option key={s.id} value={s.id}>{s.name}</Option>
-                  ))}
-                </Dropdown>
-              </Field>
-            </form>
+              )}
+              <form id="tool-form" onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                <Field label="Key (snake_case or kebab-case)" validationMessage={keyError || undefined} validationState={keyError ? 'error' : 'none'}>
+                  <Input
+                    value={form.key}
+                    disabled={!!tool}
+                    onChange={(e) => { setForm({ ...form, key: e.target.value }); setKeyError('') }}
+                    placeholder="e.g. web_search"
+                  />
+                </Field>
+                <Field label="Name">
+                  <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="e.g. Web Search" />
+                </Field>
+                <Field label="Description">
+                  <Textarea
+                    value={form.description}
+                    onChange={(_, d) => setForm({ ...form, description: d.value })}
+                    rows={3}
+                    placeholder="What this tool does — agent-facing summary."
+                  />
+                </Field>
+                <Field label="Category (optional)">
+                  <Input value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })} placeholder="e.g. research" />
+                </Field>
+                <Field label="Backing MCP server (optional)">
+                  <Dropdown
+                    value={form.mcpServerId ? mcpServers.find((s) => s.id === form.mcpServerId)?.name ?? '' : 'None'}
+                    selectedOptions={form.mcpServerId ? [form.mcpServerId] : ['']}
+                    onOptionSelect={(_, d) => setForm({ ...form, mcpServerId: (d.optionValue as string) ?? '' })}
+                  >
+                    <Option value="">None</Option>
+                    {mcpServers.map((s) => (
+                      <Option key={s.id} value={s.id}>{s.name}</Option>
+                    ))}
+                  </Dropdown>
+                </Field>
+              </form>
+            </div>
           </DialogContent>
           <DialogActions>
             <Button appearance="secondary" onClick={onClose}>Cancel</Button>
