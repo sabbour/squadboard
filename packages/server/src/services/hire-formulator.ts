@@ -188,7 +188,7 @@ function buildTeamPrompt(draft: string, universes: { id: string; label: string; 
     '}',
     '',
     'Guidelines:',
-    '- universe: pick one whose tone matches the draft. Default to "usual-suspects" if the draft is generic.',
+    '- universe: pick one whose tone matches the draft. Available ids: "usual-suspects" (heist crew, generic default), "oceans-eleven" (slick ensemble), "the-office" (workplace comedy, office/business context), "seinfeld" (observational comedy, NYC professional), "the-simpsons" (satirical everyman, suburban or civic context). Default to "usual-suspects" if the draft is generic.',
     '- teamSize: prefer 4-6 for a typical product team; 3 for a tight crew; 7-9 for ambitious efforts. Never less than 3.',
     '- requiredRoles: always include "lead". Add roles based on the draft (e.g. mention of UI → designer, mention of testing → tester, mention of infra → devops).',
     '- Do NOT include "scribe" unless the draft explicitly mentions documentation or memory.',
