@@ -53,6 +53,10 @@ import { initWebSocketServer } from './realtime/ws-server.js';
 import { listPresence } from './realtime/presence.js';
 import { initGitHubSyncHooks } from './github/sync-hook.js';
 import { stopAllSyncLoops } from './github/sync.js';
+// Phase 19: Templates & Portability
+import templatesRouter from './routes/templates.js';
+import teamPortabilityRouter from './routes/team-portability.js';
+import projectPortabilityRouter from './routes/project-portability.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);

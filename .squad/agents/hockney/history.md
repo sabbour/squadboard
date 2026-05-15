@@ -112,3 +112,28 @@ Keyser's Diagnostics UI work (commit 13c34dca) accidentally swept Hockney's serv
 ## Team update (2026-05-15T16:09:55Z — Wave 3)
 
 Anchor filter fix (r3, commit 4ecb5525): `resolveAnchorIssue()` now excludes fan-out child issues via `issue_links` table. Closes spam loop at source — no ceremony anchor will pick a recently-created child that itself has fan-out steps. Indexed by existing `(child_issue_id, link_type)` pair from Demo 10; no schema migration. P1 follow-up: persist sweep failure count to Redis for process-restart recovery.
+
+---
+
+**2026-05-15T09:09:55-07:00 — Task: Phase 19 Templates & Portability backend**
+
+**Commits:** 3 batches (see SHAs below after commit)
+
+**Scope:**
+- `db/schema.ts`: Added `templates` pgTable — UUID PK, kind TEXT + CHECK('workflow'|'team'|'project'), name, description, payload JSONB, optional project_id FK, timestamps.
+- `db/index.ts`: Bootstrap DDL — `CREATE TABLE IF NOT EXISTS templates` + `CREATE INDEX IF NOT EXISTS templates_kind_name_idx ON templates (kind, name)`.
+- `services/templates/workflow-template.ts`: exportWorkflow, importWorkflow (creates ceremony + version row), saveAsTemplate, instantiateTemplate.
+- `services/templates/team-template.ts`: exportTeam (agents + skills/tools/mcp by key), importTeam (with name-conflict skip/force), saveAsTemplate, instantiateTemplate.
+- `services/templates/project-template.ts`: exportProject (full bundle excluding issues/runs/comments/inbox/costs), importProject (transactional), saveAsTemplate, instantiateTemplate.
+- `routes/templates.ts`: GET /api/templates (filter by kind), GET /api/templates/:id, DELETE /api/templates/:id.
+- `routes/team-portability.ts`: POST export/import/save-as-template/instantiate-template under /api/projects/:id/team/.
+- `routes/project-portability.ts`: POST export/import/save-as-template/instantiate-template under /api/projects (import + instantiate-template are static paths mounted before /:id handlers).
+- `index.ts`: Mounted all 3 new route modules at end of mount block.
+
+**Route count:** 11 new endpoints.
+
+**No-conflict:** Did NOT touch engine/, sdk/, client/, ceremonies.ts existing GET /templates handler, Kobayashi's charter-compiler.ts/agent-sync.ts, McManus's engine/, or Verbal's sdk/.
+
+**TypeScript:** `npx tsc --noEmit` → only 2 pre-existing conjure-classifier.ts errors. Zero new errors from this change.
+
+**Decision filed:** `.squad/decisions/inbox/hockney-phase19-backend.md`
