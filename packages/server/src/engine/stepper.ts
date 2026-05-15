@@ -3,6 +3,7 @@ import { getDb, schema, type DrizzleDb } from '../db/index.js';
 import { resolveWorkspace } from './workspace.js';
 import { executeAgentRun } from '../sdk/bridge.js';
 import { recordRunCompletion } from '../services/output-validator.js';
+import { eventBus } from '../realtime/event-bus.js';
 
 const LEASE_TTL_SECONDS = 90;
 const HEARTBEAT_INTERVAL_MS = 30_000;
@@ -119,10 +120,19 @@ export async function runWorker(issueRunId: string): Promise<void> {
         WHERE id = ${issueRunId}
           AND status = 'running'
       `);
+      // ── Flow heartbeat (throttled to 1/s in the bus) ─────────────────────
+      eventBus.emitFlowHeartbeat(project.id, issueRunId, { instanceId: issueRunId, status: 'active' });
     } catch (err: unknown) {
       console.error(`[stepper] heartbeat failed for ${issueRunId}:`, err);
     }
   }, HEARTBEAT_INTERVAL_MS);
+
+  // ── Flow event: issue_run started ──────────────────────────────────────────
+  eventBus.emitFlowEvent('flow.instance.started', project.id, {
+    instanceId: issueRunId,
+    agentId: run.agentId,
+    kind: 'issue_run',
+  });
 
   // --- Call SDK bridge ---
   try {
@@ -162,12 +172,18 @@ export async function runWorker(issueRunId: string): Promise<void> {
         result.output ?? '',
         workflowVersionId,
       );
+      // ── Flow event: issue_run ended (completed) ────────────────────────────
+      eventBus.emitFlowEvent('flow.instance.ended', project.id, { instanceId: issueRunId, status: 'completed' });
     } else {
       await markFailed(db, issueRunId, result.errorMessage ?? 'Agent run failed');
+      // ── Flow event: issue_run ended (failed) ───────────────────────────────
+      eventBus.emitFlowEvent('flow.instance.ended', project.id, { instanceId: issueRunId, status: 'failed' });
     }
   } catch (err: unknown) {
     clearInterval(heartbeatTimer);
     await markFailed(db, issueRunId, err instanceof Error ? err.message : String(err));
+    // ── Flow event: issue_run ended (failed — exception path) ─────────────────
+    eventBus.emitFlowEvent('flow.instance.ended', project.id, { instanceId: issueRunId, status: 'failed' });
   }
 }
 

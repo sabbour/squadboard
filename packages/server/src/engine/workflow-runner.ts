@@ -30,6 +30,22 @@ import {
 import type { RequestChangesPolicy } from './peer-reviewer.js';
 import { materializeAndSpawnFanOut, checkFanOutCompletion } from './fan-out.js';
 import { appendSystemComment } from '../services/issues.js';
+import { eventBus } from '../realtime/event-bus.js';
+
+// ---------------------------------------------------------------------------
+// Internal helper — look up projectId for a workflow_run (for flow events)
+// ---------------------------------------------------------------------------
+async function getProjectIdForWorkflowRun(workflowRunId: string): Promise<string | null> {
+  const db = getDb();
+  const rows = await db.execute(sql`
+    SELECT i.project_id
+    FROM   workflow_runs wr
+    JOIN   issues i ON wr.issue_id = i.id
+    WHERE  wr.id = ${workflowRunId}::uuid
+    LIMIT  1
+  `);
+  return (rows.rows as Array<{ project_id: string }>)[0]?.project_id ?? null;
+}
 
 // ---------------------------------------------------------------------------
 // createWorkflowRun
@@ -98,6 +114,17 @@ export async function createWorkflowRun(
     `[workflow-runner] created workflow_run ${wfRun.id} for issue ${issueId} ` +
     `(version ${workflowVersionId}, ${definition.steps.length} steps, policy=${requestChangesPolicy})`,
   );
+
+  // ── Flow event: instance started ──────────────────────────────────────────
+  const projectId = await getProjectIdForWorkflowRun(wfRun.id);
+  if (projectId) {
+    eventBus.emitFlowEvent('flow.instance.started', projectId, {
+      instanceId: wfRun.id,
+      agentId: null,
+      kind: 'workflow_run',
+    });
+  }
+
   return wfRun.id;
 }
 
@@ -374,6 +401,11 @@ async function handleAgentRunStep(
       .set({ status: 'failed', updatedAt: new Date() })
       .where(eq(schema.workflowRuns.id, wfRun.id));
     console.warn(`[workflow-runner] workflow_run ${wfRun.id} failed at agent_run step ${stepRun.stepIndex}`);
+    // ── Flow event: workflow_run ended (failed) ──────────────────────────────
+    const pid = await getProjectIdForWorkflowRun(wfRun.id);
+    if (pid) {
+      eventBus.emitFlowEvent('flow.instance.ended', pid, { instanceId: wfRun.id, status: 'failed' });
+    }
   }
   // else: still running/pending — wait for next tick
 }
@@ -995,6 +1027,11 @@ async function advanceToNextStep(workflowRunId: string, currentIndex: number): P
       .set({ currentStepIndex: nextIndex, updatedAt: new Date() })
       .where(eq(workflowRuns.id, workflowRunId));
     console.log(`[workflow-runner] workflow_run ${workflowRunId} advanced to step ${nextIndex}`);
+    // ── Flow event: heartbeat on step advancement ────────────────────────────
+    const pid = await getProjectIdForWorkflowRun(workflowRunId);
+    if (pid) {
+      eventBus.emitFlowHeartbeat(pid, workflowRunId, { instanceId: workflowRunId, status: 'active' });
+    }
   } else {
     // All steps complete
     await db
@@ -1002,6 +1039,11 @@ async function advanceToNextStep(workflowRunId: string, currentIndex: number): P
       .set({ status: 'completed', updatedAt: new Date() })
       .where(eq(workflowRuns.id, workflowRunId));
     console.log(`[workflow-runner] workflow_run ${workflowRunId} completed`);
+    // ── Flow event: instance ended ───────────────────────────────────────────
+    const pid = await getProjectIdForWorkflowRun(workflowRunId);
+    if (pid) {
+      eventBus.emitFlowEvent('flow.instance.ended', pid, { instanceId: workflowRunId, status: 'completed' });
+    }
   }
 }
 

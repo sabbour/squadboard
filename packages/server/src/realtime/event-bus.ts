@@ -93,6 +93,21 @@ export type ConsultEventType =
   | 'consult.error'
   | 'consult.completed';
 
+/**
+ * Phase 12 reframe: Flow-page real-time events.
+ * Scoped to a project room (same routing as RunEventType / WorkflowEventType).
+ *
+ * flow.instance.started    — a new agent instance began (workflow_run, issue_run, live_session, consult_session)
+ * flow.instance.heartbeat  — periodic liveness tick for a running instance (throttled to 1/s per instance)
+ * flow.instance.ended      — instance reached a terminal state
+ * flow.lineage.edge.created — a new parent→child edge was materialised
+ */
+export type FlowEventType =
+  | 'flow.instance.started'
+  | 'flow.instance.heartbeat'
+  | 'flow.instance.ended'
+  | 'flow.lineage.edge.created';
+
 export type BusEventType =
   | IssueEventType
   | RunEventType
@@ -103,7 +118,8 @@ export type BusEventType =
   | DeliverableEventType
   | FanOutEventType
   | ConsultEventType
-  | HeartbeatEventType;
+  | HeartbeatEventType
+  | FlowEventType;
 
 export interface BusEvent {
   type: BusEventType;
@@ -175,6 +191,39 @@ class EventBus extends EventEmitter {
    */
   emitConsultEvent(type: ConsultEventType, consultSessionId: string, payload: unknown): void {
     const event: BusEvent = { type, projectId: `consult:${consultSessionId}`, payload };
+    this.emit('event', event);
+  }
+
+  // ── Phase 12 reframe: Flow page real-time events ──────────────────────────
+
+  /**
+   * In-memory throttle map for `flow.instance.heartbeat` events.
+   * Key: instanceId — Value: last emit timestamp (ms since epoch).
+   * Entries are never explicitly evicted; they are O(active_instances) which
+   * is bounded in practice by the number of running workflow/issue runs.
+   */
+  private readonly _flowHeartbeatLastEmit = new Map<string, number>();
+
+  /**
+   * Emit a flow lifecycle event (started / ended / lineage) scoped to a
+   * project. Routed through the same project room as issue/run events.
+   */
+  emitFlowEvent(type: FlowEventType, projectId: string, payload: unknown): void {
+    const event: BusEvent = { type, projectId, payload };
+    this.emit('event', event);
+  }
+
+  /**
+   * Emit `flow.instance.heartbeat` throttled to at most 1 event per second
+   * per instance. Calls that arrive within the 1 s window are silently
+   * dropped to avoid flooding the WS channel.
+   */
+  emitFlowHeartbeat(projectId: string, instanceId: string, payload: unknown): void {
+    const now = Date.now();
+    const last = this._flowHeartbeatLastEmit.get(instanceId) ?? 0;
+    if (now - last < 1_000) return;
+    this._flowHeartbeatLastEmit.set(instanceId, now);
+    const event: BusEvent = { type: 'flow.instance.heartbeat', projectId, payload };
     this.emit('event', event);
   }
   /**

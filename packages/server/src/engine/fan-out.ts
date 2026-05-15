@@ -25,6 +25,7 @@ import {
   type FanOutChild,
   type FanOutSpawnResult,
 } from '../sdk/fan-out-adapter.js';
+import { eventBus } from '../realtime/event-bus.js';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -366,6 +367,19 @@ export async function materializeAndSpawnFanOut(
     issue,
     db,
   );
+
+  // ── Flow event: lineage edges created for each child ────────────────────────
+  if (childWorkflowRunIds.length > 0) {
+    const createdAt = new Date().toISOString();
+    for (const childId of childWorkflowRunIds) {
+      eventBus.emitFlowEvent('flow.lineage.edge.created', issue.projectId, {
+        fromInstanceId: parentWorkflowRunId,
+        toInstanceId: childId,
+        relation: 'fan_out',
+        createdAt,
+      });
+    }
+  }
 
   // Phase 15: serial mode = byte-identical pre-Phase-15 behaviour.
   const mode = fanOutStep.mode ?? 'serial';

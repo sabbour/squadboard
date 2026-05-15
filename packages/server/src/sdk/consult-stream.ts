@@ -191,6 +191,15 @@ export async function startConsultSession(input: StartConsultInput): Promise<Con
     model: session.model,
   });
 
+  // ── Flow event: consult_session instance started ────────────────────────────
+  if (session.projectId && session.agentId) {
+    eventBus.emitFlowEvent('flow.instance.started', session.projectId, {
+      instanceId: session.id,
+      agentId: session.agentId,
+      kind: 'consult_session',
+    });
+  }
+
   return session;
 }
 
@@ -472,6 +481,13 @@ export async function endRunningConsult(
     // ignore
   }
   eventBus.emitConsultEvent('consult.completed', consultId, { sessionId: consultId, reason });
+  // ── Flow event: consult_session instance ended ────────────────────────────
+  if (running.projectId) {
+    eventBus.emitFlowEvent('flow.instance.ended', running.projectId, {
+      instanceId: consultId,
+      status: reason === 'completed' ? 'completed' : 'failed',
+    });
+  }
 }
 
 export async function shutdownAllConsults(): Promise<void> {
