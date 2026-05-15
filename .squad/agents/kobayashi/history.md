@@ -147,3 +147,23 @@ Decision filed: `.squad/decisions/inbox/kobayashi-sdk-state-wrapper.md`.
 ## Team update (2026-05-15T16:09:55Z — Wave 3)
 
 SDK state wrapper (r1, commit 8fdbbaa9): `services/sdk-state.ts` with SquadState factory and 7 typed collection accessors (agents, routing, decisions, skills, team, templates, config). Synchronous fromStorage(storage, rootDir) factory (no re-validation; path already validated on DB write). Module-level cache per projectId with invalidateState() eviction. FSStorageProvider must receive rootDir for security confinement. Foundational shim for downstream Phase 5 work; all Phase 5 state reads depend on this wrapper. SDK quirk: collection constructors not exported; only instantiate via SquadState.
+
+### 2026-05-15T09:09:55-07:00 — Phase 5 fs-migration (p5-migrate-fs)
+
+Migrated charter-compiler + agent-sync from raw `fs/promises` reads to SDK collections.
+
+**charter-compiler.ts:** Refactored internally without changing any public signatures.
+- Extracted `parseCharterContent(content: string): CharterMetadata` — synchronous, pure in-memory parser. Called by `parseCharter(charterPath)` (unchanged signature, now delegates).
+- Extracted `computeContentHash(content: string | Buffer): string` — synchronous md5. Called by `computeCharterHash(charterPath)` (unchanged signature, now delegates).
+- Both new exports are available for callers who already have content in memory (e.g. after an SDK read).
+
+**agent-sync.ts:** Two callsite clusters replaced with SDK-first + fs-fallback:
+1. `fs.readdir(agentsDir)` → `(await getAgents(projectId)).list()` with warn + readdir fallback
+2. `fs.access(charterPath)` + `parseCharter(charterPath)` + `computeCharterHash(charterPath)` → `(await getAgents(projectId)).get(name).charter()` with warn + fs.readFile fallback. Both branches now call `parseCharterContent(content)` + `computeContentHash(content)` — no double-file reads.
+
+**No write-side migration:** `writeCharter` in charter-compiler.ts uses `fs.writeFile`. The SDK's `AgentsCollection` only has `create(name, charter)` (for NEW agents) and no `AgentHandle.updateCharter()` method. Raw-fs write retained intentionally; documented in decision doc.
+
+**TS check:** Zero new errors. Two pre-existing `conjure-classifier.ts` errors untouched.
+
+Decision filed: `.squad/decisions/inbox/kobayashi-fs-migration.md`
+Commit: (see git log after p5-migrate-fs commit)

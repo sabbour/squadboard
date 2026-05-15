@@ -2,7 +2,8 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { eq, and } from 'drizzle-orm';
 import { getDb, schema } from '../db/index.js';
-import { parseCharter, computeCharterHash } from './charter-compiler.js';
+import { parseCharterContent, computeContentHash } from './charter-compiler.js';
+import { getAgents } from './sdk-state.js';
 
 export interface SyncResult {
   added: number;
@@ -26,14 +27,19 @@ export async function syncAgentsFromDisk(
 ): Promise<SyncResult> {
   const agentsDir = path.join(squadPath, 'agents');
 
-  // Collect folder names
+  // --- List agents: SDK first, raw fs fallback ---
   let entries: string[] = [];
   try {
-    const dirents = await fs.readdir(agentsDir, { withFileTypes: true });
-    entries = dirents.filter((d) => d.isDirectory()).map((d) => d.name);
-  } catch {
-    // No agents directory — nothing to sync
-    return { added: 0, updated: 0, removed: 0 };
+    entries = await (await getAgents(projectId)).list();
+  } catch (sdkErr) {
+    console.warn('[agent-sync] SDK agents.list() failed, falling back to fs.readdir:', sdkErr);
+    try {
+      const dirents = await fs.readdir(agentsDir, { withFileTypes: true });
+      entries = dirents.filter((d) => d.isDirectory()).map((d) => d.name);
+    } catch {
+      // No agents directory — nothing to sync
+      return { added: 0, updated: 0, removed: 0 };
+    }
   }
 
   const db = getDb();
@@ -47,23 +53,40 @@ export async function syncAgentsFromDisk(
       const charterPath = path.join(agentsDir, agentName, 'charter.md');
       const historyPath = path.join(agentsDir, agentName, 'history.md');
 
-      // Skip folders without a charter.md
+      // --- Read charter: SDK first, raw fs fallback ---
+      let charterContent: string | null = null;
       try {
-        await fs.access(charterPath);
-      } catch {
-        return;
+        charterContent = await (await getAgents(projectId)).get(agentName).charter();
+      } catch (sdkErr) {
+        console.warn(
+          `[agent-sync] SDK charter() failed for '${agentName}', falling back to fs:`,
+          sdkErr,
+        );
+        // Fallback: require charter.md on disk
+        try {
+          await fs.access(charterPath);
+        } catch {
+          return; // no charter — skip this agent
+        }
+        try {
+          charterContent = await fs.readFile(charterPath, 'utf-8');
+        } catch {
+          return;
+        }
       }
+
+      if (charterContent === null) return;
 
       seenNames.add(agentName);
 
       let meta;
       try {
-        meta = await parseCharter(charterPath);
+        meta = parseCharterContent(charterContent);
       } catch {
         return;
       }
 
-      const newHash = await computeCharterHash(charterPath).catch(() => undefined);
+      const newHash = computeContentHash(charterContent);
 
       const historyExists = await fs
         .access(historyPath)
