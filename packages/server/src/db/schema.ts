@@ -268,6 +268,14 @@ export const workflows = pgTable('workflows', {
   name: text('name').notNull(),
   slug: text('slug').notNull(),         // kebab-case identifier
   description: text('description'),
+  // Phase 10: Ceremonies unification — trigger taxonomy. Workflows are now a
+  // triggerKind of "ceremony"; the DB table keeps the historical name.
+  //   triggerKind:   'on_issue_entry' | 'on_schedule' | 'on_event' | 'manual'
+  //   triggerConfig: shape depends on triggerKind (see routes/ceremonies.ts).
+  //   kind:          'workflow' | 'ceremony' | 'review_policy' | 'narrative'
+  triggerKind: text('trigger_kind').notNull().default('on_issue_entry'),
+  triggerConfig: jsonb('trigger_config').notNull().default({}),
+  kind: text('kind').notNull().default('ceremony'),
   createdAt: timestamp('created_at').notNull().defaultNow(),
   updatedAt: timestamp('updated_at').notNull().defaultNow(),
 });
@@ -297,6 +305,27 @@ export type WorkflowVersion = typeof workflowVersions.$inferSelect;
 export type NewWorkflowVersion = typeof workflowVersions.$inferInsert;
 export type IssueWorkflow = typeof issueWorkflows.$inferSelect;
 export type NewIssueWorkflow = typeof issueWorkflows.$inferInsert;
+
+// ---------------------------------------------------------------------------
+// Phase 10 — Ceremony schedules (recurring on_schedule triggers)
+// ---------------------------------------------------------------------------
+// One row per scheduled ceremony. The heartbeat sweep picks up any row with
+// nextFireAt <= now() and enabled=true, spawns a workflowRun, then advances
+// nextFireAt using cron-parser.
+export const ceremonySchedules = pgTable('ceremony_schedules', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  workflowId: uuid('workflow_id').notNull().references(() => workflows.id, { onDelete: 'cascade' }),
+  cronExpr: text('cron_expr').notNull(),
+  timezone: text('timezone').notNull().default('UTC'),
+  nextFireAt: timestamp('next_fire_at').notNull(),
+  lastFiredAt: timestamp('last_fired_at'),
+  enabled: boolean('enabled').notNull().default(true),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+  updatedAt: timestamp('updated_at').notNull().defaultNow(),
+});
+
+export type CeremonySchedule = typeof ceremonySchedules.$inferSelect;
+export type NewCeremonySchedule = typeof ceremonySchedules.$inferInsert;
 
 // ---------------------------------------------------------------------------
 // Demo 8 — Routing Tiers 2 + 3

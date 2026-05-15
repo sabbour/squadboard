@@ -16,6 +16,9 @@ export const projects = pgTable('projects', {
     githubAppId: text('github_app_id'), // numeric GitHub App ID as string
     githubAppInstallationId: text('github_app_installation_id'), // installation ID for this repo
     githubAppPrivateKey: text('github_app_private_key'), // PEM private key, plaintext (hacking phase)
+    // Project-level default model used by the auto-model resolution chain
+    // (sdk/model-defaults.ts). Null means "use BUILTIN_FALLBACK".
+    defaultModel: text('default_model'),
     createdAt: timestamp('created_at').notNull().defaultNow(),
     updatedAt: timestamp('updated_at').notNull().defaultNow(),
 });
@@ -215,6 +218,14 @@ export const workflows = pgTable('workflows', {
     name: text('name').notNull(),
     slug: text('slug').notNull(), // kebab-case identifier
     description: text('description'),
+    // Phase 10: Ceremonies unification — trigger taxonomy. Workflows are now a
+    // triggerKind of "ceremony"; the DB table keeps the historical name.
+    //   triggerKind:   'on_issue_entry' | 'on_schedule' | 'on_event' | 'manual'
+    //   triggerConfig: shape depends on triggerKind (see routes/ceremonies.ts).
+    //   kind:          'workflow' | 'ceremony' | 'review_policy' | 'narrative'
+    triggerKind: text('trigger_kind').notNull().default('on_issue_entry'),
+    triggerConfig: jsonb('trigger_config').notNull().default({}),
+    kind: text('kind').notNull().default('ceremony'),
     createdAt: timestamp('created_at').notNull().defaultNow(),
     updatedAt: timestamp('updated_at').notNull().defaultNow(),
 });
@@ -234,6 +245,23 @@ export const issueWorkflows = pgTable('issue_workflows', {
     issueId: uuid('issue_id').primaryKey().references(() => issues.id, { onDelete: 'cascade' }),
     workflowVersionId: uuid('workflow_version_id').notNull().references(() => workflowVersions.id),
     attachedAt: timestamp('attached_at').notNull().defaultNow(),
+});
+// ---------------------------------------------------------------------------
+// Phase 10 — Ceremony schedules (recurring on_schedule triggers)
+// ---------------------------------------------------------------------------
+// One row per scheduled ceremony. The heartbeat sweep picks up any row with
+// nextFireAt <= now() and enabled=true, spawns a workflowRun, then advances
+// nextFireAt using cron-parser.
+export const ceremonySchedules = pgTable('ceremony_schedules', {
+    id: uuid('id').primaryKey().defaultRandom(),
+    workflowId: uuid('workflow_id').notNull().references(() => workflows.id, { onDelete: 'cascade' }),
+    cronExpr: text('cron_expr').notNull(),
+    timezone: text('timezone').notNull().default('UTC'),
+    nextFireAt: timestamp('next_fire_at').notNull(),
+    lastFiredAt: timestamp('last_fired_at'),
+    enabled: boolean('enabled').notNull().default(true),
+    createdAt: timestamp('created_at').notNull().defaultNow(),
+    updatedAt: timestamp('updated_at').notNull().defaultNow(),
 });
 // ---------------------------------------------------------------------------
 // Demo 8 — Routing Tiers 2 + 3

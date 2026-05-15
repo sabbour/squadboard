@@ -582,6 +582,45 @@ async function bootstrapSchema(): Promise<void> {
 
     CREATE INDEX IF NOT EXISTS inbox_items_user_idx
       ON inbox_items (user_id, created_at DESC);
+
+    -- Phase 10: Ceremonies unification --------------------------------------
+    -- Workflows become a triggerKind of "ceremony". DB columns added in-place
+    -- (the table keeps its historical name); API + UI rename to "ceremony".
+    --
+    --   trigger_kind   : on_issue_entry | on_schedule | on_event | manual
+    --   trigger_config : jsonb shape depends on trigger_kind
+    --   kind           : workflow | ceremony | review_policy | narrative
+    ALTER TABLE workflows
+      ADD COLUMN IF NOT EXISTS trigger_kind   TEXT  NOT NULL DEFAULT 'on_issue_entry';
+    ALTER TABLE workflows
+      ADD COLUMN IF NOT EXISTS trigger_config JSONB NOT NULL DEFAULT '{}'::jsonb;
+    ALTER TABLE workflows
+      ADD COLUMN IF NOT EXISTS kind           TEXT  NOT NULL DEFAULT 'ceremony';
+
+    -- Backfill existing rows so behaviour does not change: anything older
+    -- than five minutes is an existing workflow → kind='workflow' (default
+    -- 'ceremony' applies only to brand-new rows created post-Phase-10).
+    UPDATE workflows
+       SET kind = 'workflow'
+     WHERE kind = 'ceremony'
+       AND created_at < (now() - interval '5 minutes');
+
+    -- New table: ceremony_schedules (heartbeat sweep target for on_schedule).
+    CREATE TABLE IF NOT EXISTS ceremony_schedules (
+      id            UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+      workflow_id   UUID        NOT NULL REFERENCES workflows(id) ON DELETE CASCADE,
+      cron_expr     TEXT        NOT NULL,
+      timezone      TEXT        NOT NULL DEFAULT 'UTC',
+      next_fire_at  TIMESTAMPTZ NOT NULL,
+      last_fired_at TIMESTAMPTZ,
+      enabled       BOOLEAN     NOT NULL DEFAULT TRUE,
+      created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_ceremony_schedules_next_fire
+      ON ceremony_schedules (next_fire_at)
+      WHERE enabled = TRUE;
   `);
 
   await seedSystemReviewPolicyPresets();
