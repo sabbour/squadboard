@@ -19,7 +19,7 @@
  * then write the canonical recomputed value once the spawn resolves.
  */
 
-import { eq, and, lte, sql } from 'drizzle-orm';
+import { eq, and, lte, sql, not, exists } from 'drizzle-orm';
 import { CronExpressionParser } from 'cron-parser';
 import { getDb, schema } from '../db/index.js';
 import { createWorkflowRun } from '../engine/workflow-runner.js';
@@ -128,10 +128,35 @@ export async function disableSchedule(scheduleId: string): Promise<void> {
 // first-class concept in the UI.
 async function resolveAnchorIssue(projectId: string): Promise<string | null> {
   const db = getDb();
+  // Root cause (verbal-spam-loop-rootcause.md, 2026-05-15):
+  // After a fan-out materialises, the newest issues in the project are the
+  // fan-out children (e.g. "Foo — verbal"). The old query (ORDER BY created_at
+  // DESC, no filter) would pick a child as the next ceremony anchor, triggering
+  // another fan-out on it, compounding titles indefinitely each cron tick.
+  //
+  // Fix: exclude any issue that appears as a child_issue_id in issue_links with
+  // link_type = 'fan_out'. Only top-level (non-child) issues are eligible anchors.
   const [issue] = await db
     .select({ id: schema.issues.id })
     .from(schema.issues)
-    .where(eq(schema.issues.projectId, projectId))
+    .where(
+      and(
+        eq(schema.issues.projectId, projectId),
+        not(
+          exists(
+            db
+              .select({ id: schema.issueLinks.id })
+              .from(schema.issueLinks)
+              .where(
+                and(
+                  eq(schema.issueLinks.childIssueId, schema.issues.id),
+                  eq(schema.issueLinks.linkType, 'fan_out'),
+                ),
+              ),
+          ),
+        ),
+      ),
+    )
     .orderBy(sql`${schema.issues.createdAt} DESC`)
     .limit(1);
   return issue?.id ?? null;

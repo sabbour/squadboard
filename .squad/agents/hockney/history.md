@@ -66,6 +66,20 @@ For older learnings (Demo 1–15 architecture notes, GitHub App auth, TS fixes, 
 
 ## Learnings
 
+**2026-05-15T08:21:46-07:00 — P0 fix: resolveAnchorIssue spam-loop root cause**
+
+Fixed the ceremony scheduler anchor spam loop (root cause identified by Verbal in
+`verbal-spam-loop-rootcause.md`). Added a `NOT EXISTS (SELECT 1 FROM issue_links
+WHERE child_issue_id = issues.id AND link_type = 'fan_out')` filter to
+`resolveAnchorIssue()` in `ceremony-scheduler.ts`. The `issue_links` table from
+Demo 10 already had the discriminator — no schema migration needed. Only the one
+occurrence of the bad anchor selector pattern was in scope; the grep sweep of
+`packages/server/src/services/` and `packages/server/src/engine/` confirmed no
+other anchor-picker queries. TS check confirmed no regressions (pre-existing
+`conjure-classifier.ts` errors were present on the base commit). See
+`.squad/decisions/inbox/hockney-anchor-filter.md` for the exact filter and
+follow-ups.
+
 **2026-05-15 — Phase 3 Doctor (diagnostics service):**
 
 - `getWebSocketServer()` is already exported from `realtime/ws-server.ts` — no new singleton needed. The `WebSocketServer` node from `ws` doesn't expose a `.readyState` in its TypeScript types the same way a client `WebSocket` does; checking `wss !== null` is the primary liveness signal; `.clients.size` gives connected count.
