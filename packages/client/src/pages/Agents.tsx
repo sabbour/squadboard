@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useParams } from 'react-router'
 import { useAgents, type Agent } from '../api/agents.ts'
+import { useProject } from '../api/projects.ts'
 import { apiFetch } from '../api/client.ts'
 import { useRoutingLog, useRoutingStats, useRefreshKeywords } from '../api/routing.ts'
 import AgentGrid from '../components/agents/AgentGrid.tsx'
@@ -12,7 +13,7 @@ import { RoutingLogTable } from '../components/routing/RoutingLogTable.tsx'
 import { RoutingStatsPanel } from '../components/routing/RoutingStatsPanel.tsx'
 import { CastPanel } from '../components/routing/CastPanel.tsx'
 import { ArrowSync20Regular, Bot20Regular, ArrowSwap20Regular, People20Regular } from '@fluentui/react-icons'
-import { Subtitle1 } from '@fluentui/react-components'
+import PageHeader from '../components/layout/PageHeader.tsx'
 
 interface RouteTestResult {
   matched: boolean
@@ -184,6 +185,7 @@ function TestRoutingPanel({ projectId }: { projectId: string }) {
 
 export default function Agents() {
   const { id: projectId = '' } = useParams<{ id: string }>()
+  const { data: project } = useProject(projectId)
   const { data: agents = [], isLoading, isError } = useAgents(projectId)
   const [selectedAgent, setSelectedAgent] = useState<Agent | null>(null)
   const [showHireModal, setShowHireModal] = useState(false)
@@ -208,62 +210,37 @@ export default function Agents() {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0 }}>
-      {/* Page header */}
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          padding: '16px 24px',
-          borderBottom: '1px solid var(--border)',
-          flexShrink: 0,
-        }}
-      >
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <Subtitle1 as="h1">Agents</Subtitle1>
-          {!isLoading && (
-            <span
-              style={{
-                fontSize: '12px',
-                fontWeight: 600,
-                padding: '2px 8px',
-                borderRadius: '12px',
-                background: 'rgba(139,148,158,0.15)',
-                color: 'var(--text-muted)',
-                border: '1px solid rgba(139,148,158,0.2)',
-              }}
-            >
-              {agents.length}
-            </span>
-          )}
-        </div>
-
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          {activeTab === 'routing' && (
-            <button
-              onClick={() => void refreshKeywords.mutate()}
-              disabled={refreshKeywords.isPending}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '6px',
-                background: 'var(--bg)',
-                border: '1px solid var(--border)',
-                borderRadius: 'var(--radius)',
-                color: 'var(--text)',
-                padding: '6px 12px',
-                fontSize: '12px',
-                cursor: refreshKeywords.isPending ? 'not-allowed' : 'pointer',
-                opacity: refreshKeywords.isPending ? 0.6 : 1,
-              }}
-            >
-              <ArrowSync20Regular /> Refresh keywords
-            </button>
-          )}
-          {activeTab === 'agents' && (
-            <>
+      <PageHeader
+        eyebrow={project?.name}
+        title={
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '12px' }}>
+            Agents
+            {!isLoading && (
+              <span
+                style={{
+                  fontSize: '12px',
+                  fontWeight: 600,
+                  padding: '2px 8px',
+                  borderRadius: '12px',
+                  background: 'rgba(139,148,158,0.15)',
+                  color: 'var(--text-muted)',
+                  border: '1px solid rgba(139,148,158,0.2)',
+                }}
+              >
+                {agents.length}
+              </span>
+            )}
+          </span>
+        }
+        description={activeTab === 'routing'
+          ? 'Routing rules, recent decisions, and keyword tuning across the squad.'
+          : 'Hired agents on this project — their roles, models, and capabilities.'}
+        actions={
+          <>
+            {activeTab === 'routing' && (
               <button
-                onClick={() => setShowHireTeamModal(true)}
+                onClick={() => void refreshKeywords.mutate()}
+                disabled={refreshKeywords.isPending}
                 style={{
                   display: 'flex',
                   alignItems: 'center',
@@ -272,42 +249,64 @@ export default function Agents() {
                   border: '1px solid var(--border)',
                   borderRadius: 'var(--radius)',
                   color: 'var(--text)',
-                  padding: '7px 14px',
-                  fontSize: '13px',
-                  fontWeight: 500,
-                  cursor: 'pointer',
+                  padding: '6px 12px',
+                  fontSize: '12px',
+                  cursor: refreshKeywords.isPending ? 'not-allowed' : 'pointer',
+                  opacity: refreshKeywords.isPending ? 0.6 : 1,
                 }}
-                onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.background = 'var(--surface)' }}
-                onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.background = 'var(--bg)' }}
               >
-                <People20Regular />
-                Hire Team
+                <ArrowSync20Regular /> Refresh keywords
               </button>
-              <button
-                onClick={() => setShowHireModal(true)}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '6px',
-                  background: '#238636',
-                  border: '1px solid #2ea043',
-                  borderRadius: 'var(--radius)',
-                  color: 'white',
-                  padding: '7px 14px',
-                  fontSize: '13px',
-                  fontWeight: 500,
-                  cursor: 'pointer',
-                }}
-                onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.background = '#2ea043' }}
-                onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.background = '#238636' }}
-              >
-                <span style={{ fontSize: '16px', lineHeight: 1 }}>+</span>
-                Hire Agent
-              </button>
-            </>
-          )}
-        </div>
-      </div>
+            )}
+            {activeTab === 'agents' && (
+              <>
+                <button
+                  onClick={() => setShowHireTeamModal(true)}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    background: 'var(--bg)',
+                    border: '1px solid var(--border)',
+                    borderRadius: 'var(--radius)',
+                    color: 'var(--text)',
+                    padding: '7px 14px',
+                    fontSize: '13px',
+                    fontWeight: 500,
+                    cursor: 'pointer',
+                  }}
+                  onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.background = 'var(--surface)' }}
+                  onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.background = 'var(--bg)' }}
+                >
+                  <People20Regular />
+                  Hire Team
+                </button>
+                <button
+                  onClick={() => setShowHireModal(true)}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    background: '#238636',
+                    border: '1px solid #2ea043',
+                    borderRadius: 'var(--radius)',
+                    color: 'white',
+                    padding: '7px 14px',
+                    fontSize: '13px',
+                    fontWeight: 500,
+                    cursor: 'pointer',
+                  }}
+                  onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.background = '#2ea043' }}
+                  onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.background = '#238636' }}
+                >
+                  <span style={{ fontSize: '16px', lineHeight: 1 }}>+</span>
+                  Hire Agent
+                </button>
+              </>
+            )}
+          </>
+        }
+      />
 
       {/* Tabs */}
       <div

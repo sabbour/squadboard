@@ -17,7 +17,6 @@
 import { useState, useMemo } from 'react'
 import { useParams, useNavigate, Link } from 'react-router'
 import {
-  Subtitle1,
   Caption1,
   Body1,
   Button,
@@ -44,6 +43,7 @@ import {
   useTranslateCeremony,
   type Ceremony,
 } from '../api/ceremonies.ts'
+import PageHeader from '../components/layout/PageHeader.tsx'
 
 export default function CeremoniesReview() {
   const { id } = useParams<{ id: string }>()
@@ -70,26 +70,16 @@ export default function CeremoniesReview() {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-      <header
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: 16,
-          padding: '16px 24px',
-          borderBottom: '1px solid var(--border)',
-          flexShrink: 0,
-        }}
-      >
-        <div style={{ flex: 1 }}>
-          <Subtitle1 as="h1">{project.name} — Ceremonies Review</Subtitle1>
-          <Caption1 style={{ color: 'var(--text-muted)', marginTop: 2, display: 'block' }}>
-            Drafts produced by translating narrative ceremonies. Review and activate, edit, or discard.
-          </Caption1>
-        </div>
-        <Button appearance="subtle" onClick={() => navigate(`/projects/${projectId}/ceremonies`)}>
-          ← All Ceremonies
-        </Button>
-      </header>
+      <PageHeader
+        eyebrow={project.name}
+        title="Ceremonies Review"
+        description="Drafts produced by translating narrative ceremonies. Review and activate, edit, or discard."
+        actions={
+          <Button appearance="subtle" onClick={() => navigate(`/projects/${projectId}/ceremonies`)}>
+            ← All Ceremonies
+          </Button>
+        }
+      />
 
       {draftsLoading ? (
         <div style={{ padding: 32 }}><Spinner label="Loading drafts…" /></div>

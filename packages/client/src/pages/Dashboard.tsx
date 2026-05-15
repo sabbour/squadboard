@@ -12,6 +12,7 @@ import { useBudget } from '../api/costs.ts'
 import { useProjectFlow } from '../api/flow.ts'
 import AgentLeaderboard from '../components/dashboard/AgentLeaderboard.tsx'
 import WorkflowHealth from '../components/dashboard/WorkflowHealth.tsx'
+import PageHeader from '../components/layout/PageHeader.tsx'
 
 // ---------------------------------------------------------------------------
 // Stat card
@@ -243,31 +244,11 @@ export default function Dashboard() {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
-      {/* Header */}
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: '16px',
-          padding: '16px 24px',
-          borderBottom: '1px solid var(--border)',
-          flexShrink: 0,
-        }}
-      >
-        <div>
-          <h1 style={{ fontSize: '18px', fontWeight: 600, color: 'var(--text)' }}>
-            {project?.name ?? 'Project'} — Dashboard
-          </h1>
-          <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '2px' }}>
-            Live project health · auto-refreshes every 30 s
-          </p>
-        </div>
-        <span
-          style={{
-            marginLeft: 'auto',
-          }}
-        />
-      </div>
+      <PageHeader
+        eyebrow={project?.name}
+        title="Dashboard"
+        description="Live project health · auto-refreshes every 30 s"
+      />
 
       {/* Scrollable body */}
       <div style={{ flex: 1, overflow: 'auto', padding: '24px' }}>

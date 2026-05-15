@@ -14,6 +14,7 @@ import {
   type ProjectFlowColumn,
   type ProjectFlowIssue,
 } from '../api/flow.ts'
+import PageHeader from '../components/layout/PageHeader.tsx'
 
 export default function ProjectFlow() {
   const { id } = useParams<{ id: string }>()
@@ -27,30 +28,18 @@ export default function ProjectFlow() {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
       {/* Header */}
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: 16,
-          padding: '16px 24px',
-          borderBottom: '1px solid var(--border)',
-          flexShrink: 0,
-        }}
-      >
-        <div>
-          <h1 style={{ fontSize: 18, fontWeight: 600, color: 'var(--text)' }}>
-            {project?.name ?? 'Project'} — Flow
-          </h1>
-          <p style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>
-            Live issue flow across columns · click a card to inspect its DAG
-          </p>
-        </div>
-        <div style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
-          <Chip label="Active runs" value={flow?.activeRunsCount ?? 0} color="#388bfd" />
-          <Chip label="Pending reviews" value={flow?.pendingReviewsCount ?? 0} color="#d29922" />
-          <Chip label="Issues" value={totalIssues} color="#7d8590" />
-        </div>
-      </div>
+      <PageHeader
+        eyebrow={project?.name}
+        title="Flow"
+        description="Live issue flow across columns · click a card to inspect its DAG."
+        actions={
+          <>
+            <Chip label="Active runs" value={flow?.activeRunsCount ?? 0} color="#388bfd" />
+            <Chip label="Pending reviews" value={flow?.pendingReviewsCount ?? 0} color="#d29922" />
+            <Chip label="Issues" value={totalIssues} color="#7d8590" />
+          </>
+        }
+      />
 
       {/* Body */}
       <div style={{ flex: 1, overflow: 'auto', padding: '20px 24px' }}>

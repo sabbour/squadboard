@@ -10,7 +10,6 @@ import { useState } from 'react'
 import { useParams } from 'react-router'
 import {
   Button,
-  Caption1,
   Dialog,
   DialogActions,
   DialogBody,
@@ -21,7 +20,6 @@ import {
   Field,
   Input,
   Option,
-  Subtitle1,
   Textarea,
 } from '@fluentui/react-components'
 import { useProject } from '../api/projects.ts'
@@ -36,6 +34,7 @@ import {
   type Tool,
 } from '../api/tools.ts'
 import FormulatePanel from '../components/formulate/FormulatePanel.tsx'
+import PageHeader from '../components/layout/PageHeader.tsx'
 
 const KEBAB_RE = /^[a-z_][a-z0-9_]*$/
 
@@ -72,18 +71,12 @@ export default function Tools() {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-      <div style={{
-        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-        padding: '16px 24px', borderBottom: '1px solid var(--border)', flexShrink: 0,
-      }}>
-        <div>
-          <Subtitle1 as="h1">{project?.name ?? '…'} — Tools</Subtitle1>
-          <Caption1 style={{ color: 'var(--text-muted)', display: 'block', marginTop: '2px' }}>
-            Catalogued external actions agents can be assigned. Typically backed by an MCP server.
-          </Caption1>
-        </div>
-        <Button appearance="primary" onClick={() => setShowCreate(true)}>New tool</Button>
-      </div>
+      <PageHeader
+        eyebrow={project?.name}
+        title="Tools"
+        description="Catalogued external actions agents can be assigned. Typically backed by an MCP server."
+        actions={<Button appearance="primary" onClick={() => setShowCreate(true)}>New tool</Button>}
+      />
 
       <div style={{ flex: 1, overflow: 'auto', padding: '24px', maxWidth: '1100px', width: '100%', margin: '0 auto' }}>
         {isLoading && <p style={{ color: 'var(--text-muted)' }}>Loading…</p>}

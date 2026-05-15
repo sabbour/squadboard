@@ -1,7 +1,7 @@
 import { useParams } from 'react-router'
 import { useProject } from '../api/projects.ts'
 import CostDashboard from '../components/costs/CostDashboard.tsx'
-import { Subtitle1, Caption1 } from '@fluentui/react-components'
+import PageHeader from '../components/layout/PageHeader.tsx'
 
 export default function Costs() {
   const { id } = useParams<{ id: string }>()
@@ -23,31 +23,12 @@ export default function Costs() {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-      {/* Page header */}
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: '16px',
-          padding: '16px 24px',
-          borderBottom: '1px solid var(--border)',
-          flexShrink: 0,
-        }}
-      >
-        <div>
-          <Subtitle1 as="h1">{project.name} — Costs</Subtitle1>
-          <Caption1 style={{ color: 'var(--text-muted)', marginTop: '2px', display: 'block' }}>
-            Month-to-date LLM spend across all agents and runs
-          </Caption1>
-        </div>
-        <span
-          style={{
-            marginLeft: 'auto',
-          }}
-        />
-      </div>
+      <PageHeader
+        eyebrow={project.name}
+        title="Costs"
+        description="Month-to-date LLM spend across all agents and runs."
+      />
 
-      {/* Dashboard */}
       <div style={{ flex: 1, overflow: 'auto' }}>
         <CostDashboard projectId={projectId} />
       </div>

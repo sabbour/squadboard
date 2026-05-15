@@ -15,6 +15,7 @@ import { Open16Regular } from '@fluentui/react-icons'
 import { useInboxItems, type InboxItem, type InboxStatus } from '../api/inbox.ts'
 import { useProjects } from '../api/projects.ts'
 import CaptureModal from '../components/inbox/CaptureModal.tsx'
+import PageHeader from '../components/layout/PageHeader.tsx'
 
 const STATUS_GROUPS: { status: InboxStatus; label: string; tone: string }[] = [
   { status: 'captured', label: 'Captured', tone: '#6e7681' },
@@ -51,38 +52,35 @@ export default function Inbox() {
   }, [items])
 
   return (
-    <div style={{ padding: '24px', maxWidth: '960px', margin: '0 auto' }}>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
-        <div>
-          <h1 style={{ fontSize: '20px', fontWeight: 600, color: tokens.colorNeutralForeground1, margin: 0 }}>
-            Inbox
-          </h1>
-          <p style={{ fontSize: '12px', color: tokens.colorNeutralForeground3, margin: '4px 0 0' }}>
-            Quick captures across every project — review, edit, and publish to a board when ready.
-          </p>
-        </div>
-        <button
-          type="button"
-          onClick={() => navigate('/')}
-          style={{
-            background: 'none',
-            border: `1px solid ${tokens.colorNeutralStroke1}`,
-            borderRadius: '6px',
-            color: tokens.colorNeutralForeground1,
-            padding: '6px 14px',
-            fontSize: '12px',
-            cursor: 'pointer',
-          }}
-        >
-          ← Projects
-        </button>
-      </div>
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+      <PageHeader
+        title="Inbox"
+        description="Quick captures across every project — review, edit, and publish to a board when ready."
+        actions={
+          <button
+            type="button"
+            onClick={() => navigate('/')}
+            style={{
+              background: 'none',
+              border: `1px solid ${tokens.colorNeutralStroke1}`,
+              borderRadius: '6px',
+              color: tokens.colorNeutralForeground1,
+              padding: '6px 14px',
+              fontSize: '12px',
+              cursor: 'pointer',
+            }}
+          >
+            ← Projects
+          </button>
+        }
+      />
 
-      {isLoading && (
-        <div style={{ color: tokens.colorNeutralForeground3, padding: '32px', textAlign: 'center' }}>
-          Loading inbox…
-        </div>
-      )}
+      <div style={{ flex: 1, overflow: 'auto', padding: '24px', maxWidth: '960px', width: '100%', margin: '0 auto', boxSizing: 'border-box' }}>
+        {isLoading && (
+          <div style={{ color: tokens.colorNeutralForeground3, padding: '32px', textAlign: 'center' }}>
+            Loading inbox…
+          </div>
+        )}
 
       {!isLoading && items.length === 0 && (
         <div
@@ -230,6 +228,7 @@ export default function Inbox() {
         onClose={() => setEditingId(null)}
         existingItemId={editingId}
       />
+      </div>
     </div>
   )
 }

@@ -13,7 +13,6 @@ import { useParams } from 'react-router'
 import {
   Badge,
   Button,
-  Caption1,
   Dialog,
   DialogActions,
   DialogBody,
@@ -25,7 +24,6 @@ import {
   MessageBar,
   MessageBarBody,
   MessageBarTitle,
-  Subtitle1,
   Textarea,
   tokens,
 } from '@fluentui/react-components'
@@ -40,6 +38,7 @@ import {
   type McpServer,
   type McpTransport,
 } from '../api/mcp.ts'
+import PageHeader from '../components/layout/PageHeader.tsx'
 
 interface FormState {
   name: string
@@ -90,18 +89,12 @@ export default function McpServers() {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-      <div style={{
-        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-        padding: '16px 24px', borderBottom: '1px solid var(--border)', flexShrink: 0,
-      }}>
-        <div>
-          <Subtitle1 as="h1">{project?.name ?? '…'} — MCP Servers</Subtitle1>
-          <Caption1 style={{ color: 'var(--text-muted)', display: 'block', marginTop: '2px' }}>
-            Model Context Protocol gateways. Header values are AES-256-GCM encrypted at rest with a per-project key.
-          </Caption1>
-        </div>
-        <Button appearance="primary" onClick={() => setShowCreate(true)}>New MCP server</Button>
-      </div>
+      <PageHeader
+        eyebrow={project?.name}
+        title="MCP Servers"
+        description="Model Context Protocol gateways. Header values are AES-256-GCM encrypted at rest with a per-project key."
+        actions={<Button appearance="primary" onClick={() => setShowCreate(true)}>New MCP server</Button>}
+      />
 
       <div style={{ flex: 1, overflow: 'auto', padding: '24px', maxWidth: '1100px', width: '100%', margin: '0 auto' }}>
         {isLoading && <p style={{ color: 'var(--text-muted)' }}>Loading…</p>}

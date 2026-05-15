@@ -6,6 +6,7 @@ import { useBudget } from '../api/costs.ts'
 import { apiFetch } from '../api/client.ts'
 import { McpConfigPanel } from '../components/settings/McpConfigPanel.tsx'
 import { ReviewPolicySection } from '../components/settings/ReviewPolicySection.tsx'
+import PageHeader from '../components/layout/PageHeader.tsx'
 import {
   Dropdown,
   Option,
@@ -295,28 +296,12 @@ export default function Settings() {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-      {/* Page header */}
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: '12px',
-          padding: '16px 24px',
-          borderBottom: '1px solid var(--border)',
-          flexShrink: 0,
-        }}
-      >
-        <h1 style={{ fontSize: '16px', fontWeight: 600, color: 'var(--text)', margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <Settings20Regular /> Settings
-        </h1>
-        <span style={{ fontSize: '13px', color: 'var(--text-muted)' }}>·</span>
-        <span style={{ fontSize: '13px', color: 'var(--text-muted)' }}>{project.name}</span>
-        <span
-          style={{
-            marginLeft: 'auto',
-          }}
-        />
-      </div>
+      <PageHeader
+        eyebrow={project.name}
+        icon={<Settings20Regular />}
+        title="Settings"
+        description="Project configuration · MCP servers · budget · review policy."
+      />
 
       {/* Body: sidebar + content */}
       <div style={{ flex: 1, display: 'flex', minHeight: 0, overflow: 'hidden' }}>
