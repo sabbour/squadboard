@@ -710,3 +710,123 @@ export type NewMcpServer = typeof mcpServers.$inferInsert;
 export type AgentMcpServer = typeof agentMcpServers.$inferSelect;
 export type NewAgentMcpServer = typeof agentMcpServers.$inferInsert;
 
+// ---------------------------------------------------------------------------
+// Phase 17: Ask / Consult mode — free-form brainstorm sessions
+// ---------------------------------------------------------------------------
+//
+// Distinct from `live_sessions` (Phase 1) which run an agent against an
+// issue and produce deliverables. Consults are open-ended chats with either
+// a hired agent (mode='agent', charter loaded, propose-only tool surface)
+// or a raw model (mode='model', no tools, plain "thinking partner" system
+// prompt). They never advance the workflow engine; they emit `consult.*`
+// events, persist to consult_sessions/_messages, and tag cost as
+// kind='consult' so the Costs page can filter them out of issue rollups.
+
+export const consultModeEnum = pgEnum('consult_mode', ['agent', 'model']);
+
+export const consultStatusEnum = pgEnum('consult_status', [
+  'active',
+  'idle',
+  'completed',
+  'failed',
+  'cancelled',
+]);
+
+export const consultSessions = pgTable('consult_sessions', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  // Nullable — cross-project consults are allowed (the global `?` shortcut
+  // opens one with no project bound).
+  projectId: uuid('project_id').references(() => projects.id, { onDelete: 'cascade' }),
+  // Auto-derived from the first user message; user-editable later.
+  name: text('name'),
+  mode: consultModeEnum('mode').notNull().default('agent'),
+  // Only set when mode='agent'. NULL after agent deletion (snapshot below).
+  agentId: uuid('agent_id').references(() => agents.id, { onDelete: 'set null' }),
+  agentName: text('agent_name'),
+  model: text('model'),
+  status: consultStatusEnum('status').notNull().default('active'),
+  sdkSessionId: text('sdk_session_id'),
+  inputTokens: integer('input_tokens').notNull().default(0),
+  outputTokens: integer('output_tokens').notNull().default(0),
+  costUsd: numeric('cost_usd', { precision: 12, scale: 6 }).notNull().default('0'),
+  messageCount: integer('message_count').notNull().default(0),
+  // When user switches mode mid-conversation we fork a new session and
+  // record the parent here so the UI can render breadcrumb/lineage.
+  forkedFromSessionId: uuid('forked_from_session_id'),
+  errorMessage: text('error_message'),
+  startedAt: timestamp('started_at').notNull().defaultNow(),
+  endedAt: timestamp('ended_at'),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+  updatedAt: timestamp('updated_at').notNull().defaultNow(),
+});
+
+export const consultMessageRoleEnum = pgEnum('consult_message_role', [
+  'user',
+  'assistant',
+  'system',
+  'tool',
+]);
+
+export const consultMessages = pgTable('consult_messages', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  sessionId: uuid('session_id').notNull().references(() => consultSessions.id, { onDelete: 'cascade' }),
+  role: consultMessageRoleEnum('role').notNull(),
+  content: text('content').notNull().default(''),
+  // Assistant chain-of-thought / reasoning trace (rendered in the
+  // collapsible thinking pane). Streamed deltas accumulate here.
+  reasoningContent: text('reasoning_content'),
+  // Populated when role='tool' (i.e. a propose_* tool result).
+  toolName: text('tool_name'),
+  toolArgs: jsonb('tool_args'),
+  toolResult: jsonb('tool_result'),
+  // Per-message usage / cost. Aggregated up to consult_sessions on each turn.
+  inputTokens: integer('input_tokens'),
+  outputTokens: integer('output_tokens'),
+  costUsd: numeric('cost_usd', { precision: 12, scale: 6 }),
+  ts: timestamp('ts').notNull().defaultNow(),
+});
+
+export const consultProposalKindEnum = pgEnum('consult_proposal_kind', [
+  'issue',
+  'ceremony',
+  'inbox_item',
+  'capture_to_decision',
+  'assign_agent_to_issue',
+]);
+
+export const consultProposalStatusEnum = pgEnum('consult_proposal_status', [
+  'pending',
+  'accepted',
+  'edited',
+  'discarded',
+]);
+
+// Each propose_* tool call from an agent-mode consult lands here as a
+// pending proposal. The UI renders inline cards and the user clicks
+// Accept (optionally with edits) or Discard. Accepting a proposal
+// dispatches to the appropriate downstream API (issues, inbox,
+// ceremonies/import-narrative, decisions inbox, dispatcher).
+export const consultProposals = pgTable('consult_proposals', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  sessionId: uuid('session_id').notNull().references(() => consultSessions.id, { onDelete: 'cascade' }),
+  // Optional pointer to the assistant message that spawned this proposal.
+  messageId: uuid('message_id').references(() => consultMessages.id, { onDelete: 'set null' }),
+  kind: consultProposalKindEnum('kind').notNull(),
+  // Original arguments as the LLM produced them.
+  payload: jsonb('payload').notNull().default({}),
+  // Optional user edits captured at Accept time.
+  editedPayload: jsonb('edited_payload'),
+  status: consultProposalStatusEnum('status').notNull().default('pending'),
+  // Downstream artefact reference once accepted — e.g. { issueId, url }.
+  result: jsonb('result'),
+  errorMessage: text('error_message'),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+  decidedAt: timestamp('decided_at'),
+});
+
+export type ConsultSession = typeof consultSessions.$inferSelect;
+export type NewConsultSession = typeof consultSessions.$inferInsert;
+export type ConsultMessage = typeof consultMessages.$inferSelect;
+export type NewConsultMessage = typeof consultMessages.$inferInsert;
+export type ConsultProposal = typeof consultProposals.$inferSelect;
+export type NewConsultProposal = typeof consultProposals.$inferInsert;

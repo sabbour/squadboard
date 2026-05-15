@@ -1,0 +1,831 @@
+/**
+ * sdk/consult-stream.ts — Phase 17 Ask / Consult mode runtime.
+ *
+ * Sits between `routes/consult.ts` (HTTP) and `services/consult.ts` (DB).
+ * Owns:
+ *   - In-process registry of running SquadClient sessions per consult.
+ *   - The `runConsultTurn(sessionId, userMessage)` streaming loop that fans
+ *     `assistant.message_delta` + `reasoning_delta` events to WS via the
+ *     event bus (`emitConsultEvent`).
+ *   - The propose-only tool surface in agent mode (registered via the
+ *     SDK's permission/tool hooks). Each propose_* call persists to
+ *     consult_proposals + emits `consult.proposal_created`.
+ *   - Accept / Discard for proposals; Accept dispatches to the
+ *     downstream API for the relevant kind.
+ *   - "Promote whole conversation" — turn the chat into an inbox item,
+ *     a new issue, or a ceremony narrative.
+ *
+ * Phase 17 build order:
+ *   - p17-consult-schema (todo 1): scaffolding + accept/discard for
+ *     proposals (proposals can be created manually for testing); send /
+ *     promote stubbed.
+ *   - p17-consult-streaming (todo 2): real SDK session + streaming.
+ *   - p17-propose-tools (todo 3): wire propose_* tools.
+ *   - p17-promote-conversation (todo 7): LLM-backed promote.
+ */
+
+import { readFile } from 'node:fs/promises';
+import { eq } from 'drizzle-orm';
+
+import { getDb, schema } from '../db/index.js';
+import { eventBus } from '../realtime/event-bus.js';
+import { resolveModel } from './model-defaults.js';
+import { estimateCost } from './pricing.js';
+import * as consultService from '../services/consult.js';
+import type {
+  ConsultMode,
+  ConsultProposalKind,
+} from '../services/consult.js';
+import type { ConsultProposal, ConsultSession } from '../db/schema.js';
+
+// ---------------------------------------------------------------------------
+// SDK adapter shapes (kept loose so we don't have to depend on SDK types).
+// ---------------------------------------------------------------------------
+
+interface SquadSessionLike {
+  readonly sessionId: string;
+  sendMessage(opts: { prompt: string }): Promise<void>;
+  on(event: string, handler: (event: unknown) => void): void;
+  off?(event: string, handler: (event: unknown) => void): void;
+  close(): Promise<void>;
+  abort?(): Promise<void>;
+}
+
+interface SquadClientLike {
+  connect(): Promise<void>;
+  disconnect(): Promise<void>;
+  createSession(config: Record<string, unknown>): Promise<SquadSessionLike>;
+}
+
+// ---------------------------------------------------------------------------
+// Helpers (mirrors squad-stream.ts shape — kept private to avoid coupling)
+// ---------------------------------------------------------------------------
+
+function pickString(obj: unknown, ...keys: string[]): string | undefined {
+  if (!obj || typeof obj !== 'object') return undefined;
+  const o = obj as Record<string, unknown>;
+  for (const k of keys) {
+    const v = o[k];
+    if (typeof v === 'string') return v;
+    if (v && typeof v === 'object') {
+      const nested = pickString(v, ...keys);
+      if (nested !== undefined) return nested;
+    }
+  }
+  return undefined;
+}
+
+function pickNumber(obj: unknown, ...keys: string[]): number | undefined {
+  if (!obj || typeof obj !== 'object') return undefined;
+  const o = obj as Record<string, unknown>;
+  for (const k of keys) {
+    const v = o[k];
+    if (typeof v === 'number') return v;
+    if (v && typeof v === 'object') {
+      const nested = pickNumber(v, ...keys);
+      if (nested !== undefined) return nested;
+    }
+  }
+  return undefined;
+}
+
+const MODEL_THINKING_PARTNER_PROMPT = `\
+You are a thinking partner. The user wants to brainstorm ideas, work through \
+problems, or explore options out loud. Be curious, ask clarifying questions, \
+and offer multiple perspectives. Do not produce code, formal documents, or \
+take any actions in their system — this is a conversation surface, nothing \
+gets created or changed unless they explicitly say so.`;
+
+const AGENT_CONSULT_PROMPT_SUFFIX = `\
+\n\n---\nYou are operating in CONSULT MODE inside Squadboard. The user wants \
+to brainstorm, ask questions, and explore options. You are NOT working an \
+issue, NOT producing deliverables, and NOT advancing any workflow. \
+Be conversational and helpful. \
+\n\nYou have a small set of *propose-only* tools: propose_issue, \
+propose_ceremony, propose_inbox_item, propose_capture_to_decision, \
+propose_assign_agent_to_issue. Use these only when the user clearly wants \
+to capture an action item — proposals render as inline cards that the \
+user can Accept, Edit, or Discard. Never call these tools in the middle \
+of a thought; finish your reasoning first.`;
+
+// ---------------------------------------------------------------------------
+// Session registry (for streaming runs in todo 2)
+// ---------------------------------------------------------------------------
+
+interface RunningConsult {
+  id: string;
+  sessionId: string; // SDK session id
+  client: SquadClientLike;
+  session: SquadSessionLike;
+  mode: ConsultMode;
+  projectId: string | null;
+  model: string | null;
+  /** The message currently being streamed (if any), for delta accumulation. */
+  pendingAssistant?: { content: string; reasoning: string };
+}
+
+const runningConsults = new Map<string, RunningConsult>();
+
+// ---------------------------------------------------------------------------
+// LIFECYCLE — start / send / end
+// ---------------------------------------------------------------------------
+
+export interface StartConsultInput {
+  projectId?: string | null;
+  mode: ConsultMode;
+  agentId?: string | null;
+  agentName?: string | null;
+  model?: string | null;
+  name?: string | null;
+  forkedFromSessionId?: string | null;
+}
+
+/**
+ * Persist a new consult session row. The SDK SquadClient is *not* opened
+ * here — it's lazily opened on the first `sendConsultMessage` so the page
+ * can render an empty conversation immediately.
+ */
+export async function startConsultSession(input: StartConsultInput): Promise<ConsultSession> {
+  // Resolve agent metadata when in agent mode, so we capture the snapshot
+  // (agentName, model) even if the agent is later renamed/deleted.
+  let agentName = input.agentName ?? null;
+  let model = input.model ?? null;
+  let resolvedAgentId = input.agentId ?? null;
+
+  if (input.mode === 'agent' && resolvedAgentId) {
+    const db = getDb();
+    const [row] = await db
+      .select({
+        id: schema.agents.id,
+        name: schema.agents.name,
+        model: schema.agents.model,
+      })
+      .from(schema.agents)
+      .where(eq(schema.agents.id, resolvedAgentId))
+      .limit(1);
+    if (row) {
+      agentName = agentName ?? row.name;
+      model = model ?? row.model;
+    } else {
+      throw Object.assign(new Error('Agent not found'), { status: 404 });
+    }
+  }
+
+  const session = await consultService.createConsultSession({
+    projectId: input.projectId ?? null,
+    mode: input.mode,
+    agentId: resolvedAgentId,
+    agentName,
+    model,
+    name: input.name ?? null,
+    forkedFromSessionId: input.forkedFromSessionId ?? null,
+  });
+
+  // Lifecycle event — clients subscribed to the consult sessionId will pick
+  // it up and update their session list.
+  eventBus.emitConsultEvent('consult.started', session.id, {
+    sessionId: session.id,
+    projectId: session.projectId,
+    mode: session.mode,
+    agentName: session.agentName,
+    model: session.model,
+  });
+
+  return session;
+}
+
+/**
+ * Send a user message to a consult session. In todo 2 this opens an SDK
+ * session lazily and streams the assistant turn. For todo 1 it just
+ * persists the user message and records a system stub so the chat is
+ * visible end-to-end without LLM dependency.
+ */
+export async function sendConsultMessage(sessionId: string, userMessage: string): Promise<void> {
+  const session = await consultService.getConsultSession(sessionId);
+  if (!session) {
+    throw Object.assign(new Error('Consult session not found'), { status: 404 });
+  }
+  if (session.status === 'completed' || session.status === 'cancelled' || session.status === 'failed') {
+    throw Object.assign(new Error(`Session is ${session.status}`), { status: 409 });
+  }
+
+  // Persist + broadcast the user turn.
+  const userMsg = await consultService.addConsultMessage({
+    sessionId,
+    role: 'user',
+    content: userMessage,
+  });
+  eventBus.emitConsultEvent('consult.user_message', sessionId, {
+    sessionId,
+    messageId: userMsg.id,
+    content: userMessage,
+  });
+
+  // Auto-name the session from the first user message if it's still default.
+  if (!session.name) {
+    const derived = consultService.deriveConsultName(userMessage);
+    await consultService.renameConsultSession(sessionId, derived);
+  }
+
+  await runConsultTurn(sessionId, userMessage);
+}
+
+/**
+ * Execute the assistant turn. The default implementation drives a real
+ * SquadClient session through `streamAgentTurn()`; if the SDK is
+ * unavailable (test / offline mode), it falls back to a stubbed reply
+ * so the surface stays usable.
+ *
+ * Replaceable via {@link setConsultRunner} — the propose-tools layer
+ * (todo 3) decorates this with a tool registry.
+ */
+export async function runConsultTurn(sessionId: string, userMessage: string): Promise<void> {
+  await runner(sessionId, userMessage);
+}
+
+type ConsultTurnRunner = (sessionId: string, userMessage: string) => Promise<void>;
+let runner: ConsultTurnRunner = defaultRunner;
+
+export function setConsultTurnRunner(fn: ConsultTurnRunner): void {
+  runner = fn;
+}
+
+async function defaultRunner(sessionId: string, userMessage: string): Promise<void> {
+  await streamAgentTurn(sessionId, userMessage);
+}
+
+/**
+ * The actual SDK-backed streaming runner. Lazily opens a SquadClient,
+ * keeps it in `runningConsults`, fans deltas to WS, and persists the
+ * final assistant message.
+ */
+async function streamAgentTurn(sessionId: string, userMessage: string): Promise<void> {
+  const session = await consultService.getConsultSession(sessionId);
+  if (!session) return;
+
+  let running = runningConsults.get(sessionId);
+  if (!running) {
+    try {
+      running = await openSdkConsult(session);
+      runningConsults.set(sessionId, running);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Failed to open SDK session';
+      console.warn('[consult-stream] openSdkConsult failed:', msg);
+      await fallbackStubReply(sessionId, msg);
+      return;
+    }
+  }
+
+  running.pendingAssistant = { content: '', reasoning: '' };
+
+  try {
+    await running.session.sendMessage({ prompt: userMessage });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    eventBus.emitConsultEvent('consult.error', sessionId, { sessionId, message: msg });
+    await consultService.setSessionStatus(sessionId, 'failed', msg);
+  }
+}
+
+async function fallbackStubReply(sessionId: string, errorMsg: string): Promise<void> {
+  const stubText = `(Consult agent unavailable — ${errorMsg}. The conversation is recorded; restart the server with SDK access to resume streaming replies.)`;
+  const msg = await consultService.addConsultMessage({
+    sessionId,
+    role: 'assistant',
+    content: stubText,
+  });
+  eventBus.emitConsultEvent('consult.message_complete', sessionId, {
+    sessionId,
+    messageId: msg.id,
+    content: stubText,
+    role: 'assistant',
+  });
+}
+
+async function openSdkConsult(session: ConsultSession): Promise<RunningConsult> {
+  const db = getDb();
+
+  // Resolve the model.
+  let agentModel: string | null = null;
+  let charterPath: string | null = null;
+  if (session.mode === 'agent' && session.agentId) {
+    const [row] = await db
+      .select({ model: schema.agents.model, charterPath: schema.agents.charterPath })
+      .from(schema.agents)
+      .where(eq(schema.agents.id, session.agentId))
+      .limit(1);
+    agentModel = row?.model ?? null;
+    charterPath = row?.charterPath ?? null;
+  }
+  let projectDefaultModel: string | null = null;
+  let workspacePath = process.cwd();
+  if (session.projectId) {
+    const [proj] = await db
+      .select({ defaultModel: schema.projects.defaultModel, path: schema.projects.path })
+      .from(schema.projects)
+      .where(eq(schema.projects.id, session.projectId))
+      .limit(1);
+    projectDefaultModel = proj?.defaultModel ?? null;
+    workspacePath = proj?.path ?? workspacePath;
+  }
+
+  const resolved = resolveModel({
+    sessionModel: session.model,
+    agentModel,
+    projectDefaultModel,
+  });
+
+  // Build system prompt.
+  let systemPrompt = MODEL_THINKING_PARTNER_PROMPT;
+  if (session.mode === 'agent') {
+    const charter = charterPath
+      ? await readFile(charterPath, 'utf8').catch(() => null)
+      : null;
+    systemPrompt = (charter ?? `You are ${session.agentName ?? 'an agent'} helping the user.`)
+      + AGENT_CONSULT_PROMPT_SUFFIX;
+  }
+
+  const token = process.env.GITHUB_TOKEN ?? process.env.SQUADBOARD_GITHUB_TOKEN;
+  const { SquadClient } = await import('@bradygaster/squad-sdk/client');
+  const client = new SquadClient({
+    ...(token ? { githubToken: token } : { useLoggedInUser: true }),
+    cwd: workspacePath,
+  }) as unknown as SquadClientLike;
+
+  await client.connect();
+
+  const sdkSession = await client.createSession({
+    model: resolved.model,
+    streaming: true,
+    systemMessage: { mode: 'replace', content: systemPrompt },
+    workingDirectory: workspacePath,
+    onPermissionRequest: () => ({ kind: 'approved' }),
+  });
+
+  await consultService.setSessionSdkId(session.id, sdkSession.sessionId);
+  if (resolved.model && resolved.model !== session.model) {
+    await consultService.setSessionModel(session.id, resolved.model);
+  }
+
+  const running: RunningConsult = {
+    id: session.id,
+    sessionId: sdkSession.sessionId,
+    client,
+    session: sdkSession,
+    mode: session.mode,
+    projectId: session.projectId,
+    model: resolved.model,
+  };
+
+  attachListeners(running);
+  return running;
+}
+
+function attachListeners(running: RunningConsult): void {
+  const consultId = running.id;
+  running.session.on('assistant.message_delta', (e) => {
+    const delta = pickString(e, 'delta', 'content', 'text') ?? '';
+    if (!delta) return;
+    if (running.pendingAssistant) running.pendingAssistant.content += delta;
+    eventBus.emitConsultEvent('consult.message_delta', consultId, { sessionId: consultId, delta });
+  });
+  running.session.on('assistant.reasoning_delta', (e) => {
+    const delta = pickString(e, 'delta', 'content', 'text') ?? '';
+    if (!delta) return;
+    if (running.pendingAssistant) running.pendingAssistant.reasoning += delta;
+    eventBus.emitConsultEvent('consult.reasoning_delta', consultId, { sessionId: consultId, delta });
+  });
+  running.session.on('assistant.message', async (e) => {
+    const content = pickString(e, 'content', 'text', 'message')
+      ?? running.pendingAssistant?.content
+      ?? '';
+    const reasoning = running.pendingAssistant?.reasoning ?? null;
+    const messageId = pickString(e, 'messageId', 'id');
+    const msg = await consultService.addConsultMessage({
+      sessionId: consultId,
+      role: 'assistant',
+      content,
+      reasoningContent: reasoning && reasoning.length > 0 ? reasoning : null,
+    });
+    running.pendingAssistant = undefined;
+    eventBus.emitConsultEvent('consult.message_complete', consultId, {
+      sessionId: consultId,
+      messageId: msg.id,
+      sdkMessageId: messageId,
+      content,
+      reasoningContent: reasoning,
+      role: 'assistant',
+    });
+  });
+  running.session.on('assistant.usage', async (e) => {
+    const inputTokens = pickNumber(e, 'inputTokens', 'input_tokens', 'promptTokens', 'prompt_tokens') ?? 0;
+    const outputTokens = pickNumber(e, 'outputTokens', 'output_tokens', 'completionTokens', 'completion_tokens') ?? 0;
+    const model = pickString(e, 'model') ?? running.model ?? null;
+    const turnCost = estimateCost(model, inputTokens, outputTokens);
+    await consultService.recordSessionUsage(consultId, inputTokens, outputTokens, turnCost.toFixed(6));
+    eventBus.emitConsultEvent('consult.usage', consultId, {
+      sessionId: consultId,
+      inputTokens,
+      outputTokens,
+      model,
+      cost: turnCost,
+    });
+  });
+  running.session.on('session.error', (e) => {
+    const message = pickString(e, 'message', 'error') ?? 'SDK error';
+    eventBus.emitConsultEvent('consult.error', consultId, { sessionId: consultId, message });
+  });
+}
+
+/**
+ * End the running SDK session for a consult (best-effort). Safe to call
+ * when no SDK session is open — it just resolves.
+ */
+export async function endRunningConsult(
+  consultId: string,
+  reason: 'completed' | 'cancelled' | 'failed' = 'cancelled',
+): Promise<void> {
+  const running = runningConsults.get(consultId);
+  if (!running) return;
+  runningConsults.delete(consultId);
+  try {
+    await running.session.close();
+  } catch {
+    // ignore
+  }
+  try {
+    await running.client.disconnect();
+  } catch {
+    // ignore
+  }
+  eventBus.emitConsultEvent('consult.completed', consultId, { sessionId: consultId, reason });
+}
+
+export async function shutdownAllConsults(): Promise<void> {
+  const ids = [...runningConsults.keys()];
+  await Promise.allSettled(ids.map((id) => endRunningConsult(id, 'cancelled')));
+}
+
+// ---------------------------------------------------------------------------
+// PROPOSAL ACCEPT / DISCARD
+// ---------------------------------------------------------------------------
+
+export interface AcceptProposalInput {
+  sessionId: string;
+  proposalId: string;
+  editedPayload?: Record<string, unknown> | null;
+}
+
+export interface AcceptProposalResult {
+  proposal: ConsultProposal;
+  artifact?: Record<string, unknown> | null;
+}
+
+export async function acceptProposal(input: AcceptProposalInput): Promise<AcceptProposalResult> {
+  const proposal = await consultService.getProposal(input.proposalId);
+  if (!proposal || proposal.sessionId !== input.sessionId) {
+    throw Object.assign(new Error('Proposal not found'), { status: 404 });
+  }
+  if (proposal.status !== 'pending') {
+    throw Object.assign(new Error(`Proposal already ${proposal.status}`), { status: 409 });
+  }
+  const session = await consultService.getConsultSession(input.sessionId);
+  if (!session) {
+    throw Object.assign(new Error('Consult session not found'), { status: 404 });
+  }
+  const effectivePayload =
+    input.editedPayload && Object.keys(input.editedPayload).length > 0
+      ? { ...(proposal.payload as Record<string, unknown>), ...input.editedPayload }
+      : (proposal.payload as Record<string, unknown>);
+
+  const isEdited = Boolean(input.editedPayload && Object.keys(input.editedPayload).length > 0);
+
+  let artifact: Record<string, unknown> | null = null;
+  try {
+    artifact = await dispatchProposal(proposal.kind as ConsultProposalKind, effectivePayload, session);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    const updated = await consultService.updateProposal(input.proposalId, {
+      status: 'pending',
+      errorMessage: msg,
+      ...(isEdited ? { editedPayload: input.editedPayload as Record<string, unknown> } : {}),
+    });
+    throw Object.assign(new Error(`Failed to accept proposal: ${msg}`), {
+      status: 502,
+      proposal: updated,
+    });
+  }
+
+  const updated = await consultService.updateProposal(input.proposalId, {
+    status: isEdited ? 'edited' : 'accepted',
+    result: artifact ?? undefined,
+    errorMessage: null,
+    ...(isEdited ? { editedPayload: input.editedPayload as Record<string, unknown> } : {}),
+  });
+
+  eventBus.emitConsultEvent('consult.proposal_decided', input.sessionId, {
+    sessionId: input.sessionId,
+    proposalId: input.proposalId,
+    status: updated?.status ?? 'accepted',
+    artifact,
+  });
+
+  return { proposal: updated ?? proposal, artifact };
+}
+
+export async function discardProposal(proposalId: string): Promise<ConsultProposal | null> {
+  const proposal = await consultService.getProposal(proposalId);
+  if (!proposal) return null;
+  const updated = await consultService.updateProposal(proposalId, { status: 'discarded' });
+  if (updated) {
+    eventBus.emitConsultEvent('consult.proposal_decided', proposal.sessionId, {
+      sessionId: proposal.sessionId,
+      proposalId,
+      status: 'discarded',
+      artifact: null,
+    });
+  }
+  return updated;
+}
+
+async function dispatchProposal(
+  kind: ConsultProposalKind,
+  payload: Record<string, unknown>,
+  session: ConsultSession,
+): Promise<Record<string, unknown> | null> {
+  switch (kind) {
+    case 'issue':
+      return acceptProposeIssue(payload, session);
+    case 'inbox_item':
+      return acceptProposeInboxItem(payload, session);
+    case 'ceremony':
+      return acceptProposeCeremony(payload, session);
+    case 'capture_to_decision':
+      return acceptProposeCaptureDecision(payload, session);
+    case 'assign_agent_to_issue':
+      return acceptProposeAssignAgent(payload, session);
+    default:
+      throw new Error(`Unknown proposal kind: ${String(kind)}`);
+  }
+}
+
+async function acceptProposeIssue(
+  payload: Record<string, unknown>,
+  session: ConsultSession,
+): Promise<Record<string, unknown>> {
+  const projectId =
+    (typeof payload.projectId === 'string' && payload.projectId) ||
+    session.projectId ||
+    null;
+  if (!projectId) {
+    throw new Error('propose_issue requires a projectId (consult is cross-project — pass projectId in editedPayload)');
+  }
+  const title = typeof payload.title === 'string' ? payload.title.trim() : '';
+  if (!title) throw new Error('propose_issue requires a title');
+  const body = typeof payload.body === 'string' ? payload.body : '';
+  const columnSlug = typeof payload.columnSlug === 'string' ? payload.columnSlug : 'backlog';
+  const issuesService = await import('../services/issues.js');
+  const created = await issuesService.createIssue(projectId, {
+    title,
+    body,
+    status: columnSlug as 'backlog' | 'todo' | 'in_progress' | 'in_review' | 'done',
+  });
+  return { kind: 'issue', issueId: created.id, projectId, url: `/projects/${projectId}/board` };
+}
+
+async function acceptProposeInboxItem(
+  payload: Record<string, unknown>,
+  session: ConsultSession,
+): Promise<Record<string, unknown>> {
+  const summary = typeof payload.summary === 'string' ? payload.summary.trim() : '';
+  if (!summary) throw new Error('propose_inbox_item requires a summary');
+  const suggestedProjectId =
+    (typeof payload.suggestedProjectId === 'string' && payload.suggestedProjectId) ||
+    session.projectId ||
+    null;
+  const inboxService = await import('../services/inbox.js');
+  const item = await inboxService.createInboxItem({
+    originalDraft: summary,
+    suggestedProjectId,
+    userId: null,
+  });
+  return { kind: 'inbox_item', inboxItemId: item.id, suggestedProjectId };
+}
+
+async function acceptProposeCeremony(
+  payload: Record<string, unknown>,
+  session: ConsultSession,
+): Promise<Record<string, unknown>> {
+  const projectId =
+    (typeof payload.projectId === 'string' && payload.projectId) ||
+    session.projectId ||
+    null;
+  if (!projectId) {
+    throw new Error('propose_ceremony requires a projectId (consult is cross-project — pass projectId in editedPayload)');
+  }
+  const name = typeof payload.name === 'string' ? payload.name.trim() : '';
+  const markdown = typeof payload.narrativeMarkdown === 'string'
+    ? payload.narrativeMarkdown
+    : typeof payload.markdown === 'string' ? payload.markdown : '';
+  if (!name && !markdown) {
+    throw new Error('propose_ceremony requires `name` and `narrativeMarkdown`');
+  }
+  // Insert a narrative ceremony directly through the DB (mirrors the
+  // /api/ceremonies/import-narrative handler so we don't need an
+  // out-of-process HTTP call).
+  const db = getDb();
+  const slug = slugify(name || 'imported-ceremony');
+  const [narrative] = await db
+    .insert(schema.workflows)
+    .values({
+      projectId,
+      name: name || 'Imported ceremony',
+      slug,
+      description: typeof payload.description === 'string' ? payload.description : null,
+      triggerKind: 'manual',
+      triggerConfig: {},
+      kind: 'narrative',
+      status: 'draft',
+    })
+    .returning();
+  if (!narrative) throw new Error('Failed to insert narrative ceremony');
+  await db.insert(schema.workflowVersions).values({
+    workflowId: narrative.id,
+    version: 1,
+    yamlContent: markdown,
+    isActive: true,
+  });
+  return {
+    kind: 'ceremony',
+    ceremonyId: narrative.id,
+    projectId,
+    url: `/projects/${projectId}/ceremonies/review`,
+  };
+}
+
+async function acceptProposeCaptureDecision(
+  payload: Record<string, unknown>,
+  session: ConsultSession,
+): Promise<Record<string, unknown>> {
+  const key = typeof payload.key === 'string' ? payload.key.trim() : '';
+  const value = typeof payload.value === 'string' ? payload.value.trim() : '';
+  if (!key || !value) throw new Error('propose_capture_to_decision requires `key` and `value`');
+  if (!session.projectId) {
+    throw new Error('propose_capture_to_decision requires a project-scoped consult');
+  }
+  const db = getDb();
+  const [proj] = await db
+    .select({ path: schema.projects.path })
+    .from(schema.projects)
+    .where(eq(schema.projects.id, session.projectId))
+    .limit(1);
+  if (!proj?.path) throw new Error('Project squad path not found');
+  const fs = await import('node:fs/promises');
+  const path = await import('node:path');
+  const inboxDir = path.join(proj.path, 'decisions', 'inbox');
+  await fs.mkdir(inboxDir, { recursive: true });
+  const slug = slugify(key);
+  const file = path.join(inboxDir, `${Date.now()}-${slug}.md`);
+  const content = `# ${key}\n\n${value}\n\n---\nCaptured from consult ${session.id} on ${new Date().toISOString()}\n`;
+  await fs.writeFile(file, content, 'utf8');
+  return { kind: 'capture_to_decision', filePath: file, key };
+}
+
+async function acceptProposeAssignAgent(
+  payload: Record<string, unknown>,
+  session: ConsultSession,
+): Promise<Record<string, unknown>> {
+  const issueId = typeof payload.issueId === 'string' ? payload.issueId.trim() : '';
+  const agentName = typeof payload.agentName === 'string' ? payload.agentName.trim() : '';
+  if (!issueId) throw new Error('propose_assign_agent_to_issue requires `issueId`');
+  if (!agentName) throw new Error('propose_assign_agent_to_issue requires `agentName`');
+  if (!session.projectId) {
+    throw new Error('propose_assign_agent_to_issue requires a project-scoped consult');
+  }
+  const db = getDb();
+  const [agent] = await db
+    .select({ id: schema.agents.id })
+    .from(schema.agents)
+    .where(eq(schema.agents.projectId, session.projectId))
+    .limit(50)
+    .then((rows) => rows.filter((_r) => true)); // placeholder narrowing — full match below
+
+  // Above query returns up to 50 agents; we need the one matching the name.
+  // Re-query with a name filter for correctness.
+  const matched = await db
+    .select({ id: schema.agents.id, name: schema.agents.name })
+    .from(schema.agents)
+    .where(eq(schema.agents.projectId, session.projectId));
+  const found = matched.find((a) => a.name === agentName);
+  if (!found) throw new Error(`Agent '${agentName}' not found in this project`);
+  void agent;
+
+  const { createRoutedRun } = await import('../engine/router.js');
+  const runId = await createRoutedRun(issueId, found.id, `consult:propose_assign:${session.id}`);
+  return { kind: 'assign_agent_to_issue', issueId, agentId: found.id, runId };
+}
+
+function slugify(s: string): string {
+  return s
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 64) || 'untitled';
+}
+
+// ---------------------------------------------------------------------------
+// PROMOTE WHOLE CONVERSATION
+// ---------------------------------------------------------------------------
+
+export interface PromoteConsultInput {
+  sessionId: string;
+  kind: 'inbox' | 'issue' | 'ceremony';
+  projectId?: string | null;
+  columnSlug?: string | null;
+}
+
+export interface PromoteConsultResult {
+  kind: PromoteConsultInput['kind'];
+  artifact: Record<string, unknown>;
+}
+
+/**
+ * Promote a consult conversation to an inbox item, new issue, or ceremony.
+ * In todo 7 this calls the LLM to summarise/extract; for the moment it
+ * builds a deterministic transcript dump so the surface is already wired.
+ */
+export async function promoteConsult(input: PromoteConsultInput): Promise<PromoteConsultResult> {
+  const detail = await consultService.getConsultSessionDetail(input.sessionId);
+  if (!detail) throw Object.assign(new Error('Consult session not found'), { status: 404 });
+
+  const transcriptMd = renderTranscript(detail.messages, detail.name ?? 'Consult conversation');
+  const projectId = input.projectId ?? detail.projectId ?? null;
+
+  if (input.kind === 'inbox') {
+    const inboxService = await import('../services/inbox.js');
+    const item = await inboxService.createInboxItem({
+      originalDraft: transcriptMd,
+      suggestedProjectId: projectId,
+      userId: null,
+    });
+    return { kind: 'inbox', artifact: { inboxItemId: item.id, suggestedProjectId: projectId } };
+  }
+
+  if (input.kind === 'issue') {
+    if (!projectId) throw Object.assign(new Error('issue promotion requires a projectId'), { status: 400 });
+    const issuesService = await import('../services/issues.js');
+    const title = detail.name?.trim() || 'Promoted from consult';
+    const created = await issuesService.createIssue(projectId, {
+      title: title.slice(0, 200),
+      body: transcriptMd,
+      status: (input.columnSlug as 'backlog' | 'todo' | 'in_progress' | 'in_review' | 'done') ?? 'backlog',
+    });
+    return {
+      kind: 'issue',
+      artifact: { issueId: created.id, projectId, url: `/projects/${projectId}/board` },
+    };
+  }
+
+  // ceremony
+  if (!projectId) throw Object.assign(new Error('ceremony promotion requires a projectId'), { status: 400 });
+  const db = getDb();
+  const slug = slugify(detail.name ?? 'consult-ceremony');
+  const [narrative] = await db
+    .insert(schema.workflows)
+    .values({
+      projectId,
+      name: detail.name ?? 'Consult-promoted ceremony',
+      slug,
+      description: 'Promoted from a consult session',
+      triggerKind: 'manual',
+      triggerConfig: {},
+      kind: 'narrative',
+      status: 'draft',
+    })
+    .returning();
+  if (!narrative) throw new Error('Failed to insert narrative ceremony');
+  await db.insert(schema.workflowVersions).values({
+    workflowId: narrative.id,
+    version: 1,
+    yamlContent: transcriptMd,
+    isActive: true,
+  });
+  return {
+    kind: 'ceremony',
+    artifact: {
+      ceremonyId: narrative.id,
+      projectId,
+      url: `/projects/${projectId}/ceremonies/review`,
+    },
+  };
+}
+
+function renderTranscript(messages: Array<{ role: string; content: string }>, title: string): string {
+  const lines: string[] = [`# ${title}`, ''];
+  for (const m of messages) {
+    if (m.role === 'system' || m.role === 'tool') continue;
+    const speaker = m.role === 'user' ? 'You' : 'Agent';
+    lines.push(`**${speaker}:**`, '', m.content.trim(), '');
+  }
+  return lines.join('\n');
+}

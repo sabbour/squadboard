@@ -59,6 +59,25 @@ export type DeliverableEventType =
  */
 export type FanOutEventType = 'fan_out.parallel_spawn';
 
+/**
+ * Phase 17: Ask / Consult mode events. Routed to a per-consult room
+ * (key: `consult:<sessionId>`) rather than a project room because consult
+ * sessions can be cross-project. Clients subscribe via the existing
+ * `subscribe` ws message using that synthetic project key.
+ */
+export type ConsultEventType =
+  | 'consult.started'
+  | 'consult.user_message'
+  | 'consult.message_delta'
+  | 'consult.reasoning_delta'
+  | 'consult.message_complete'
+  | 'consult.tool_call'
+  | 'consult.proposal_created'
+  | 'consult.proposal_decided'
+  | 'consult.usage'
+  | 'consult.error'
+  | 'consult.completed';
+
 export type BusEventType =
   | IssueEventType
   | RunEventType
@@ -67,7 +86,8 @@ export type BusEventType =
   | SessionEventType
   | CommentEventType
   | DeliverableEventType
-  | FanOutEventType;
+  | FanOutEventType
+  | ConsultEventType;
 
 export interface BusEvent {
   type: BusEventType;
@@ -128,6 +148,17 @@ class EventBus extends EventEmitter {
    */
   emitFanOutEvent(type: FanOutEventType, projectId: string, payload: unknown): void {
     const event: BusEvent = { type, projectId, payload };
+    this.emit('event', event);
+  }
+
+  /**
+   * Phase 17: Ask / Consult event. The "scope key" is `consult:<sessionId>`
+   * (placed in the BusEvent.projectId slot for ws-server room routing).
+   * Clients subscribe with `{ projectId: 'consult:<sessionId>' }` to
+   * receive these events.
+   */
+  emitConsultEvent(type: ConsultEventType, consultSessionId: string, payload: unknown): void {
+    const event: BusEvent = { type, projectId: `consult:${consultSessionId}`, payload };
     this.emit('event', event);
   }
 }

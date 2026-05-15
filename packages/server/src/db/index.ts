@@ -717,6 +717,93 @@ async function bootstrapSchema(): Promise<void> {
         ADD CONSTRAINT tools_mcp_server_fk
         FOREIGN KEY (mcp_server_id) REFERENCES mcp_servers(id) ON DELETE SET NULL;
     EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+    -- Phase 17: Ask / Consult mode — free-form brainstorm sessions.
+    DO $$ BEGIN
+      CREATE TYPE consult_mode AS ENUM ('agent', 'model');
+    EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+    DO $$ BEGIN
+      CREATE TYPE consult_status AS ENUM ('active', 'idle', 'completed', 'failed', 'cancelled');
+    EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+    DO $$ BEGIN
+      CREATE TYPE consult_message_role AS ENUM ('user', 'assistant', 'system', 'tool');
+    EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+    DO $$ BEGIN
+      CREATE TYPE consult_proposal_kind AS ENUM (
+        'issue', 'ceremony', 'inbox_item', 'capture_to_decision', 'assign_agent_to_issue'
+      );
+    EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+    DO $$ BEGIN
+      CREATE TYPE consult_proposal_status AS ENUM ('pending', 'accepted', 'edited', 'discarded');
+    EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+    CREATE TABLE IF NOT EXISTS consult_sessions (
+      id                       UUID            PRIMARY KEY DEFAULT gen_random_uuid(),
+      project_id               UUID            REFERENCES projects(id) ON DELETE CASCADE,
+      name                     TEXT,
+      mode                     consult_mode    NOT NULL DEFAULT 'agent',
+      agent_id                 UUID            REFERENCES agents(id) ON DELETE SET NULL,
+      agent_name               TEXT,
+      model                    TEXT,
+      status                   consult_status  NOT NULL DEFAULT 'active',
+      sdk_session_id           TEXT,
+      input_tokens             INTEGER         NOT NULL DEFAULT 0,
+      output_tokens            INTEGER         NOT NULL DEFAULT 0,
+      cost_usd                 NUMERIC(12, 6)  NOT NULL DEFAULT 0,
+      message_count            INTEGER         NOT NULL DEFAULT 0,
+      forked_from_session_id   UUID,
+      error_message            TEXT,
+      started_at               TIMESTAMPTZ     NOT NULL DEFAULT NOW(),
+      ended_at                 TIMESTAMPTZ,
+      created_at               TIMESTAMPTZ     NOT NULL DEFAULT NOW(),
+      updated_at               TIMESTAMPTZ     NOT NULL DEFAULT NOW()
+    );
+
+    CREATE INDEX IF NOT EXISTS consult_sessions_project_idx
+      ON consult_sessions (project_id, created_at DESC);
+    CREATE INDEX IF NOT EXISTS consult_sessions_created_idx
+      ON consult_sessions (created_at DESC);
+
+    CREATE TABLE IF NOT EXISTS consult_messages (
+      id                UUID                  PRIMARY KEY DEFAULT gen_random_uuid(),
+      session_id        UUID                  NOT NULL REFERENCES consult_sessions(id) ON DELETE CASCADE,
+      role              consult_message_role  NOT NULL,
+      content           TEXT                  NOT NULL DEFAULT '',
+      reasoning_content TEXT,
+      tool_name         TEXT,
+      tool_args         JSONB,
+      tool_result       JSONB,
+      input_tokens      INTEGER,
+      output_tokens     INTEGER,
+      cost_usd          NUMERIC(12, 6),
+      ts                TIMESTAMPTZ           NOT NULL DEFAULT NOW()
+    );
+
+    CREATE INDEX IF NOT EXISTS consult_messages_session_idx
+      ON consult_messages (session_id, ts);
+
+    CREATE TABLE IF NOT EXISTS consult_proposals (
+      id              UUID                      PRIMARY KEY DEFAULT gen_random_uuid(),
+      session_id      UUID                      NOT NULL REFERENCES consult_sessions(id) ON DELETE CASCADE,
+      message_id      UUID                      REFERENCES consult_messages(id) ON DELETE SET NULL,
+      kind            consult_proposal_kind     NOT NULL,
+      payload         JSONB                     NOT NULL DEFAULT '{}'::jsonb,
+      edited_payload  JSONB,
+      status          consult_proposal_status   NOT NULL DEFAULT 'pending',
+      result          JSONB,
+      error_message   TEXT,
+      created_at      TIMESTAMPTZ               NOT NULL DEFAULT NOW(),
+      decided_at      TIMESTAMPTZ
+    );
+
+    CREATE INDEX IF NOT EXISTS consult_proposals_session_idx
+      ON consult_proposals (session_id, created_at);
+    CREATE INDEX IF NOT EXISTS consult_proposals_status_idx
+      ON consult_proposals (status);
   `);
 
   await seedSystemReviewPolicyPresets();
