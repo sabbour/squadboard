@@ -77,6 +77,11 @@ interface UIStep {
   // Handoff
   to?: string
   message?: string
+  // Fan-out (Phase 15)
+  // 'serial' (default) lets the dispatcher claim child workflow_runs one tick at
+  // a time. 'parallel' tells the engine to immediately spawn every child's first
+  // LLM session via the SDK's spawnParallel(); see Phase 15 in docs.
+  mode?: 'serial' | 'parallel'
 }
 
 const STEP_TYPE_OPTIONS: { value: StepType; label: string }[] = [
@@ -145,6 +150,12 @@ function emitYaml(name: string, description: string | undefined, steps: UIStep[]
     if (s.type === 'handoff') {
       if (s.to) lines.push(`    to: ${quoteIfNeeded(s.to)}`)
       if (s.message) lines.push(`    message: ${quoteIfNeeded(s.message)}`)
+    }
+    if (s.type === 'fan_out') {
+      // Phase 15: emit only the spawn mode here. Other fan_out fields
+      // (split_by, agents, merge_strategy) aren't editable in the UI yet
+      // and round-trip through ceremony YAML untouched on the server side.
+      if (s.mode && s.mode !== 'serial') lines.push(`    mode: ${s.mode}`)
     }
   }
   return lines.join('\n') + '\n'
@@ -240,6 +251,12 @@ function parseSteps(yaml: string): UIStep[] {
     if (m) { cur.to = unquote(m[1].trim()); continue }
     m = stripped.match(/^message\s*:\s*(.+)/)
     if (m) { cur.message = unquote(m[1].trim()); continue }
+    m = stripped.match(/^mode\s*:\s*(.+)/)
+    if (m) {
+      const v = unquote(m[1].trim())
+      if (v === 'serial' || v === 'parallel') cur.mode = v
+      continue
+    }
     // Top-level field outside steps
     if (!raw.startsWith(' ') && stripped.length > 0) {
       commit()
@@ -733,6 +750,33 @@ export default function CeremonyEditor() {
                       disabled={readOnly}
                       rows={2}
                     />
+                  </div>
+                )}
+
+                {step.type === 'fan_out' && (
+                  <div style={{ display: 'flex', gap: 8, flexDirection: 'column' }}>
+                    <label style={{ fontSize: 12, display: 'flex', flexDirection: 'column', gap: 4 }}>
+                      Spawn mode
+                      <Dropdown
+                        value={step.mode === 'parallel' ? 'parallel — spawn all children at once (SDK)' : 'serial — let dispatcher claim children one tick at a time'}
+                        selectedOptions={[step.mode ?? 'serial']}
+                        onOptionSelect={(_, d) => updateStep(i, { mode: d.optionValue as 'serial' | 'parallel' })}
+                        disabled={readOnly}
+                      >
+                        <Option value="serial">serial — let dispatcher claim children one tick at a time</Option>
+                        <Option value="parallel">parallel — spawn all children at once (SDK)</Option>
+                      </Dropdown>
+                    </label>
+                    <Caption1 style={{ color: 'var(--text-muted)' }}>
+                      Phase 15: <code>parallel</code> calls the SDK's <code>spawnParallel()</code> immediately
+                      after materialise so every child's first LLM session starts within ~1s instead of waiting
+                      ~5s per child for the dispatcher to claim it. Failures are isolated per child;
+                      on spawn error the dispatcher recovery path takes over.
+                    </Caption1>
+                    <Caption1 style={{ color: 'var(--text-muted)' }}>
+                      Other fan_out fields (<code>split_by</code>, <code>agents</code>, <code>merge_strategy</code>) are
+                      currently authored in the YAML preview below and round-trip untouched.
+                    </Caption1>
                   </div>
                 )}
 
