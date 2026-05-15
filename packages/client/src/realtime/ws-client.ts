@@ -101,6 +101,10 @@ class WsClient {
     if (this.socket && this.projectId === projectId && this.socket.readyState === WebSocket.OPEN) {
       return // already connected to same project
     }
+    // Cancel any pending reconnect timer from a prior connection — otherwise a
+    // stale timer can fire after this connect() runs and spawn a second socket
+    // racing the new one, leaving the state machine stuck in 'reconnecting'.
+    this.cancelReconnect()
     if (this.socket) {
       this.cleanup(false) // close old connection without notifying "disconnect"
     }

@@ -166,7 +166,6 @@ export default function Board() {
           title="Customize columns"
           aria-label="Customize columns"
           style={{
-            marginLeft: 'auto',
             background: 'none',
             border: 'none',
             cursor: 'pointer',
