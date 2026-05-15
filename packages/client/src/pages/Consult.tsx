@@ -53,6 +53,7 @@ import {
 } from '../api/consult.ts'
 import { useAgents, useModels } from '../api/agents.ts'
 import { useProjects } from '../api/projects.ts'
+import PageHeader from '../components/layout/PageHeader.tsx'
 
 const useStyles = makeStyles({
   root: {
@@ -63,7 +64,7 @@ const useStyles = makeStyles({
     background: tokens.colorNeutralBackground2,
   },
   list: {
-    width: '300px',
+    width: '240px',
     flexShrink: 0,
     display: 'flex',
     flexDirection: 'column',
@@ -71,11 +72,12 @@ const useStyles = makeStyles({
     background: tokens.colorNeutralBackground1,
   },
   listHeader: {
-    padding: '12px 16px',
+    padding: `${tokens.spacingVerticalS} ${tokens.spacingHorizontalM}`,
     borderBottom: `1px solid ${tokens.colorNeutralStroke1}`,
     display: 'flex',
     flexDirection: 'column',
-    gap: '8px',
+    gap: tokens.spacingVerticalS,
+    alignItems: 'flex-start',
   },
   listScroll: {
     flex: 1,
@@ -316,8 +318,8 @@ function SessionList({
     <div className={styles.list}>
       <div className={styles.listHeader}>
         <Subtitle2>{scope === 'global' ? 'Ask anything' : 'Project consults'}</Subtitle2>
-        <Button appearance="primary" icon={<Add20Regular />} onClick={onNew}>
-          New conversation
+        <Button appearance="primary" size="small" icon={<Add20Regular />} onClick={onNew}>
+          New
         </Button>
       </div>
       <div className={styles.listScroll}>
@@ -443,102 +445,138 @@ function NewSessionView({
   }
 
   return (
-    <div className={styles.scroll} style={{ maxWidth: '720px', alignSelf: 'center', width: '100%' }}>
-      <Title2>New consult</Title2>
-      <Body1 style={{ color: tokens.colorNeutralForeground3 }}>
-        Brainstorm with an agent (charter-bound, propose-only) or with a raw model (thinking partner). Nothing
-        you say here side-effects your project until you accept a proposal.
-      </Body1>
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+      <PageHeader
+        title="New consult"
+        description="Brainstorm with an agent (charter-bound, propose-only) or a raw model. Nothing you say here side-effects your project until you accept a proposal."
+      />
+      <div className={styles.scroll} style={{ maxWidth: '720px', alignSelf: 'center', width: '100%' }}>
+        <Card style={{ padding: tokens.spacingVerticalL, display: 'flex', flexDirection: 'column', gap: tokens.spacingVerticalM }}>
 
-      <Card style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
-        <Field label="Mode">
-          <div style={{ display: 'flex', gap: '8px' }}>
+          {/* Config grid: 2-column layout for compact knobs */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: tokens.spacingHorizontalM }}>
+
+            {/* Row 1 Col 1: Mode toggle */}
+            <Field label="Mode">
+              <div style={{ display: 'flex', gap: tokens.spacingHorizontalS }}>
+                <Button
+                  appearance={mode === 'agent' ? 'primary' : 'secondary'}
+                  icon={<Bot20Regular />}
+                  onClick={() => setMode('agent')}
+                  disabled={!projectId}
+                  size="small"
+                >
+                  Agent
+                </Button>
+                <Button
+                  appearance={mode === 'model' ? 'primary' : 'secondary'}
+                  icon={<Brain20Regular />}
+                  onClick={() => setMode('model')}
+                  size="small"
+                >
+                  Model
+                </Button>
+              </div>
+            </Field>
+
+            {/* Row 1 Col 2: Agent picker (agent mode) or Model picker (model mode) */}
+            {mode === 'agent' ? (
+              <Field label="Agent" required>
+                {agentsQuery.isLoading ? (
+                  <Spinner size="extra-small" />
+                ) : agents.length === 0 ? (
+                  <Caption1 style={{ color: tokens.colorNeutralForeground3 }}>
+                    No agents in this project. Create one first or switch to Model mode.
+                  </Caption1>
+                ) : (
+                  <Dropdown
+                    value={agents.find((a) => a.id === agentId)?.name ?? ''}
+                    selectedOptions={agentId ? [agentId] : []}
+                    onOptionSelect={(_, data) => setAgentId(data.optionValue ?? '')}
+                  >
+                    {agents.map((a) => (
+                      <Option key={a.id} value={a.id} text={a.name}>
+                        {a.name} ({a.role})
+                      </Option>
+                    ))}
+                  </Dropdown>
+                )}
+              </Field>
+            ) : (
+              <Field label="Model">
+                <Dropdown
+                  value={model || 'auto'}
+                  selectedOptions={model ? [model] : []}
+                  onOptionSelect={(_, data) => setModel(data.optionValue === 'auto' ? '' : data.optionValue ?? '')}
+                >
+                  <Option key="auto" value="auto" text="auto">auto (resolve from project / default)</Option>
+                  {models.map((m) => (
+                    <Option key={m.id} value={m.id} text={m.id}>{m.id}</Option>
+                  ))}
+                </Dropdown>
+              </Field>
+            )}
+
+            {/* Row 2 Col 1: Model override (agent mode) or empty spacer (model mode) */}
+            {mode === 'agent' ? (
+              <Field label="Model override (optional)">
+                <Dropdown
+                  value={model || 'auto'}
+                  selectedOptions={model ? [model] : []}
+                  onOptionSelect={(_, data) => setModel(data.optionValue === 'auto' ? '' : data.optionValue ?? '')}
+                >
+                  <Option key="auto" value="auto" text="auto">auto (resolve from agent / project / default)</Option>
+                  {models.map((m) => (
+                    <Option key={m.id} value={m.id} text={m.id}>{m.id}</Option>
+                  ))}
+                </Dropdown>
+              </Field>
+            ) : (
+              <div />
+            )}
+
+            {/* Row 2 Col 2: Name */}
+            <Field label="Name (optional)">
+              <Input
+                value={name}
+                onChange={(_, d) => setName(d.value)}
+                placeholder="auto-derived from first message"
+              />
+            </Field>
+          </div>
+
+          {/* Hero textarea — the focal point */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: tokens.spacingVerticalXS, marginTop: tokens.spacingVerticalL }}>
+            <Subtitle2>Open with…</Subtitle2>
+            <Textarea
+              value={firstMessage}
+              onChange={(_, d) => setFirstMessage(d.value)}
+              placeholder="What's on your mind? Paste a brief, ask a question, or describe a problem you want to think through together."
+              rows={6}
+            />
+          </div>
+
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: tokens.spacingHorizontalS }}>
             <Button
-              appearance={mode === 'agent' ? 'primary' : 'secondary'}
-              icon={<Bot20Regular />}
-              onClick={() => setMode('agent')}
-              disabled={!projectId}
+              appearance="primary"
+              icon={<Send20Regular />}
+              onClick={handleStart}
+              disabled={
+                startMut.isPending ||
+                (!firstMessage.trim() && !(mode === 'agent' && Boolean(agentId)))
+              }
             >
-              Agent
-            </Button>
-            <Button
-              appearance={mode === 'model' ? 'primary' : 'secondary'}
-              icon={<Brain20Regular />}
-              onClick={() => setMode('model')}
-            >
-              Model
+              {startMut.isPending ? 'Starting…' : 'Start conversation'}
             </Button>
           </div>
-        </Field>
 
-        {mode === 'agent' && (
-          <Field label="Agent" required>
-            {agentsQuery.isLoading ? (
-              <Spinner size="extra-small" />
-            ) : agents.length === 0 ? (
-              <Caption1>No agents in this project. Create one first or switch to Model mode.</Caption1>
-            ) : (
-              <Dropdown
-                value={agents.find((a) => a.id === agentId)?.name ?? ''}
-                selectedOptions={agentId ? [agentId] : []}
-                onOptionSelect={(_, data) => setAgentId(data.optionValue ?? '')}
-              >
-                {agents.map((a) => (
-                  <Option key={a.id} value={a.id} text={a.name}>
-                    {a.name} ({a.role})
-                  </Option>
-                ))}
-              </Dropdown>
-            )}
-          </Field>
-        )}
-
-        <Field label="Model (optional override)">
-          <Dropdown
-            value={model || 'auto (resolve from agent / project / default)'}
-            selectedOptions={model ? [model] : []}
-            onOptionSelect={(_, data) => setModel(data.optionValue === 'auto' ? '' : data.optionValue ?? '')}
-          >
-            <Option key="auto" value="auto" text="auto">auto (resolve from agent / project / default)</Option>
-            {models.map((m) => (
-              <Option key={m.id} value={m.id} text={m.id}>{m.id}</Option>
-            ))}
-          </Dropdown>
-        </Field>
-
-        <Field label="Name (optional)">
-          <Input value={name} onChange={(_, d) => setName(d.value)} placeholder="auto-derived from first message" />
-        </Field>
-
-        <Field label="Open with…">
-          <Textarea
-            value={firstMessage}
-            onChange={(_, d) => setFirstMessage(d.value)}
-            placeholder="What's on your mind?"
-            rows={4}
-          />
-        </Field>
-
-        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
-          <Button
-            appearance="primary"
-            icon={<Send20Regular />}
-            onClick={handleStart}
-            disabled={
-              startMut.isPending ||
-              (mode === 'agent' && !agentId)
-            }
-          >
-            {startMut.isPending ? 'Starting…' : 'Start conversation'}
-          </Button>
-        </div>
-
-        {startMut.error && (
-          <Caption1 style={{ color: tokens.colorPaletteRedForeground1 }}>
-            {startMut.error.message}
-          </Caption1>
-        )}
-      </Card>
+          {startMut.error && (
+            <Caption1 style={{ color: tokens.colorPaletteRedForeground1 }}>
+              {startMut.error.message}
+            </Caption1>
+          )}
+        </Card>
+      </div>
     </div>
   )
 }
