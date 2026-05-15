@@ -23,13 +23,14 @@ interface CardDetailProps {
   projectId: string
   issue: Issue
   onClose: () => void
+  initialTab?: Tab
 }
 
 type Tab = 'overview' | 'runs' | 'deliverables' | 'flow'
 
-export default function CardDetail({ projectId, issue, onClose }: CardDetailProps) {
+export default function CardDetail({ projectId, issue, onClose, initialTab }: CardDetailProps) {
   const panelRef = useRef<HTMLDivElement>(null)
-  const [activeTab, setActiveTab] = useState<Tab>('overview')
+  const [activeTab, setActiveTab] = useState<Tab>(initialTab ?? 'overview')
   const [showAttachModal, setShowAttachModal] = useState(false)
   const { data: labels } = useLabels(projectId)
   const { data: runs } = useIssueRuns(projectId, issue.id)

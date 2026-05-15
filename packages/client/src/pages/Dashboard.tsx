@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react'
-import { useParams } from 'react-router'
+import { useNavigate, useParams } from 'react-router'
 import { useProject } from '../api/projects.ts'
 import {
   useProjectOverview,
@@ -9,6 +9,7 @@ import {
   type ThroughputDay,
 } from '../api/analytics.ts'
 import { useBudget } from '../api/costs.ts'
+import { useProjectFlow } from '../api/flow.ts'
 import AgentLeaderboard from '../components/dashboard/AgentLeaderboard.tsx'
 import WorkflowHealth from '../components/dashboard/WorkflowHealth.tsx'
 
@@ -225,6 +226,8 @@ export default function Dashboard() {
   const { data: agentStats, isLoading: agentsLoading } = useAgentStats(projectId)
   const { data: workflowStats, isLoading: workflowsLoading } = useWorkflowStats(projectId)
   const { data: budget } = useBudget(projectId)
+  const { data: flow } = useProjectFlow(projectId)
+  const navigate = useNavigate()
 
   // WoW change formatting
   const wowPct = overview ? Math.abs(overview.weekOverWeekChange * 100).toFixed(1) : null
@@ -268,6 +271,61 @@ export default function Dashboard() {
 
       {/* Scrollable body */}
       <div style={{ flex: 1, overflow: 'auto', padding: '24px' }}>
+
+        {/* Phase 12 — Now view: live activity + jump to project flow board */}
+        <Section title="Now">
+          <button
+            type="button"
+            onClick={() => navigate(`/projects/${projectId}/flow`)}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 16,
+              width: '100%',
+              textAlign: 'left',
+              background: 'var(--surface)',
+              border: '1px solid var(--border)',
+              borderRadius: 10,
+              padding: '16px 20px',
+              cursor: 'pointer',
+              color: 'var(--text)',
+              transition: 'border-color 100ms ease-out',
+            }}
+            onMouseEnter={(e) => {
+              ;(e.currentTarget as HTMLButtonElement).style.borderColor = 'var(--accent, #388bfd)'
+            }}
+            onMouseLeave={(e) => {
+              ;(e.currentTarget as HTMLButtonElement).style.borderColor = 'var(--border)'
+            }}
+          >
+            <div
+              style={{
+                width: 40,
+                height: 40,
+                borderRadius: 8,
+                background: 'rgba(56, 139, 253, 0.15)',
+                color: '#58a6ff',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontSize: 20,
+                flexShrink: 0,
+              }}
+              aria-hidden
+            >
+              ⌥
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 2, flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: 14, fontWeight: 600 }}>Project Flow board</div>
+              <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+                {flow
+                  ? `${flow.activeRunsCount} active run${flow.activeRunsCount === 1 ? '' : 's'} · ${flow.pendingReviewsCount} pending review${flow.pendingReviewsCount === 1 ? '' : 's'}`
+                  : 'See live issue activity across all columns'}
+              </div>
+            </div>
+            <span style={{ color: 'var(--text-muted)', fontSize: 18 }}>→</span>
+          </button>
+        </Section>
 
         {/* Section 1 — Overview cards */}
         <Section title="Overview">

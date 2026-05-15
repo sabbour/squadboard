@@ -11,6 +11,7 @@ import CeremonyEditor from './pages/CeremonyEditor.tsx'
 import Settings from './pages/Settings.tsx'
 import Dashboard from './pages/Dashboard.tsx'
 import Inbox from './pages/Inbox.tsx'
+import ProjectFlow from './pages/ProjectFlow.tsx'
 
 export default function App() {
   return (
@@ -21,6 +22,7 @@ export default function App() {
         <Route path="projects/:id" element={<Navigate to="dashboard" replace />} />
         <Route path="projects/:id/dashboard" element={<Dashboard />} />
         <Route path="projects/:id/board" element={<Board />} />
+        <Route path="projects/:id/flow" element={<ProjectFlow />} />
         <Route path="projects/:id/agents" element={<Agents />} />
         <Route path="projects/:id/costs" element={<Costs />} />
         {/* Phase 10: ceremonies replaces workflows. Legacy routes redirect via the page shims. */}

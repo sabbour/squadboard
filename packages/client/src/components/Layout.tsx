@@ -22,6 +22,7 @@ import {
   Settings24Regular,
   Add20Regular,
   Mail20Regular,
+  Flowchart24Regular,
 } from '@fluentui/react-icons'
 import type { OnNavItemSelectData } from '@fluentui/react-components'
 import CaptureModal from './inbox/CaptureModal.tsx'
@@ -78,6 +79,7 @@ const useStyles = makeStyles({
 const PROJECT_NAV_ITEMS = [
   { label: 'Dashboard', segment: 'dashboard', icon: <Grid24Regular /> },
   { label: 'Board', segment: 'board', icon: <ClipboardTaskListLtr24Regular /> },
+  { label: 'Flow', segment: 'flow', icon: <Flowchart24Regular /> },
   { label: 'Agents', segment: 'agents', icon: <Bot24Regular /> },
   { label: 'Ceremonies', segment: 'ceremonies', icon: <ArrowSync24Regular /> },
   { label: 'Costs', segment: 'costs', icon: <Money24Regular /> },

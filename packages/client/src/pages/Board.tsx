@@ -1,5 +1,5 @@
-import { useState, useCallback } from 'react'
-import { useParams } from 'react-router'
+import { useState, useCallback, useEffect } from 'react'
+import { useParams, useSearchParams } from 'react-router'
 import { useQueryClient } from '@tanstack/react-query'
 import { useProject } from '../api/projects.ts'
 import { useIssues, useBulkAction, type Issue, type ColumnId } from '../api/issues.ts'
@@ -39,6 +39,29 @@ export default function Board() {
 
   // Card detail slide-over
   const [activeCard, setActiveCard] = useState<Issue | null>(null)
+  const [initialTab, setInitialTab] = useState<'overview' | 'runs' | 'deliverables' | 'flow' | undefined>()
+
+  // Phase 12: support deep-linking via ?openIssue=X&tab=flow|runs|...
+  // Used by the project Flow board to jump straight into an issue's DAG.
+  const [searchParams, setSearchParams] = useSearchParams()
+  useEffect(() => {
+    const openIssue = searchParams.get('openIssue')
+    if (!openIssue || activeCard?.id === openIssue) return
+    const target = allIssues.find((i) => i.id === openIssue)
+    if (!target) return
+    const tabParam = searchParams.get('tab')
+    const tab =
+      tabParam === 'flow' || tabParam === 'runs' || tabParam === 'deliverables' || tabParam === 'overview'
+        ? tabParam
+        : undefined
+    setActiveCard(target)
+    setInitialTab(tab)
+    // Strip the query so refreshes don't keep popping the panel open
+    const next = new URLSearchParams(searchParams)
+    next.delete('openIssue')
+    next.delete('tab')
+    setSearchParams(next, { replace: true })
+  }, [allIssues, searchParams, setSearchParams, activeCard?.id])
 
   // Multi-select
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
@@ -152,7 +175,8 @@ export default function Board() {
         <CardDetail
           projectId={projectId}
           issue={activeCard}
-          onClose={() => setActiveCard(null)}
+          initialTab={initialTab}
+          onClose={() => { setActiveCard(null); setInitialTab(undefined) }}
         />
       )}
 
