@@ -49,3 +49,28 @@ Session log: `.squad/log/2026-05-15T12:35:00Z-squad-fanout.md`
 ## Recent team activity
 
 **2026-05-15 Round 2 shipped:** Hockney (attachments backend), McManus (multi-modal frontend), Verbal (Consult chat fix), Fenster (typography sweep), Kobayashi (Ceremony Conjure UX), Keyser (layout rebalance). See `.squad/decisions.md` for Fluent2 canon, image bytea architecture, create-page pattern, react-markdown rendering.
+
+---
+
+## 2026-05-15 — Phase 3 Heartbeat Sweep Registry (p3-heartbeat + p3-sweeps)
+
+**Task:** Replace the monolithic `dispatcher.start()` 5 s tick with a per-sweep interval registry.
+
+**Delivered:**
+- `engine/heartbeat.ts` — `Heartbeat` class with `register`, `start`, `stop`, `tick`, `getStatus`, `setSweepEnabled`. Singleton `heartbeat` exported.
+- `engine/sweeps/stuck-issue-runs.ts` — 30 s — wraps all 5 sweeper operations + review timeouts.
+- `engine/sweeps/idle-live-sessions.ts` — 60 s — marks `active` live sessions idle after 10 min of inactivity.
+- `engine/sweeps/stale-presence.ts` — 30 s — evicts in-memory presence records older than 60 s.
+- `engine/sweeps/ready-workflow-steps.ts` — 5 s — wraps `tickWorkflowAdvancement` + `claimAndRun`.
+- `engine/sweeps/github-sync-overdue.ts` — 60 s — one-off pull for overdue GitHub-connected projects.
+- `engine/sweeps/ceremonies-due.ts` — 5 s — thin wrapper around `sweepDueSchedules()` (honours Verbal's 504f4a57 backoff).
+- `routes/heartbeat.ts` — `GET /api/heartbeat`, `POST /api/heartbeat/sweeps/:id/run`, `PATCH /api/heartbeat/sweeps/:id`.
+- `realtime/event-bus.ts` — added `HeartbeatEventType` + `emitHeartbeatEvent()` method. Scope key `__heartbeat__`.
+- `realtime/presence.ts` — added `sweepStalePresence(maxAgeMs)` export.
+- `engine/dispatcher.ts` — deprecated comment added; file kept intact for rollback.
+- `index.ts` — dispatcher.start() replaced; all 6 sweeps registered; heartbeat route mounted; graceful shutdown updated.
+- `.squad/decisions/inbox/mcmanus-heartbeat.md` — design decisions documented (interface shape, intervals, deprecation, EventBus integration).
+
+**TSC:** Clean on new code. 2 pre-existing errors in `conjure-classifier.ts` (not my code, not my responsibility to fix).
+
+**Guardrails respected:** Did not touch `ceremony-scheduler.ts`, `routes/templates.ts`, `sdk/squad-stream.ts`, `sdk/consult-stream.ts`.

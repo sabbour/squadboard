@@ -1,3 +1,4 @@
+// DEPRECATED: replaced by engine/heartbeat.ts (Phase 3). Kept for one release cycle for rollback safety.
 import { getDb } from '../db/index.js';
 import { sweepExpiredLeases, sweepOrphanedRuns, sweepExpiredStepLeases, sweepOrphanedWorkflowRuns } from './sweeper.js';
 import { claimAndRun } from './stepper.js';

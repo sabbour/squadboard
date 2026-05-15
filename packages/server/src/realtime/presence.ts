@@ -71,3 +71,24 @@ export function removeUser(userId: string, subscribedProjects: string[]): void {
     leavePresence(projectId, userId);
   }
 }
+
+/**
+ * Remove presence records whose connectedAt is older than maxAgeMs.
+ * Used by the stale-presence heartbeat sweep (every 30 s).
+ * Returns the number of stale records evicted.
+ */
+export function sweepStalePresence(maxAgeMs: number): number {
+  const cutoff = new Date(Date.now() - maxAgeMs);
+  let evicted = 0;
+  for (const [projectId, room] of presenceMap) {
+    for (const [userId, record] of room) {
+      if (record.connectedAt < cutoff) {
+        room.delete(userId);
+        evicted += 1;
+        eventBus.emitPresenceEvent('presence.left', projectId, { userId });
+      }
+    }
+    if (room.size === 0) presenceMap.delete(projectId);
+  }
+  return evicted;
+}

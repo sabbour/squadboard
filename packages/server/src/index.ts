@@ -36,8 +36,16 @@ import { curatedSkillsRouter, projectSkillsRouter, agentSkillsRouter } from './r
 import { projectToolsRouter, agentToolsRouter } from './routes/tools.js';
 import { projectMcpRouter, agentMcpRouter } from './routes/mcp.js';
 import { diagnosticsRouter, projectDiagnosticsRouter } from './routes/diagnostics.js';
+import heartbeatRouter from './routes/heartbeat.js';
 import { createMcpHttpRouter } from './mcp/http-transport.js';
 import { dispatcher } from './engine/dispatcher.js';
+import { heartbeat } from './engine/heartbeat.js';
+import { stuckIssueRunsSweep } from './engine/sweeps/stuck-issue-runs.js';
+import { idleLiveSessionsSweep } from './engine/sweeps/idle-live-sessions.js';
+import { stalePresenceSweep } from './engine/sweeps/stale-presence.js';
+import { readyWorkflowStepsSweep } from './engine/sweeps/ready-workflow-steps.js';
+import { githubSyncOverdueSweep } from './engine/sweeps/github-sync-overdue.js';
+import { ceremoniesDueSweep } from './engine/sweeps/ceremonies-due.js';
 // Phase 10: side-effect import — registers the on_event ceremony listener
 // against the in-process event bus.
 import './services/ceremony-dispatcher.js';
@@ -61,8 +69,15 @@ async function main(): Promise<void> {
   const connectionString = await startEmbeddedPostgres();
   await initDb(connectionString);
 
-  // Start the workflow engine dispatcher (5 s tick: sweep → wake → advance)
-  dispatcher.start();
+  // Phase 3: register and start the heartbeat sweep registry
+  // (replaces the old dispatcher.start() 5 s monolithic tick).
+  heartbeat.register(stuckIssueRunsSweep);      // 30 s — reclaim expired/orphaned runs
+  heartbeat.register(idleLiveSessionsSweep);    // 60 s — mark inactive sessions idle
+  heartbeat.register(stalePresenceSweep);       // 30 s — evict phantom presence records
+  heartbeat.register(readyWorkflowStepsSweep);  //  5 s — advance workflow steps + stepper
+  heartbeat.register(githubSyncOverdueSweep);   // 60 s — catch-up GitHub pulls
+  heartbeat.register(ceremoniesDueSweep);       //  5 s — fire due ceremony schedules
+  heartbeat.start();
 
   // Demo 15: register GitHub sync event-bus hooks
   initGitHubSyncHooks();
@@ -140,6 +155,8 @@ async function main(): Promise<void> {
   // Phase 3 Doctor: diagnostics
   app.use('/api/diagnostics', diagnosticsRouter);
   app.use('/api/projects/:id/diagnostics', projectDiagnosticsRouter);
+  // Phase 3 Heartbeat: sweep registry status + manual controls
+  app.use('/api/heartbeat', heartbeatRouter);
   // Demo 9: peer review endpoints (not project-scoped)
   app.use('/api/workflow-runs', workflowRunsRouter);
   app.use('/api/step-runs', stepRunsRouter);
@@ -186,7 +203,7 @@ async function main(): Promise<void> {
 
   const gracefulShutdown = (signal: string) => {
     console.log(`[squadboard] received ${signal}`);
-    dispatcher.stop();
+    heartbeat.stop();
     stopAllSyncLoops(); // Demo 15: stop GitHub sync polling loops
     server.close(() => {
       closeDb()
