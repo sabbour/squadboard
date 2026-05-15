@@ -1,0 +1,31 @@
+{
+  "slug": "content-creation",
+  "title": "Content Creation Workflow — Squad Edition",
+  "blurb": "A Squad sample that takes a blog topic and produces a polished, SEO-optimized article through a four-agent content pipeline: research → outline → write → edit.",
+  "tags": [
+    "ceremonies",
+    "routing",
+    "multi-agent"
+  ],
+  "agentCount": 4,
+  "routingRuleCount": 5,
+  "ceremonyCount": 1,
+  "defaultModel": null,
+  "teamName": "Content Creation Squad",
+  "warnings": [],
+  "source": {
+    "origin": "github",
+    "repo": "bradygaster/Squad-IRL",
+    "ref": "main"
+  },
+  "files": [
+    "README.md",
+    "content-topics",
+    "index.ts",
+    "package.json",
+    "squad.config.ts",
+    "tsconfig.json"
+  ],
+  "htmlUrl": "https://github.com/bradygaster/Squad-IRL/tree/main/content-creation",
+  "bundledAt": "2026-05-15T07:48:07.931Z"
+}

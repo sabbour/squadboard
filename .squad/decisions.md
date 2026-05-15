@@ -2363,3 +2363,59 @@ paddingRight: tokens.spacingHorizontalXXL
 For pinning a nav section (SYSTEM, settings) to the visual bottom of the sidebar: drop a `<div style={{ flex: 1 }} />` spacer in `NavDrawerBody`. No CSS overrides needed — Fluent's flex column + DrawerBody flex already handle it.
 
 **Root cause note:** Reconnecting badge alignment + stale timer were a **client-side state machine bug, NOT a server issue**. No Hockney handoff needed.
+
+---
+
+## 2026-05-15: Hockney — MCP server extended (11 tools) + diagnostics path resolver
+
+**Author:** Hockney
+**Date:** 2026-05-15
+**Status:** Shipped (local commits only — not pushed)
+
+**Scope:** Two parallel asks from Ahmed (queued in Wave 8):
+
+1. 🔌 **MCP Phase 1 starter tools** — Extend the existing `createMcpServer()` factory in `packages/server/src/mcp/server.ts` with 4 new tools: `list_projects`, `list_inbox`, `capture` (wrapping Conjure classifier), `get_routing`. Total tool count now **11** across stdio + HTTP `/mcp` transports. README with `.copilot/mcp-config.json` install snippet added at `packages/server/src/mcp/README.md`.
+
+2. 🩺 **Diagnostics false-negative fix** — Bug: `projects.path` for foo already pointed AT `.squad/` (not the parent), so `join(path, '.squad')` was double-nesting to `.squad/.squad/`, causing all 4 inner collection checks to fail. Solution: `resolveSquadDir()` helper tolerates both layouts, returns ONE clear error when project path is wrong instead of cascading missing-collection errors.
+
+**MCP tool details:**
+
+| Tool             | Wraps                                                      | Transport |
+|------------------|------------------------------------------------------------|-----------|
+| `list_projects`  | `db.select().from(projects)` + `resolveSquadDir()` per row | stdio, HTTP |
+| `list_inbox`     | `inboxService.listInboxItems()`                           | stdio, HTTP |
+| `capture`        | Conjure classify → issue creation if intent='issue'        | stdio, HTTP |
+| `get_routing`    | `resolveSquadDir()` + `readFile('.squad/routing.md')`      | stdio, HTTP |
+
+Naming: kept the Phase 18 convention (bare names, no `squadboard.*` prefix) for consistency within the factory.
+
+**Diagnostics resolver:**
+
+`resolveSquadDir(storedPath): ResolvedSquadDir | UnresolvedSquadDir`
+- Resolves to absolute path first (defensive against relative CWD pivots).
+- If basename is `.squad/` AND exists → use as-is.
+- Else if `<path>/.squad/` exists → use that.
+- Else → `{ ok: false, reason }` with actionable diagnostic.
+
+Applied to:
+- `checkSquadDirShape()` (the reported bug)
+- `checkDiskWriteable()` (same double-nesting bug, was silently writing wrong dir)
+- `mcp/server.ts → handleGetRouting()` (new, uses same helper)
+
+**Files touched:**
+- `packages/server/src/services/diagnostics.ts` — +`resolveSquadDir()` + types; rewrote `checkSquadDirShape`; updated `checkDiskWriteable`.
+- `packages/server/src/mcp/server.ts` — +4 TOOLS, +4 handlers, +4 switch cases, imports.
+- `packages/server/src/mcp/README.md` — new install/usage guide.
+
+**Commits:**
+- `85dd8780` — Diagnostics false-negative fix
+- `1838253d` — MCP Phase 1 starter tools
+
+**Verification:** `cd packages/server && npx tsc --noEmit` → clean (exit 0, 0 errors). Resolver verified offline against all live `projects.path` values; foo resolves correctly.
+
+**Follow-ups (not in this commit):**
+- **`projects.path` migration.** Unify both layouts; until then, all consumers should use `resolveSquadDir()`.
+- **Auth on MCP HTTP transport.** Local-only fine for hacking; problem if Squadboard runs on shared port.
+- **`capture` for non-issue intents.** Currently return `draft_only`; could support full materialisation with more inputs (Phase 2).
+- **`list_inbox` filters.** Add `userId`, `since`, `until`, search (Phase 2).
+

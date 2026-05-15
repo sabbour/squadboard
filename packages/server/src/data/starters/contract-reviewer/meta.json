@@ -1,0 +1,33 @@
+{
+  "slug": "contract-reviewer",
+  "title": "Contract Reviewer — Squad Edition",
+  "blurb": "A real Squad-powered contract review tool. Point it at a contract file and a team of four AI legal specialists will extract clauses, score risk, suggest negotiation alternatives, and deliver an executive summary — all with 🔴🟡🟢 traffic-li",
+  "tags": [
+    "ceremonies",
+    "routing",
+    "multi-agent"
+  ],
+  "agentCount": 4,
+  "routingRuleCount": 5,
+  "ceremonyCount": 1,
+  "defaultModel": null,
+  "teamName": "Contract Review Squad",
+  "warnings": [],
+  "source": {
+    "origin": "github",
+    "repo": "bradygaster/Squad-IRL",
+    "ref": "main"
+  },
+  "files": [
+    ".gitignore",
+    "README.md",
+    "contract-reader.ts",
+    "index.ts",
+    "package.json",
+    "sample-contract.md",
+    "squad.config.ts",
+    "tsconfig.json"
+  ],
+  "htmlUrl": "https://github.com/bradygaster/Squad-IRL/tree/main/contract-reviewer",
+  "bundledAt": "2026-05-15T07:48:08.080Z"
+}

@@ -1,0 +1,33 @@
+{
+  "slug": "inventory-manager",
+  "title": "Inventory Manager",
+  "blurb": "A Squad-powered inventory analysis demo. Reads a CSV file of product data and feeds it to a four-agent Squad that predicts stockouts, optimises reorder points, finds cost savings, and produces an actionable restock plan.",
+  "tags": [
+    "ceremonies",
+    "routing",
+    "multi-agent"
+  ],
+  "agentCount": 4,
+  "routingRuleCount": 5,
+  "ceremonyCount": 1,
+  "defaultModel": null,
+  "teamName": "Inventory Analysis Squad",
+  "warnings": [],
+  "source": {
+    "origin": "github",
+    "repo": "bradygaster/Squad-IRL",
+    "ref": "main"
+  },
+  "files": [
+    ".gitignore",
+    "README.md",
+    "index.ts",
+    "inventory-reader.ts",
+    "package.json",
+    "sample-inventory.csv",
+    "squad.config.ts",
+    "tsconfig.json"
+  ],
+  "htmlUrl": "https://github.com/bradygaster/Squad-IRL/tree/main/inventory-manager",
+  "bundledAt": "2026-05-15T07:48:08.358Z"
+}

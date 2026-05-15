@@ -1,0 +1,32 @@
+{
+  "slug": "linkedin-monitor",
+  "title": "LinkedIn Monitor & Engagement Tracker",
+  "blurb": "A Squad sample that opens your real LinkedIn in a browser, scrapes your notifications and messages using Playwright, and feeds them to a four-agent AI squad that tells you what needs your attention — with direct links to take action.",
+  "tags": [
+    "ceremonies",
+    "routing",
+    "multi-agent"
+  ],
+  "agentCount": 4,
+  "routingRuleCount": 5,
+  "ceremonyCount": 1,
+  "defaultModel": null,
+  "teamName": "LinkedIn Engagement Squad",
+  "warnings": [],
+  "source": {
+    "origin": "github",
+    "repo": "bradygaster/Squad-IRL",
+    "ref": "main"
+  },
+  "files": [
+    ".gitignore",
+    "README.md",
+    "index.ts",
+    "linkedin-scraper.ts",
+    "package.json",
+    "squad.config.ts",
+    "tsconfig.json"
+  ],
+  "htmlUrl": "https://github.com/bradygaster/Squad-IRL/tree/main/linkedin-monitor",
+  "bundledAt": "2026-05-15T07:48:08.725Z"
+}

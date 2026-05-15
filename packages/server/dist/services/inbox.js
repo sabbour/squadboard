@@ -17,6 +17,7 @@
 import { and, desc, eq, sql } from 'drizzle-orm';
 import { getDb, schema } from '../db/index.js';
 import * as issuesService from './issues.js';
+import { resolveModel } from '../sdk/model-defaults.js';
 // ---------------------------------------------------------------------------
 // Throttle (in-memory; cleared on server restart)
 // ---------------------------------------------------------------------------
@@ -313,7 +314,7 @@ function normalizePayload(parsed, validProjectIds) {
  * sdk/squad-client.ts) to formulate the inbox item. Throws on parse / SDK
  * failure with a useful message so the route can surface it verbatim.
  */
-async function callFormulator(prompt) {
+async function callFormulator(prompt, model) {
     const token = process.env.GITHUB_TOKEN ?? process.env.SQUADBOARD_GITHUB_TOKEN;
     const { SquadClient } = await import('@bradygaster/squad-sdk/client');
     const client = new SquadClient({
@@ -323,6 +324,7 @@ async function callFormulator(prompt) {
     await client.connect();
     try {
         const session = await client.createSession({
+            model,
             systemMessage: {
                 mode: 'replace',
                 content: 'You are a precise JSON-only assistant. Return only the requested JSON object — no markdown fences, no prose.',
@@ -371,9 +373,33 @@ export async function formulateInboxItem(id) {
     }
     lastFormulateAt.set(id, now);
     const { prompt, projectIds } = await buildPrompt(item);
+    // Resolve model via the standard chain: agent (n/a here) → project default →
+    // built-in fallback. The inbox formulator has no agent, so we pass null for
+    // agentModel and look up the project default if we know one.
+    let projectDefaultModel = null;
+    if (item.suggestedProjectId) {
+        try {
+            const db = getDb();
+            const [proj] = await db
+                .select({ defaultModel: schema.projects.defaultModel })
+                .from(schema.projects)
+                .where(eq(schema.projects.id, item.suggestedProjectId))
+                .limit(1);
+            projectDefaultModel = proj?.defaultModel ?? null;
+        }
+        catch {
+            // Best-effort: fall through to fallback.
+        }
+    }
+    const modelUsed = resolveModel({
+        sessionModel: null,
+        agentModel: null,
+        projectDefaultModel,
+    });
+    console.log(`[inbox] formulating ${id} with model=${modelUsed.model} (via ${modelUsed.via})`);
     let raw;
     try {
-        raw = await callFormulator(prompt);
+        raw = await callFormulator(prompt, modelUsed.model);
     }
     catch (err) {
         // Reset the throttle so the user can retry immediately on outright failure.
@@ -410,7 +436,7 @@ export async function formulateInboxItem(id) {
     })
         .where(eq(schema.inboxItems.id, id))
         .returning();
-    return updated;
+    return { item: updated, modelUsed };
 }
 // `sql` import kept for future status-counting endpoints.
 void sql;

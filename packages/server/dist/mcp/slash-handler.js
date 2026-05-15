@@ -1,7 +1,7 @@
 /**
  * Slash command parser for /squadboard commands.
  * Parses "/squadboard <command> [args]" and returns markdown-formatted output.
- * Used by the squadboard_slash_command MCP tool.
+ * Used by the slash_command MCP tool.
  */
 import { getDb } from '../db/index.js';
 import { issues, issueRuns, agents } from '../db/schema.js';

@@ -216,6 +216,57 @@ Start the production build:
 pnpm start
 ```
 
+### Dogfood Mode — Auto-capture Directives (Wave 10)
+
+When running Squadboard under GitHub Copilot CLI with Squad as the coordinator,
+every implementation directive is automatically captured into Squadboard's own
+project inbox. This closes the dogfood loop: directives → decisions → board
+cards → runs → completion tracking.
+
+**Setup:**
+1. Ensure your `.copilot/mcp-config.json` points to this repo's MCP server
+2. Set `SQUADBOARD_DEFAULT_PROJECT_ID` to your project UUID (use `list_projects`
+   to discover it)
+3. Reference `.squad/dogfood.md` for the full coordinator playbook
+
+See [Dogfood Playbook](.squad/dogfood.md) and [MCP tool reference](packages/server/src/mcp/README.md)
+for details on the `capture` tool and when the coordinator calls it.
+
+### Cost Tracking — GitHub Copilot Premium-Request Multipliers (Wave 10)
+
+Squadboard tracks cost in two models:
+- **Legacy (USD):** Token-based pricing (Anthropic / OpenAI public rates)
+- **GitHub Copilot multipliers:** Premium-request equivalent (1 premium request ≈ 10,000 tokens)
+
+Switch models via:
+```bash
+# Set globally
+export SQUADBOARD_COST_MODEL=gh_multipliers
+
+# Or per-project via the API (see next section)
+curl -X PATCH http://localhost:3000/api/projects/{projectId} \
+  -H "Content-Type: application/json" \
+  -d '{"costModel": "gh_multipliers"}'
+```
+
+See `packages/server/src/sdk/cost-tracker.ts` for pricing details.
+
+### Templates — Save & Reuse Workflows (Wave 10)
+
+Save a project, team, or workflow as a reusable template:
+
+```bash
+curl -X POST http://localhost:3000/api/projects/{projectId}/save-as-template \
+  -H "Content-Type: application/json" \
+  -d '{"name": "my-template"}'
+```
+
+Templates are stored in `.squad/squadboard/templates/{kind}/{slug}.json` and
+versioned alongside your code. Import a template by uploading its JSON via the UI
+or the `/api/projects/{projectId}/import-template` endpoint.
+
+
+
 ### Database Studio (Development)
 
 Inspect or edit the database schema:

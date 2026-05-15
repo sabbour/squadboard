@@ -136,12 +136,21 @@ export const TOOLS = [
   {
     name: 'list_agents',
     description:
-      'List active agents in a Squadboard project. ' +
+      'List agents in a Squadboard project. Defaults to active agents only; ' +
+      "pass `status` to include disabled or retired agents. " +
       "projectId may be omitted if the request includes an 'x-project-id' header.",
     inputSchema: {
       type: 'object' as const,
       properties: {
         projectId: { type: 'string', description: 'UUID of the project (optional if x-project-id header set)' },
+        status: {
+          type: 'string',
+          enum: ['active', 'disabled', 'retired', 'all'],
+          description:
+            'Filter agents by status. Default: "active". ' +
+            'Use "disabled" to find paused agents that can be re-enabled, ' +
+            '"retired" for archived agents, or "all" to see everything.',
+        },
       },
       required: [],
     },
@@ -256,8 +265,27 @@ function headerProjectId(extra: { requestInfo?: { headers?: Record<string, strin
   return raw;
 }
 
+/**
+ * Wave 10 / A3: process-wide default projectId. Set via
+ * `setDefaultProjectId()` from the stdio transport boot path (which reads
+ * `SQUADBOARD_DEFAULT_PROJECT_ID`). Used as the last-resort fallback when
+ * neither args.projectId nor the x-project-id header is present.
+ *
+ * Module-scope state is acceptable here because every MCP server in the
+ * process shares the same DB and the env var applies to the whole process.
+ */
+let defaultProjectId: string | undefined;
+
+export function setDefaultProjectId(id: string | undefined): void {
+  defaultProjectId = id && id.trim() ? id.trim() : undefined;
+}
+
+export function getDefaultProjectId(): string | undefined {
+  return defaultProjectId;
+}
+
 function resolveProjectId(args: { projectId?: string }, extra: Parameters<typeof headerProjectId>[0]): string | undefined {
-  return args.projectId ?? headerProjectId(extra);
+  return args.projectId ?? headerProjectId(extra) ?? defaultProjectId;
 }
 
 // ---------------------------------------------------------------------------
@@ -435,6 +463,27 @@ async function handleRunAgent(args: ToolArgs): Promise<unknown> {
       return { error: 'no_active_agents', projectId: issue.projectId };
     }
     resolvedAgentId = agent.id;
+  } else {
+    // Wave 10 B9: when an explicit agentId is supplied, refuse to dispatch
+    // it if it isn't active. Mirrors the REST surface (POST issues/.../runs)
+    // so MCP-driven runs honour the same disabled/retired semantics.
+    const [agentRow] = await db
+      .select({ id: agents.id, name: agents.name, status: agents.status })
+      .from(agents)
+      .where(eq(agents.id, resolvedAgentId))
+      .limit(1);
+    if (!agentRow) {
+      return { error: 'agent_not_found', agentId: resolvedAgentId };
+    }
+    if (agentRow.status !== 'active') {
+      return {
+        error: 'agent_not_active',
+        agentId: agentRow.id,
+        agentName: agentRow.name,
+        status: agentRow.status,
+        hint: 'Re-enable the agent before running it.',
+      };
+    }
   }
 
   // Invariant I-1: MCP-triggered runs use kind='agent_run'
@@ -490,11 +539,29 @@ async function handleGetRunStatus(args: ToolArgs): Promise<unknown> {
 
 async function handleListAgents(args: ToolArgs, extra: Extra): Promise<unknown> {
   const db = getDb();
-  const projectId = resolveProjectId(args as { projectId?: string }, extra);
+  const argsTyped = args as { projectId?: string; status?: string };
+  const projectId = resolveProjectId(argsTyped, extra);
 
   if (!projectId) {
     return { error: 'missing_project_id', hint: 'Pass projectId in args, or set the x-project-id header.' };
   }
+
+  // Wave 10 B9: status defaults to 'active' to keep the LLM picker honest;
+  // 'all' or an explicit ('disabled' | 'retired') broadens the scope.
+  const statusArg = (argsTyped.status ?? 'active').toLowerCase();
+  const validStatuses = new Set(['active', 'disabled', 'retired', 'all']);
+  if (!validStatuses.has(statusArg)) {
+    return {
+      error: 'invalid_status',
+      hint: `status must be one of: ${[...validStatuses].join(', ')}`,
+    };
+  }
+
+  const baseFilter = eq(agents.projectId, projectId);
+  const where =
+    statusArg === 'all'
+      ? baseFilter
+      : and(baseFilter, eq(agents.status, statusArg as 'active' | 'disabled' | 'retired'));
 
   const rows = await db
     .select({
@@ -506,10 +573,10 @@ async function handleListAgents(args: ToolArgs, extra: Extra): Promise<unknown> 
       charterPath: agents.charterPath,
     })
     .from(agents)
-    .where(and(eq(agents.projectId, projectId), eq(agents.status, 'active')))
+    .where(where)
     .limit(100);
 
-  return { agents: rows, count: rows.length };
+  return { agents: rows, count: rows.length, status: statusArg };
 }
 
 async function handleSlashCommandTool(args: ToolArgs): Promise<unknown> {

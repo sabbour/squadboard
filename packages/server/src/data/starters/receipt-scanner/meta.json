@@ -1,0 +1,33 @@
+{
+  "slug": "receipt-scanner",
+  "title": "🧾 Receipt Scanner & Expense Analyzer",
+  "blurb": "A Squad-powered sample that reads receipt files from a folder and processes them",
+  "tags": [
+    "ceremonies",
+    "routing",
+    "multi-agent"
+  ],
+  "agentCount": 4,
+  "routingRuleCount": 5,
+  "ceremonyCount": 1,
+  "defaultModel": null,
+  "teamName": "Receipt Scanner & Expense Analyzer Squad",
+  "warnings": [],
+  "source": {
+    "origin": "github",
+    "repo": "bradygaster/Squad-IRL",
+    "ref": "main"
+  },
+  "files": [
+    ".gitignore",
+    "README.md",
+    "index.ts",
+    "package.json",
+    "receipt-reader.ts",
+    "sample-receipts",
+    "squad.config.ts",
+    "tsconfig.json"
+  ],
+  "htmlUrl": "https://github.com/bradygaster/Squad-IRL/tree/main/receipt-scanner",
+  "bundledAt": "2026-05-15T07:48:07.254Z"
+}

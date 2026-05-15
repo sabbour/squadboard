@@ -14,6 +14,9 @@ export interface Tool {
   mcpServerId: string | null
   inputSchema: unknown
   outputSchema: unknown
+  /** Provenance — Wave 10 D3. */
+  source: 'curated' | 'imported' | 'custom' | 'project'
+  sourceUri: string | null
   createdAt: string
   updatedAt: string
 }
@@ -96,6 +99,31 @@ export function useUnassignToolFromAgent(projectId: string, agentId: string) {
         { method: 'DELETE' },
       ),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['tools', projectId, 'agent', agentId] }),
+  })
+}
+
+export interface ImportToolsResult {
+  imported: Array<{ id: string; key: string; name: string }>
+  skipped: Array<{ key: string; reason: string }>
+}
+
+/**
+ * Wave 10 D3 — import a tool JSON file (or bundle) as project tool(s).
+ * Idempotent — duplicate keys are skipped.
+ */
+export function useImportToolsFromJson(projectId: string) {
+  const qc = useQueryClient()
+  return useMutation<
+    ImportToolsResult,
+    Error,
+    { content: string; filename?: string; sourceUri?: string; mcpServerId?: string }
+  >({
+    mutationFn: ({ content, filename, sourceUri, mcpServerId }) =>
+      apiFetch<Envelope<ImportToolsResult>>(`/api/projects/${projectId}/tools/import-from-json`, {
+        method: 'POST',
+        body: JSON.stringify({ content, filename, sourceUri, mcpServerId }),
+      }).then(unwrap),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['tools', projectId] }),
   })
 }
 

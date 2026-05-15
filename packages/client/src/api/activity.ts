@@ -41,6 +41,15 @@ export interface NowIssueRun {
   leaseExpiresAt: string | null
 }
 
+export interface NowWorkflowRunTrigger {
+  kind: 'manual' | 'manual_force' | 'on_schedule' | 'on_event' | 'unknown'
+  detail?: string
+  eventType?: string
+  scheduleId?: string
+  anchorIssueId?: string
+  by?: string
+}
+
 export interface NowWorkflowRun {
   id: string
   projectId: string
@@ -49,6 +58,7 @@ export interface NowWorkflowRun {
   status: string
   startedAt: string
   currentStepKind: string | null
+  triggerSource: NowWorkflowRunTrigger | null
 }
 
 export interface NowFeed {

@@ -92,6 +92,19 @@ export async function runWorker(issueRunId: string): Promise<void> {
     return;
   }
 
+  // Wave 10 B9: defense-in-depth — even if the route accepted this run while
+  // the agent was active, the operator may have disabled or retired it
+  // before the worker picked it up. Refuse to spend tokens on a non-active
+  // agent and surface a clear failure reason instead.
+  if (agent.status !== 'active') {
+    await markFailed(
+      db,
+      issueRunId,
+      `Agent "${agent.name}" is ${agent.status} — re-enable it before retrying this run.`,
+    );
+    return;
+  }
+
   // Resolve the workflow version attached to this issue (for Invariant 4)
   const workflowVersionId = await resolveWorkflowVersionId(db, run.issueId);
 

@@ -8,7 +8,7 @@
  * a warning banner so users don't accidentally clobber existing secrets.
  */
 
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { useParams } from 'react-router'
 import {
   Badge,
@@ -30,10 +30,12 @@ import {
   Textarea,
   tokens,
 } from '@fluentui/react-components'
+import { Add20Regular, ArrowUpload20Regular, PlugConnectedRegular } from '@fluentui/react-icons'
 import { useProject } from '../api/projects.ts'
 import {
   useCreateMcpServer,
   useDeleteMcpServer,
+  useImportMcpServersFromJson,
   useMcpServers,
   useTestMcpServer,
   useUpdateMcpServer,
@@ -42,6 +44,7 @@ import {
   type McpTransport,
 } from '../api/mcp.ts'
 import PageHeader from '../components/layout/PageHeader.tsx'
+import EmptyState from '../components/layout/EmptyState.tsx'
 
 interface FormState {
   name: string
@@ -65,6 +68,9 @@ export default function McpServers() {
   const { data: servers = [], isLoading } = useMcpServers(projectId)
   const deleteServer = useDeleteMcpServer(projectId)
   const testServer = useTestMcpServer(projectId)
+  const importJson = useImportMcpServersFromJson(projectId)
+  const importInputRef = useRef<HTMLInputElement | null>(null)
+  const [importMessage, setImportMessage] = useState<{ kind: 'ok' | 'error'; text: string } | null>(null)
   const [showCreate, setShowCreate] = useState(false)
   const [editing, setEditing] = useState<McpServer | null>(null)
   const [testing, setTesting] = useState<string | null>(null)
@@ -73,6 +79,20 @@ export default function McpServers() {
   function confirmDelete(s: McpServer) {
     if (!window.confirm(`Delete MCP server "${s.name}"? It will be unassigned from any agents.`)) return
     deleteServer.mutate(s.id)
+  }
+
+  async function handleImportFile(file: File) {
+    setImportMessage(null)
+    try {
+      const text = await file.text()
+      const result = await importJson.mutateAsync({ content: text, filename: file.name })
+      const parts: string[] = []
+      if (result.imported.length) parts.push(`Imported ${result.imported.length} MCP server(s): ${result.imported.map((s) => s.name).join(', ')}.`)
+      if (result.skipped.length) parts.push(`Skipped ${result.skipped.length}: ${result.skipped.map((s) => `${s.name} (${s.reason})`).join(', ')}.`)
+      setImportMessage({ kind: result.imported.length > 0 ? 'ok' : 'error', text: parts.join(' ') || 'Nothing imported.' })
+    } catch (err) {
+      setImportMessage({ kind: 'error', text: err instanceof Error ? err.message : 'Import failed' })
+    }
   }
 
   function runTest(s: McpServer) {
@@ -96,16 +116,77 @@ export default function McpServers() {
         eyebrow={project?.name}
         title="MCP Servers"
         description="Model Context Protocol gateways. Header values are AES-256-GCM encrypted at rest with a per-project key."
-        actions={<Button appearance="primary" onClick={() => setShowCreate(true)}>New MCP server</Button>}
+        actions={
+          <>
+            <input
+              ref={importInputRef}
+              type="file"
+              accept=".json,application/json"
+              style={{ display: 'none' }}
+              onChange={(e) => {
+                const f = e.target.files?.[0]
+                if (f) handleImportFile(f)
+                e.target.value = ''
+              }}
+            />
+            <Button
+              appearance="secondary"
+              icon={<ArrowUpload20Regular />}
+              onClick={() => importInputRef.current?.click()}
+              disabled={importJson.isPending}
+            >
+              {importJson.isPending ? 'Importing…' : 'Import .json'}
+            </Button>
+            <Button appearance="primary" icon={<Add20Regular />} onClick={() => setShowCreate(true)}>New MCP server</Button>
+          </>
+        }
       />
 
       <div style={{ flex: 1, overflow: 'auto', padding: '24px', maxWidth: '1100px', width: '100%', margin: '0 auto' }}>
+        {importMessage && (
+          <div
+            style={{
+              padding: '8px 12px',
+              borderRadius: '6px',
+              marginBottom: '12px',
+              fontSize: '13px',
+              background: importMessage.kind === 'ok' ? tokens.colorPaletteGreenBackground2 : tokens.colorPaletteRedBackground2,
+              color: importMessage.kind === 'ok' ? tokens.colorPaletteGreenForeground2 : tokens.colorPaletteRedForeground2,
+              border: `1px solid ${importMessage.kind === 'ok' ? tokens.colorPaletteGreenBorderActive : tokens.colorPaletteRedBorderActive}`,
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              gap: '8px',
+            }}
+          >
+            <span>{importMessage.text}</span>
+            <Button size="small" appearance="subtle" onClick={() => setImportMessage(null)}>Dismiss</Button>
+          </div>
+        )}
         {isLoading && <Body1 style={{ color: tokens.colorNeutralForeground3 }}>Loading…</Body1>}
         {!isLoading && servers.length === 0 && (
-          <div style={{ textAlign: 'center', padding: '48px 16px', color: 'var(--text-muted)' }}>
-            <Body1 style={{ display: 'block', marginBottom: tokens.spacingVerticalM }}>No MCP servers configured.</Body1>
-            <Button appearance="primary" onClick={() => setShowCreate(true)}>Add a server</Button>
-          </div>
+          /* Wave 10 C5: Ceremonies-style empty state. Stream D's import-json
+             flow is preserved as the secondary action. */
+          <EmptyState
+            icon={<PlugConnectedRegular />}
+            title="No MCP servers configured"
+            description="MCP (Model Context Protocol) servers expose external tools and resources to your agents. Add one inline or import an mcp-server.json bundle."
+            actions={
+              <>
+                <Button
+                  appearance="secondary"
+                  icon={<ArrowUpload20Regular />}
+                  onClick={() => importInputRef.current?.click()}
+                  disabled={importJson.isPending}
+                >
+                  {importJson.isPending ? 'Importing…' : 'Import .json'}
+                </Button>
+                <Button appearance="primary" icon={<Add20Regular />} onClick={() => setShowCreate(true)}>
+                  Add a server
+                </Button>
+              </>
+            }
+          />
         )}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
           {servers.map((s) => (
@@ -128,6 +209,39 @@ export default function McpServers() {
   )
 }
 
+function McpSourceBadge({ source }: { source: McpServer['source'] }) {
+  const meta = (() => {
+    switch (source) {
+      case 'curated':
+        return { label: 'Built-in catalog', bg: tokens.colorBrandBackground2, fg: tokens.colorBrandForeground1 }
+      case 'imported':
+        return { label: 'Imported', bg: tokens.colorPaletteGreenBackground2, fg: tokens.colorPaletteGreenForeground2 }
+      case 'project':
+        return { label: 'Project', bg: tokens.colorNeutralBackground3, fg: tokens.colorNeutralForeground2 }
+      case 'custom':
+      default:
+        return { label: 'Custom', bg: tokens.colorNeutralBackground3, fg: tokens.colorNeutralForeground2 }
+    }
+  })()
+  return (
+    <span
+      style={{
+        fontSize: '10px',
+        padding: '1px 6px',
+        borderRadius: '8px',
+        background: meta.bg,
+        color: meta.fg,
+        textTransform: 'uppercase',
+        letterSpacing: '0.04em',
+        fontWeight: 600,
+      }}
+      title={`MCP server provenance: ${meta.label.toLowerCase()}`}
+    >
+      {meta.label}
+    </span>
+  )
+}
+
 function McpRow({ server, testing, result, onEdit, onDelete, onTest }: {
   server: McpServer
   testing: boolean
@@ -142,12 +256,13 @@ function McpRow({ server, testing, result, onEdit, onDelete, onTest }: {
       background: 'var(--surface)', display: 'flex', gap: '16px', alignItems: 'flex-start',
     }}>
       <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px', flexWrap: 'wrap' }}>
           <Body1Strong style={{ color: tokens.colorNeutralForeground1 }}>{server.name}</Body1Strong>
           <Badge appearance="outline" color={server.enabled ? 'success' : 'subtle'}>
             {server.enabled ? 'enabled' : 'disabled'}
           </Badge>
           <Badge appearance="outline">{server.transport}</Badge>
+          <McpSourceBadge source={server.source} />
         </div>
         {server.description && (
           <Caption1 style={{ display: 'block', color: tokens.colorNeutralForeground3, margin: '0 0 6px' }}>{server.description}</Caption1>

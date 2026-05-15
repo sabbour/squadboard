@@ -49,7 +49,7 @@ import CeremonyStepNode, {
 } from '../flow/nodes/CeremonyStepNode.tsx'
 import { layoutDag } from '../flow/dagLayout.ts'
 import StepPropertyForm from './StepPropertyForm.tsx'
-import { useAgents } from '../../api/agents.ts'
+import { useActiveAgents } from '../../api/agents.ts'
 
 const nodeTypes = { ceremony: CeremonyStepNode }
 
@@ -124,7 +124,9 @@ function reorderSteps(steps: CeremonyStep[], sourceIdx: number, targetIdx: numbe
 }
 
 function CanvasInner({ projectId, header, steps, onChange, disabled }: VisualCanvasProps) {
-  const { data: agents } = useAgents(projectId)
+  // Wave 10 B9: ceremony step pickers (rendered downstream by the
+  // property panel) only surface active agents.
+  const { data: agents } = useActiveAgents(projectId)
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null)
   const containerRef = useRef<HTMLDivElement>(null)
 

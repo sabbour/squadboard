@@ -26,7 +26,6 @@ import {
   ArrowSync24Regular,
   Money24Regular,
   Settings24Regular,
-  Add20Regular,
   Mail20Regular,
   Flowchart24Regular,
   BookStar24Regular,
@@ -40,7 +39,6 @@ import {
   ChevronDown16Regular,
 } from '@fluentui/react-icons'
 import type { OnNavItemSelectData } from '@fluentui/react-components'
-import CaptureModal from './inbox/CaptureModal.tsx'
 
 const useStyles = makeStyles({
   root: {
@@ -90,13 +88,22 @@ const useStyles = makeStyles({
     gap: tokens.spacingHorizontalS,
   },
   projectSwitcher: {
-    maxWidth: '240px',
+    // Wave 10 C4: long project names (e.g. "Content Creation Workflow — Squad Edition")
+    // were wrapping in the top bar. Cap at 320px and force single-line ellipsis;
+    // tooltip on the button surfaces the full name.
+    minWidth: '180px',
+    maxWidth: '320px',
     fontWeight: tokens.fontWeightSemibold,
     '& .fui-Button__text': {
       overflow: 'hidden',
       textOverflow: 'ellipsis',
       whiteSpace: 'nowrap',
+      display: 'block',
     },
+  },
+  projectSwitcherPopover: {
+    // Match the trigger so single-line names don't wrap inside the menu either.
+    minWidth: '280px',
   },
 })
 
@@ -169,7 +176,6 @@ export default function Layout() {
   const styles = useStyles()
 
   const [projectName, setProjectName] = useState<string | null>(null)
-  const [captureOpen, setCaptureOpen] = useState(false)
   const projectsQuery = useProjects()
   const projects = projectsQuery.data
 
@@ -204,10 +210,10 @@ export default function Layout() {
       .catch(() => setProjectName(null))
   }, [id])
 
-  // Phase 14: pressing 'c' anywhere opens the quick-capture modal as long
-  // as the user isn't typing in another input.
-  // Phase 17: pressing '?' anywhere navigates to the cross-project Ask page
-  // (or the project-scoped one when inside a project).
+  // Wave 10 B2: 'c' (legacy Capture shortcut) and '?' both route into Conjure
+  // — i.e. the Consult /new entry point that owns raw input + classification.
+  // Capture is deprecated; the global "+ Capture" button has been removed
+  // from the top bar (only the per-project Board FAB remains as a shim).
   useEffect(() => {
     function isTypingTarget(target: EventTarget | null): boolean {
       const el = target as HTMLElement | null
@@ -222,10 +228,7 @@ export default function Layout() {
     function onKey(e: KeyboardEvent) {
       if (e.ctrlKey || e.metaKey || e.altKey) return
       if (isTypingTarget(e.target)) return
-      if (e.key === 'c') {
-        e.preventDefault()
-        setCaptureOpen(true)
-      } else if (e.key === '?') {
+      if (e.key === 'c' || e.key === '?') {
         e.preventDefault()
         void navigate(id ? `/projects/${id}/consult/new` : '/consult/new')
       }
@@ -351,12 +354,12 @@ export default function Layout() {
                     iconPosition="after"
                     icon={<ChevronDown16Regular />}
                     className={styles.projectSwitcher}
-                    title="Switch project"
+                    title={projectName}
                   >
                     {projectName}
                   </Button>
                 </MenuTrigger>
-                <MenuPopover>
+                <MenuPopover className={styles.projectSwitcherPopover}>
                   <MenuList>
                     {switcherProjects.length === 0 ? (
                       <MenuItem disabled>No other projects</MenuItem>
@@ -382,28 +385,21 @@ export default function Layout() {
             >
               Inbox
             </Button>
-            <Button
-              appearance="subtle"
-              icon={<ChatHelp20Regular />}
-              onClick={() => navigate(id ? `/projects/${id}/consult/new` : '/consult/new')}
-              title="Consult (press ?)"
-            >
-              Consult
-            </Button>
+            {/* Wave 10 B2: blue "+ Capture" button removed. Conjure is now the
+                single intake surface — Consult takes raw input and the Inbox
+                uses the Conjure classifier. */}
             <Button
               appearance="primary"
-              icon={<Add20Regular />}
-              onClick={() => setCaptureOpen(true)}
-              title="Quick capture (press c)"
+              icon={<ChatHelp20Regular />}
+              onClick={() => navigate(id ? `/projects/${id}/consult/new` : '/consult/new')}
+              title="Consult / Conjure (press c or ?)"
             >
-              Capture
+              Consult
             </Button>
           </div>
         </div>
         <Outlet />
       </main>
-
-      <CaptureModal open={captureOpen} onClose={() => setCaptureOpen(false)} />
     </div>
   )
 }

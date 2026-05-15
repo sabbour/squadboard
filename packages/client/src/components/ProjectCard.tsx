@@ -22,6 +22,23 @@ const useStyles = makeStyles({
   card: {
     cursor: 'pointer',
     width: '100%',
+    // Wave 10 B4: hover treatment must NOT change the bounding box. The
+    // previous behaviour scaled the tile (Fluent's default Card hover plus an
+    // implicit transform) which pushed neighbouring grid cells around. Lock
+    // the layout dimensions and use elevation for the hover affordance — same
+    // visual feedback, zero reflow.
+    transform: 'none',
+    transition: `box-shadow ${tokens.durationFast} ${tokens.curveEasyEase}`,
+    ':hover': {
+      transform: 'none',
+      boxShadow: tokens.shadow16,
+    },
+    ':focus-visible': {
+      transform: 'none',
+    },
+    ':active': {
+      transform: 'none',
+    },
   },
   metaRow: {
     display: 'flex',

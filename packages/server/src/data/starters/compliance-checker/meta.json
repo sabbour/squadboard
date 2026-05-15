@@ -1,0 +1,32 @@
+{
+  "slug": "compliance-checker",
+  "title": "Compliance Checker — Codebase Compliance Scanner",
+  "blurb": "A Squad-powered compliance checker that scans a real project folder and evaluates compliance across security, licensing, documentation, and data privacy — with a team of four AI specialists.",
+  "tags": [
+    "ceremonies",
+    "routing",
+    "multi-agent"
+  ],
+  "agentCount": 4,
+  "routingRuleCount": 5,
+  "ceremonyCount": 1,
+  "defaultModel": null,
+  "teamName": "Compliance Checker Squad",
+  "warnings": [],
+  "source": {
+    "origin": "github",
+    "repo": "bradygaster/Squad-IRL",
+    "ref": "main"
+  },
+  "files": [
+    ".gitignore",
+    "README.md",
+    "index.ts",
+    "package.json",
+    "project-scanner.ts",
+    "squad.config.ts",
+    "tsconfig.json"
+  ],
+  "htmlUrl": "https://github.com/bradygaster/Squad-IRL/tree/main/compliance-checker",
+  "bundledAt": "2026-05-15T07:48:07.803Z"
+}

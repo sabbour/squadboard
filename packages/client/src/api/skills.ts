@@ -23,6 +23,9 @@ export interface Skill {
   category: string | null
   promptAddendum: string
   curatedKey: string | null
+  /** Provenance — Wave 10 D2. 'curated' | 'imported' | 'custom' | 'project'. */
+  source: 'curated' | 'imported' | 'custom' | 'project'
+  sourceUri: string | null
   createdAt: string
   updatedAt: string
 }
@@ -98,6 +101,25 @@ export function useCloneCuratedSkill(projectId: string) {
       apiFetch<Envelope<Skill>>(`/api/projects/${projectId}/skills/clone-curated`, {
         method: 'POST',
         body: JSON.stringify({ key }),
+      }).then(unwrap),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['skills', projectId] }),
+  })
+}
+
+/**
+ * Wave 10 D2 — import a SKILL.md file as a project skill.
+ *
+ * Accepts the raw markdown content (and optional original filename) and
+ * persists it as a `source: 'imported'` skill row. Idempotent: importing the
+ * same key twice returns the existing row.
+ */
+export function useImportSkillFromMd(projectId: string) {
+  const qc = useQueryClient()
+  return useMutation<Skill, Error, { content: string; filename?: string; sourceUri?: string }>({
+    mutationFn: ({ content, filename, sourceUri }) =>
+      apiFetch<Envelope<Skill>>(`/api/projects/${projectId}/skills/import-from-md`, {
+        method: 'POST',
+        body: JSON.stringify({ content, filename, sourceUri }),
       }).then(unwrap),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['skills', projectId] }),
   })

@@ -159,11 +159,21 @@ export async function startConsultSession(input: StartConsultInput): Promise<Con
         id: schema.agents.id,
         name: schema.agents.name,
         model: schema.agents.model,
+        status: schema.agents.status,
       })
       .from(schema.agents)
       .where(eq(schema.agents.id, resolvedAgentId))
       .limit(1);
     if (row) {
+      // Wave 10 B9: refuse to create an agent-mode consult against a
+      // non-active agent. The picker filters at the UI layer; this is the
+      // defense-in-depth check for direct API callers (curl, MCP, tests).
+      if (row.status !== 'active') {
+        throw Object.assign(
+          new Error(`Agent "${row.name}" is ${row.status} — re-enable it before starting a consult.`),
+          { status: 422 },
+        );
+      }
       agentName = agentName ?? row.name;
       model = model ?? row.model;
     } else {

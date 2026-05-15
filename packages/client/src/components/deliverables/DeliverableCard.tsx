@@ -9,7 +9,7 @@ import {
   useRequestPeerReview,
   useDeliverable,
 } from '../../api/deliverables.ts'
-import { useAgents, type Agent } from '../../api/agents.ts'
+import { useActiveAgents, type Agent } from '../../api/agents.ts'
 import {
   type ReviewDecision,
   type ReviewEvent,
@@ -72,7 +72,8 @@ export default function DeliverableCard({ projectId, deliverable }: DeliverableC
   const [pickerError, setPickerError] = useState<string | null>(null)
   const [pickerNote, setPickerNote] = useState<string | null>(null)
 
-  const { data: agents = [] } = useAgents(projectId)
+  // Wave 10 B9: peer-reviewer picker only surfaces active agents.
+  const { data: agents = [] } = useActiveAgents(projectId)
   const requestPeerReview = useRequestPeerReview(projectId, deliverable.id)
   const { data: full } = useDeliverable(projectId, open ? deliverable.id : null)
   const reviewGroup = buildSyntheticReviewGroup(deliverable, full?.reviews ?? [])

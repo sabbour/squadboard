@@ -1,0 +1,33 @@
+{
+  "slug": "mtg-commander-deck-builder",
+  "title": "MTG Commander Deck Builder",
+  "blurb": "A Squad sample that scrapes EDHREC card recommendations using Playwright, then hands them to a four-agent AI squad to build a complete 100-card Commander deck. Supports follow-up modifications in a conversation loop.",
+  "tags": [
+    "ceremonies",
+    "routing",
+    "multi-agent"
+  ],
+  "agentCount": 4,
+  "routingRuleCount": 6,
+  "ceremonyCount": 1,
+  "defaultModel": null,
+  "teamName": "MTG Commander Deck Builder Squad",
+  "warnings": [],
+  "source": {
+    "origin": "github",
+    "repo": "bradygaster/Squad-IRL",
+    "ref": "main"
+  },
+  "files": [
+    ".gitignore",
+    "README.md",
+    "card-scraper.ts",
+    "deck-manager.ts",
+    "index.ts",
+    "package.json",
+    "squad.config.ts",
+    "tsconfig.json"
+  ],
+  "htmlUrl": "https://github.com/bradygaster/Squad-IRL/tree/main/mtg-commander-deck-builder",
+  "bundledAt": "2026-05-15T07:48:09.115Z"
+}

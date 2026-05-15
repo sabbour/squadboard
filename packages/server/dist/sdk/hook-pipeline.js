@@ -1,7 +1,7 @@
 // HookPipeline runs registered hooks in sequence at defined lifecycle points.
 // Demo 6 hook point: 'output-validation' (Invariant 4)
 // validateAgentOutput is implemented by Hockney in the workflow engine.
-import { validateAgentOutput } from '../engine/workflow-validation.js';
+import { validateAgentOutput } from '../services/output-validator.js';
 export class HookPipeline {
     hooks = [];
     register(hook) {

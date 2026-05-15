@@ -1,7 +1,23 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router'
-import { Button, Title2, Title3, Body1, Dialog, DialogSurface, DialogBody, DialogTitle, DialogContent, DialogActions, tokens } from '@fluentui/react-components'
-import { Folder20Regular, DocumentCopy20Regular } from '@fluentui/react-icons'
+import {
+  Button,
+  Title2,
+  Title3,
+  Body1,
+  Caption1,
+  Field,
+  Input,
+  Dialog,
+  DialogSurface,
+  DialogBody,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  Spinner,
+  tokens,
+} from '@fluentui/react-components'
+import { Folder20Regular, DocumentCopy20Regular, ArrowSync20Regular } from '@fluentui/react-icons'
 import { useProjects } from '../api/projects.ts'
 import { useDiscoverSquad, useRegisterSquad, useInitSquad, useCreateSquad } from '../api/squad.ts'
 import type { SquadDirectory } from '../api/squad.ts'
@@ -247,8 +263,95 @@ function DiscoveryModal({
   onClose: () => void
   onCreated: (id: string) => void
 }) {
-  const [activeTab, setActiveTab] = useState<'discover' | 'connect' | 'create'>('discover')
-  const tabLabels = { discover: 'Discover', connect: 'Connect existing', create: 'Create new' } as const
+  type ModalTab = 'discover' | 'connect' | 'create'
+  const [activeTab, setActiveTab] = useState<ModalTab>('discover')
+  const tabLabels: Record<ModalTab, string> = { discover: 'Discover', connect: 'Connect existing', create: 'Create new' }
+
+  // Wave 10 C2: form state lifted up so the dialog can render a single
+  // right-aligned DialogActions row whose primary button changes by tab.
+  // Previously each tab body had its own stacked primary button which
+  // looked off vs Fluent2 dialogs.
+  const [connectPath, setConnectPath] = useState('')
+  const [connectName, setConnectName] = useState('')
+  const initSquad = useInitSquad()
+
+  const [createParent, setCreateParent] = useState('')
+  const [createName, setCreateName] = useState('')
+  const createSquad = useCreateSquad()
+
+  // Default the Create tab parent path to the server's home directory the
+  // first time it's mounted so the user doesn't have to type the prefix.
+  useEffect(() => {
+    fetch('/api/squad/home')
+      .then((r) => r.json())
+      .then((data: { path: string }) => {
+        if (data.path) setCreateParent((cur) => cur || data.path)
+      })
+      .catch(() => { /* ignore — user can type manually */ })
+  }, [])
+
+  // Per-tab error parsing. The squad APIs return structured errors as
+  // `API <code>: <body>` so unwrap when possible.
+  const connectError = (() => {
+    const err = initSquad.error
+    if (!err) return null
+    if (err.message.startsWith('API 409')) return 'A .squad/ directory already exists here — use Discover instead.'
+    if (err.message.startsWith('API 422')) return 'Directory not found — check the path.'
+    return err.message
+  })()
+
+  const createError = (() => {
+    const err = createSquad.error
+    if (!err) return null
+    const m = err.message.match(/^API \d+: (.+)$/)
+    if (m) {
+      try {
+        const body = JSON.parse(m[1]) as { error?: string }
+        if (body.error) return body.error
+      } catch { /* fall through */ }
+    }
+    return err.message
+  })()
+
+  const createPreview = createParent.trim() && createName.trim()
+    ? `${createParent.trim().replace(/\/$/, '')}/${createName.trim()}/.squad/`
+    : null
+
+  function handleConnect() {
+    if (!connectPath.trim()) return
+    initSquad.mutate(
+      { path: connectPath.trim(), projectName: connectName.trim() || undefined },
+      { onSuccess: (res) => onCreated(res.projectId) },
+    )
+  }
+
+  function handleCreate() {
+    if (!createParent.trim() || !createName.trim()) return
+    createSquad.mutate(
+      { parentPath: createParent.trim(), projectName: createName.trim() },
+      { onSuccess: (res) => onCreated(res.projectId) },
+    )
+  }
+
+  // Per-tab primary action descriptor used by DialogActions below. The
+  // Discover tab has no primary action (rows act as click targets).
+  const primaryAction = (() => {
+    if (activeTab === 'connect') {
+      return {
+        label: initSquad.isPending ? 'Connecting…' : 'Connect',
+        disabled: !connectPath.trim() || initSquad.isPending,
+        onClick: handleConnect,
+      }
+    }
+    if (activeTab === 'create') {
+      return {
+        label: createSquad.isPending ? 'Creating…' : 'Create project',
+        disabled: !createParent.trim() || !createName.trim() || createSquad.isPending,
+        onClick: handleCreate,
+      }
+    }
+    return null
+  })()
 
   return (
     <Dialog open onOpenChange={(_, data) => { if (!data.open) onClose() }}>
@@ -260,8 +363,8 @@ function DiscoveryModal({
             <div
               style={{
                 display: 'flex',
-                borderBottom: '1px solid var(--border)',
-                marginBottom: '16px',
+                borderBottom: `1px solid ${tokens.colorNeutralStroke2}`,
+                marginBottom: tokens.spacingVerticalM,
               }}
             >
               {(['discover', 'connect', 'create'] as const).map((tab) => {
@@ -291,12 +394,45 @@ function DiscoveryModal({
             {/* Tab body */}
             <div style={{ overflowY: 'auto', flex: 1 }}>
               {activeTab === 'discover' && <DiscoverTab onCreated={onCreated} />}
-              {activeTab === 'connect' && <ConnectTab onCreated={onCreated} />}
-              {activeTab === 'create' && <CreateTab onCreated={onCreated} />}
+              {activeTab === 'connect' && (
+                <ConnectTab
+                  path={connectPath}
+                  setPath={setConnectPath}
+                  name={connectName}
+                  setName={setConnectName}
+                  errorMsg={connectError}
+                  onSubmit={handleConnect}
+                />
+              )}
+              {activeTab === 'create' && (
+                <CreateTab
+                  parentPath={createParent}
+                  setParentPath={setCreateParent}
+                  projectName={createName}
+                  setProjectName={setCreateName}
+                  errorMsg={createError}
+                  preview={createPreview}
+                  onSubmit={handleCreate}
+                />
+              )}
             </div>
           </DialogContent>
+          {/* Wave 10 C2: single right-aligned DialogActions row. The primary
+              swaps based on active tab (or hides on Discover, which is row-
+              triggered). Cancel always available. */}
           <DialogActions>
-            <Button appearance="secondary" onClick={onClose}>Close</Button>
+            <Button appearance="secondary" onClick={onClose}>
+              {primaryAction ? 'Cancel' : 'Close'}
+            </Button>
+            {primaryAction && (
+              <Button
+                appearance="primary"
+                disabled={primaryAction.disabled}
+                onClick={primaryAction.onClick}
+              >
+                {primaryAction.label}
+              </Button>
+            )}
           </DialogActions>
         </DialogBody>
       </DialogSurface>
@@ -317,40 +453,35 @@ function DiscoverTab({ onCreated }: { onCreated: (id: string) => void }) {
 
   return (
     <div>
-      <p style={{ fontSize: '13px', color: 'var(--text-muted)', marginBottom: '16px' }}>
-        Scan the filesystem for existing <code style={{ fontFamily: 'monospace' }}>.squad/</code> directories.
-      </p>
+      <Body1 style={{ display: 'block', color: tokens.colorNeutralForeground3, marginBottom: tokens.spacingVerticalM }}>
+        Scan the filesystem for existing <code style={{ fontFamily: tokens.fontFamilyMonospace }}>.squad/</code> directories.
+      </Body1>
 
-      <button
-        onClick={() => void refetch()}
+      <Button
+        appearance="secondary"
+        size="small"
+        icon={isFetching ? <Spinner size="extra-tiny" /> : <ArrowSync20Regular />}
         disabled={isFetching}
-        style={{
-          background: 'none',
-          border: '1px solid var(--border)',
-          color: 'var(--text)',
-          borderRadius: 'var(--radius)',
-          padding: '6px 14px',
-          fontSize: '13px',
-          marginBottom: '16px',
-        }}
+        onClick={() => void refetch()}
+        style={{ marginBottom: tokens.spacingVerticalM }}
       >
         {isFetching ? 'Scanning…' : 'Scan filesystem'}
-      </button>
+      </Button>
 
       {isDiscoverError && (
-        <p style={{ color: 'var(--danger)', fontSize: '13px', marginBottom: '8px' }}>
+        <Caption1 style={{ display: 'block', color: tokens.colorPaletteRedForeground1, marginBottom: tokens.spacingVerticalS }}>
           Scan failed: {discoverError?.message ?? 'Unknown error'}
-        </p>
+        </Caption1>
       )}
 
       {!isDiscoverError && dirs && dirs.length === 0 && (
-        <p style={{ color: 'var(--text-muted)', fontSize: '13px' }}>
+        <Caption1 style={{ color: tokens.colorNeutralForeground3 }}>
           No .squad/ directories found on the filesystem.
-        </p>
+        </Caption1>
       )}
 
       {!isDiscoverError && dirs && dirs.length > 0 && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: tokens.spacingVerticalXS }}>
           {dirs.map((dir) => (
             <button
               key={dir.path}
@@ -360,205 +491,78 @@ function DiscoverTab({ onCreated }: { onCreated: (id: string) => void }) {
                 display: 'flex',
                 flexDirection: 'column',
                 alignItems: 'flex-start',
-                background: 'var(--bg)',
-                border: '1px solid var(--border)',
-                borderRadius: 'var(--radius)',
-                padding: '10px 14px',
-                color: 'var(--text)',
+                gap: 2,
+                background: tokens.colorNeutralBackground1,
+                border: `1px solid ${tokens.colorNeutralStroke2}`,
+                borderRadius: tokens.borderRadiusMedium,
+                padding: `${tokens.spacingVerticalS} ${tokens.spacingHorizontalM}`,
+                color: tokens.colorNeutralForeground1,
                 textAlign: 'left',
                 width: '100%',
+                cursor: isRegistering ? 'wait' : 'pointer',
               }}
             >
-              <span style={{ fontWeight: 500 }}>{dir.name}</span>
-              <span style={{ fontSize: '12px', color: 'var(--text-muted)', fontFamily: 'monospace' }}>
+              <span style={{ fontWeight: tokens.fontWeightSemibold }}>{dir.name}</span>
+              <Caption1 style={{ color: tokens.colorNeutralForeground3, fontFamily: tokens.fontFamilyMonospace }}>
                 {dir.path}
-              </span>
+              </Caption1>
             </button>
           ))}
         </div>
       )}
 
       {registerError && (
-        <p style={{ color: 'var(--danger)', marginTop: '12px', fontSize: '13px' }}>
+        <Caption1 style={{ display: 'block', color: tokens.colorPaletteRedForeground1, marginTop: tokens.spacingVerticalS }}>
           {registerError.message}
-        </p>
+        </Caption1>
       )}
     </div>
   )
 }
 
-function ConnectTab({ onCreated }: { onCreated: (id: string) => void }) {
-  const [path, setPath] = useState('')
-  const [name, setName] = useState('')
-  const { mutate: initSquad, isPending, error } = useInitSquad()
-
-  const errorMsg = error
-    ? error.message.startsWith('API 409')
-      ? 'A .squad/ directory already exists here — use Discover instead.'
-      : error.message.startsWith('API 422')
-        ? 'Directory not found — check the path.'
-        : error.message
-    : null
-
-  function handleConnect() {
-    if (!path.trim()) return
-    initSquad(
-      { path: path.trim(), projectName: name.trim() || undefined },
-      { onSuccess: (res) => onCreated(res.projectId) },
-    )
-  }
-
+function ConnectTab({
+  path,
+  setPath,
+  name,
+  setName,
+  errorMsg,
+  onSubmit,
+}: {
+  path: string
+  setPath: (v: string) => void
+  name: string
+  setName: (v: string) => void
+  errorMsg: string | null
+  onSubmit: () => void
+}) {
   return (
     <div>
-      <p style={{ fontSize: '13px', color: 'var(--text-muted)', marginBottom: '16px' }}>
-        Scaffold a <code style={{ fontFamily: 'monospace' }}>.squad/</code> directory in an existing project folder.
-      </p>
+      <Body1 style={{ display: 'block', color: tokens.colorNeutralForeground3, marginBottom: tokens.spacingVerticalM }}>
+        Scaffold a <code style={{ fontFamily: tokens.fontFamilyMonospace }}>.squad/</code> directory in an existing project folder.
+      </Body1>
 
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-        <div>
-          <label style={{ fontSize: '12px', color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>
-            Directory path
-          </label>
-          <input
-            type="text"
-            placeholder="/absolute/path/to/project"
+      <div style={{ display: 'flex', flexDirection: 'column', gap: tokens.spacingVerticalS }}>
+        <Field label="Directory path" required>
+          <Input
             value={path}
-            onChange={(e) => setPath(e.target.value)}
-            onKeyDown={(e) => { if (e.key === 'Enter') handleConnect() }}
-            style={inputStyle}
+            onChange={(_, d) => setPath(d.value)}
+            onKeyDown={(e) => { if (e.key === 'Enter') onSubmit() }}
+            placeholder="/absolute/path/to/project"
+            input={{ style: { fontFamily: tokens.fontFamilyMonospace } }}
           />
-        </div>
+        </Field>
 
-        <div>
-          <label style={{ fontSize: '12px', color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>
-            Project name <span style={{ opacity: 0.6 }}>(optional)</span>
-          </label>
-          <input
-            type="text"
-            placeholder="my-project"
+        <Field label="Project name" hint="Optional — defaults to directory name.">
+          <Input
             value={name}
-            onChange={(e) => setName(e.target.value)}
-            style={inputStyle}
+            onChange={(_, d) => setName(d.value)}
+            placeholder="my-project"
           />
-        </div>
+        </Field>
 
         {errorMsg && (
-          <p style={{ color: 'var(--danger)', fontSize: '13px', margin: 0 }}>{errorMsg}</p>
+          <Caption1 style={{ color: tokens.colorPaletteRedForeground1 }}>{errorMsg}</Caption1>
         )}
-
-        <button
-          onClick={handleConnect}
-          disabled={!path.trim() || isPending}
-          style={primaryButtonStyle}
-        >
-          {isPending ? 'Connecting…' : 'Connect'}
-        </button>
-      </div>
-    </div>
-  )
-}
-
-function CreateTab({ onCreated }: { onCreated: (id: string) => void }) {
-  const [parentPath, setParentPath] = useState('')
-  const [projectName, setProjectName] = useState('')
-  const { mutate: createSquad, isPending, error } = useCreateSquad()
-
-  // Default parentPath to the server's home directory on mount
-  useEffect(() => {
-    fetch('/api/squad/home')
-      .then((r) => r.json())
-      .then((data: { path: string }) => {
-        if (data.path) setParentPath(data.path)
-      })
-      .catch(() => { /* ignore, user can type manually */ })
-  }, [])
-
-  // Parse the structured error message from the API
-  const errorMsg = (() => {
-    if (!error) return null
-    const m = error.message.match(/^API \d+: (.+)$/)
-    if (m) {
-      try {
-        const body = JSON.parse(m[1]) as { error?: string }
-        if (body.error) return body.error
-      } catch { /* fall through */ }
-    }
-    return error.message
-  })()
-
-  const preview = parentPath.trim() && projectName.trim()
-    ? `${parentPath.trim().replace(/\/$/, '')}/${projectName.trim()}/.squad/`
-    : null
-
-  function handleCreate() {
-    if (!parentPath.trim() || !projectName.trim()) return
-    createSquad(
-      { parentPath: parentPath.trim(), projectName: projectName.trim() },
-      { onSuccess: (res) => onCreated(res.projectId) },
-    )
-  }
-
-  return (
-    <div>
-      <p style={{ fontSize: '13px', color: 'var(--text-muted)', marginBottom: '16px' }}>
-        Create a new directory with a <code style={{ fontFamily: 'monospace' }}>.squad/</code> scaffold inside it.
-      </p>
-
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-        <div>
-          <label style={{ fontSize: '12px', color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>
-            Parent directory
-          </label>
-          <input
-            type="text"
-            placeholder="/absolute/path/to/parent"
-            value={parentPath}
-            onChange={(e) => setParentPath(e.target.value)}
-            style={inputStyle}
-          />
-        </div>
-
-        <div>
-          <label style={{ fontSize: '12px', color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>
-            Project name
-          </label>
-          <input
-            type="text"
-            placeholder="my-new-project"
-            value={projectName}
-            onChange={(e) => setProjectName(e.target.value)}
-            onKeyDown={(e) => { if (e.key === 'Enter') handleCreate() }}
-            style={inputStyle}
-          />
-        </div>
-
-        {preview && (
-          <div
-            style={{
-              background: 'var(--bg)',
-              border: '1px solid var(--border)',
-              borderRadius: 'var(--radius)',
-              padding: '8px 12px',
-              fontSize: '12px',
-              fontFamily: 'monospace',
-              color: 'var(--text-muted)',
-            }}
-          >
-            Will create: <span style={{ color: 'var(--accent)' }}>{preview}</span>
-          </div>
-        )}
-
-        {errorMsg && (
-          <p style={{ color: 'var(--danger)', fontSize: '13px', margin: 0 }}>{errorMsg}</p>
-        )}
-
-        <button
-          onClick={handleCreate}
-          disabled={!parentPath.trim() || !projectName.trim() || isPending}
-          style={primaryButtonStyle}
-        >
-          {isPending ? 'Creating…' : 'Create project'}
-        </button>
       </div>
     </div>
   )
@@ -577,13 +581,68 @@ const inputStyle: React.CSSProperties = {
   boxSizing: 'border-box',
 }
 
-const primaryButtonStyle: React.CSSProperties = {
-  background: 'var(--accent)',
-  color: '#fff',
-  border: 'none',
-  borderRadius: 'var(--radius)',
-  padding: '8px 16px',
-  fontWeight: 500,
-  fontSize: '13px',
-  alignSelf: 'flex-start',
+function CreateTab({
+  parentPath,
+  setParentPath,
+  projectName,
+  setProjectName,
+  errorMsg,
+  preview,
+  onSubmit,
+}: {
+  parentPath: string
+  setParentPath: (v: string) => void
+  projectName: string
+  setProjectName: (v: string) => void
+  errorMsg: string | null
+  preview: string | null
+  onSubmit: () => void
+}) {
+  return (
+    <div>
+      <Body1 style={{ display: 'block', color: tokens.colorNeutralForeground3, marginBottom: tokens.spacingVerticalM }}>
+        Create a new directory with a <code style={{ fontFamily: tokens.fontFamilyMonospace }}>.squad/</code> scaffold inside it.
+      </Body1>
+
+      <div style={{ display: 'flex', flexDirection: 'column', gap: tokens.spacingVerticalS }}>
+        <Field label="Parent directory" required>
+          <Input
+            value={parentPath}
+            onChange={(_, d) => setParentPath(d.value)}
+            placeholder="/absolute/path/to/parent"
+            input={{ style: { fontFamily: tokens.fontFamilyMonospace } }}
+          />
+        </Field>
+
+        <Field label="Project name" required>
+          <Input
+            value={projectName}
+            onChange={(_, d) => setProjectName(d.value)}
+            onKeyDown={(e) => { if (e.key === 'Enter') onSubmit() }}
+            placeholder="my-new-project"
+          />
+        </Field>
+
+        {preview && (
+          <div
+            style={{
+              background: tokens.colorNeutralBackground2,
+              border: `1px solid ${tokens.colorNeutralStroke2}`,
+              borderRadius: tokens.borderRadiusMedium,
+              padding: `${tokens.spacingVerticalXS} ${tokens.spacingHorizontalM}`,
+              fontSize: '12px',
+              fontFamily: tokens.fontFamilyMonospace,
+              color: tokens.colorNeutralForeground3,
+            }}
+          >
+            Will create: <span style={{ color: tokens.colorBrandForeground1 }}>{preview}</span>
+          </div>
+        )}
+
+        {errorMsg && (
+          <Caption1 style={{ color: tokens.colorPaletteRedForeground1 }}>{errorMsg}</Caption1>
+        )}
+      </div>
+    </div>
+  )
 }

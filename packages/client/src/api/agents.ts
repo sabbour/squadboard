@@ -40,6 +40,22 @@ export function useAgents(projectId: string) {
   })
 }
 
+/**
+ * Wave 10 B9: helper for picker UIs (Consult, ceremonies, RunButton, comment
+ * mentions, peer-review reassignment, …) that should ONLY surface active
+ * agents. Disabled and retired agents are intentionally hidden from any
+ * surface where the user could pick them — the server enforces the same
+ * rule on the invoke side, so the picker filter is purely UX hygiene.
+ *
+ * Display surfaces (Agents page, run history, audit logs) should keep using
+ * `useAgents` directly so they can show the full roster.
+ */
+export function useActiveAgents(projectId: string) {
+  const query = useAgents(projectId)
+  const data = (query.data ?? []).filter((a) => a.status === 'active')
+  return { ...query, data }
+}
+
 export function useAgent(projectId: string, agentId: string) {
   return useQuery<AgentWithHistory>({
     queryKey: ['agents', projectId, agentId],
@@ -143,7 +159,12 @@ export function useModels() {
 
 export type CastingUniverseId = 'usual-suspects' | 'oceans-eleven' | 'the-office' | 'seinfeld' | 'the-simpsons' | 'parks-and-rec'
 
-export type CastingAgentRole =
+/**
+ * Base SDK roles (the 9 sealed `AgentRole` values from `@bradygaster/squad-sdk/casting`).
+ * Mirrored as a string-literal union so the UI can reference them without
+ * importing the SDK in client bundles.
+ */
+export type CastingBaseRole =
   | 'lead'
   | 'developer'
   | 'tester'
@@ -154,14 +175,47 @@ export type CastingAgentRole =
   | 'prompt-engineer'
   | 'scribe'
 
+/**
+ * Squadboard-side extension over the SDK's sealed `AgentRole` union.
+ *
+ * The 7 non-tech roles below are not part of the SDK. They live in
+ * `.github/agents/squad.agent.md` (emoji table) and `.squad/routing.md`.
+ * On the server, `EXTENDED_ROLE_TO_BASE_ROLE` (in
+ * `packages/server/src/services/casting-engine.ts`) maps each extended role
+ * back to a base SDK role for downstream casting operations, so the SDK
+ * pipeline keeps producing valid teams regardless of which role flavours
+ * the user picks.
+ */
+export type CastingExtendedRole =
+  | 'pm'
+  | 'designer-nontech'
+  | 'founder'
+  | 'sales'
+  | 'marketing'
+  | 'customer-success'
+  | 'research'
+
+/**
+ * Union of all roles the HireTeam UI may surface.
+ * `CastingBaseRole` round-trips the SDK without translation;
+ * `CastingExtendedRole` rounds-trips through the server's mapping table.
+ */
+export type CastingAgentRole = CastingBaseRole | CastingExtendedRole
+
 export interface CastedMember {
   name: string
   agentName: string
-  role: CastingAgentRole
+  role: CastingBaseRole
   personality: string
   backstory: string
   suggestedRoleId: string
   suggestedRoleTitle: string
+  /**
+   * Squadboard-extended role label when the user requested a non-tech role
+   * (PM, Sales, Marketing, …). Null when the SDK base role was requested
+   * directly. Mirrors `CastedMember.extendedRole` in `casting-engine.ts`.
+   */
+  extendedRole: CastingExtendedRole | null
 }
 
 export interface HireTeamProposeInput {

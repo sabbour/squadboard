@@ -13,6 +13,7 @@ import issuesRouter from './routes/issues.js';
 import commentsMentionRouter from './routes/comments-mention.js';
 import projectDeliverablesRouter, { issueDeliverablesRouter } from './routes/deliverables.js';
 import labelsRouter from './routes/labels.js';
+import columnMetaRouter from './routes/column-meta.js';
 import { issueRunsRouter, projectRunsRouter } from './routes/runs.js';
 import routingRouter from './routes/routing.js';
 import { workflowsRouter, issueWorkflowRouter, workflowRunsRouter, stepRunsRouter, workflowTemplatesRouter } from './routes/workflows.js';
@@ -28,11 +29,27 @@ import castingRouter from './routes/casting.js';
 import castRouter from './routes/cast.js';
 import reviewPoliciesRouter from './routes/review-policies.js';
 import inboxRouter from './routes/inbox.js';
+import { consultRouter, projectConsultRouter } from './routes/consult.js';
 import { projectFlowRouter, issueFlowRouter } from './routes/flow.js';
+import activityRouter from './routes/activity.js';
 import { curatedSkillsRouter, projectSkillsRouter, agentSkillsRouter } from './routes/skills.js';
 import { projectToolsRouter, agentToolsRouter } from './routes/tools.js';
 import { projectMcpRouter, agentMcpRouter } from './routes/mcp.js';
-import { dispatcher } from './engine/dispatcher.js';
+import { diagnosticsRouter, projectDiagnosticsRouter } from './routes/diagnostics.js';
+import heartbeatRouter from './routes/heartbeat.js';
+// Wave 10 B3: side-effect import — subscribes the in-memory ring buffer to
+// `eventBus.onHeartbeat` BEFORE heartbeat.start() schedules sweeps so the
+// first sweep tick is already captured.
+import './services/heartbeat.js';
+import { createMcpHttpRouter } from './mcp/http-transport.js';
+import { setDefaultProjectId } from './mcp/server.js';
+import { heartbeat } from './engine/heartbeat.js';
+import { stuckIssueRunsSweep } from './engine/sweeps/stuck-issue-runs.js';
+import { idleLiveSessionsSweep } from './engine/sweeps/idle-live-sessions.js';
+import { stalePresenceSweep } from './engine/sweeps/stale-presence.js';
+import { readyWorkflowStepsSweep } from './engine/sweeps/ready-workflow-steps.js';
+import { githubSyncOverdueSweep } from './engine/sweeps/github-sync-overdue.js';
+import { ceremoniesDueSweep } from './engine/sweeps/ceremonies-due.js';
 // Phase 10: side-effect import — registers the on_event ceremony listener
 // against the in-process event bus.
 import './services/ceremony-dispatcher.js';
@@ -40,6 +57,14 @@ import { initWebSocketServer } from './realtime/ws-server.js';
 import { listPresence } from './realtime/presence.js';
 import { initGitHubSyncHooks } from './github/sync-hook.js';
 import { stopAllSyncLoops } from './github/sync.js';
+// Phase 19: Templates & Portability
+import templatesRouter from './routes/templates.js';
+import teamPortabilityRouter from './routes/team-portability.js';
+import projectPortabilityRouter from './routes/project-portability.js';
+// Conjure smart-create — Phase 1 classify endpoint
+import conjureRouter from './routes/conjure.js';
+// Wave 10 Stream A1: auto-register the running squadboard repo as a project
+import { registerSelfAtBoot } from './services/self-register.js';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 const PORT = parseInt(process.env.PORT ?? '3000', 10);
@@ -50,23 +75,46 @@ async function main() {
     console.log('[squadboard] starting…');
     const connectionString = await startEmbeddedPostgres();
     await initDb(connectionString);
-    // Start the workflow engine dispatcher (5 s tick: sweep → wake → advance)
-    dispatcher.start();
+    // Wave 10 Stream A1: dogfood — self-register the running squadboard repo as
+    // a project on first boot so the MCP capture loop has somewhere to land
+    // cards. Gated and idempotent (see services/self-register.ts).
+    await registerSelfAtBoot();
+    // Wave 10 / A3: honour SQUADBOARD_DEFAULT_PROJECT_ID for the HTTP MCP
+    // transport too. The stdio entry point does this independently for desktop
+    // clients; doing it here covers HTTP clients (e.g. VS Code) that hit /mcp.
+    const mcpDefaultProjectId = process.env.SQUADBOARD_DEFAULT_PROJECT_ID;
+    if (mcpDefaultProjectId && mcpDefaultProjectId.trim()) {
+        setDefaultProjectId(mcpDefaultProjectId);
+        console.log(`[squadboard] MCP default projectId from SQUADBOARD_DEFAULT_PROJECT_ID = ${mcpDefaultProjectId.trim()}`);
+    }
+    // Phase 3: register and start the heartbeat sweep registry
+    // (replaces the old dispatcher.start() 5 s monolithic tick).
+    heartbeat.register(stuckIssueRunsSweep); // 30 s — reclaim expired/orphaned runs
+    heartbeat.register(idleLiveSessionsSweep); // 60 s — mark inactive sessions idle
+    heartbeat.register(stalePresenceSweep); // 30 s — evict phantom presence records
+    heartbeat.register(readyWorkflowStepsSweep); //  5 s — advance workflow steps + stepper
+    heartbeat.register(githubSyncOverdueSweep); // 60 s — catch-up GitHub pulls
+    heartbeat.register(ceremoniesDueSweep); //  5 s — fire due ceremony schedules
+    heartbeat.start();
     // Demo 15: register GitHub sync event-bus hooks
     initGitHubSyncHooks();
     const app = express();
     app.use(express.json());
     app.use('/api/health', healthRouter);
+    app.use('/api/activity', activityRouter);
     app.use('/api/inbox', inboxRouter);
+    app.use('/api/consult', consultRouter);
     app.use('/api/projects', projectsRouter);
     app.use('/api/squad', squadRouter);
     app.use('/api/projects/:projectId/agents', agentsRouter);
     app.use('/api/projects/:projectId/sessions', projectSessionsRouter);
+    app.use('/api/projects/:projectId/consult', projectConsultRouter);
     app.use('/api/projects/:projectId/issues', issuesRouter);
     app.use('/api/projects/:projectId/issues', commentsMentionRouter);
     app.use('/api/projects/:projectId/issues', issueDeliverablesRouter);
     app.use('/api/projects/:projectId/deliverables', projectDeliverablesRouter);
     app.use('/api/projects/:projectId/labels', labelsRouter);
+    app.use('/api/projects/:projectId/columns', columnMetaRouter);
     app.use('/api/projects/:projectId/issues/:issueId/runs', issueRunsRouter);
     app.use('/api/projects/:projectId/runs', projectRunsRouter);
     // Phase 12: flow visualisation aggregators
@@ -119,14 +167,32 @@ async function main() {
     app.use('/api/projects/:id/analytics', analyticsRouter);
     // Demo 15: GitHub sync endpoints
     app.use('/api/projects/:id/github', githubSyncRouter);
+    // Phase 3 Doctor: diagnostics
+    app.use('/api/diagnostics', diagnosticsRouter);
+    app.use('/api/projects/:id/diagnostics', projectDiagnosticsRouter);
+    // Phase 3 Heartbeat: sweep registry status + manual controls
+    app.use('/api/heartbeat', heartbeatRouter);
     // Demo 9: peer review endpoints (not project-scoped)
     app.use('/api/workflow-runs', workflowRunsRouter);
     app.use('/api/step-runs', stepRunsRouter);
+    // Conjure smart-create — POST /api/conjure/classify
+    app.use('/api/conjure', conjureRouter);
+    // Wave 10 B7 — team portability (export/import/save-as-template/instantiate)
+    app.use('/api/projects/:id/team', teamPortabilityRouter);
+    // Phase 19 — project portability (export/import/save-as-template/instantiate)
+    app.use('/api/projects/:id', projectPortabilityRouter);
+    // Phase 19 — templates CRUD
+    app.use('/api/templates', templatesRouter);
     // Demo 12: presence REST endpoint (GET /api/projects/:id/presence)
     app.get('/api/projects/:id/presence', (req, res) => {
         const presence = listPresence(req.params.id);
         res.json(presence);
     });
+    // Phase 18: Squadboard exposes itself as an MCP server over Streamable HTTP
+    // for VS Code (Insiders) + any HTTP-capable MCP client. Mounted *before* the
+    // SPA fallback so /mcp doesn't return index.html. Stdio path
+    // (packages/server/src/mcp/index.ts) stays for Claude Desktop / Cursor.
+    app.use('/mcp', createMcpHttpRouter());
     if (existsSync(CLIENT_DIST)) {
         app.use(express.static(CLIENT_DIST));
         // SPA fallback — let the React router handle unknown paths
@@ -153,7 +219,7 @@ async function main() {
     });
     const gracefulShutdown = (signal) => {
         console.log(`[squadboard] received ${signal}`);
-        dispatcher.stop();
+        heartbeat.stop();
         stopAllSyncLoops(); // Demo 15: stop GitHub sync polling loops
         server.close(() => {
             closeDb()

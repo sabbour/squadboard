@@ -1,0 +1,32 @@
+{
+  "slug": "real-estate-analyzer",
+  "title": "Real Estate Investment Analyzer",
+  "blurb": "A Squad sample that opens Redfin or Zillow in a browser, scrapes visible property listings using Playwright, and feeds them to a four-agent AI squad for investment analysis.",
+  "tags": [
+    "ceremonies",
+    "routing",
+    "multi-agent"
+  ],
+  "agentCount": 4,
+  "routingRuleCount": 5,
+  "ceremonyCount": 1,
+  "defaultModel": null,
+  "teamName": "Real Estate Investment Analyzer Squad",
+  "warnings": [],
+  "source": {
+    "origin": "github",
+    "repo": "bradygaster/Squad-IRL",
+    "ref": "main"
+  },
+  "files": [
+    ".gitignore",
+    "README.md",
+    "index.ts",
+    "listing-scraper.ts",
+    "package.json",
+    "squad.config.ts",
+    "tsconfig.json"
+  ],
+  "htmlUrl": "https://github.com/bradygaster/Squad-IRL/tree/main/real-estate-analyzer",
+  "bundledAt": "2026-05-15T07:48:09.566Z"
+}

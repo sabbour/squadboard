@@ -360,3 +360,41 @@ values (`/.../foo/.squad`, two `/.../.squadboard/projects/<slug>`):
    fails, don't run dependent child checks — they generate noise. Pattern
    is now: resolve once, fail-fast with remediation, only descend when the
    parent is healthy.
+
+---
+
+## Heartbeat live verification path — Wave 10 E4 (2026-05-15T13:09:47-07:00)
+
+**Verified by:** Hockney (programmatic, no browser needed)
+
+### Data path traced
+
+| Layer | Detail |
+|---|---|
+| Engine | `engine/heartbeat.ts` — `Heartbeat._runSweep()` sets `this.lastTickAt = new Date()` on every sweep completion |
+| Sweeps | 6 registered: `stuck-issue-runs` (30s), `stale-presence` (30s), `idle-live-sessions` (60s), `ready-workflow-steps` (5s), `ceremonies-due` (5s), `github-sync-overdue` (60s) |
+| Service | `services/heartbeat.ts` — `getHeartbeatSnapshot()` reads `heartbeat.getStatus().lastTickAt` and returns it as `lastTickAt` in the snapshot. Also maintains an in-memory ring buffer (capacity 200) of recent sweep events keyed by monotonic `seq`. |
+| API endpoint | `GET /api/heartbeat/status` — returns `{ active, lastTickAt, lastError, sweeps[], recent }` |
+| React component | `pages/Heartbeat.tsx` — polls `/api/heartbeat/status` every 5s; renders `lastTickAt` via `relativeTime()` helper in the "Last tick" section card |
+| No DB column | `lastTickAt` is pure in-memory (`Heartbeat` singleton). The lease+heartbeat column `heartbeat_at` on `issue_runs` is separate (written by runWorker at 30s interval during active LLM runs). |
+
+### Live-fire samples (server was already running on :3000)
+
+| Sample | `lastTickAt` | Ring cursor |
+|---|---|---|
+| T1 | `2026-05-15T20:15:30.871Z` | 374 |
+| T2 | `2026-05-15T20:15:58.809Z` | 384 |
+
+- **Delta:** 27.9 s ✅ (within ~30s ± 5s; driven by the 5s fast-sweeps so actual cadence is ≤5s between any tick)
+- **Ring advancement:** +10 events — confirms continuous sweep completions
+- **Status:** ✅ TICKING — `active: true`, no `lastError`
+
+### Quick re-verify command (future agents)
+
+```bash
+T1=$(curl -s http://localhost:3000/api/heartbeat/status | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['lastTickAt'])")
+sleep 10
+T2=$(curl -s http://localhost:3000/api/heartbeat/status | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['lastTickAt'])")
+echo "T1=$T1  T2=$T2"
+# Expect T2 > T1 by ≥5s (fastest sweep cadence)
+```

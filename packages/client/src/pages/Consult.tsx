@@ -18,6 +18,9 @@ import {
   Caption1,
   Subtitle2,
   Badge,
+  MessageBar,
+  MessageBarBody,
+  MessageBarTitle,
   makeStyles,
   Tooltip,
 } from '@fluentui/react-components'
@@ -52,7 +55,7 @@ import {
   type ConsultMode,
   type ConsultProposalKind,
 } from '../api/consult.ts'
-import { useAgents, useModels } from '../api/agents.ts'
+import { useActiveAgents, useModels } from '../api/agents.ts'
 import { useProjects } from '../api/projects.ts'
 import PageHeader from '../components/layout/PageHeader.tsx'
 
@@ -217,17 +220,72 @@ export default function Consult() {
       try {
         if (prefillRaw.startsWith('issue:') && projectId) {
           const issueId = prefillRaw.slice('issue:'.length)
-          const res = await fetch(`/api/projects/${projectId}/issues/${issueId}`)
-          const env = await res.json()
-          const issue = env?.data
-          if (!cancelled && issue) {
-            const head = `Help me think through this issue.\n\n**${issue.title}**`
-            const body = issue.body ? `\n\n${issue.body}` : ''
-            setPrefill({
-              content: `${head}${body}\n\nWhat's the best way to approach this?`,
-              name: prefillNameParam ?? `Re: ${issue.title}`,
-            })
+          // Wave 10 B6: GET /api/projects/:id/issues/:id returns the issue
+          // record directly (no `{ ok, data }` envelope); the previous
+          // `env?.data` lookup silently returned undefined and the seed
+          // message was never populated, so the Consult button on the issue
+          // panel always opened an empty new session.
+          const issueRes = await fetch(`/api/projects/${projectId}/issues/${issueId}`)
+          const issueBody = (await issueRes.json()) as
+            | { id?: string; title?: string; body?: string | null }
+            | { data?: { id?: string; title?: string; body?: string | null } }
+            | null
+          const issue =
+            issueBody && typeof issueBody === 'object' && 'data' in issueBody && issueBody.data
+              ? issueBody.data
+              : (issueBody as { id?: string; title?: string; body?: string | null } | null)
+          if (cancelled || !issue || !issue.title) return
+
+          // Pull recent runs so the agent has concrete context (latest output
+          // tail). Best-effort — failure here just trims the seed payload.
+          // Wave 10 B8: clamp the embedded runs block so a giant log can't
+          // make the seed message blow past the server's 64 KiB cap.
+          let runsBlock = ''
+          try {
+            const runsRes = await fetch(
+              `/api/projects/${projectId}/issues/${issueId}/runs`,
+            )
+            if (runsRes.ok) {
+              const runs = (await runsRes.json()) as Array<{
+                id: string
+                status?: string | null
+                output?: string | null
+                createdAt?: string | null
+                agentId?: string | null
+              }>
+              const recent = runs.slice(-3).reverse() // newest first, max 3
+              const formatted = recent
+                .map((r) => {
+                  const tail = r.output ? r.output.split('\n').slice(-12).join('\n') : ''
+                  // Cap a single run tail to 4 KiB so 3 runs ≤ 12 KiB combined.
+                  const trimmedTail = tail.length > 4096 ? `${tail.slice(-4096)}\n…(truncated)` : tail
+                  const head = `Run ${r.id.slice(0, 8)} (${r.status ?? 'unknown'})`
+                  return trimmedTail
+                    ? `### ${head}\n\n\`\`\`\n${trimmedTail}\n\`\`\``
+                    : `### ${head}\n_(no output)_`
+                })
+                .join('\n\n')
+              if (formatted) runsBlock = `\n\n---\n\n**Recent runs:**\n\n${formatted}`
+            }
+          } catch {
+            // ignore
           }
+
+          const head = `Help me think through this issue.\n\n**${issue.title}**`
+          const body = issue.body ? `\n\n${issue.body}` : ''
+          const fullContent = `${head}${body}${runsBlock}\n\nWhat's the best way to approach this?`
+          // Final defense — if the assembled seed is still oversized for any
+          // reason (huge issue body, many runs), clamp it well under the
+          // 64 KiB server cap so the first POST /messages succeeds.
+          const SEED_CAP = 32 * 1024
+          const clamped =
+            fullContent.length > SEED_CAP
+              ? `${fullContent.slice(0, SEED_CAP)}\n\n…(seed truncated to keep the request small)`
+              : fullContent
+          setPrefill({
+            content: clamped,
+            name: prefillNameParam ?? `Re: ${issue.title}`,
+          })
         } else if (prefillRaw.startsWith('ceremony:') && projectId) {
           const cid = prefillRaw.slice('ceremony:'.length)
           const res = await fetch(`/api/projects/${projectId}/ceremonies/${cid}`)
@@ -403,14 +461,22 @@ function NewSessionView({
   const [name, setName] = useState<string>(prefillName ?? '')
   const [firstMessage, setFirstMessage] = useState<string>(prefillContent ?? '')
 
-  const agentsQuery = useAgents(projectId ?? '')
+  const agentsQuery = useActiveAgents(projectId ?? '')
   const modelsQuery = useModels()
   const startMut = useStartConsult()
   const sendMut = useSendConsultMessage('') // unused; we recreate after start
   void sendMut
 
+  // Wave 10 B9: useActiveAgents already filters to status === 'active' so
+  // disabled / retired agents never reach the picker dropdown.
   const agents = agentsQuery.data ?? []
   const models = modelsQuery.data ?? []
+
+  // Wave 10 B8: surface failures in-place instead of letting them bubble to
+  // the React error boundary. Both the create-session POST and the seed
+  // first-message POST can return a structured error (400 oversized seed,
+  // 5xx server) — show a MessageBar with retry instead of crashing.
+  const [startError, setStartError] = useState<string | null>(null)
 
   // Auto-pick first agent for new project-scoped agent-mode consults.
   useEffect(() => {
@@ -425,29 +491,52 @@ function NewSessionView({
   }, [projectId, mode])
 
   const handleStart = async () => {
-    const session = await startMut.mutateAsync({
-      projectId,
-      mode,
-      agentId: mode === 'agent' ? (agentId || null) : null,
-      model: model || null,
-      name: name || null,
-    })
-    if (firstMessage.trim()) {
-      try {
-        await fetch(`/api/consult/${session.id}/messages`, {
+    setStartError(null)
+    try {
+      const session = await startMut.mutateAsync({
+        projectId,
+        mode,
+        agentId: mode === 'agent' ? (agentId || null) : null,
+        model: model || null,
+        name: name || null,
+      })
+      if (firstMessage.trim()) {
+        const seed = firstMessage.trim()
+        const res = await fetch(`/api/consult/${session.id}/messages`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ content: firstMessage.trim() }),
+          body: JSON.stringify({ content: seed }),
         })
+        if (!res.ok) {
+          // Server rejected the seed — keep the session, surface the message,
+          // and let the user edit-and-retry rather than navigating away.
+          let detail = ''
+          try {
+            const body = (await res.json()) as { error?: string }
+            detail = body.error ?? ''
+          } catch {
+            // ignore
+          }
+          setStartError(
+            detail
+              ? `Couldn't send opening message (${res.status}): ${detail}`
+              : `Couldn't send opening message (${res.status}). The conversation was created — you can try sending it again from the chat.`,
+          )
+          // Mark detail stale so the chat view rehydrates if user navigates in.
+          void qc.invalidateQueries({ queryKey: ['consultSession', session.id] })
+          onCreated(session.id)
+          return
+        }
         // Mark the detail query stale so SessionView refetches immediately on mount,
         // catching the case where the WS subscription isn't yet active when the
         // assistant message completes.
         void qc.invalidateQueries({ queryKey: ['consultSession', session.id] })
-      } catch (err) {
-        console.warn('failed to post first message', err)
       }
+      onCreated(session.id)
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      setStartError(`Couldn't start the conversation: ${msg}`)
     }
-    onCreated(session.id)
   }
 
   return (
@@ -456,13 +545,14 @@ function NewSessionView({
         title="New consult"
         description="Brainstorm with an agent (charter-bound, propose-only) or a raw model. Nothing you say here side-effects your project until you accept a proposal."
       />
-      {/* Fluent2: form card uses up to 1200px so it breathes on wider viewports
-          while still capping for readability on ultra-wide screens. */}
-      <div className={styles.scroll} style={{ maxWidth: '1200px', width: '100%', margin: '0 auto' }}>
+      {/* Wave 10 C1: form card uses up to 1280px so it breathes on wider viewports
+          and matches the Inbox/Board content rhythm, while still capping for
+          readability on ultra-wide screens. */}
+      <div className={styles.scroll} style={{ maxWidth: '1280px', width: '100%', margin: '0 auto' }}>
         <Card style={{ padding: tokens.spacingVerticalL, display: 'flex', flexDirection: 'column', gap: tokens.spacingVerticalM }}>
 
-          {/* Mode toggle — full-width at top so it never competes for column space */}
-          <Field label="Mode" style={{ gridColumn: '1 / -1' }}>
+          {/* Mode toggle — segmented control sits at the top of the form */}
+          <Field label="Mode">
             <div style={{ display: 'flex', gap: tokens.spacingHorizontalS }}>
               {/* appearance='subtle' when unselected keeps both options visually clickable */}
               <Button
@@ -470,7 +560,6 @@ function NewSessionView({
                 icon={<Bot20Regular />}
                 onClick={() => setMode('agent')}
                 disabled={!projectId}
-                size="small"
               >
                 Agent
               </Button>
@@ -478,7 +567,6 @@ function NewSessionView({
                 appearance={mode === 'model' ? 'primary' : 'subtle'}
                 icon={<Brain20Regular />}
                 onClick={() => setMode('model')}
-                size="small"
               >
                 Model
               </Button>
@@ -587,10 +675,13 @@ function NewSessionView({
             </Button>
           </div>
 
-          {startMut.error && (
-            <Caption1 style={{ color: tokens.colorPaletteRedForeground1 }}>
-              {startMut.error.message}
-            </Caption1>
+          {(startError || startMut.error) && (
+            <MessageBar intent="error" politeness="assertive">
+              <MessageBarBody>
+                <MessageBarTitle>Couldn&apos;t start the conversation</MessageBarTitle>
+                {startError ?? startMut.error?.message}
+              </MessageBarBody>
+            </MessageBar>
           )}
         </Card>
       </div>
@@ -625,6 +716,10 @@ function SessionView({ sessionId, projectId }: { sessionId: string; projectId: s
   const [editingName, setEditingName] = useState<boolean>(false)
   const [nameDraft, setNameDraft] = useState<string>('')
   const [promoteOpen, setPromoteOpen] = useState<boolean>(false)
+  // Wave 10 B8: persist send failures inline so the user sees what went
+  // wrong (oversized payload, transient 5xx, network drop) instead of the
+  // page silently swallowing the error and stalling at "Sending…".
+  const [sendError, setSendError] = useState<string | null>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
 
   // Build streaming buffer: any deltas after the most recent persisted
@@ -700,12 +795,23 @@ function SessionView({ sessionId, projectId }: { sessionId: string; projectId: s
   const handleSend = async () => {
     const text = draft.trim()
     if (!text) return
+    setSendError(null)
     setDraft('')
     try {
       await sendMut.mutateAsync({ content: text })
     } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      // Restore the draft so the user doesn't lose what they typed.
+      setDraft(text)
+      setSendError(`Send failed: ${msg}`)
       console.error('send failed', err)
     }
+  }
+
+  const handleRetrySend = async () => {
+    setSendError(null)
+    if (!draft.trim()) return
+    await handleSend()
   }
 
   const handleEnd = async () => {
@@ -786,6 +892,20 @@ function SessionView({ sessionId, projectId }: { sessionId: string; projectId: s
       </div>
 
       <div className={styles.composer}>
+        {sendError && (
+          <MessageBar intent="error" politeness="assertive" style={{ marginBottom: '8px' }}>
+            <MessageBarBody>
+              <MessageBarTitle>Couldn&apos;t send your message</MessageBarTitle>
+              {sendError}
+            </MessageBarBody>
+            <Button appearance="transparent" size="small" onClick={() => void handleRetrySend()}>
+              Retry
+            </Button>
+            <Button appearance="transparent" size="small" onClick={() => setSendError(null)}>
+              Dismiss
+            </Button>
+          </MessageBar>
+        )}
         <Textarea
           value={draft}
           onChange={(_, d) => setDraft(d.value)}

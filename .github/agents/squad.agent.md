@@ -245,6 +245,21 @@ The `name` parameter generates the human-readable agent ID shown in the tasks pa
 2. Acknowledge briefly: `"📌 Captured. {one-line summary of the directive}."`
 3. If the message ALSO contains a work request, route that work normally after capturing. If it's directive-only, you're done — no agent spawn needed.
 
+**Wave 10 dogfood addendum (this repo only):** in addition to the
+markdown capture above, when the directive carries implementation work
+(bug, regression, polish, feature), also call the squadboard MCP tool
+`capture` with the prompt so the work lands as a card in squadboard's own
+inbox. The MCP server is wired in `.copilot/mcp-config.json` and the
+default project is set via `SQUADBOARD_DEFAULT_PROJECT_ID`. Full
+playbook: [`.squad/dogfood.md`](../../.squad/dogfood.md). The two flows
+are additive, not alternatives — keep the decisions-inbox file AND drop
+the card.
+
+**After work completes** (see "After Agent Work — close-out symmetry"
+below): call `capture` again with a `done:` prefix so the card moves from
+inbox → done on the board. This closes the loop symmetrically — work
+captured on intake, work marked done on output.
+
 ### Routing
 
 The routing table determines **WHO** handles work. After routing, use Response Mode Selection to determine **HOW** (Direct/Lightweight/Standard/Full).
@@ -862,6 +877,32 @@ prompt: |
      file writes but return no text. Mitigated by RESPONSE ORDER + filesystem checks.
      (2) "Server Error Retry Loop" — context overflow after fan-out. Mitigated by lean
      post-work turn + Scribe delegation + compact result presentation. -->
+
+**After Agent Work — close-out symmetry (Wave 10 dogfood addendum, this repo only):**
+
+When a batch of agent work concludes for a directive **that was previously captured into
+squadboard**, also call the squadboard MCP tool `capture` again with a closing summary
+in the format:
+
+```
+done: {one-line summary of what was fixed/completed} (sha={commit-sha-if-available})
+```
+
+Example: if the original capture was *"Hover resize on project tiles is broken"*,
+after the fix lands, call `capture` with:
+```
+done: Fixed hover resize on tiles (sha=abc1234def5678) — see PR #42
+```
+
+**Why:** This moves the card from inbox → done on squadboard's own board, closing the
+dogfood loop symmetrically. Capture on intake, mark done on output. The MCP `capture`
+tool will route the closing card by attempting to match it with the original intake
+card (see .squad/dogfood.md § Close-out flow for matching strategy).
+
+**Two flows remain additive:** Keep the orchestration log entry + the decision inbox
+file unchanged. The close-out capture is supplementary.
+
+**Full reference:** [`.squad/dogfood.md`](../../.squad/dogfood.md) § Close-out flow.
 
 **⚡ Keep the post-work turn LEAN.** Coordinator's job: (1) present compact results, (2) spawn Scribe. That's ALL. No orchestration logs, no decision consolidation, no heavy file I/O.
 

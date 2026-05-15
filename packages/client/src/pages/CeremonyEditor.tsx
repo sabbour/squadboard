@@ -34,7 +34,7 @@ import {
   type TriggerKind,
   type CeremonyKind,
 } from '../api/ceremonies.ts'
-import { useAgents } from '../api/agents.ts'
+import { useActiveAgents } from '../api/agents.ts'
 import { useSaveWorkflowAsTemplate, triggerTextDownload } from '../api/templates.ts'
 import {
   Subtitle1,
@@ -79,9 +79,14 @@ import {
   Play16Regular,
   Checkmark16Regular,
   Warning16Regular,
+  BookmarkAddRegular,
+  ArrowDownloadRegular,
 } from '@fluentui/react-icons'
 import VisualCanvas from '../components/ceremony/VisualCanvas.tsx'
-import ProseTab from '../components/ceremony/ProseTab.tsx'
+// Stream D — D5: ProseTab removed. The "Formulate" hero on the new-ceremony
+// flow still exposes prose → YAML; the always-visible Prose tab inside the
+// editor was a duplicate path (see plan.md D5). The component file
+// components/ceremony/ProseTab.tsx is deleted.
 import {
   blankStep,
   ceremonyYamlToGraph,
@@ -182,7 +187,7 @@ export default function CeremonyEditor() {
   const [triggerConfig, setTriggerConfig] = useState<Record<string, unknown>>({})
   const [steps, setSteps] = useState<CeremonyStep[]>(DEFAULT_STEPS)
   const [showAdvancedFor, setShowAdvancedFor] = useState<Set<number>>(new Set())
-  const [activeTab, setActiveTab] = useState<'code' | 'visual' | 'prose'>('code')
+  const [activeTab, setActiveTab] = useState<'code' | 'visual'>('code')
 
   // Conjure/Formulate model badge.
   const [formulateModelUsed, setFormulateModelUsed] = useState<{ model: string; via: string } | null>(null)
@@ -196,7 +201,8 @@ export default function CeremonyEditor() {
   const [cronPreviewErr, setCronPreviewErr] = useState<string | null>(null)
   const [convertToast, setConvertToast] = useState<string | null>(null)
 
-  const { data: agents } = useAgents(projectId)
+  // Wave 10 B9: only active agents are pickable for ceremony steps.
+  const { data: agents } = useActiveAgents(projectId)
   const saveWorkflowAsTemplate = useSaveWorkflowAsTemplate(projectId)
   const [showSaveTemplateDialog, setShowSaveTemplateDialog] = useState(false)
   const [templateName, setTemplateName] = useState('')
@@ -502,20 +508,21 @@ export default function CeremonyEditor() {
           </Button>
           {!isNew && (
             <>
+              {/* Wave 10 C7: Fluent2 secondary Button + BookmarkAdd icon. */}
               <Button
-                appearance="outline"
-                size="medium"
+                appearance="secondary"
+                icon={<BookmarkAddRegular />}
                 onClick={() => { setSaveTemplateError(null); setTemplateName(name); setTemplateDescription(description); setShowSaveTemplateDialog(true) }}
                 disabled={isNew || readOnly}
               >
-                ☆ Save as template
+                Save as template
               </Button>
               <Button
-                appearance="outline"
-                size="medium"
+                appearance="secondary"
+                icon={<ArrowDownloadRegular />}
                 onClick={handleExportYaml}
               >
-                ↓ Export YAML
+                Export YAML
               </Button>
               {saveTemplateDone && (
                 <Caption1 style={{ color: tokens.colorPaletteGreenForeground1 }}>
@@ -694,12 +701,11 @@ export default function CeremonyEditor() {
                   <TabList
                     selectedValue={activeTab}
                     onTabSelect={(_e: SelectTabEvent, d: SelectTabData) =>
-                      setActiveTab(d.value as 'code' | 'visual' | 'prose')
+                      setActiveTab(d.value as 'code' | 'visual')
                     }
                   >
                     <Tab value="code">Code</Tab>
                     <Tab value="visual">Visual</Tab>
-                    <Tab value="prose">Prose</Tab>
                   </TabList>
                 </div>
 
@@ -929,25 +935,6 @@ export default function CeremonyEditor() {
                     />
                   </div>
                 )}
-
-                {activeTab === 'prose' && (
-                  <ProseTab
-                    projectId={projectId}
-                    ceremonyId={ceremonyId}
-                    currentYaml={yaml}
-                    currentName={name}
-                    onAccept={({ header: h, steps: s, triggerKind: tk, triggerConfig: tc }) => {
-                      if (h.name && h.name.trim()) setName(h.name)
-                      if (h.description) setDescription(h.description)
-                      setHeaderExtras(h.extras)
-                      setSteps(s)
-                      setTriggerKind(tk)
-                      setTriggerConfig(tc)
-                      setActiveTab('code')
-                    }}
-                    disabled={false}
-                  />
-                )}
               </div>
             </div>
           )}
@@ -1093,12 +1080,11 @@ export default function CeremonyEditor() {
             <TabList
               selectedValue={activeTab}
               onTabSelect={(_e: SelectTabEvent, d: SelectTabData) =>
-                setActiveTab(d.value as 'code' | 'visual' | 'prose')
+                setActiveTab(d.value as 'code' | 'visual')
               }
             >
               <Tab value="code">Code</Tab>
               <Tab value="visual">Visual</Tab>
-              <Tab value="prose">Prose</Tab>
             </TabList>
           </div>
 
@@ -1347,25 +1333,6 @@ export default function CeremonyEditor() {
                 disabled={readOnly}
               />
             </div>
-          )}
-
-          {activeTab === 'prose' && (
-            <ProseTab
-              projectId={projectId}
-              ceremonyId={ceremonyId}
-              currentYaml={yaml}
-              currentName={name}
-              onAccept={({ header: h, steps: s, triggerKind: tk, triggerConfig: tc }) => {
-                if (h.name && h.name.trim()) setName(h.name)
-                if (h.description) setDescription(h.description)
-                setHeaderExtras(h.extras)
-                setSteps(s)
-                setTriggerKind(tk)
-                setTriggerConfig(tc)
-                setActiveTab('code')
-              }}
-              disabled={readOnly}
-            />
           )}
         </div>
       </div>

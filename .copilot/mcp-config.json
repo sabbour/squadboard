@@ -1,13 +1,13 @@
 {
   "mcpServers": {
-    "EXAMPLE-github": {
+    "squadboard": {
       "command": "npx",
       "args": [
-        "-y",
-        "@anthropic/github-mcp-server"
+        "tsx",
+        "/home/asabbour/GitWSL/EMU/foo/packages/server/src/mcp/index.ts"
       ],
       "env": {
-        "GITHUB_TOKEN": "${GITHUB_TOKEN}"
+        "SQUADBOARD_DEFAULT_PROJECT_ID": "${SQUADBOARD_DEFAULT_PROJECT_ID}"
       }
     }
   }

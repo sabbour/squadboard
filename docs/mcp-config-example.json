@@ -1,0 +1,14 @@
+{
+  "mcpServers": {
+    "squadboard": {
+      "command": "npx",
+      "args": [
+        "tsx",
+        "/absolute/path/to/squadboard/packages/server/src/mcp/index.ts"
+      ],
+      "env": {
+        "SQUADBOARD_DEFAULT_PROJECT_ID": "7a9cc07a-d463-4f8c-864a-c733342aa8a8"
+      }
+    }
+  }
+}

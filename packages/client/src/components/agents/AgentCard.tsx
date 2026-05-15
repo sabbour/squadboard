@@ -27,7 +27,14 @@ export default function AgentCard({ agent, onClick, muted = false }: AgentCardPr
   const [hovered, setHovered] = useState(false)
   const avatarBg = getAvatarColor(agent.name)
   const initials = getInitials(agent.name)
-  const isActive = agent.status === 'active'
+
+  // Wave 10 B9: three-state legend instead of binary active/!active.
+  // Active = green, Disabled = amber (paused, recoverable), Retired = gray
+  // (archived). The tooltip uses the literal status value so QA can grep.
+  const statusDotColor =
+    agent.status === 'active' ? '#3fb950'
+    : agent.status === 'disabled' ? '#d29922'
+    : '#8b949e'
 
   return (
     <button
@@ -99,14 +106,14 @@ export default function AgentCard({ agent, onClick, muted = false }: AgentCardPr
           </div>
         </div>
 
-        {/* Status dot */}
+        {/* Status dot — green=active, amber=disabled, gray=retired (B9) */}
         <span
           title={agent.status}
           style={{
             width: '8px',
             height: '8px',
             borderRadius: '50%',
-            background: isActive ? '#3fb950' : '#8b949e',
+            background: statusDotColor,
             flexShrink: 0,
           }}
         />

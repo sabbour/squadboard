@@ -4,17 +4,29 @@ import { getDb } from '../db/index.js';
 import { getCostSummary } from '../sdk/cost-tracker.js';
 import { BudgetGuard } from '../sdk/budget-guard.js';
 const router = Router({ mergeParams: true });
+const VALID_SOURCES = ['run', 'live_session', 'consult'];
 /**
  * GET /api/projects/:id/costs
  *
  * Returns a cost summary for the project broken down by agent and model,
  * for both the current calendar month (MTD) and all time.
+ *
+ * Query params:
+ *   ?sources=run,live_session,consult   filter included spend sources.
+ *                                        defaults to run,live_session
+ *                                        (consult is opt-in so exploratory
+ *                                        thinking doesn't pollute run charts)
  */
 router.get('/', async (req, res) => {
     try {
         const { id } = req.params;
         const db = getDb();
-        const summary = await getCostSummary(db, id);
+        const sourcesRaw = req.query.sources ?? '';
+        const sources = sourcesRaw
+            .split(',')
+            .map((s) => s.trim().toLowerCase())
+            .filter((s) => VALID_SOURCES.includes(s));
+        const summary = await getCostSummary(db, id, sources.length ? { sources } : {});
         res.json(summary);
     }
     catch (err) {

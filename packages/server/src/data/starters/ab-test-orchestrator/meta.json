@@ -1,0 +1,32 @@
+{
+  "slug": "ab-test-orchestrator",
+  "title": "A/B Test Orchestrator — Squad Edition",
+  "blurb": "A Squad sample that turns an experiment hypothesis into a complete A/B test plan. Provide a hypothesis at the terminal or point it at an experiment brief file, and four AI specialists collaborate to design your test.",
+  "tags": [
+    "ceremonies",
+    "routing",
+    "multi-agent"
+  ],
+  "agentCount": 4,
+  "routingRuleCount": 5,
+  "ceremonyCount": 1,
+  "defaultModel": null,
+  "teamName": "A/B Test Orchestrator Squad",
+  "warnings": [],
+  "source": {
+    "origin": "github",
+    "repo": "bradygaster/Squad-IRL",
+    "ref": "main"
+  },
+  "files": [
+    "README.md",
+    "experiment-briefs",
+    "experiment-reader.ts",
+    "index.ts",
+    "package.json",
+    "squad.config.ts",
+    "tsconfig.json"
+  ],
+  "htmlUrl": "https://github.com/bradygaster/Squad-IRL/tree/main/ab-test-orchestrator",
+  "bundledAt": "2026-05-15T07:48:07.372Z"
+}

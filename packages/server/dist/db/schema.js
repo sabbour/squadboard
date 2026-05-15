@@ -1,4 +1,9 @@
-import { pgTable, uuid, text, timestamp, integer, boolean, pgEnum, primaryKey, numeric, jsonb } from 'drizzle-orm/pg-core';
+import { pgTable, uuid, text, timestamp, integer, boolean, pgEnum, primaryKey, numeric, jsonb, uniqueIndex, customType } from 'drizzle-orm/pg-core';
+// Bytea custom type — stores binary data (images, blobs) in PostgreSQL BYTEA columns.
+// The pg driver delivers bytea columns as Node.js Buffer objects, so no conversion needed.
+const bytea = customType({
+    dataType() { return 'bytea'; },
+});
 export const agentStatusEnum = pgEnum('agent_status', ['active', 'disabled', 'retired']);
 export const projects = pgTable('projects', {
     id: uuid('id').primaryKey().defaultRandom(),
@@ -10,7 +15,7 @@ export const projects = pgTable('projects', {
     githubToken: text('github_token'), // PAT stored plaintext (hacking phase; use secrets manager in prod)
     githubOwner: text('github_owner'), // GitHub org or user
     githubRepo: text('github_repo'), // GitHub repository name
-    githubSyncLastAt: timestamp('github_sync_last_at'), // timestamp of last successful pull
+    githubSyncLastAt: timestamp('github_sync_last_at', { withTimezone: true }), // timestamp of last successful pull
     // GitHub App auth (follow-up to Demo 15 PAT auth — null means PAT for backward compat)
     githubAuthType: text('github_auth_type'), // 'pat' | 'app' — null treated as 'pat'
     githubAppId: text('github_app_id'), // numeric GitHub App ID as string
@@ -19,8 +24,12 @@ export const projects = pgTable('projects', {
     // Project-level default model used by the auto-model resolution chain
     // (sdk/model-defaults.ts). Null means "use BUILTIN_FALLBACK".
     defaultModel: text('default_model'),
-    createdAt: timestamp('created_at').notNull().defaultNow(),
-    updatedAt: timestamp('updated_at').notNull().defaultNow(),
+    // Stream D — D6: which cost model the Costs page renders for this project.
+    // 'usd' = legacy token-derived USD, 'gh_multipliers' = GitHub Copilot
+    // premium-request multipliers. Null falls back to env SQUADBOARD_COST_MODEL.
+    costModel: text('cost_model'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 });
 export const settings = pgTable('settings', {
     id: uuid('id').primaryKey().defaultRandom(),
@@ -38,19 +47,21 @@ export const agents = pgTable('agents', {
     charterPath: text('charter_path').notNull(),
     historyPath: text('history_path'),
     charterHash: text('charter_hash'),
-    createdAt: timestamp('created_at').notNull().defaultNow(),
-    updatedAt: timestamp('updated_at').notNull().defaultNow(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 });
 // ---------------------------------------------------------------------------
 // Board data layer — Demo 2
 // ---------------------------------------------------------------------------
-export const columnStatusEnum = pgEnum('column_status', ['backlog', 'todo', 'in_progress', 'in_review', 'done']);
+// columnStatusEnum removed — issues.status is now plain TEXT so columns are
+// per-project add/removable. The Postgres 'column_status' enum is dropped via
+// the bootstrap migration in db/index.ts (idempotent, detects IF EXISTS).
 export const issues = pgTable('issues', {
     id: uuid('id').primaryKey().defaultRandom(),
     projectId: uuid('project_id').notNull().references(() => projects.id, { onDelete: 'cascade' }),
     title: text('title').notNull(),
     body: text('body').default(''),
-    status: columnStatusEnum('status').notNull().default('backlog'),
+    status: text('status').notNull().default('backlog'),
     assigneeId: uuid('assignee_id'), // references agents.id later
     position: integer('position').notNull().default(0),
     archived: integer('archived').notNull().default(0), // 0 = active, 1 = archived (soft delete)
@@ -60,8 +71,8 @@ export const issues = pgTable('issues', {
     githubIssueNumber: integer('github_issue_number'), // linked GitHub issue number
     githubIssueUrl: text('github_issue_url'), // html_url of the GitHub issue
     githubNodeId: text('github_node_id'), // GitHub GraphQL node_id
-    createdAt: timestamp('created_at').notNull().defaultNow(),
-    updatedAt: timestamp('updated_at').notNull().defaultNow(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 });
 export const comments = pgTable('comments', {
     id: uuid('id').primaryKey().defaultRandom(),
@@ -76,20 +87,46 @@ export const comments = pgTable('comments', {
     mentions: jsonb('mentions').notNull().default([]), // string[] of agent ids mentioned via @
     eventKind: text('event_kind'), // when authorKind='system': run.started | deliverable.submitted | review.requested_changes | column.changed | …
     eventPayload: jsonb('event_payload'), // structured payload for system events
-    createdAt: timestamp('created_at').notNull().defaultNow(),
-    updatedAt: timestamp('updated_at').notNull().defaultNow(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 });
 export const labels = pgTable('labels', {
     id: uuid('id').primaryKey().defaultRandom(),
     projectId: uuid('project_id').notNull().references(() => projects.id, { onDelete: 'cascade' }),
     name: text('name').notNull(),
     color: text('color').notNull().default('#388bfd'),
-    createdAt: timestamp('created_at').notNull().defaultNow(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 });
 export const issueLabels = pgTable('issue_labels', {
     issueId: uuid('issue_id').notNull().references(() => issues.id, { onDelete: 'cascade' }),
     labelId: uuid('label_id').notNull().references(() => labels.id, { onDelete: 'cascade' }),
 }, (t) => ({ pk: primaryKey({ columns: [t.issueId, t.labelId] }) }));
+// ---------------------------------------------------------------------------
+// Column metadata — source of truth for which columns a project has.
+// Phase dynamic-columns: column_status enum dropped; this table now fully
+// owns project column definitions (add/remove/reorder). Color is a 6-digit
+// hex string (e.g. '#1f6feb'). semantic maps to analytics/GitHub sync
+// roll-up buckets; is_default marks where new issues land.
+// ---------------------------------------------------------------------------
+export const columnMeta = pgTable('column_meta', {
+    id: uuid('id').primaryKey().defaultRandom(),
+    projectId: uuid('project_id')
+        .notNull()
+        .references(() => projects.id, { onDelete: 'cascade' }),
+    columnId: text('column_id').notNull(),
+    label: text('label').notNull(),
+    description: text('description'),
+    color: text('color').notNull(), // '#rrggbb' hex
+    position: integer('position').notNull().default(0),
+    /** Roll-up bucket for analytics, GitHub sync, and dashboard semantics. */
+    semantic: text('semantic').notNull().default('custom'), // 'backlog'|'ready'|'in_progress'|'review'|'done'|'custom'
+    /** True on exactly one column per project — new issues land here. */
+    isDefault: boolean('is_default').notNull().default(false),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+}, (t) => ({
+    uqProjectColumn: uniqueIndex('column_meta_project_column_uq').on(t.projectId, t.columnId),
+}));
 // ---------------------------------------------------------------------------
 // Engine data layer — Demo 4 / Demo 5
 // ---------------------------------------------------------------------------
@@ -111,10 +148,10 @@ export const issueRuns = pgTable('issue_runs', {
     stepRunId: uuid('step_run_id'),
     // Demo 9: additional context prepended to issueBody for peer_review runs.
     inputContext: text('input_context'),
-    leaseExpiresAt: timestamp('lease_expires_at'),
-    heartbeatAt: timestamp('heartbeat_at'),
-    startedAt: timestamp('started_at'),
-    completedAt: timestamp('completed_at'),
+    leaseExpiresAt: timestamp('lease_expires_at', { withTimezone: true }),
+    heartbeatAt: timestamp('heartbeat_at', { withTimezone: true }),
+    startedAt: timestamp('started_at', { withTimezone: true }),
+    completedAt: timestamp('completed_at', { withTimezone: true }),
     output: text('output'),
     errorMessage: text('error_message'),
     // Legacy total-token field kept for backward compat
@@ -123,12 +160,14 @@ export const issueRuns = pgTable('issue_runs', {
     inputTokens: integer('input_tokens').default(0),
     outputTokens: integer('output_tokens').default(0),
     costUsd: text('cost_usd').default('0'),
+    // Stream D — D6: GitHub Copilot premium-request consumption
+    premiumRequests: numeric('premium_requests', { precision: 12, scale: 4 }).default('0'),
     // Demo 8: routing audit fields
     routingTier: integer('routing_tier'), // 1 | 2 | 3 — which tier resolved this run
     routingScore: numeric('routing_score', { precision: 5, scale: 4 }), // Tier-2 keyword score
     routingReasoning: text('routing_reasoning'), // Tier-3 LLM reasoning or Tier-2 score breakdown
-    createdAt: timestamp('created_at').notNull().defaultNow(),
-    updatedAt: timestamp('updated_at').notNull().defaultNow(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 });
 export const workflowRuns = pgTable('workflow_runs', {
     id: uuid('id').primaryKey().defaultRandom(),
@@ -144,8 +183,12 @@ export const workflowRuns = pgTable('workflow_runs', {
     pinnedAgentRevisions: text('pinned_agent_revisions'), // JSON: {agentName: charterHash}; inherited from parent
     variables: jsonb('variables').default('{}'), // propagated from parent on fan_out
     inlineStepsJson: text('inline_steps_json'), // JSON: WorkflowStep[] for fan_out child workflows
-    createdAt: timestamp('created_at').notNull().defaultNow(),
-    updatedAt: timestamp('updated_at').notNull().defaultNow(),
+    // Stream D — D4: provenance for how this run was spawned. {kind: 'manual'|'manual_force'|'on_schedule'|'on_event'|'unknown', detail?: string, eventType?, anchorIssueId?, scheduleId?, by?}
+    triggerSource: jsonb('trigger_source'),
+    // Stream D — D6: GitHub Copilot premium-request consumption (rolled up from child issue_runs)
+    premiumRequests: numeric('premium_requests', { precision: 12, scale: 4 }).default('0'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 });
 export const stepRuns = pgTable('step_runs', {
     id: uuid('id').primaryKey().defaultRandom(),
@@ -160,8 +203,8 @@ export const stepRuns = pgTable('step_runs', {
     maxRetries: integer('max_retries').default(3),
     retryDelay: integer('retry_delay').default(0), // ms delay before next retry (reserved for future use)
     // Demo 7: lease for step-level crash recovery
-    leaseExpiresAt: timestamp('lease_expires_at'),
-    heartbeatAt: timestamp('heartbeat_at'),
+    leaseExpiresAt: timestamp('lease_expires_at', { withTimezone: true }),
+    heartbeatAt: timestamp('heartbeat_at', { withTimezone: true }),
     // Demo 9: peer review outcome fields (set when this step_run is an approve step)
     reviewDecision: text('review_decision'), // 'approve' | 'request_changes'
     reviewComment: text('review_comment'),
@@ -173,9 +216,9 @@ export const stepRuns = pgTable('step_runs', {
     resolvedAgentId: text('resolved_agent_id'), // pre-resolved agent UUID for agent_run in fan_out children
     // Phase 15: stamped by spawnFanOutChildren() when a fan_out runs in parallel mode
     sessionId: text('session_id'), // opaque SDK session id (when spawned via SDK spawnParallel)
-    startedAt: timestamp('started_at'), // when spawn flipped this step_run to 'running'
-    createdAt: timestamp('created_at').notNull().defaultNow(),
-    updatedAt: timestamp('updated_at').notNull().defaultNow(),
+    startedAt: timestamp('started_at', { withTimezone: true }), // when spawn flipped this step_run to 'running'
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 });
 // ---------------------------------------------------------------------------
 // Peer review audit trail — Demo 9
@@ -196,7 +239,7 @@ export const reviewEvents = pgTable('review_events', {
     verb: text('verb').notNull(), // 'approve' | 'request_changes' | 'comment' | 'dismiss'
     body: text('body'),
     suggestions: jsonb('suggestions'), // string[] — structured suggestions from request_changes
-    createdAt: timestamp('created_at').notNull().defaultNow(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 });
 // ---------------------------------------------------------------------------
 // Routing tier 1 — Demo 5
@@ -210,7 +253,7 @@ export const routingRules = pgTable('routing_rules', {
     matchType: text('match_type').notNull(), // 'label' | 'keyword' | 'assignee' | 'catchall'
     agentName: text('agent_name').notNull(), // target agent name
     rawRule: text('raw_rule').notNull(), // original line from routing.md
-    loadedAt: timestamp('loaded_at').notNull().defaultNow(),
+    loadedAt: timestamp('loaded_at', { withTimezone: true }).notNull().defaultNow(),
 });
 // ---------------------------------------------------------------------------
 // YAML Workflow definitions — Demo 6
@@ -243,9 +286,9 @@ export const workflows = pgTable('workflows', {
     // Phase 11: translation failure surface. Populated on a failed convert /
     //   translate attempt; cleared when a retry succeeds.
     lastTranslationError: text('last_translation_error'),
-    lastTranslationAttemptAt: timestamp('last_translation_attempt_at'),
-    createdAt: timestamp('created_at').notNull().defaultNow(),
-    updatedAt: timestamp('updated_at').notNull().defaultNow(),
+    lastTranslationAttemptAt: timestamp('last_translation_attempt_at', { withTimezone: true }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 });
 // Immutable versioned snapshots; updates create a new version row.
 export const workflowVersions = pgTable('workflow_versions', {
@@ -256,13 +299,13 @@ export const workflowVersions = pgTable('workflow_versions', {
     jsonSchema: text('json_schema'), // parsed JSON Schema for output validation (Invariant 4)
     pinnedAgentRevisions: text('pinned_agent_revisions'), // JSON: {agentName: charterHash}
     isActive: boolean('is_active').notNull().default(true),
-    createdAt: timestamp('created_at').notNull().defaultNow(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 });
 // Links an issue to the active workflow version it runs under.
 export const issueWorkflows = pgTable('issue_workflows', {
     issueId: uuid('issue_id').primaryKey().references(() => issues.id, { onDelete: 'cascade' }),
     workflowVersionId: uuid('workflow_version_id').notNull().references(() => workflowVersions.id),
-    attachedAt: timestamp('attached_at').notNull().defaultNow(),
+    attachedAt: timestamp('attached_at', { withTimezone: true }).notNull().defaultNow(),
 });
 // ---------------------------------------------------------------------------
 // Phase 10 — Ceremony schedules (recurring on_schedule triggers)
@@ -275,11 +318,11 @@ export const ceremonySchedules = pgTable('ceremony_schedules', {
     workflowId: uuid('workflow_id').notNull().references(() => workflows.id, { onDelete: 'cascade' }),
     cronExpr: text('cron_expr').notNull(),
     timezone: text('timezone').notNull().default('UTC'),
-    nextFireAt: timestamp('next_fire_at').notNull(),
-    lastFiredAt: timestamp('last_fired_at'),
+    nextFireAt: timestamp('next_fire_at', { withTimezone: true }).notNull(),
+    lastFiredAt: timestamp('last_fired_at', { withTimezone: true }),
     enabled: boolean('enabled').notNull().default(true),
-    createdAt: timestamp('created_at').notNull().defaultNow(),
-    updatedAt: timestamp('updated_at').notNull().defaultNow(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 });
 // ---------------------------------------------------------------------------
 // Demo 8 — Routing Tiers 2 + 3
@@ -294,7 +337,7 @@ export const agentKeywords = pgTable('agent_keywords', {
     keywords: text('keywords').notNull().default('[]'),
     // Focus areas extracted from charter (used for label matching in Tier 2)
     focusAreas: text('focus_areas').notNull().default('[]'),
-    updatedAt: timestamp('updated_at').notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 });
 /**
  * Immutable audit log of every routing decision (all tiers).
@@ -312,7 +355,7 @@ export const routingLog = pgTable('routing_log', {
     reasoning: text('reasoning'), // Tier-3 LLM reasoning or Tier-2 score breakdown
     // The issueRun created for specifier_run (Tier-3 only)
     specifierRunId: uuid('specifier_run_id').references(() => issueRuns.id, { onDelete: 'set null' }),
-    decidedAt: timestamp('decided_at').notNull().defaultNow(),
+    decidedAt: timestamp('decided_at', { withTimezone: true }).notNull().defaultNow(),
 });
 // ---------------------------------------------------------------------------
 // Demo 10 — Fan-Out + Handoff (Invariant 5)
@@ -326,7 +369,7 @@ export const issueLinks = pgTable('issue_links', {
     parentIssueId: uuid('parent_issue_id').notNull().references(() => issues.id, { onDelete: 'cascade' }),
     childIssueId: uuid('child_issue_id').notNull().references(() => issues.id, { onDelete: 'cascade' }),
     linkType: text('link_type').notNull().default('fan_out'), // 'fan_out' | 'handoff'
-    createdAt: timestamp('created_at').notNull().defaultNow(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 });
 /**
  * handoff_context: stores variables, message, and split-target info propagated
@@ -339,7 +382,7 @@ export const handoffContext = pgTable('handoff_context', {
     targetIssueId: uuid('target_issue_id').references(() => issues.id, { onDelete: 'set null' }),
     // Serialised context: includes splitTarget info, inherited variables, handoff message
     contextJson: jsonb('context_json').notNull().default('{}'),
-    createdAt: timestamp('created_at').notNull().defaultNow(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 });
 // ---------------------------------------------------------------------------
 // Demo 15 — GitHub Sync
@@ -357,7 +400,7 @@ export const githubSyncLog = pgTable('github_sync_log', {
     githubNumber: integer('github_number'), // GitHub issue / comment number (if known)
     status: text('status').notNull(), // 'ok' | 'error'
     errorMsg: text('error_msg'),
-    syncedAt: timestamp('synced_at').notNull().defaultNow(),
+    syncedAt: timestamp('synced_at', { withTimezone: true }).notNull().defaultNow(),
 });
 // ---------------------------------------------------------------------------
 // Live multi-agent sessions (Squad-IRL "run-first" slice)
@@ -391,9 +434,9 @@ export const liveSessions = pgTable('live_sessions', {
     costUsd: numeric('cost_usd', { precision: 12, scale: 6 }).notNull().default('0'),
     turnCount: integer('turn_count').notNull().default(0),
     errorMessage: text('error_message'),
-    createdAt: timestamp('created_at').notNull().defaultNow(),
-    updatedAt: timestamp('updated_at').notNull().defaultNow(),
-    completedAt: timestamp('completed_at'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+    completedAt: timestamp('completed_at', { withTimezone: true }),
 });
 export const liveSessionEvents = pgTable('live_session_events', {
     id: uuid('id').primaryKey().defaultRandom(),
@@ -404,7 +447,7 @@ export const liveSessionEvents = pgTable('live_session_events', {
     type: text('type').notNull(),
     // Free-form payload — message body, delta chunk, tool name+args, usage tuple, etc.
     payload: jsonb('payload').notNull().default('{}'),
-    createdAt: timestamp('created_at').notNull().defaultNow(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 });
 // ---------------------------------------------------------------------------
 // Phase 8: Review policies — workflow approve-step primitives
@@ -422,8 +465,8 @@ export const reviewPolicyPresets = pgTable('review_policy_presets', {
     name: text('name').notNull(), // display label
     description: text('description'),
     payload: jsonb('payload').notNull(),
-    createdAt: timestamp('created_at').notNull().defaultNow(),
-    updatedAt: timestamp('updated_at').notNull().defaultNow(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 });
 // Scope-level inherited defaults. UNIQUE(scope, scopeId) guarantees a single
 // default per scope-instance. scope='board' is enum-allowed but rejected at
@@ -433,8 +476,8 @@ export const reviewPolicyDefaults = pgTable('review_policy_defaults', {
     scope: text('scope').notNull(), // 'project' | 'board'
     scopeId: uuid('scope_id').notNull(),
     payload: jsonb('payload').notNull(),
-    createdAt: timestamp('created_at').notNull().defaultNow(),
-    updatedAt: timestamp('updated_at').notNull().defaultNow(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 });
 // ---------------------------------------------------------------------------
 // Phase 9: Deliverables — first-class artifact records produced by runs.
@@ -465,10 +508,10 @@ export const deliverables = pgTable('deliverables', {
     summary: text('summary'),
     payload: jsonb('payload').notNull(), // kind-specific shape
     status: text('status').notNull().default('submitted'), // draft | submitted | approved | changes_requested | superseded
-    producedAt: timestamp('produced_at').notNull().defaultNow(),
+    producedAt: timestamp('produced_at', { withTimezone: true }).notNull().defaultNow(),
     supersededByDeliverableId: uuid('superseded_by_deliverable_id'),
-    createdAt: timestamp('created_at').notNull().defaultNow(),
-    updatedAt: timestamp('updated_at').notNull().defaultNow(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 });
 // ---------------------------------------------------------------------------
 // Phase 14: Quick capture (AI-formulated inbox)
@@ -503,8 +546,8 @@ export const inboxItems = pgTable('inbox_items', {
     rationale: text('rationale'),
     status: text('status').notNull().default('captured'),
     publishedIssueId: uuid('published_issue_id').references(() => issues.id, { onDelete: 'set null' }),
-    createdAt: timestamp('created_at').notNull().defaultNow(),
-    updatedAt: timestamp('updated_at').notNull().defaultNow(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 });
 // ---------------------------------------------------------------------------
 // Phase 13: Skills, Tools, MCP servers — capability registries
@@ -524,13 +567,24 @@ export const skills = pgTable('skills', {
     category: text('category'),
     promptAddendum: text('prompt_addendum').notNull(),
     curatedKey: text('curated_key'),
-    createdAt: timestamp('created_at').notNull().defaultNow(),
-    updatedAt: timestamp('updated_at').notNull().defaultNow(),
+    /**
+     * Provenance tag — Wave 10 D2.
+     *   'curated'  — cloned from the bundled curated library (curatedKey is set)
+     *   'imported' — uploaded as a SKILL.md (or other portable format) by a user
+     *   'custom'   — hand-authored or AI-formulated in-app
+     *   'project'  — auto-created by the project bootstrap (legacy)
+     * Default is 'custom' so existing rows keep their behaviour.
+     */
+    source: text('source').notNull().default('custom'),
+    /** Optional source URI (file://… or https://…) when source='imported'. */
+    sourceUri: text('source_uri'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 });
 export const agentSkills = pgTable('agent_skills', {
     agentId: uuid('agent_id').notNull().references(() => agents.id, { onDelete: 'cascade' }),
     skillId: uuid('skill_id').notNull().references(() => skills.id, { onDelete: 'cascade' }),
-    assignedAt: timestamp('assigned_at').notNull().defaultNow(),
+    assignedAt: timestamp('assigned_at', { withTimezone: true }).notNull().defaultNow(),
 }, (t) => ({ pk: primaryKey({ columns: [t.agentId, t.skillId] }) }));
 export const tools = pgTable('tools', {
     id: uuid('id').primaryKey().defaultRandom(),
@@ -543,13 +597,16 @@ export const tools = pgTable('tools', {
     mcpServerId: uuid('mcp_server_id'),
     inputSchema: jsonb('input_schema'),
     outputSchema: jsonb('output_schema'),
-    createdAt: timestamp('created_at').notNull().defaultNow(),
-    updatedAt: timestamp('updated_at').notNull().defaultNow(),
+    /** Provenance tag — Wave 10 D3. See `skills.source` for vocabulary. */
+    source: text('source').notNull().default('custom'),
+    sourceUri: text('source_uri'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 });
 export const agentTools = pgTable('agent_tools', {
     agentId: uuid('agent_id').notNull().references(() => agents.id, { onDelete: 'cascade' }),
     toolId: uuid('tool_id').notNull().references(() => tools.id, { onDelete: 'cascade' }),
-    assignedAt: timestamp('assigned_at').notNull().defaultNow(),
+    assignedAt: timestamp('assigned_at', { withTimezone: true }).notNull().defaultNow(),
 }, (t) => ({ pk: primaryKey({ columns: [t.agentId, t.toolId] }) }));
 export const mcpServers = pgTable('mcp_servers', {
     id: uuid('id').primaryKey().defaultRandom(),
@@ -568,12 +625,148 @@ export const mcpServers = pgTable('mcp_servers', {
     headersIv: text('headers_iv'),
     headersTag: text('headers_tag'),
     enabled: boolean('enabled').notNull().default(true),
-    createdAt: timestamp('created_at').notNull().defaultNow(),
-    updatedAt: timestamp('updated_at').notNull().defaultNow(),
+    /** Provenance tag — Wave 10 D3. See `skills.source` for vocabulary. */
+    source: text('source').notNull().default('custom'),
+    sourceUri: text('source_uri'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 });
 export const agentMcpServers = pgTable('agent_mcp_servers', {
     agentId: uuid('agent_id').notNull().references(() => agents.id, { onDelete: 'cascade' }),
     mcpServerId: uuid('mcp_server_id').notNull().references(() => mcpServers.id, { onDelete: 'cascade' }),
-    assignedAt: timestamp('assigned_at').notNull().defaultNow(),
+    assignedAt: timestamp('assigned_at', { withTimezone: true }).notNull().defaultNow(),
 }, (t) => ({ pk: primaryKey({ columns: [t.agentId, t.mcpServerId] }) }));
+// ---------------------------------------------------------------------------
+// Phase 17: Ask / Consult mode — free-form brainstorm sessions
+// ---------------------------------------------------------------------------
+//
+// Distinct from `live_sessions` (Phase 1) which run an agent against an
+// issue and produce deliverables. Consults are open-ended chats with either
+// a hired agent (mode='agent', charter loaded, propose-only tool surface)
+// or a raw model (mode='model', no tools, plain "thinking partner" system
+// prompt). They never advance the workflow engine; they emit `consult.*`
+// events, persist to consult_sessions/_messages, and tag cost as
+// kind='consult' so the Costs page can filter them out of issue rollups.
+export const consultModeEnum = pgEnum('consult_mode', ['agent', 'model']);
+export const consultStatusEnum = pgEnum('consult_status', [
+    'active',
+    'idle',
+    'completed',
+    'failed',
+    'cancelled',
+]);
+export const consultSessions = pgTable('consult_sessions', {
+    id: uuid('id').primaryKey().defaultRandom(),
+    // Nullable — cross-project consults are allowed (the global `?` shortcut
+    // opens one with no project bound).
+    projectId: uuid('project_id').references(() => projects.id, { onDelete: 'cascade' }),
+    // Auto-derived from the first user message; user-editable later.
+    name: text('name'),
+    mode: consultModeEnum('mode').notNull().default('agent'),
+    // Only set when mode='agent'. NULL after agent deletion (snapshot below).
+    agentId: uuid('agent_id').references(() => agents.id, { onDelete: 'set null' }),
+    agentName: text('agent_name'),
+    model: text('model'),
+    status: consultStatusEnum('status').notNull().default('active'),
+    sdkSessionId: text('sdk_session_id'),
+    inputTokens: integer('input_tokens').notNull().default(0),
+    outputTokens: integer('output_tokens').notNull().default(0),
+    costUsd: numeric('cost_usd', { precision: 12, scale: 6 }).notNull().default('0'),
+    // Stream D — D6: GitHub Copilot premium-request consumption
+    premiumRequests: numeric('premium_requests', { precision: 12, scale: 4 }).notNull().default('0'),
+    messageCount: integer('message_count').notNull().default(0),
+    // When user switches mode mid-conversation we fork a new session and
+    // record the parent here so the UI can render breadcrumb/lineage.
+    forkedFromSessionId: uuid('forked_from_session_id'),
+    errorMessage: text('error_message'),
+    startedAt: timestamp('started_at', { withTimezone: true }).notNull().defaultNow(),
+    endedAt: timestamp('ended_at', { withTimezone: true }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+});
+export const consultMessageRoleEnum = pgEnum('consult_message_role', [
+    'user',
+    'assistant',
+    'system',
+    'tool',
+]);
+export const consultMessages = pgTable('consult_messages', {
+    id: uuid('id').primaryKey().defaultRandom(),
+    sessionId: uuid('session_id').notNull().references(() => consultSessions.id, { onDelete: 'cascade' }),
+    role: consultMessageRoleEnum('role').notNull(),
+    content: text('content').notNull().default(''),
+    // Assistant chain-of-thought / reasoning trace (rendered in the
+    // collapsible thinking pane). Streamed deltas accumulate here.
+    reasoningContent: text('reasoning_content'),
+    // Populated when role='tool' (i.e. a propose_* tool result).
+    toolName: text('tool_name'),
+    toolArgs: jsonb('tool_args'),
+    toolResult: jsonb('tool_result'),
+    // Per-message usage / cost. Aggregated up to consult_sessions on each turn.
+    inputTokens: integer('input_tokens'),
+    outputTokens: integer('output_tokens'),
+    costUsd: numeric('cost_usd', { precision: 12, scale: 6 }),
+    ts: timestamp('ts', { withTimezone: true }).notNull().defaultNow(),
+});
+export const consultProposalKindEnum = pgEnum('consult_proposal_kind', [
+    'issue',
+    'ceremony',
+    'inbox_item',
+    'capture_to_decision',
+    'assign_agent_to_issue',
+]);
+export const consultProposalStatusEnum = pgEnum('consult_proposal_status', [
+    'pending',
+    'accepted',
+    'edited',
+    'discarded',
+]);
+// Each propose_* tool call from an agent-mode consult lands here as a
+// pending proposal. The UI renders inline cards and the user clicks
+// Accept (optionally with edits) or Discard. Accepting a proposal
+// dispatches to the appropriate downstream API (issues, inbox,
+// ceremonies/import-narrative, decisions inbox, dispatcher).
+export const consultProposals = pgTable('consult_proposals', {
+    id: uuid('id').primaryKey().defaultRandom(),
+    sessionId: uuid('session_id').notNull().references(() => consultSessions.id, { onDelete: 'cascade' }),
+    // Optional pointer to the assistant message that spawned this proposal.
+    messageId: uuid('message_id').references(() => consultMessages.id, { onDelete: 'set null' }),
+    kind: consultProposalKindEnum('kind').notNull(),
+    // Original arguments as the LLM produced them.
+    payload: jsonb('payload').notNull().default({}),
+    // Optional user edits captured at Accept time.
+    editedPayload: jsonb('edited_payload'),
+    status: consultProposalStatusEnum('status').notNull().default('pending'),
+    // Downstream artefact reference once accepted — e.g. { issueId, url }.
+    result: jsonb('result'),
+    errorMessage: text('error_message'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    decidedAt: timestamp('decided_at', { withTimezone: true }),
+});
+// ---------------------------------------------------------------------------
+// Issue Attachments — image uploads stored as bytea in PG
+// ---------------------------------------------------------------------------
+export const issueAttachments = pgTable('issue_attachments', {
+    id: uuid('id').primaryKey().defaultRandom(),
+    issueId: uuid('issue_id').notNull().references(() => issues.id, { onDelete: 'cascade' }),
+    filename: text('filename').notNull(),
+    mimeType: text('mime_type').notNull(),
+    sizeBytes: integer('size_bytes').notNull(),
+    content: bytea('content').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+});
+// ---------------------------------------------------------------------------
+// Phase 19: Templates & Portability
+// ---------------------------------------------------------------------------
+export const templates = pgTable('templates', {
+    id: uuid('id').primaryKey().defaultRandom(),
+    kind: text('kind').notNull(), // 'workflow' | 'team' | 'project'
+    name: text('name').notNull(),
+    description: text('description'),
+    payload: jsonb('payload').notNull(), // serialised bundle; shape depends on kind
+    // Optional: the project this template was saved from. NULL for built-ins.
+    projectId: uuid('project_id'),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+});
 //# sourceMappingURL=schema.js.map

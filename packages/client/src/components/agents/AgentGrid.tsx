@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { type Agent } from '../../api/agents.ts'
 import AgentCard from './AgentCard.tsx'
 
@@ -35,9 +36,35 @@ const gridStyle: React.CSSProperties = {
   gap: '12px',
 }
 
+// Wave 10 B9: three-state legend pinned to the top of the grid so the
+// status dots on each card are self-explanatory at a glance.
+function StatusLegend() {
+  const items: Array<{ color: string; label: string; title: string }> = [
+    { color: '#3fb950', label: 'Active',   title: 'Active — runnable everywhere.' },
+    { color: '#d29922', label: 'Disabled', title: 'Disabled — paused, can be re-enabled.' },
+    { color: '#8b949e', label: 'Retired',  title: 'Retired — archived, hidden by default.' },
+  ]
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: '14px', flexWrap: 'wrap' }}>
+      {items.map((it) => (
+        <span key={it.label} title={it.title} style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', fontSize: '11px', color: 'var(--text-muted)' }}>
+          <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: it.color, display: 'inline-block' }} />
+          {it.label}
+        </span>
+      ))}
+    </div>
+  )
+}
+
 export default function AgentGrid({ agents, onSelectAgent }: AgentGridProps) {
-  const active = agents.filter((a) => a.status === 'active')
-  const disabled = agents.filter((a) => a.status !== 'active')
+  // Wave 10 B9: split into three roster sections so disabled and retired
+  // agents are visually distinct. Retired is hidden behind a toggle so the
+  // common case stays uncluttered.
+  const [showRetired, setShowRetired] = useState(false)
+
+  const active   = agents.filter((a) => a.status === 'active')
+  const disabled = agents.filter((a) => a.status === 'disabled')
+  const retired  = agents.filter((a) => a.status === 'retired')
 
   if (agents.length === 0) {
     return (
@@ -61,7 +88,23 @@ export default function AgentGrid({ agents, onSelectAgent }: AgentGridProps) {
   }
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '32px' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+      {/* Legend + show-retired toggle */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap' }}>
+        <StatusLegend />
+        {retired.length > 0 && (
+          <label style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', fontSize: '12px', color: 'var(--text-muted)', cursor: 'pointer' }}>
+            <input
+              type="checkbox"
+              checked={showRetired}
+              onChange={(e) => setShowRetired(e.target.checked)}
+              aria-label="Show retired agents"
+            />
+            Show retired ({retired.length})
+          </label>
+        )}
+      </div>
+
       {/* Active section */}
       {active.length > 0 && (
         <section>
@@ -80,6 +123,18 @@ export default function AgentGrid({ agents, onSelectAgent }: AgentGridProps) {
           <SectionHeader label="Disabled" count={disabled.length} />
           <div style={gridStyle}>
             {disabled.map((agent) => (
+              <AgentCard key={agent.id} agent={agent} onClick={onSelectAgent} muted />
+            ))}
+          </div>
+        </section>
+      )}
+
+      {/* Retired section — opt-in */}
+      {showRetired && retired.length > 0 && (
+        <section>
+          <SectionHeader label="Retired" count={retired.length} />
+          <div style={gridStyle}>
+            {retired.map((agent) => (
               <AgentCard key={agent.id} agent={agent} onClick={onSelectAgent} muted />
             ))}
           </div>

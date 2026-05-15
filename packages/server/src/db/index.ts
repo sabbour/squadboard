@@ -892,6 +892,75 @@ async function bootstrapSchema(): Promise<void> {
     );
   `);
 
+  // ---------------------------------------------------------------------------
+  // Wave 10 D2: skill provenance tracking — distinguish curated/imported/custom
+  // skills so the UI can render a "From: built-in catalog" / "From: import"
+  // badge. Backfills `source='curated'` for any skill that already has a
+  // curatedKey set.
+  // ---------------------------------------------------------------------------
+  await _pool.query(`
+    ALTER TABLE skills
+      ADD COLUMN IF NOT EXISTS source     TEXT NOT NULL DEFAULT 'custom',
+      ADD COLUMN IF NOT EXISTS source_uri TEXT;
+
+    UPDATE skills
+    SET    source = 'curated'
+    WHERE  curated_key IS NOT NULL
+    AND    source = 'custom';
+  `);
+
+  // ---------------------------------------------------------------------------
+  // Wave 10 D3: tool + MCP-server provenance tracking — same pattern as D2.
+  // ---------------------------------------------------------------------------
+  await _pool.query(`
+    ALTER TABLE tools
+      ADD COLUMN IF NOT EXISTS source     TEXT NOT NULL DEFAULT 'custom',
+      ADD COLUMN IF NOT EXISTS source_uri TEXT;
+
+    DO $$ BEGIN
+      IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'mcp_servers') THEN
+        ALTER TABLE mcp_servers
+          ADD COLUMN IF NOT EXISTS source     TEXT NOT NULL DEFAULT 'custom',
+          ADD COLUMN IF NOT EXISTS source_uri TEXT;
+      END IF;
+    END $$;
+  `);
+
+  // ---------------------------------------------------------------------------
+  // Wave 10 D4: ceremony trigger source. workflow_runs.trigger_source records
+  // whether the run was spawned manually, by the schedule sweep, or by an
+  // event (and which event/schedule). Surfaced on the runs list.
+  // ---------------------------------------------------------------------------
+  await _pool.query(`
+    ALTER TABLE workflow_runs
+      ADD COLUMN IF NOT EXISTS trigger_source jsonb;
+  `);
+
+  // ---------------------------------------------------------------------------
+  // Wave 10 D6: GitHub Copilot premium-request multipliers. Adds an
+  // alternate cost rollup column on issue_runs / workflow_runs / consult_sessions
+  // (USD remains the default). Adds projects.cost_model so each project can
+  // pick which cost model the Costs page shows; env SQUADBOARD_COST_MODEL is
+  // the default when null.
+  // ---------------------------------------------------------------------------
+  await _pool.query(`
+    ALTER TABLE issue_runs
+      ADD COLUMN IF NOT EXISTS premium_requests numeric(12, 4) DEFAULT 0;
+
+    ALTER TABLE workflow_runs
+      ADD COLUMN IF NOT EXISTS premium_requests numeric(12, 4) DEFAULT 0;
+
+    DO $$ BEGIN
+      IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'consult_sessions') THEN
+        ALTER TABLE consult_sessions
+          ADD COLUMN IF NOT EXISTS premium_requests numeric(12, 4) NOT NULL DEFAULT 0;
+      END IF;
+    END $$;
+
+    ALTER TABLE projects
+      ADD COLUMN IF NOT EXISTS cost_model text;
+  `);
+
   await seedSystemReviewPolicyPresets();
 
   console.log('[db] schema bootstrapped');

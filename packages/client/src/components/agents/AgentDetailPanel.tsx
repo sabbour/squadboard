@@ -54,9 +54,19 @@ export default function AgentDetailPanel({ projectId, agent, onClose }: AgentDet
     }
   }
 
-  function toggleStatus() {
-    const newStatus = current.status === 'active' ? 'disabled' : 'active'
-    updateAgent.mutate({ agentId: current.id, status: newStatus })
+  function setStatus(next: 'active' | 'disabled' | 'retired') {
+    updateAgent.mutate({ agentId: current.id, status: next })
+  }
+
+  function handleRetire() {
+    if (
+      !window.confirm(
+        `Retire ${current.name}? Retired agents are hidden from pickers and listings by default — they remain on disk and can be re-enabled later if needed.`,
+      )
+    ) {
+      return
+    }
+    setStatus('retired')
   }
 
   return (
@@ -267,25 +277,30 @@ export default function AgentDetailPanel({ projectId, agent, onClose }: AgentDet
           )}
         </div>
 
-        {/* Footer actions */}
+        {/* Footer actions — Wave 10 B9 three-state controls.
+            Active   → Disable (recoverable pause)
+            Disabled → Re-enable, Retire (archive)
+            Retired  → Re-enable (rare; keeps the option open)              */}
         <div
           style={{
             padding: '12px 20px',
             borderTop: '1px solid var(--border)',
             display: 'flex',
             justifyContent: 'flex-end',
+            gap: '8px',
             flexShrink: 0,
           }}
         >
-          {current.status === 'active' ? (
+          {current.status === 'active' && (
             <button
-              onClick={toggleStatus}
+              onClick={() => setStatus('disabled')}
               disabled={updateAgent.isPending}
+              title="Pause this agent — it stops appearing in pickers and cannot be invoked. Reversible."
               style={{
-                background: 'rgba(248,81,73,0.1)',
-                border: '1px solid rgba(248,81,73,0.4)',
+                background: 'rgba(210,153,34,0.12)',
+                border: '1px solid rgba(210,153,34,0.4)',
                 borderRadius: 'var(--radius)',
-                color: '#f85149',
+                color: '#d29922',
                 padding: '6px 16px',
                 fontSize: '13px',
                 fontWeight: 500,
@@ -295,10 +310,13 @@ export default function AgentDetailPanel({ projectId, agent, onClose }: AgentDet
             >
               {updateAgent.isPending ? 'Updating…' : 'Disable Agent'}
             </button>
-          ) : (
+          )}
+
+          {current.status !== 'active' && (
             <button
-              onClick={toggleStatus}
+              onClick={() => setStatus('active')}
               disabled={updateAgent.isPending}
+              title="Bring this agent back online — pickers and runs will accept it again."
               style={{
                 background: 'rgba(63,185,80,0.1)',
                 border: '1px solid rgba(63,185,80,0.4)',
@@ -311,7 +329,28 @@ export default function AgentDetailPanel({ projectId, agent, onClose }: AgentDet
                 opacity: updateAgent.isPending ? 0.6 : 1,
               }}
             >
-              {updateAgent.isPending ? 'Updating…' : 'Enable Agent'}
+              {updateAgent.isPending ? 'Updating…' : 'Re-enable Agent'}
+            </button>
+          )}
+
+          {current.status === 'disabled' && (
+            <button
+              onClick={handleRetire}
+              disabled={updateAgent.isPending}
+              title="Archive this agent — hidden from listings by default. Charter file stays on disk."
+              style={{
+                background: 'rgba(139,148,158,0.12)',
+                border: '1px solid rgba(139,148,158,0.4)',
+                borderRadius: 'var(--radius)',
+                color: 'var(--text-muted)',
+                padding: '6px 16px',
+                fontSize: '13px',
+                fontWeight: 500,
+                cursor: 'pointer',
+                opacity: updateAgent.isPending ? 0.6 : 1,
+              }}
+            >
+              Retire Agent
             </button>
           )}
         </div>

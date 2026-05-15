@@ -95,6 +95,10 @@ class RunningLiveSession {
         this.session.on('assistant.turn_end', (e) => this.publish('session.tool', { phase: 'turn_end', raw: e }));
         this.session.on('session.idle', () => this.publish('session.tool', { phase: 'idle' }));
         this.session.on('session.error', (e) => this.onError(e));
+        // Phase 5: consult events emitted by the SDK session flow through the live
+        // session stream so they appear inline in the activity feed.
+        this.session.on('consult.request', (e) => this.onConsultRequest(e));
+        this.session.on('consult.response', (e) => this.onConsultResponse(e));
     }
     async publish(type, payload) {
         const enrichedPayload = { sessionId: this.id, ...payload };
@@ -172,6 +176,46 @@ class RunningLiveSession {
         }
         catch {
             // best effort
+        }
+    }
+    // ---------------------------------------------------------------------------
+    // Phase 5 — consult request / response handlers
+    //
+    // The SDK session fires these events when an agent-level consult exchange
+    // occurs inside the live session. We translate them into typed session events
+    // so they share the same EventBus topic / WS room as the rest of the
+    // transcript. The client renders them inline in AgentActivityFeed without any
+    // additional subscription.
+    //
+    // Resilience: errors inside these handlers MUST NOT crash the outer stream.
+    // We log a warning and emit a consult.error event instead.
+    // ---------------------------------------------------------------------------
+    async onConsultRequest(event) {
+        try {
+            const requestId = pickString(event, 'requestId', 'id') ?? `req-${Date.now()}`;
+            const fromAgent = pickString(event, 'fromAgent', 'agentName', 'agent') ?? 'agent';
+            const question = pickString(event, 'question', 'content', 'text', 'message') ?? '';
+            const timestamp = pickString(event, 'timestamp') ?? new Date().toISOString();
+            await this.publish('consult.request', { requestId, fromAgent, question, timestamp });
+        }
+        catch (err) {
+            const message = err instanceof Error ? err.message : String(err);
+            console.warn('[squad-stream] consult.request handler error', message);
+            await this.publish('consult.error', { message, timestamp: new Date().toISOString() }).catch(() => { });
+        }
+    }
+    async onConsultResponse(event) {
+        try {
+            const requestId = pickString(event, 'requestId', 'id') ?? `req-${Date.now()}`;
+            const fromAgent = pickString(event, 'fromAgent', 'agentName', 'agent') ?? 'agent';
+            const answer = pickString(event, 'answer', 'content', 'text', 'message') ?? '';
+            const timestamp = pickString(event, 'timestamp') ?? new Date().toISOString();
+            await this.publish('consult.response', { requestId, fromAgent, answer, timestamp });
+        }
+        catch (err) {
+            const message = err instanceof Error ? err.message : String(err);
+            console.warn('[squad-stream] consult.response handler error', message);
+            await this.publish('consult.error', { message, timestamp: new Date().toISOString() }).catch(() => { });
         }
     }
     async bumpTurnCount() {

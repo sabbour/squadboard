@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react'
-import { useAgents } from '../../api/agents.ts'
+import { useActiveAgents } from '../../api/agents.ts'
 import { useStartRun, useCancelRun, useIssueRuns, type IssueRun } from '../../api/runs.ts'
 
 interface RunButtonProps {
@@ -14,7 +14,9 @@ export default function RunButton({ projectId, issueId, onRunStarted }: RunButto
   const [doneFlash, setDoneFlash] = useState(false)
   const dropdownRef = useRef<HTMLDivElement>(null)
 
-  const { data: agents } = useAgents(projectId)
+  // Wave 10 B9: useActiveAgents filters out disabled/retired so the picker
+  // and auto-pick fallback can never dispatch a run with a non-active agent.
+  const { data: agents } = useActiveAgents(projectId)
   const { data: runs } = useIssueRuns(projectId, issueId)
   const startRun = useStartRun(projectId)
   const cancelRun = useCancelRun(projectId)
@@ -43,6 +45,8 @@ export default function RunButton({ projectId, issueId, onRunStarted }: RunButto
   }, [lastRun?.status])
 
   function handleRun() {
+    // useActiveAgents already filters to status === 'active'; this fallback
+    // simply auto-picks the first active agent if no selection was made.
     const agentId = selectedAgentId || agents?.[0]?.id
     if (!agentId) return
     startRun.mutate(
@@ -112,8 +116,8 @@ export default function RunButton({ projectId, issueId, onRunStarted }: RunButto
     )
   }
 
-  // Normal state: dropdown + Run button
-  const activeAgents = agents?.filter((a) => a.status === 'active') ?? []
+  // Normal state: dropdown + Run button — `agents` is already active-only.
+  const activeAgents = agents ?? []
 
   return (
     <div ref={dropdownRef} style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: '4px' }}>

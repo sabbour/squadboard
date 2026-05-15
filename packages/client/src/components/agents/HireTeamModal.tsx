@@ -39,16 +39,31 @@ interface HireTeamModalProps {
 
 type Step = 'configure' | 'review' | 'done'
 
-const ROLE_OPTIONS: { id: CastingAgentRole; label: string }[] = [
-  { id: 'lead', label: 'Lead' },
-  { id: 'developer', label: 'Developer' },
-  { id: 'tester', label: 'Tester' },
-  { id: 'reviewer', label: 'Reviewer' },
-  { id: 'devops', label: 'DevOps' },
-  { id: 'security', label: 'Security' },
-  { id: 'designer', label: 'Designer' },
-  { id: 'prompt-engineer', label: 'Prompt Engineer' },
-  { id: 'scribe', label: 'Scribe' },
+/**
+ * The 9 SDK base roles + 7 Squadboard-extended non-tech roles (Wave 10 D1).
+ *
+ * Extended roles are mapped server-side to a base SDK role via
+ * `EXTENDED_ROLE_TO_BASE_ROLE` in `casting-engine.ts` so the SDK pipeline
+ * still produces a complete team. Emoji are sourced from
+ * `.github/agents/squad.agent.md` (Standard role emoji mapping table).
+ */
+const ROLE_OPTIONS: { id: CastingAgentRole; label: string; group: 'tech' | 'non-tech' }[] = [
+  { id: 'lead', label: '🏗️ Lead', group: 'tech' },
+  { id: 'developer', label: '🔧 Developer', group: 'tech' },
+  { id: 'tester', label: '🧪 Tester', group: 'tech' },
+  { id: 'reviewer', label: '👁️ Reviewer', group: 'tech' },
+  { id: 'devops', label: '⚙️ DevOps', group: 'tech' },
+  { id: 'security', label: '🔒 Security', group: 'tech' },
+  { id: 'designer', label: '⚛️ Designer (Frontend)', group: 'tech' },
+  { id: 'prompt-engineer', label: '🎭 Prompt Engineer', group: 'tech' },
+  { id: 'scribe', label: '📋 Scribe', group: 'tech' },
+  { id: 'pm', label: '🎯 PM', group: 'non-tech' },
+  { id: 'designer-nontech', label: '🎨 Designer (Brand/UX)', group: 'non-tech' },
+  { id: 'founder', label: '👔 Founder', group: 'non-tech' },
+  { id: 'sales', label: '💼 Sales', group: 'non-tech' },
+  { id: 'marketing', label: '📣 Marketing', group: 'non-tech' },
+  { id: 'customer-success', label: '🎧 Customer Success', group: 'non-tech' },
+  { id: 'research', label: '🔬 Research', group: 'non-tech' },
 ]
 
 const ROLE_BADGE_COLOR: Record<
@@ -64,6 +79,13 @@ const ROLE_BADGE_COLOR: Record<
   designer: 'brand',
   'prompt-engineer': 'brand',
   scribe: 'subtle',
+  pm: 'brand',
+  'designer-nontech': 'brand',
+  founder: 'brand',
+  sales: 'success',
+  marketing: 'warning',
+  'customer-success': 'severe',
+  research: 'subtle',
 }
 
 export default function HireTeamModal({ projectId, onClose }: HireTeamModalProps) {
@@ -216,15 +238,37 @@ export default function HireTeamModal({ projectId, onClose }: HireTeamModalProps
                 </Field>
 
                 <Field label="Required roles (optional)" hint="Casting will guarantee these roles are present.">
-                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px 12px' }}>
-                    {ROLE_OPTIONS.map((r) => (
-                      <Checkbox
-                        key={r.id}
-                        label={r.label}
-                        checked={requiredRoles.has(r.id)}
-                        onChange={() => toggleRole(r.id)}
-                      />
-                    ))}
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                    <div>
+                      <div style={{ fontSize: '11px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', color: tokens.colorNeutralForeground3, marginBottom: '6px' }}>
+                        Tech (SDK)
+                      </div>
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px 12px' }}>
+                        {ROLE_OPTIONS.filter((r) => r.group === 'tech').map((r) => (
+                          <Checkbox
+                            key={r.id}
+                            label={r.label}
+                            checked={requiredRoles.has(r.id)}
+                            onChange={() => toggleRole(r.id)}
+                          />
+                        ))}
+                      </div>
+                    </div>
+                    <div>
+                      <div style={{ fontSize: '11px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', color: tokens.colorNeutralForeground3, marginBottom: '6px' }}>
+                        Non-tech
+                      </div>
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px 12px' }}>
+                        {ROLE_OPTIONS.filter((r) => r.group === 'non-tech').map((r) => (
+                          <Checkbox
+                            key={r.id}
+                            label={r.label}
+                            checked={requiredRoles.has(r.id)}
+                            onChange={() => toggleRole(r.id)}
+                          />
+                        ))}
+                      </div>
+                    </div>
                   </div>
                 </Field>
 
@@ -273,7 +317,7 @@ export default function HireTeamModal({ projectId, onClose }: HireTeamModalProps
                       <div style={{ flex: 1, minWidth: 0 }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px', flexWrap: 'wrap' }}>
                           <span style={{ fontWeight: 600, fontSize: '14px' }}>{member.name}</span>
-                          <Badge appearance="tint" color={ROLE_BADGE_COLOR[member.role]} size="small">
+                          <Badge appearance="tint" color={ROLE_BADGE_COLOR[member.extendedRole ?? member.role]} size="small">
                             {member.suggestedRoleTitle}
                           </Badge>
                           <span style={{

@@ -5,7 +5,7 @@ import {
   useSubmitReview,
 } from '../../api/reviews.ts'
 import { useReviewDeliverable } from '../../api/deliverables.ts'
-import { useAgents, type Agent } from '../../api/agents.ts'
+import { useActiveAgents, type Agent } from '../../api/agents.ts'
 import { ReviewDecisionBadge } from './ReviewDecisionBadge.tsx'
 import { safeRelativeTime } from '../../utils/dates.ts'
 import Avatar from '../Avatar.tsx'
@@ -265,7 +265,8 @@ function DeliverableOverrideActions({
   target: Extract<ReviewTarget, { kind: 'deliverable' }>
 }) {
   const reviewDeliverable = useReviewDeliverable(target.projectId, target.deliverableId)
-  const { data: agents = [] } = useAgents(target.projectId)
+  // Wave 10 B9: revision-spawning picker only surfaces active agents.
+  const { data: agents = [] } = useActiveAgents(target.projectId)
   const [submitting, setSubmitting] = useState<ReviewVerb | null>(null)
   const [comment, setComment] = useState('')
   const [showComment, setShowComment] = useState(false)

@@ -1,8 +1,14 @@
 /**
  * CaptureModal — Phase 14 quick-capture modal.
  *
- * Used by both the global "+ Capture" button (Layout) and the per-project
- * floating action button (Board). Two view modes:
+ * @deprecated Wave 10 B2: Conjure replaces Capture. New entry points should
+ * route to the Consult / Conjure intent flow instead. This file is kept as a
+ * thin shim for one release so existing imports (e.g. the per-project Board
+ * FAB and the Inbox row "Open" action that re-hydrates an existing item)
+ * keep working while we migrate them. Removal is a separate wave.
+ *
+ * Used by both the legacy global "+ Capture" button (now removed from Layout)
+ * and the per-project floating action button (Board). Two view modes:
  *
  *   draft    — empty textarea + "Formulate" button (or Ctrl+Enter).
  *              Cancel closes without saving.
@@ -34,6 +40,14 @@ import {
 } from '../../api/inbox.ts'
 import type { ColumnId } from '../../api/issues.ts'
 import { useColumnMeta } from '../../api/columns.ts'
+
+// Wave 10 B2: one-shot deprecation notice. Logged the first time this module
+// is evaluated in a given page load so the console isn't spammed on re-render.
+if (typeof window !== 'undefined' && !(window as unknown as { __squadboardCaptureWarned?: boolean }).__squadboardCaptureWarned) {
+  // eslint-disable-next-line no-console
+  console.warn('[squadboard] CaptureModal is deprecated; use Conjure (Consult intent flow) instead. Removal is a separate wave.')
+  ;(window as unknown as { __squadboardCaptureWarned?: boolean }).__squadboardCaptureWarned = true
+}
 
 // Fallback used when no project is selected (global "+ Capture" button).
 const FALLBACK_COLUMNS: { id: ColumnId; label: string }[] = [

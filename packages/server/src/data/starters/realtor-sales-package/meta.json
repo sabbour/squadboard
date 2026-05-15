@@ -1,0 +1,31 @@
+{
+  "slug": "realtor-sales-package",
+  "title": "Realtor Home Sales Package Builder",
+  "blurb": "A Squad sample that scrapes Redfin and Zillow using Playwright and feeds the listings to a four-agent AI squad that builds a client-ready Comparative Market Analysis (CMA) sales package for realtors.",
+  "tags": [
+    "ceremonies",
+    "routing",
+    "multi-agent"
+  ],
+  "agentCount": 4,
+  "routingRuleCount": 5,
+  "ceremonyCount": 1,
+  "defaultModel": null,
+  "teamName": "Realtor Sales Package Builder Squad",
+  "warnings": [],
+  "source": {
+    "origin": "github",
+    "repo": "bradygaster/Squad-IRL",
+    "ref": "main"
+  },
+  "files": [
+    "README.md",
+    "index.ts",
+    "package.json",
+    "realtor-scraper.ts",
+    "squad.config.ts",
+    "tsconfig.json"
+  ],
+  "htmlUrl": "https://github.com/bradygaster/Squad-IRL/tree/main/realtor-sales-package",
+  "bundledAt": "2026-05-15T07:48:09.710Z"
+}

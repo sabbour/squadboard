@@ -52,6 +52,13 @@ const VALID_PROPOSAL_KINDS: ReadonlySet<ConsultProposalKind> = new Set<ConsultPr
 ]);
 const VALID_PROMOTE_KINDS: ReadonlySet<string> = new Set(['inbox', 'issue', 'ceremony']);
 
+// Wave 10 B8: hard cap on a single consult message (user content) so the
+// Consult page cannot crash mid-send when something upstream injects a
+// massive prefill — e.g. an issue body concatenated with runs tail.
+// 64 KiB matches the largest legitimate paste a human would make and keeps
+// well under the Postgres `text` row-overflow boundary.
+export const MAX_CONSULT_CONTENT_BYTES = 64 * 1024;
+
 function handleError(res: Response, err: unknown) {
   const status = (err as { status?: unknown })?.status;
   if (err instanceof Error && typeof status === 'number') {
@@ -245,7 +252,22 @@ consultRouter.post('/:sessionId/messages', async (req: Request, res: Response) =
   try {
     const { sessionId } = req.params as Record<string, string>;
     const body = (req.body ?? {}) as { content?: string; prompt?: string };
-    const content = ((body.content ?? body.prompt) ?? '').trim();
+    const raw = (body.content ?? body.prompt) ?? '';
+    if (typeof raw !== 'string') {
+      res.status(400).json({ error: '`content` must be a string' });
+      return;
+    }
+    // Wave 10 B8: cap message size so a runaway prefill (e.g. issue body +
+    // recent runs tail) can never wedge the assistant turn or blow up the
+    // Postgres `text` column at insert time.  64 KiB is well above any
+    // legitimate single user message but small enough that a 400 is obvious.
+    if (raw.length > MAX_CONSULT_CONTENT_BYTES) {
+      res.status(400).json({
+        error: `message content exceeds ${MAX_CONSULT_CONTENT_BYTES} characters (got ${raw.length})`,
+      });
+      return;
+    }
+    const content = raw.trim();
     if (!content) {
       res.status(400).json({ error: '`content` is required' });
       return;

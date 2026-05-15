@@ -174,10 +174,18 @@ async function resolveAnchorIssue(projectId: string): Promise<string | null> {
  *
  * `opts.anchorIssueId` overrides the auto-resolved anchor (used by the
  * event dispatcher when the event payload carries an issue id).
+ *
+ * Stream D — D4: callers may pass `opts.triggerSource` for richer provenance
+ * than the bare `opts.trigger` string. When omitted the helper will derive a
+ * sensible TriggerSource from the legacy `trigger` field.
  */
 export async function spawnCeremonyRun(
   workflowId: string,
-  opts: { anchorIssueId?: string; trigger: string } = { trigger: 'manual' },
+  opts: {
+    anchorIssueId?: string;
+    trigger: string;
+    triggerSource?: import('../engine/workflow-runner.js').TriggerSource;
+  } = { trigger: 'manual' },
 ): Promise<string | null> {
   const db = getDb();
 
@@ -240,12 +248,34 @@ export async function spawnCeremonyRun(
     return null;
   }
 
-  const runId = await createWorkflowRun(anchorIssueId, activeVersion.id);
+  const triggerSource = opts.triggerSource ?? deriveTriggerSource(opts.trigger, anchorIssueId);
+  const runId = await createWorkflowRun(anchorIssueId, activeVersion.id, triggerSource);
   console.log(
     `[ceremony] spawned workflow_run ${runId} for ${workflow.slug} ` +
       `(trigger=${opts.trigger}, anchor=${anchorIssueId})`,
   );
   return runId;
+}
+
+function deriveTriggerSource(
+  trigger: string,
+  anchorIssueId: string,
+): import('../engine/workflow-runner.js').TriggerSource {
+  if (trigger === 'manual' || trigger === 'manual_force') {
+    return { kind: trigger, anchorIssueId };
+  }
+  if (trigger === 'on_schedule') {
+    return { kind: 'on_schedule', anchorIssueId };
+  }
+  if (trigger.startsWith('on_event:')) {
+    return {
+      kind: 'on_event',
+      eventType: trigger.slice('on_event:'.length),
+      detail: trigger,
+      anchorIssueId,
+    };
+  }
+  return { kind: 'unknown', detail: trigger, anchorIssueId };
 }
 
 // ---------------------------------------------------------------------------
@@ -293,6 +323,11 @@ export async function sweepDueSchedules(now: Date = new Date()): Promise<SweepRe
 
       const runId = await spawnCeremonyRun(sched.workflowId, {
         trigger: 'on_schedule',
+        triggerSource: {
+          kind: 'on_schedule',
+          scheduleId: sched.id,
+          detail: sched.cronExpr,
+        },
       });
 
       // Recompute the true next fire time AFTER firing, so cron expressions

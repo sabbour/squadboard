@@ -1,14 +1,20 @@
 import React from 'react'
-import { useParams } from 'react-router'
+import { useParams, useNavigate } from 'react-router'
 import {
   Title2,
   Body1,
   Caption1,
   Button,
+  Badge,
+  TabList,
+  Tab,
   tokens,
+  type SelectTabData,
+  type SelectTabEvent,
 } from '@fluentui/react-components'
 import { ArrowSync24Regular, Checkmark24Regular, Warning24Regular, Dismiss24Regular } from '@fluentui/react-icons'
 import { useDiagnostics, useRunDiagnostics, type DiagnosticCheck } from '../api/diagnostics.ts'
+import { useProject } from '../api/projects.ts'
 import PageHeader from '../components/layout/PageHeader.tsx'
 import { safeAbsoluteTime } from '../utils/dates.ts'
 
@@ -116,6 +122,8 @@ function CheckCard({ check }: { check: DiagnosticCheck }) {
 export default function Diagnostics() {
   // Supports both /diagnostics (global) and /projects/:id/diagnostics
   const { id: projectId } = useParams<{ id?: string }>()
+  const navigate = useNavigate()
+  const { data: project } = useProject(projectId ?? '')
 
   const { data, isLoading, error } = useDiagnostics({ projectId })
   const runMutation = useRunDiagnostics({ projectId })
@@ -123,22 +131,61 @@ export default function Diagnostics() {
   const is404 =
     error instanceof Error && error.message.startsWith('API 404')
 
+  // Wave 10 C8: scope is explicit — show "Global" or "Project: {name}" badge
+  // in the header and a tab strip when a project is in context, so the user
+  // never silently hops between scopes.
+  const scopeKind: 'global' | 'project' = projectId ? 'project' : 'global'
+  const scopeLabel = scopeKind === 'global'
+    ? 'Global · across all projects'
+    : `Project: ${project?.name ?? '…'}`
+
+  function handleScopeChange(_e: SelectTabEvent, data: SelectTabData) {
+    const next = data.value as 'global' | 'project'
+    if (next === scopeKind) return
+    if (next === 'global') {
+      void navigate('/diagnostics')
+    } else if (projectId) {
+      void navigate(`/projects/${projectId}/diagnostics`)
+    }
+  }
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
       <PageHeader
+        eyebrow={scopeLabel.toUpperCase()}
         title="Diagnostics"
         description="System health checks · auto-refreshes every 30 s"
         actions={
-          <Button
-            appearance="primary"
-            icon={<ArrowSync24Regular />}
-            onClick={() => runMutation.mutate()}
-            disabled={runMutation.isPending}
-          >
-            {runMutation.isPending ? 'Running…' : 'Re-run all'}
-          </Button>
+          <>
+            <Badge
+              appearance="outline"
+              color={scopeKind === 'global' ? 'informative' : 'brand'}
+            >
+              {scopeKind === 'global' ? 'Global' : 'Project'}
+            </Badge>
+            <Button
+              appearance="primary"
+              icon={<ArrowSync24Regular />}
+              onClick={() => runMutation.mutate()}
+              disabled={runMutation.isPending}
+            >
+              {runMutation.isPending ? 'Running…' : 'Re-run all'}
+            </Button>
+          </>
         }
       />
+
+      {/* Wave 10 C8: when in a project context, surface a tab strip so users
+          can pivot to global without sidebar nav (which collapses the project
+          group jarringly). The tab is hidden when accessed globally. */}
+      {projectId && (
+        <div style={{ padding: `${tokens.spacingVerticalXS} ${tokens.spacingHorizontalXXL} 0` }}>
+          <TabList selectedValue={scopeKind} onTabSelect={handleScopeChange}>
+            <Tab value="project">This project</Tab>
+            <Tab value="global">Global · all projects</Tab>
+          </TabList>
+        </div>
+      )}
 
       <div style={{ flex: 1, overflow: 'auto', padding: '24px' }}>
         {isLoading && (

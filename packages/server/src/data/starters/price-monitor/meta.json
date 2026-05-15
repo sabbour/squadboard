@@ -1,0 +1,32 @@
+{
+  "slug": "price-monitor",
+  "title": "Price Monitor & Deal Finder",
+  "blurb": "A Squad sample that opens a real browser, scrapes product prices from any shopping page, and feeds them to a four-agent deal analysis squad for actionable buy/wait/skip advice.",
+  "tags": [
+    "ceremonies",
+    "routing",
+    "multi-agent"
+  ],
+  "agentCount": 4,
+  "routingRuleCount": 5,
+  "ceremonyCount": 1,
+  "defaultModel": null,
+  "teamName": "Price Monitor Squad",
+  "warnings": [],
+  "source": {
+    "origin": "github",
+    "repo": "bradygaster/Squad-IRL",
+    "ref": "main"
+  },
+  "files": [
+    ".gitignore",
+    "README.md",
+    "index.ts",
+    "package.json",
+    "price-scraper.ts",
+    "squad.config.ts",
+    "tsconfig.json"
+  ],
+  "htmlUrl": "https://github.com/bradygaster/Squad-IRL/tree/main/price-monitor",
+  "bundledAt": "2026-05-15T07:48:09.412Z"
+}

@@ -12,6 +12,7 @@ export interface ServerCostByAgent {
   inputTokens: number
   outputTokens: number
   costUsd: number
+  premiumRequests?: number
 }
 
 export interface ServerCostByModel {
@@ -20,6 +21,7 @@ export interface ServerCostByModel {
   inputTokens: number
   outputTokens: number
   costUsd: number
+  premiumRequests?: number
 }
 
 export type CostSource = 'run' | 'live_session' | 'consult'
@@ -30,20 +32,25 @@ export interface ServerCostBySource {
   inputTokens: number
   outputTokens: number
   costUsd: number
+  premiumRequests?: number
 }
 
 export interface ServerCostBucket {
   totalInputTokens: number
   totalOutputTokens: number
   totalCostUsd: number
+  totalPremiumRequests?: number
   byAgent: ServerCostByAgent[]
   byModel: ServerCostByModel[]
   bySource?: ServerCostBySource[]
 }
 
+export type CostModel = 'usd' | 'gh_multipliers'
+
 export interface ServerCostSummary {
   projectId: string
   sources?: CostSource[]
+  costModel?: CostModel
   mtd: ServerCostBucket
   allTime: ServerCostBucket
 }
@@ -58,6 +65,8 @@ export interface AgentCost {
   runs: number
   totalUsd: number
   avgUsdPerRun: number
+  totalPremiumRequests: number
+  avgPremiumRequestsPerRun: number
 }
 
 export interface ModelCost {
@@ -66,6 +75,7 @@ export interface ModelCost {
   tokensIn: number
   tokensOut: number
   totalUsd: number
+  totalPremiumRequests: number
 }
 
 export interface SourceCost {
@@ -74,6 +84,7 @@ export interface SourceCost {
   totalUsd: number
   tokensIn: number
   tokensOut: number
+  totalPremiumRequests: number
 }
 
 export interface CostSummary {
@@ -81,6 +92,8 @@ export interface CostSummary {
   byModel: ModelCost[]
   bySource: SourceCost[]
   totalMtd: number
+  totalMtdPremiumRequests: number
+  costModel: CostModel
 }
 
 export interface ServerBudget {
@@ -103,16 +116,28 @@ export interface Budget {
 // ---------------------------------------------------------------------------
 
 function adaptSummary(raw: ServerCostSummary | undefined | null): CostSummary {
-  const mtd = raw?.mtd ?? { totalCostUsd: 0, byAgent: [], byModel: [], bySource: [] }
+  const fallbackBucket: ServerCostBucket = {
+    totalInputTokens: 0,
+    totalOutputTokens: 0,
+    totalCostUsd: 0,
+    totalPremiumRequests: 0,
+    byAgent: [],
+    byModel: [],
+    bySource: [],
+  }
+  const mtd = raw?.mtd ?? fallbackBucket
   const byAgent: AgentCost[] = (mtd.byAgent ?? []).map((a) => {
     const total = Number(a.costUsd ?? 0)
     const runs = Number(a.runCount ?? 0)
+    const premium = Number(a.premiumRequests ?? 0)
     return {
       agentId: a.agentId,
       agentName: a.agentName,
       runs,
       totalUsd: total,
       avgUsdPerRun: runs > 0 ? total / runs : 0,
+      totalPremiumRequests: premium,
+      avgPremiumRequestsPerRun: runs > 0 ? premium / runs : 0,
     }
   })
   const byModel: ModelCost[] = (mtd.byModel ?? []).map((m) => ({
@@ -121,6 +146,7 @@ function adaptSummary(raw: ServerCostSummary | undefined | null): CostSummary {
     tokensIn: Number(m.inputTokens ?? 0),
     tokensOut: Number(m.outputTokens ?? 0),
     totalUsd: Number(m.costUsd ?? 0),
+    totalPremiumRequests: Number(m.premiumRequests ?? 0),
   }))
   const bySource: SourceCost[] = (mtd.bySource ?? []).map((s) => ({
     source: s.source,
@@ -128,12 +154,15 @@ function adaptSummary(raw: ServerCostSummary | undefined | null): CostSummary {
     totalUsd: Number(s.costUsd ?? 0),
     tokensIn: Number(s.inputTokens ?? 0),
     tokensOut: Number(s.outputTokens ?? 0),
+    totalPremiumRequests: Number(s.premiumRequests ?? 0),
   }))
   return {
     byAgent,
     byModel,
     bySource,
     totalMtd: Number(mtd.totalCostUsd ?? 0),
+    totalMtdPremiumRequests: Number(mtd.totalPremiumRequests ?? 0),
+    costModel: raw?.costModel ?? 'usd',
   }
 }
 

@@ -26,6 +26,10 @@ export interface TemplateSummary {
   name: string
   description: string | null
   createdAt: string
+  // Stream D — D7: nullable. NULL = built-in / global template, non-null =
+  // saved from a specific project. Used by the "My templates" filter on the
+  // Templates page.
+  projectId?: string | null
 }
 
 export interface TemplateDetail extends TemplateSummary {
@@ -181,16 +185,32 @@ export function useImportTeam() {
   })
 }
 
+/** Stream D — D7: result envelope shared by save-as-template hooks. */
+export interface SaveAsTemplateResult {
+  template: TemplateSummary
+  storagePath: string | null
+  storageError: string | null
+}
+
 /** Save the current team roster as a named template. */
 export function useSaveTeamAsTemplate(projectId: string) {
   const queryClient = useQueryClient()
-  return useMutation<TemplateSummary, Error, { name: string; description?: string }>({
+  return useMutation<SaveAsTemplateResult, Error, { name: string; description?: string }>({
     mutationFn: async (input) => {
-      const env = await apiFetch<ApiEnvelope<{ template: TemplateSummary }>>(
+      const env = await apiFetch<ApiEnvelope<{
+        template: TemplateSummary
+        storagePath?: string | null
+        storageError?: string | null
+      }>>(
         `/api/projects/${projectId}/team/save-as-template`,
         { method: 'POST', body: JSON.stringify(input) },
       )
-      return unwrapEnvelope(env).template
+      const data = unwrapEnvelope(env)
+      return {
+        template: data.template,
+        storagePath: data.storagePath ?? null,
+        storageError: data.storageError ?? null,
+      }
     },
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['templates'] })
@@ -261,13 +281,22 @@ export function useImportProject() {
 /** Save this project as a named template. */
 export function useSaveProjectAsTemplate(projectId: string) {
   const queryClient = useQueryClient()
-  return useMutation<TemplateSummary, Error, { name: string; description?: string }>({
+  return useMutation<SaveAsTemplateResult, Error, { name: string; description?: string }>({
     mutationFn: async (input) => {
-      const env = await apiFetch<ApiEnvelope<{ template: TemplateSummary }>>(
+      const env = await apiFetch<ApiEnvelope<{
+        template: TemplateSummary
+        storagePath?: string | null
+        storageError?: string | null
+      }>>(
         `/api/projects/${projectId}/save-as-template`,
         { method: 'POST', body: JSON.stringify(input) },
       )
-      return unwrapEnvelope(env).template
+      const data = unwrapEnvelope(env)
+      return {
+        template: data.template,
+        storagePath: data.storagePath ?? null,
+        storageError: data.storageError ?? null,
+      }
     },
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['templates'] })

@@ -39,6 +39,10 @@ import {
   Settings20Regular,
   Shield20Regular,
   FolderArrowRight20Regular,
+  BookmarkAdd20Regular,
+  BookmarkAddFilled,
+  ArrowDownload20Regular,
+  ArrowUpload20Regular,
 } from '@fluentui/react-icons'
 
 type Section = 'general' | 'mcp' | 'budget' | 'reviews' | 'portability'
@@ -358,6 +362,9 @@ function PortabilitySection({ projectId, projectName }: { projectId: string; pro
   const [showImportDialog, setShowImportDialog] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
   const [saveDone, setSaveDone] = useState(false)
+  // Stream D — D7: surface the on-disk template mirror path so the user knows
+  // where the JSON copy was written (useful for git-tracking and sharing).
+  const [savedStoragePath, setSavedStoragePath] = useState<string | null>(null)
   const [importFeedback, setImportFeedback] = useState<string | null>(null)
   // Import dialog state
   const [importSquadPath, setImportSquadPath] = useState('')
@@ -382,11 +389,16 @@ function PortabilitySection({ projectId, projectName }: { projectId: string; pro
 
   async function handleSaveTemplate(name: string, description: string) {
     setSaveError(null)
+    setSavedStoragePath(null)
     try {
-      await saveAsTemplate.mutateAsync({ name, description: description || undefined })
+      const result = await saveAsTemplate.mutateAsync({ name, description: description || undefined })
       setShowSaveDialog(false)
       setSaveDone(true)
-      setTimeout(() => setSaveDone(false), 3000)
+      setSavedStoragePath(result.storagePath)
+      setTimeout(() => {
+        setSaveDone(false)
+        setSavedStoragePath(null)
+      }, 6000)
     } catch (err) {
       setSaveError(err instanceof Error ? err.message : 'Save failed')
     }
@@ -403,18 +415,6 @@ function PortabilitySection({ projectId, projectName }: { projectId: string; pro
     gap: '16px',
   }
 
-  const btnStyle: React.CSSProperties = {
-    background: 'var(--bg)',
-    border: '1px solid var(--border)',
-    borderRadius: '6px',
-    color: 'var(--text)',
-    padding: '6px 14px',
-    fontSize: '13px',
-    fontWeight: 500,
-    cursor: 'pointer',
-    flexShrink: 0,
-  }
-
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', maxWidth: 560 }}>
       {/* Export */}
@@ -425,13 +425,14 @@ function PortabilitySection({ projectId, projectName }: { projectId: string; pro
             Download this project as a portable JSON file.
           </Caption1>
         </div>
-        <button
-          style={{ ...btnStyle, opacity: exportProject.isPending ? 0.6 : 1, cursor: exportProject.isPending ? 'not-allowed' : 'pointer' }}
+        <Button
+          appearance="secondary"
+          icon={<ArrowDownload20Regular />}
           disabled={exportProject.isPending}
           onClick={() => exportProject.mutate({ projectId, filename: `project-${projectName}.json` })}
         >
-          {exportProject.isPending ? 'Exporting…' : '↓ Export'}
-        </button>
+          {exportProject.isPending ? 'Exporting…' : 'Export'}
+        </Button>
       </div>
 
       {/* Import */}
@@ -442,15 +443,16 @@ function PortabilitySection({ projectId, projectName }: { projectId: string; pro
             Import a project from an exported JSON file.
           </Caption1>
         </div>
-        <button
-          style={btnStyle}
+        <Button
+          appearance="secondary"
+          icon={<ArrowUpload20Regular />}
           onClick={() => { setImportError(null); setShowImportDialog(true) }}
         >
-          ↑ Import
-        </button>
+          Import
+        </Button>
       </div>
 
-      {/* Save as template */}
+      {/* Save as template — Wave 10 C7: Fluent2 Button + BookmarkAdd icon */}
       <div style={rowStyle}>
         <div>
           <Body1 style={{ display: 'block', fontWeight: tokens.fontWeightSemibold }}>Save as template</Body1>
@@ -458,13 +460,28 @@ function PortabilitySection({ projectId, projectName }: { projectId: string; pro
             Save this project structure as a reusable template.
           </Caption1>
         </div>
-        <button
-          style={btnStyle}
+        <Button
+          appearance="secondary"
+          icon={saveDone ? <BookmarkAddFilled /> : <BookmarkAdd20Regular />}
           onClick={() => { setSaveError(null); setShowSaveDialog(true) }}
         >
-          {saveDone ? '✓ Saved' : '☆ Save as template'}
-        </button>
+          {saveDone ? 'Saved' : 'Save as template'}
+        </Button>
       </div>
+
+      {/* Stream D — D7: tell the user where the JSON copy landed on disk */}
+      {savedStoragePath && (
+        <Caption1
+          style={{
+            display: 'block',
+            color: tokens.colorNeutralForeground3,
+            fontFamily: 'var(--font-mono, monospace)',
+            wordBreak: 'break-all',
+          }}
+        >
+          Saved to: {savedStoragePath}
+        </Caption1>
+      )}
 
       {importFeedback && (
         <Caption1

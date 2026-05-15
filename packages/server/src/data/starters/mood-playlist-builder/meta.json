@@ -1,0 +1,33 @@
+{
+  "slug": "mood-playlist-builder",
+  "title": "Mood Playlist Builder",
+  "blurb": "Create a playlist based on how you feel, refine the songs interactively, save everything in markdown, and instantly open a YouTube playlist.",
+  "tags": [
+    "routing",
+    "multi-agent"
+  ],
+  "agentCount": 3,
+  "routingRuleCount": 4,
+  "ceremonyCount": 0,
+  "defaultModel": null,
+  "teamName": "Mood Playlist Squad",
+  "warnings": [],
+  "source": {
+    "origin": "github",
+    "repo": "bradygaster/Squad-IRL",
+    "ref": "main"
+  },
+  "files": [
+    ".gitignore",
+    "README.md",
+    "index.ts",
+    "mood-logic.ts",
+    "package.json",
+    "squad-orchestration.ts",
+    "squad.config.ts",
+    "tests",
+    "tsconfig.json"
+  ],
+  "htmlUrl": "https://github.com/bradygaster/Squad-IRL/tree/main/mood-playlist-builder",
+  "bundledAt": "2026-05-15T07:48:08.975Z"
+}

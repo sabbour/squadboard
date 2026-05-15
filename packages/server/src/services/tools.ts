@@ -33,6 +33,9 @@ export interface CreateToolInput {
   mcpServerId?: string | null;
   inputSchema?: unknown;
   outputSchema?: unknown;
+  /** Provenance — defaults to 'custom'. See `tools.source`. */
+  source?: 'curated' | 'imported' | 'custom' | 'project' | null;
+  sourceUri?: string | null;
 }
 
 export interface UpdateToolInput {
@@ -77,6 +80,8 @@ export async function createTool(projectId: string, input: CreateToolInput) {
       mcpServerId: input.mcpServerId ?? null,
       inputSchema: (input.inputSchema ?? null) as never,
       outputSchema: (input.outputSchema ?? null) as never,
+      source: input.source ?? 'custom',
+      sourceUri: input.sourceUri ?? null,
     })
     .returning();
   return row;
@@ -127,6 +132,8 @@ export async function listAgentTools(projectId: string, agentId: string) {
       mcpServerId: schema.tools.mcpServerId,
       inputSchema: schema.tools.inputSchema,
       outputSchema: schema.tools.outputSchema,
+      source: schema.tools.source,
+      sourceUri: schema.tools.sourceUri,
       createdAt: schema.tools.createdAt,
       updatedAt: schema.tools.updatedAt,
       assignedAt: schema.agentTools.assignedAt,
@@ -173,6 +180,159 @@ export async function unassignToolFromAgent(
     .where(and(eq(schema.agentTools.agentId, agentId), eq(schema.agentTools.toolId, toolId)))
     .returning({ toolId: schema.agentTools.toolId });
   return result.length > 0;
+}
+
+// ---------------------------------------------------------------------------
+// Import — Wave 10 D3.
+//
+// Accept a tool JSON document and persist it as a tools row. The accepted
+// shape is permissive — we look for the standard MCP tool shape but also
+// accept anything with `name` + `description`:
+//
+//   {
+//     "key": "search_repos",            // optional, falls back to name kebab-case
+//     "name": "search_repos",
+//     "description": "Search GitHub repositories by query",
+//     "category": "github",             // optional
+//     "inputSchema":  { … },            // optional, JSON Schema
+//     "outputSchema": { … }             // optional
+//   }
+//
+// Or a bundle:
+//
+//   { "tools": [ {…}, {…} ] }   // each entry imported individually
+//   [ {…}, {…} ]                // bare array of tool objects
+//
+// Idempotent — duplicate `key` for the project returns the existing row.
+// ---------------------------------------------------------------------------
+
+export interface ImportToolFromJsonInput {
+  /** Raw JSON document — string OR pre-parsed object/array */
+  content: string | unknown;
+  /** Optional original filename for error messages */
+  filename?: string;
+  /** Optional source URI to record on the row */
+  sourceUri?: string;
+  /** Optional MCP server to associate every imported tool with */
+  mcpServerId?: string;
+}
+
+export interface ImportToolResult {
+  imported: Array<{ id: string; key: string; name: string }>;
+  skipped: Array<{ key: string; reason: string }>;
+}
+
+function toolKeySlug(input: string): string {
+  return input
+    .toLowerCase()
+    .replace(/\.json$/, '')
+    .replace(/\s+/g, '_')
+    .replace(/[^a-z0-9_-]/g, '')
+    .replace(/[_-]+/g, (m) => m[0])
+    .replace(/^[_-]|[_-]$/g, '')
+    .slice(0, 40);
+}
+
+interface ParsedToolEntry {
+  key: string;
+  name: string;
+  description: string;
+  category?: string | null;
+  inputSchema?: unknown;
+  outputSchema?: unknown;
+}
+
+function normalizeToolEntry(raw: unknown, fallbackFilename?: string): ParsedToolEntry | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const r = raw as Record<string, unknown>;
+
+  const name = typeof r.name === 'string' ? r.name.trim() : '';
+  const description = typeof r.description === 'string' ? r.description.trim() : '';
+  if (!name || !description) return null;
+
+  let key = typeof r.key === 'string' ? r.key.trim().toLowerCase() : '';
+  if (!key) key = toolKeySlug(name);
+  if (!key && fallbackFilename) key = toolKeySlug(fallbackFilename);
+  if (!key || !TOOL_KEBAB_RE.test(key)) return null;
+
+  const category = typeof r.category === 'string' ? r.category.trim().toLowerCase() : null;
+
+  return {
+    key: key.slice(0, 40),
+    name: name.slice(0, 60),
+    description: description.slice(0, 1024),
+    category: category && category.length ? category.slice(0, 30) : null,
+    inputSchema: r.inputSchema ?? r.input_schema ?? undefined,
+    outputSchema: r.outputSchema ?? r.output_schema ?? undefined,
+  };
+}
+
+export async function importToolsFromJson(
+  projectId: string,
+  input: ImportToolFromJsonInput,
+): Promise<ImportToolResult> {
+  let parsed: unknown;
+  if (typeof input.content === 'string') {
+    if (!input.content.trim()) {
+      throw Object.assign(new Error('content is required'), { status: 400 });
+    }
+    try {
+      parsed = JSON.parse(input.content);
+    } catch (err) {
+      throw Object.assign(new Error(`invalid JSON: ${(err as Error).message}`), { status: 400 });
+    }
+  } else {
+    parsed = input.content;
+  }
+
+  // Normalise to an array of candidate entries.
+  let entries: unknown[] = [];
+  if (Array.isArray(parsed)) {
+    entries = parsed;
+  } else if (parsed && typeof parsed === 'object') {
+    const p = parsed as Record<string, unknown>;
+    if (Array.isArray(p.tools)) {
+      entries = p.tools as unknown[];
+    } else {
+      entries = [p];
+    }
+  }
+
+  if (entries.length === 0) {
+    throw Object.assign(new Error('no tool entries found in payload'), { status: 400 });
+  }
+
+  const existing = await listTools(projectId);
+  const existingByKey = new Map(existing.map((t) => [t.key, t]));
+
+  const result: ImportToolResult = { imported: [], skipped: [] };
+  for (const entry of entries) {
+    const norm = normalizeToolEntry(entry, input.filename);
+    if (!norm) {
+      result.skipped.push({ key: '<invalid>', reason: 'missing name or description' });
+      continue;
+    }
+    const dup = existingByKey.get(norm.key);
+    if (dup) {
+      result.skipped.push({ key: norm.key, reason: 'already exists' });
+      continue;
+    }
+    const created = await createTool(projectId, {
+      key: norm.key,
+      name: norm.name,
+      description: norm.description,
+      category: norm.category,
+      mcpServerId: input.mcpServerId ?? null,
+      inputSchema: norm.inputSchema,
+      outputSchema: norm.outputSchema,
+      source: 'imported',
+      sourceUri: input.sourceUri ?? null,
+    });
+    existingByKey.set(created.key, created);
+    result.imported.push({ id: created.id, key: created.key, name: created.name });
+  }
+
+  return result;
 }
 
 // ---------------------------------------------------------------------------

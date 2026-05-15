@@ -23,6 +23,8 @@ import { joinPresence, leavePresence, moveCursor, removeUser } from './presence.
 const rooms = new Map();
 // ws → client state (fast lookup on message/close)
 const clients = new Map();
+// Clients subscribed to every event regardless of project (the /now page).
+const globalClients = new Set();
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 function send(ws, type, payload) {
     if (ws.readyState !== WebSocket.OPEN)
@@ -63,6 +65,14 @@ function unsubscribeFromProject(state, projectId) {
     }
     leavePresence(projectId, state.userId);
 }
+function subscribeGlobalClient(state) {
+    globalClients.add(state);
+    state.subscribedProjects.add('__global__');
+}
+function unsubscribeGlobalClient(state) {
+    globalClients.delete(state);
+    state.subscribedProjects.delete('__global__');
+}
 function handleMessage(state, raw) {
     let msg;
     try {
@@ -80,12 +90,23 @@ function handleMessage(state, raw) {
                 send(state.ws, 'error', { message: 'subscribe requires projectId' });
                 return;
             }
+            // Phase 19: '__global__' is the magic room that receives every bus event.
+            if (projectId === '__global__') {
+                subscribeGlobalClient(state);
+                send(state.ws, 'subscribed', { projectId: '__global__', userId: state.userId });
+                return;
+            }
             subscribeToProject(state, projectId);
             send(state.ws, 'subscribed', { projectId, userId: state.userId });
             break;
         case 'unsubscribe':
             if (!projectId) {
                 send(state.ws, 'error', { message: 'unsubscribe requires projectId' });
+                return;
+            }
+            if (projectId === '__global__') {
+                unsubscribeGlobalClient(state);
+                send(state.ws, 'unsubscribed', { projectId: '__global__' });
                 return;
             }
             unsubscribeFromProject(state, projectId);
@@ -107,8 +128,11 @@ function handleMessage(state, raw) {
 }
 function handleClose(state) {
     clients.delete(state.ws);
+    globalClients.delete(state); // clean up global subscription if any
     const projects = Array.from(state.subscribedProjects);
     for (const projectId of projects) {
+        if (projectId === '__global__')
+            continue;
         const room = rooms.get(projectId);
         if (room) {
             room.delete(state);
@@ -116,16 +140,28 @@ function handleClose(state) {
                 rooms.delete(projectId);
         }
     }
-    removeUser(state.userId, projects);
+    removeUser(state.userId, projects.filter((p) => p !== '__global__'));
 }
 // ─── Bus listener — fan-out to WS clients ─────────────────────────────────────
 function onBusEvent(event) {
     broadcast(event.projectId, event.type, event.payload);
+    // Phase 19: fan-out to global subscribers (/now view).
+    // Deliver every bus event to clients that requested '__global__' scope.
+    for (const client of globalClients) {
+        send(client.ws, event.type, event.payload);
+    }
 }
 // ─── Init ─────────────────────────────────────────────────────────────────────
 let wss = null;
 export function initWebSocketServer(httpServer) {
-    wss = new WebSocketServer({ server: httpServer, path: '/ws' });
+    // Mounted under /api/ws so the dev-server Vite proxy (which only forwards
+    // /api with `ws: true`) routes the WebSocket upgrade to the Express server
+    // in development. The client opens `${WS_BASE}/api/ws` (see
+    // packages/client/src/realtime/ws-client.ts); keeping the server path in
+    // sync is critical — a mismatch (e.g. server on /ws, client on /api/ws)
+    // leaves the badge stuck on yellow "Reconnecting" forever in dev because
+    // every handshake fails immediately.
+    wss = new WebSocketServer({ server: httpServer, path: '/api/ws' });
     wss.on('connection', (ws, _req) => {
         const userId = randomUUID();
         const state = {
@@ -150,7 +186,7 @@ export function initWebSocketServer(httpServer) {
     wss.on('error', (err) => {
         console.error('[ws] server error:', err);
     });
-    console.log('[ws] WebSocket server attached to HTTP server at /ws');
+    console.log('[ws] WebSocket server attached to HTTP server at /api/ws');
     return wss;
 }
 export function getWebSocketServer() {

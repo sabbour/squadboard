@@ -18,7 +18,7 @@ import { RoutingTierBadge } from '../components/routing/RoutingTierBadge.tsx'
 import { RoutingLogTable } from '../components/routing/RoutingLogTable.tsx'
 import { RoutingStatsPanel } from '../components/routing/RoutingStatsPanel.tsx'
 import { CastPanel } from '../components/routing/CastPanel.tsx'
-import { ArrowSync20Regular, Bot20Regular, ArrowSwap20Regular, People20Regular } from '@fluentui/react-icons'
+import { ArrowSync20Regular, Bot20Regular, ArrowSwap20Regular, People20Regular, BookmarkAdd20Regular } from '@fluentui/react-icons'
 import {
   Caption1,
   Body1,
@@ -280,6 +280,8 @@ export default function Agents() {
   const saveAsTemplate = useSaveTeamAsTemplate(projectId)
   const [showSaveTemplateDialog, setShowSaveTemplateDialog] = useState(false)
   const [saveTemplateError, setSaveTemplateError] = useState<string | null>(null)
+  // Stream D — D7: surface on-disk template mirror path after a successful save.
+  const [savedTemplatePath, setSavedTemplatePath] = useState<string | null>(null)
   const [importFeedback, setImportFeedback] = useState<string | null>(null)
   const importFileRef = useRef<HTMLInputElement>(null)
 
@@ -303,9 +305,13 @@ export default function Agents() {
 
   async function handleSaveTemplate(name: string, description: string) {
     setSaveTemplateError(null)
+    setSavedTemplatePath(null)
     try {
-      await saveAsTemplate.mutateAsync({ name, description: description || undefined })
+      const result = await saveAsTemplate.mutateAsync({ name, description: description || undefined })
       setShowSaveTemplateDialog(false)
+      setSavedTemplatePath(result.storagePath)
+      // Auto-clear after a few seconds so the row doesn't sit stale forever.
+      setTimeout(() => setSavedTemplatePath(null), 6000)
     } catch (err) {
       setSaveTemplateError(err instanceof Error ? err.message : 'Save failed')
     }
@@ -425,25 +431,15 @@ export default function Agents() {
                   style={{ display: 'none' }}
                   onChange={(e) => void handleImportTeamFile(e)}
                 />
-                <button
+                {/* Wave 10 C7: Fluent2 Button + BookmarkAdd icon. */}
+                <Button
+                  appearance="secondary"
+                  icon={<BookmarkAdd20Regular />}
                   onClick={() => { setSaveTemplateError(null); setShowSaveTemplateDialog(true) }}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '6px',
-                    background: 'var(--bg)',
-                    border: '1px solid var(--border)',
-                    borderRadius: 'var(--radius)',
-                    color: 'var(--text)',
-                    padding: '7px 14px',
-                    fontSize: '13px',
-                    fontWeight: 500,
-                    cursor: 'pointer',
-                  }}
                   title="Save current team roster as a reusable template"
                 >
-                  ☆ Save as template
-                </button>
+                  Save as template
+                </Button>
                 <button
                   onClick={() => setShowHireTeamModal(true)}
                   style={{
@@ -614,6 +610,27 @@ export default function Agents() {
           onClick={() => setImportFeedback(null)}
         >
           {importFeedback} ✕
+        </div>
+      )}
+
+      {/* Stream D — D7: confirm where the JSON copy was written on disk. */}
+      {savedTemplatePath && (
+        <div style={{
+          position: 'fixed', bottom: 24, right: 24, zIndex: 9999,
+          background: 'var(--surface)',
+          border: '1px solid var(--border)',
+          borderRadius: 'var(--radius)',
+          padding: '10px 16px',
+          fontSize: '12px',
+          color: tokens.colorNeutralForeground2,
+          fontFamily: 'monospace',
+          maxWidth: 480,
+          wordBreak: 'break-all',
+          cursor: 'pointer',
+        }}
+          onClick={() => setSavedTemplatePath(null)}
+        >
+          Saved to: {savedTemplatePath} ✕
         </div>
       )}
 

@@ -37,7 +37,12 @@ import { projectToolsRouter, agentToolsRouter } from './routes/tools.js';
 import { projectMcpRouter, agentMcpRouter } from './routes/mcp.js';
 import { diagnosticsRouter, projectDiagnosticsRouter } from './routes/diagnostics.js';
 import heartbeatRouter from './routes/heartbeat.js';
+// Wave 10 B3: side-effect import — subscribes the in-memory ring buffer to
+// `eventBus.onHeartbeat` BEFORE heartbeat.start() schedules sweeps so the
+// first sweep tick is already captured.
+import './services/heartbeat.js';
 import { createMcpHttpRouter } from './mcp/http-transport.js';
+import { setDefaultProjectId } from './mcp/server.js';
 import { dispatcher } from './engine/dispatcher.js';
 import { heartbeat } from './engine/heartbeat.js';
 import { stuckIssueRunsSweep } from './engine/sweeps/stuck-issue-runs.js';
@@ -59,6 +64,8 @@ import teamPortabilityRouter from './routes/team-portability.js';
 import projectPortabilityRouter from './routes/project-portability.js';
 // Conjure smart-create — Phase 1 classify endpoint
 import conjureRouter from './routes/conjure.js';
+// Wave 10 Stream A1: auto-register the running squadboard repo as a project
+import { registerSelfAtBoot } from './services/self-register.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -74,6 +81,22 @@ async function main(): Promise<void> {
 
   const connectionString = await startEmbeddedPostgres();
   await initDb(connectionString);
+
+  // Wave 10 Stream A1: dogfood — self-register the running squadboard repo as
+  // a project on first boot so the MCP capture loop has somewhere to land
+  // cards. Gated and idempotent (see services/self-register.ts).
+  await registerSelfAtBoot();
+
+  // Wave 10 / A3: honour SQUADBOARD_DEFAULT_PROJECT_ID for the HTTP MCP
+  // transport too. The stdio entry point does this independently for desktop
+  // clients; doing it here covers HTTP clients (e.g. VS Code) that hit /mcp.
+  const mcpDefaultProjectId = process.env.SQUADBOARD_DEFAULT_PROJECT_ID;
+  if (mcpDefaultProjectId && mcpDefaultProjectId.trim()) {
+    setDefaultProjectId(mcpDefaultProjectId);
+    console.log(
+      `[squadboard] MCP default projectId from SQUADBOARD_DEFAULT_PROJECT_ID = ${mcpDefaultProjectId.trim()}`,
+    );
+  }
 
   // Phase 3: register and start the heartbeat sweep registry
   // (replaces the old dispatcher.start() 5 s monolithic tick).
@@ -169,6 +192,13 @@ async function main(): Promise<void> {
 
   // Conjure smart-create — POST /api/conjure/classify
   app.use('/api/conjure', conjureRouter);
+
+  // Wave 10 B7 — team portability (export/import/save-as-template/instantiate)
+  app.use('/api/projects/:id/team', teamPortabilityRouter);
+  // Phase 19 — project portability (export/import/save-as-template/instantiate)
+  app.use('/api/projects/:id', projectPortabilityRouter);
+  // Phase 19 — templates CRUD
+  app.use('/api/templates', templatesRouter);
 
   // Demo 12: presence REST endpoint (GET /api/projects/:id/presence)
   app.get('/api/projects/:id/presence', (req, res) => {

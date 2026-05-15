@@ -1,0 +1,32 @@
+{
+  "slug": "appointment-scheduler",
+  "title": "Appointment Scheduler",
+  "blurb": "A Squad sample that turns plain-text scheduling requests into optimized meeting proposals across timezones. Describe who needs to meet, when, and what to avoid — four AI specialists handle the rest.",
+  "tags": [
+    "ceremonies",
+    "routing",
+    "multi-agent"
+  ],
+  "agentCount": 4,
+  "routingRuleCount": 5,
+  "ceremonyCount": 1,
+  "defaultModel": null,
+  "teamName": "Appointment Scheduler Squad",
+  "warnings": [],
+  "source": {
+    "origin": "github",
+    "repo": "bradygaster/Squad-IRL",
+    "ref": "main"
+  },
+  "files": [
+    ".gitignore",
+    "README.md",
+    "index.ts",
+    "package.json",
+    "scheduler-input.ts",
+    "squad.config.ts",
+    "tsconfig.json"
+  ],
+  "htmlUrl": "https://github.com/bradygaster/Squad-IRL/tree/main/appointment-scheduler",
+  "bundledAt": "2026-05-15T07:48:07.518Z"
+}

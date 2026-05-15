@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { tokens } from '@fluentui/react-components'
 import { useAddComment, useDispatchMention } from '../../api/comments.ts'
-import { useAgents, type Agent } from '../../api/agents.ts'
+import { useActiveAgents, type Agent } from '../../api/agents.ts'
 
 interface CommentComposerProps {
   projectId: string
@@ -56,7 +56,10 @@ export default function CommentComposer({
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const addComment = useAddComment(projectId, issueId)
   const dispatchMention = useDispatchMention(projectId, issueId)
-  const { data: agents = [] } = useAgents(projectId)
+  // Wave 10 B9: @-mention autocomplete should only suggest active agents
+  // — mentioning a disabled agent would dispatch a run that the server
+  // would refuse with a 422 anyway.
+  const { data: agents = [] } = useActiveAgents(projectId)
 
   useEffect(() => {
     if (initialDraft) setBody(initialDraft)

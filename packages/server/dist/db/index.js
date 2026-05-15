@@ -708,6 +708,243 @@ async function bootstrapSchema() {
         ADD CONSTRAINT tools_mcp_server_fk
         FOREIGN KEY (mcp_server_id) REFERENCES mcp_servers(id) ON DELETE SET NULL;
     EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+    -- Phase 17: Ask / Consult mode — free-form brainstorm sessions.
+    DO $$ BEGIN
+      CREATE TYPE consult_mode AS ENUM ('agent', 'model');
+    EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+    DO $$ BEGIN
+      CREATE TYPE consult_status AS ENUM ('active', 'idle', 'completed', 'failed', 'cancelled');
+    EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+    DO $$ BEGIN
+      CREATE TYPE consult_message_role AS ENUM ('user', 'assistant', 'system', 'tool');
+    EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+    DO $$ BEGIN
+      CREATE TYPE consult_proposal_kind AS ENUM (
+        'issue', 'ceremony', 'inbox_item', 'capture_to_decision', 'assign_agent_to_issue'
+      );
+    EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+    DO $$ BEGIN
+      CREATE TYPE consult_proposal_status AS ENUM ('pending', 'accepted', 'edited', 'discarded');
+    EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+    CREATE TABLE IF NOT EXISTS consult_sessions (
+      id                       UUID            PRIMARY KEY DEFAULT gen_random_uuid(),
+      project_id               UUID            REFERENCES projects(id) ON DELETE CASCADE,
+      name                     TEXT,
+      mode                     consult_mode    NOT NULL DEFAULT 'agent',
+      agent_id                 UUID            REFERENCES agents(id) ON DELETE SET NULL,
+      agent_name               TEXT,
+      model                    TEXT,
+      status                   consult_status  NOT NULL DEFAULT 'active',
+      sdk_session_id           TEXT,
+      input_tokens             INTEGER         NOT NULL DEFAULT 0,
+      output_tokens            INTEGER         NOT NULL DEFAULT 0,
+      cost_usd                 NUMERIC(12, 6)  NOT NULL DEFAULT 0,
+      message_count            INTEGER         NOT NULL DEFAULT 0,
+      forked_from_session_id   UUID,
+      error_message            TEXT,
+      started_at               TIMESTAMPTZ     NOT NULL DEFAULT NOW(),
+      ended_at                 TIMESTAMPTZ,
+      created_at               TIMESTAMPTZ     NOT NULL DEFAULT NOW(),
+      updated_at               TIMESTAMPTZ     NOT NULL DEFAULT NOW()
+    );
+
+    CREATE INDEX IF NOT EXISTS consult_sessions_project_idx
+      ON consult_sessions (project_id, created_at DESC);
+    CREATE INDEX IF NOT EXISTS consult_sessions_created_idx
+      ON consult_sessions (created_at DESC);
+
+    CREATE TABLE IF NOT EXISTS consult_messages (
+      id                UUID                  PRIMARY KEY DEFAULT gen_random_uuid(),
+      session_id        UUID                  NOT NULL REFERENCES consult_sessions(id) ON DELETE CASCADE,
+      role              consult_message_role  NOT NULL,
+      content           TEXT                  NOT NULL DEFAULT '',
+      reasoning_content TEXT,
+      tool_name         TEXT,
+      tool_args         JSONB,
+      tool_result       JSONB,
+      input_tokens      INTEGER,
+      output_tokens     INTEGER,
+      cost_usd          NUMERIC(12, 6),
+      ts                TIMESTAMPTZ           NOT NULL DEFAULT NOW()
+    );
+
+    CREATE INDEX IF NOT EXISTS consult_messages_session_idx
+      ON consult_messages (session_id, ts);
+
+    CREATE TABLE IF NOT EXISTS consult_proposals (
+      id              UUID                      PRIMARY KEY DEFAULT gen_random_uuid(),
+      session_id      UUID                      NOT NULL REFERENCES consult_sessions(id) ON DELETE CASCADE,
+      message_id      UUID                      REFERENCES consult_messages(id) ON DELETE SET NULL,
+      kind            consult_proposal_kind     NOT NULL,
+      payload         JSONB                     NOT NULL DEFAULT '{}'::jsonb,
+      edited_payload  JSONB,
+      status          consult_proposal_status   NOT NULL DEFAULT 'pending',
+      result          JSONB,
+      error_message   TEXT,
+      created_at      TIMESTAMPTZ               NOT NULL DEFAULT NOW(),
+      decided_at      TIMESTAMPTZ
+    );
+
+    CREATE INDEX IF NOT EXISTS consult_proposals_session_idx
+      ON consult_proposals (session_id, created_at);
+    CREATE INDEX IF NOT EXISTS consult_proposals_status_idx
+      ON consult_proposals (status);
+
+    -- Phase dynamic-columns: column_meta is the source of truth for project columns.
+    -- New columns: semantic (roll-up bucket) and is_default (new-issue landing column).
+    CREATE TABLE IF NOT EXISTS column_meta (
+      id          UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+      project_id  UUID        NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+      column_id   TEXT        NOT NULL,
+      label       TEXT        NOT NULL,
+      description TEXT,
+      color       TEXT        NOT NULL,
+      position    INTEGER     NOT NULL DEFAULT 0,
+      semantic    TEXT        NOT NULL DEFAULT 'custom',
+      is_default  BOOLEAN     NOT NULL DEFAULT false,
+      created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+
+    CREATE UNIQUE INDEX IF NOT EXISTS column_meta_project_column_uq
+      ON column_meta (project_id, column_id);
+
+    -- Image attachments — binary content stored in BYTEA (5 MB cap enforced in service layer)
+    CREATE TABLE IF NOT EXISTS issue_attachments (
+      id          UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+      issue_id    UUID        NOT NULL REFERENCES issues(id) ON DELETE CASCADE,
+      filename    TEXT        NOT NULL,
+      mime_type   TEXT        NOT NULL,
+      size_bytes  INTEGER     NOT NULL,
+      content     BYTEA       NOT NULL,
+      created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+
+    CREATE INDEX IF NOT EXISTS issue_attachments_issue_idx
+      ON issue_attachments (issue_id, created_at);
+
+    -- Phase 19: Templates & Portability
+    CREATE TABLE IF NOT EXISTS templates (
+      id          UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+      kind        TEXT        NOT NULL,
+      name        TEXT        NOT NULL,
+      description TEXT,
+      payload     JSONB       NOT NULL,
+      project_id  UUID        REFERENCES projects(id) ON DELETE SET NULL,
+      created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      CONSTRAINT templates_kind_chk CHECK (kind IN ('workflow', 'team', 'project'))
+    );
+
+    CREATE INDEX IF NOT EXISTS templates_kind_name_idx
+      ON templates (kind, name);
+  `);
+    // ---------------------------------------------------------------------------
+    // Phase dynamic-columns: idempotent migration from column_status enum → TEXT
+    // Runs on every server start; all steps are no-ops once applied.
+    // ---------------------------------------------------------------------------
+    await _pool.query(`
+    -- Step 1: If the Postgres column_status enum still exists, migrate issues.status
+    -- to plain TEXT (enum→text is implicit in Postgres; USING clause is explicit for safety).
+    DO $$ BEGIN
+      IF EXISTS (SELECT 1 FROM pg_type WHERE typname = 'column_status') THEN
+        ALTER TABLE issues ALTER COLUMN status TYPE TEXT USING status::TEXT;
+        ALTER TABLE issues ALTER COLUMN status SET DEFAULT 'backlog';
+        DROP TYPE column_status;
+      END IF;
+    END $$;
+
+    -- Step 2: Add semantic and is_default columns to column_meta if not present.
+    ALTER TABLE column_meta
+      ADD COLUMN IF NOT EXISTS semantic    TEXT    NOT NULL DEFAULT 'custom',
+      ADD COLUMN IF NOT EXISTS is_default  BOOLEAN NOT NULL DEFAULT false;
+
+    -- Step 3: Backfill semantic roll-up values for the 5 seed columns.
+    UPDATE column_meta SET semantic = 'backlog'     WHERE column_id = 'backlog'     AND semantic = 'custom';
+    UPDATE column_meta SET semantic = 'ready'       WHERE column_id = 'todo'        AND semantic = 'custom';
+    UPDATE column_meta SET semantic = 'in_progress' WHERE column_id = 'in_progress' AND semantic = 'custom';
+    UPDATE column_meta SET semantic = 'review'      WHERE column_id = 'in_review'   AND semantic = 'custom';
+    UPDATE column_meta SET semantic = 'done'        WHERE column_id = 'done'        AND semantic = 'custom';
+
+    -- Step 4: Backfill is_default=true on the backlog column for every project
+    -- that does not yet have any column marked as default.
+    UPDATE column_meta
+    SET    is_default = true
+    WHERE  column_id  = 'backlog'
+    AND    project_id NOT IN (
+      SELECT DISTINCT project_id FROM column_meta WHERE is_default = true
+    );
+  `);
+    // ---------------------------------------------------------------------------
+    // Wave 10 D2: skill provenance tracking — distinguish curated/imported/custom
+    // skills so the UI can render a "From: built-in catalog" / "From: import"
+    // badge. Backfills `source='curated'` for any skill that already has a
+    // curatedKey set.
+    // ---------------------------------------------------------------------------
+    await _pool.query(`
+    ALTER TABLE skills
+      ADD COLUMN IF NOT EXISTS source     TEXT NOT NULL DEFAULT 'custom',
+      ADD COLUMN IF NOT EXISTS source_uri TEXT;
+
+    UPDATE skills
+    SET    source = 'curated'
+    WHERE  curated_key IS NOT NULL
+    AND    source = 'custom';
+  `);
+    // ---------------------------------------------------------------------------
+    // Wave 10 D3: tool + MCP-server provenance tracking — same pattern as D2.
+    // ---------------------------------------------------------------------------
+    await _pool.query(`
+    ALTER TABLE tools
+      ADD COLUMN IF NOT EXISTS source     TEXT NOT NULL DEFAULT 'custom',
+      ADD COLUMN IF NOT EXISTS source_uri TEXT;
+
+    DO $$ BEGIN
+      IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'mcp_servers') THEN
+        ALTER TABLE mcp_servers
+          ADD COLUMN IF NOT EXISTS source     TEXT NOT NULL DEFAULT 'custom',
+          ADD COLUMN IF NOT EXISTS source_uri TEXT;
+      END IF;
+    END $$;
+  `);
+    // ---------------------------------------------------------------------------
+    // Wave 10 D4: ceremony trigger source. workflow_runs.trigger_source records
+    // whether the run was spawned manually, by the schedule sweep, or by an
+    // event (and which event/schedule). Surfaced on the runs list.
+    // ---------------------------------------------------------------------------
+    await _pool.query(`
+    ALTER TABLE workflow_runs
+      ADD COLUMN IF NOT EXISTS trigger_source jsonb;
+  `);
+    // ---------------------------------------------------------------------------
+    // Wave 10 D6: GitHub Copilot premium-request multipliers. Adds an
+    // alternate cost rollup column on issue_runs / workflow_runs / consult_sessions
+    // (USD remains the default). Adds projects.cost_model so each project can
+    // pick which cost model the Costs page shows; env SQUADBOARD_COST_MODEL is
+    // the default when null.
+    // ---------------------------------------------------------------------------
+    await _pool.query(`
+    ALTER TABLE issue_runs
+      ADD COLUMN IF NOT EXISTS premium_requests numeric(12, 4) DEFAULT 0;
+
+    ALTER TABLE workflow_runs
+      ADD COLUMN IF NOT EXISTS premium_requests numeric(12, 4) DEFAULT 0;
+
+    DO $$ BEGIN
+      IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'consult_sessions') THEN
+        ALTER TABLE consult_sessions
+          ADD COLUMN IF NOT EXISTS premium_requests numeric(12, 4) NOT NULL DEFAULT 0;
+      END IF;
+    END $$;
+
+    ALTER TABLE projects
+      ADD COLUMN IF NOT EXISTS cost_model text;
   `);
     await seedSystemReviewPolicyPresets();
     console.log('[db] schema bootstrapped');

@@ -1,0 +1,155 @@
+/**
+ * routes/starters.ts
+ *
+ * Bundled Squad-IRL starter projects served from local disk (no network).
+ *
+ *   GET  /api/starters              → catalogue
+ *   GET  /api/starters/:slug        → meta + readme + plan + source
+ *   GET  /api/starters/:slug/plan   → just the provisioning plan
+ *   POST /api/starters/:slug/use    → materialise as a new Squadboard project
+ */
+import { Router } from 'express';
+import path from 'node:path';
+import os from 'node:os';
+import fs from 'node:fs/promises';
+import { eq } from 'drizzle-orm';
+import { getDb, schema } from '../db/index.js';
+import { getStarter, getStarterPlan, listStarters, } from '../services/starter-projects.js';
+import { materialiseIrlPlan } from '../services/irl-mapper.js';
+export const startersRouter = Router();
+startersRouter.get('/', async (_req, res) => {
+    try {
+        const starters = await listStarters();
+        res.json({ ok: true, data: starters });
+    }
+    catch (err) {
+        res.status(500).json({
+            ok: false,
+            error: 'starters_unavailable',
+            message: err.message,
+        });
+    }
+});
+startersRouter.get('/:slug', async (req, res) => {
+    const slug = req.params.slug;
+    try {
+        const detail = await getStarter(slug);
+        if (!detail) {
+            res.status(404).json({ ok: false, error: 'starter_not_found' });
+            return;
+        }
+        res.json({ ok: true, data: detail });
+    }
+    catch (err) {
+        res.status(500).json({
+            ok: false,
+            error: 'starter_read_failed',
+            message: err.message,
+        });
+    }
+});
+startersRouter.get('/:slug/plan', async (req, res) => {
+    const slug = req.params.slug;
+    try {
+        const plan = await getStarterPlan(slug);
+        if (!plan) {
+            res.status(404).json({ ok: false, error: 'starter_not_found' });
+            return;
+        }
+        res.json({ ok: true, data: plan });
+    }
+    catch (err) {
+        res.status(500).json({
+            ok: false,
+            error: 'starter_read_failed',
+            message: err.message,
+        });
+    }
+});
+startersRouter.post('/:slug/use', async (req, res) => {
+    const slug = req.params.slug;
+    const body = (req.body ?? {});
+    let detail;
+    try {
+        detail = await getStarter(slug);
+    }
+    catch (err) {
+        res.status(500).json({
+            ok: false,
+            error: 'starter_read_failed',
+            message: err.message,
+        });
+        return;
+    }
+    if (!detail) {
+        res.status(404).json({ ok: false, error: 'starter_not_found' });
+        return;
+    }
+    const projectName = (body.projectName ?? detail.meta.title).slice(0, 200) || slug;
+    const projectPath = await resolveProjectPath(body.projectPath, slug);
+    // Refuse if the target path already has anything in it that would collide.
+    try {
+        const existing = await fs.readdir(projectPath).catch(() => []);
+        if (existing.length > 0) {
+            res.status(409).json({
+                ok: false,
+                error: 'path_not_empty',
+                message: `Refusing to use non-empty path ${projectPath}`,
+            });
+            return;
+        }
+    }
+    catch {
+        // dir doesn't exist yet — fine, materialiser will create it
+    }
+    const db = getDb();
+    const [project] = await db
+        .insert(schema.projects)
+        .values({ name: projectName, path: projectPath })
+        .returning();
+    if (!project) {
+        res.status(500).json({ ok: false, error: 'project_insert_failed' });
+        return;
+    }
+    let result;
+    try {
+        result = await materialiseIrlPlan(project.id, projectPath, detail.plan);
+    }
+    catch (err) {
+        // Best-effort rollback on partial failure.
+        await db.delete(schema.projects).where(eq(schema.projects.id, project.id)).catch(() => { });
+        await fs.rm(projectPath, { recursive: true, force: true }).catch(() => { });
+        res.status(500).json({
+            ok: false,
+            error: 'materialise_failed',
+            message: err.message,
+        });
+        return;
+    }
+    res.status(201).json({
+        ok: true,
+        data: {
+            project,
+            result,
+            plan: {
+                agents: detail.plan.agents.map((a) => ({ name: a.name, role: a.role })),
+                routingRules: detail.plan.routingRules.length,
+                ceremonies: detail.plan.ceremonies.length,
+                warnings: detail.plan.warnings,
+            },
+        },
+    });
+});
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+async function resolveProjectPath(provided, slug) {
+    if (provided && path.isAbsolute(provided))
+        return provided;
+    const home = os.homedir();
+    const base = path.join(home, '.squadboard', 'projects');
+    await fs.mkdir(base, { recursive: true });
+    const stamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+    return path.join(base, `${slug}-${stamp}`);
+}
+//# sourceMappingURL=starters.js.map

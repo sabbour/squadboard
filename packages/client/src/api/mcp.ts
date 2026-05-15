@@ -31,6 +31,9 @@ export interface McpServer {
   args: string[]
   headers: ScrubbedHeader[]
   enabled: boolean
+  /** Provenance — Wave 10 D3. */
+  source: 'curated' | 'imported' | 'custom' | 'project'
+  sourceUri: string | null
   createdAt: string
   updatedAt: string
 }
@@ -147,5 +150,34 @@ export function useUnassignMcpServerFromAgent(projectId: string, agentId: string
         { method: 'DELETE' },
       ),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['mcp-servers', projectId, 'agent', agentId] }),
+  })
+}
+
+export interface ImportMcpResult {
+  imported: Array<{ id: string; name: string; transport: McpTransport }>
+  skipped: Array<{ name: string; reason: string }>
+}
+
+/**
+ * Wave 10 D3 — import an MCP server config JSON document.
+ *
+ * Accepts the standard Claude/VS Code/Continue MCP shape:
+ *   { "mcpServers": { "github": { "command": "npx", "args": [...], "env": {...} } } }
+ * Or a single server object: { "name": "remote", "url": "https://…", "headers": {...} }
+ * Idempotent — duplicate names are skipped.
+ */
+export function useImportMcpServersFromJson(projectId: string) {
+  const qc = useQueryClient()
+  return useMutation<
+    ImportMcpResult,
+    Error,
+    { content: string; filename?: string; sourceUri?: string }
+  >({
+    mutationFn: ({ content, filename, sourceUri }) =>
+      apiFetch<Envelope<ImportMcpResult>>(`/api/projects/${projectId}/mcp-servers/import-from-json`, {
+        method: 'POST',
+        body: JSON.stringify({ content, filename, sourceUri }),
+      }).then(unwrap),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['mcp-servers', projectId] }),
   })
 }

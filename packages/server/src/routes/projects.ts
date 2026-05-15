@@ -44,7 +44,10 @@ router.get('/:id', async (req: Request, res: Response) => {
 });
 
 router.patch('/:id', async (req: Request, res: Response) => {
-  const { defaultModel } = (req.body ?? {}) as { defaultModel?: string | null };
+  const { defaultModel, costModel } = (req.body ?? {}) as {
+    defaultModel?: string | null;
+    costModel?: string | null;
+  };
   const updates: Partial<typeof schema.projects.$inferInsert> = {};
 
   if (defaultModel !== undefined) {
@@ -58,6 +61,18 @@ router.patch('/:id', async (req: Request, res: Response) => {
       }
     }
     updates.defaultModel = normalized;
+  }
+
+  // Stream D — D6: cost model toggle. 'usd' | 'gh_multipliers' | null (use env default).
+  if (costModel !== undefined) {
+    if (costModel === null || costModel === '') {
+      updates.costModel = null;
+    } else if (costModel === 'usd' || costModel === 'gh_multipliers') {
+      updates.costModel = costModel;
+    } else {
+      res.status(400).json({ error: "costModel must be 'usd', 'gh_multipliers', or null" });
+      return;
+    }
   }
 
   if (Object.keys(updates).length === 0) {

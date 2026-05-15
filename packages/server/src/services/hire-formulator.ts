@@ -138,6 +138,7 @@ export async function formulateAgentDraft(
 // ---------------------------------------------------------------------------
 
 const VALID_ROLES = [
+  // SDK base roles
   'lead',
   'developer',
   'tester',
@@ -147,6 +148,14 @@ const VALID_ROLES = [
   'designer',
   'prompt-engineer',
   'scribe',
+  // Squadboard-extended non-tech roles (Wave 10 D1)
+  'pm',
+  'designer-nontech',
+  'founder',
+  'sales',
+  'marketing',
+  'customer-success',
+  'research',
 ] as const;
 type ValidRole = (typeof VALID_ROLES)[number];
 
@@ -172,7 +181,10 @@ function buildTeamPrompt(draft: string, universes: { id: string; label: string; 
     universeList,
     '',
     'Available roles:',
-    VALID_ROLES.map((r) => `- ${r}`).join('\n'),
+    [
+      '- Tech (SDK): lead, developer, tester, reviewer, devops, security, designer (frontend), prompt-engineer, scribe',
+      '- Non-tech: pm, designer-nontech (brand/UX), founder, sales, marketing, customer-success, research',
+    ].join('\n'),
     '',
     "User's draft:",
     '"""',

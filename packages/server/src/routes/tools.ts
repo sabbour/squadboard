@@ -5,6 +5,8 @@
  *
  *   GET    /api/projects/:projectId/tools                    — list project tools
  *   POST   /api/projects/:projectId/tools                    — create
+ *   POST   /api/projects/:projectId/tools/import-from-json   — import tool(s) (Wave 10 D3)
+ *   POST   /api/projects/:projectId/tools/formulate          — AI-author from a draft
  *   PATCH  /api/projects/:projectId/tools/:id                — update
  *   DELETE /api/projects/:projectId/tools/:id                — delete
  *   GET    /api/projects/:projectId/agents/:agentId/tools    — assigned tools
@@ -61,6 +63,31 @@ projectToolsRouter.post('/', async (req: Request, res: Response) => {
     res.status(201).json({ ok: true, data: created });
   } catch (err) {
     handleError(res, err, 'tools');
+  }
+});
+
+projectToolsRouter.post('/import-from-json', async (req: Request, res: Response) => {
+  try {
+    const { projectId } = req.params as { projectId: string };
+    const body = req.body as {
+      content?: string | unknown;
+      filename?: string;
+      sourceUri?: string;
+      mcpServerId?: string;
+    };
+    if (body.content === undefined || body.content === null) {
+      res.status(400).json({ ok: false, error: 'content is required (raw JSON string or object)' });
+      return;
+    }
+    const result = await toolsService.importToolsFromJson(projectId, {
+      content: body.content,
+      filename: typeof body.filename === 'string' ? body.filename : undefined,
+      sourceUri: typeof body.sourceUri === 'string' ? body.sourceUri : undefined,
+      mcpServerId: typeof body.mcpServerId === 'string' ? body.mcpServerId : undefined,
+    });
+    res.status(201).json({ ok: true, data: result });
+  } catch (err) {
+    handleError(res, err, 'tools/import-from-json');
   }
 });
 

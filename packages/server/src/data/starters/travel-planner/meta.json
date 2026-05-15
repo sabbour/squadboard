@@ -1,0 +1,30 @@
+{
+  "slug": "travel-planner",
+  "title": "Travel Planner — A Squad of Travel Experts",
+  "blurb": "Trip planning sucks. You're bouncing between Google Maps, TripAdvisor, Booking.com, Reddit threads, and your friend's cousin's blog. Visa requirements, flight connections, neighborhood vibes, whether that $200 hotel is worth it — it's fragm",
+  "tags": [
+    "ceremonies",
+    "routing",
+    "large-team"
+  ],
+  "agentCount": 5,
+  "routingRuleCount": 6,
+  "ceremonyCount": 1,
+  "defaultModel": null,
+  "teamName": "Travel Planning Squad",
+  "warnings": [],
+  "source": {
+    "origin": "github",
+    "repo": "bradygaster/Squad-IRL",
+    "ref": "main"
+  },
+  "files": [
+    "README.md",
+    "index.ts",
+    "package.json",
+    "squad.config.ts",
+    "tsconfig.json"
+  ],
+  "htmlUrl": "https://github.com/bradygaster/Squad-IRL/tree/main/travel-planner",
+  "bundledAt": "2026-05-15T07:48:10.111Z"
+}

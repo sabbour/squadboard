@@ -1,5 +1,6 @@
 import { issueRuns } from '../db/schema.js';
 import { eq, sql } from 'drizzle-orm';
+import { estimatePremiumRequests } from './pricing.js';
 const MODEL_PRICING = {
     // Claude Opus 4.x
     'claude-opus-4': { inputPerM: 15.00, outputPerM: 75.00 },
@@ -53,10 +54,13 @@ export class CostTracker {
             .where(eq(issueRuns.id, this.issueRunId));
     }
     /** Full granular cost record with input/output split. */
-    async recordCost(inputTokens, outputTokens, modelId) {
+    async recordCost(inputTokens, outputTokens, modelId, premiumOpts) {
         const pricing = getPricing(modelId);
         const costUsd = computeCost(inputTokens, outputTokens, pricing).toFixed(6);
         const totalTokens = inputTokens + outputTokens;
+        // Stream D — D6: stamp the GitHub Copilot premium-request equivalent
+        // alongside the USD figure so the Costs page can render either model.
+        const premiumRequests = estimatePremiumRequests(modelId, premiumOpts);
         await this.db
             .update(issueRuns)
             .set({
@@ -64,6 +68,7 @@ export class CostTracker {
             outputTokens,
             costTokens: totalTokens,
             costUsd,
+            premiumRequests: premiumRequests.toString(),
             updatedAt: new Date(),
         })
             .where(eq(issueRuns.id, this.issueRunId));
@@ -80,69 +85,113 @@ export class CostTracker {
             .where(eq(issueRuns.id, this.issueRunId));
     }
 }
-export async function getCostSummary(db, projectId) {
+export async function getCostSummary(db, projectId, options = {}) {
+    const sources = options.sources && options.sources.length > 0
+        ? options.sources
+        : ['run', 'live_session'];
     const startOfMonth = new Date();
     startOfMonth.setUTCDate(1);
     startOfMonth.setUTCHours(0, 0, 0, 0);
-    // Query all completed issue_runs for this project, joined with agent info
-    const rows = await db.execute(sql `
-    SELECT
-      ir.id,
-      ir.agent_id,
-      a.name          AS agent_name,
-      a.model         AS model_id,
-      ir.input_tokens,
-      ir.output_tokens,
-      ir.cost_tokens,
-      ir.cost_usd,
-      ir.created_at
-    FROM issue_runs ir
-    JOIN agents a ON ir.agent_id = a.id
-    JOIN issues i ON ir.issue_id = i.id
-    WHERE i.project_id = ${projectId}
-      AND ir.status IN ('completed', 'failed')
-    ORDER BY ir.created_at DESC
-  `);
-    // Live sessions also accrue cost via SquadClient streaming.
-    // They're not bound to issue_runs, so union them in as synthetic rows
-    // grouped under their owning agent (or 'live-session' bucket if no agent).
-    const liveRows = await db.execute(sql `
-    SELECT
-      ls.id,
-      COALESCE(ls.agent_id::text, ls.id::text) AS agent_id,
-      COALESCE(ls.agent_name, 'Live session') AS agent_name,
-      ls.model AS model_id,
-      ls.input_tokens,
-      ls.output_tokens,
-      (ls.input_tokens + ls.output_tokens) AS cost_tokens,
-      ls.cost_usd::text AS cost_usd,
-      ls.created_at
-    FROM live_sessions ls
-    WHERE ls.project_id = ${projectId}
-  `);
-    const allRows = [
-        ...rows.rows,
-        ...liveRows.rows,
-    ];
+    const allRows = [];
+    if (sources.includes('run')) {
+        // Query all completed issue_runs for this project, joined with agent info
+        const rows = await db.execute(sql `
+      SELECT
+        ir.id,
+        ir.agent_id,
+        a.name          AS agent_name,
+        a.model         AS model_id,
+        ir.input_tokens,
+        ir.output_tokens,
+        ir.cost_tokens,
+        ir.cost_usd,
+        ir.premium_requests,
+        ir.created_at,
+        'run'::text     AS source
+      FROM issue_runs ir
+      JOIN agents a ON ir.agent_id = a.id
+      JOIN issues i ON ir.issue_id = i.id
+      WHERE i.project_id = ${projectId}
+        AND ir.status IN ('completed', 'failed')
+      ORDER BY ir.created_at DESC
+    `);
+        allRows.push(...rows.rows);
+    }
+    if (sources.includes('live_session')) {
+        // Live sessions also accrue cost via SquadClient streaming.
+        // They're not bound to issue_runs, so union them in as synthetic rows
+        // grouped under their owning agent (or 'live-session' bucket if no agent).
+        const liveRows = await db.execute(sql `
+      SELECT
+        ls.id,
+        COALESCE(ls.agent_id::text, ls.id::text) AS agent_id,
+        COALESCE(ls.agent_name, 'Live session') AS agent_name,
+        ls.model AS model_id,
+        ls.input_tokens,
+        ls.output_tokens,
+        (ls.input_tokens + ls.output_tokens) AS cost_tokens,
+        ls.cost_usd::text AS cost_usd,
+        NULL::numeric AS premium_requests,
+        ls.created_at,
+        'live_session'::text AS source
+      FROM live_sessions ls
+      WHERE ls.project_id = ${projectId}
+    `);
+        allRows.push(...liveRows.rows);
+    }
+    if (sources.includes('consult')) {
+        // Phase 17: Ask / Consult sessions (free-form brainstorm). These
+        // are intentionally separate from billable run + live spend so
+        // exploratory thinking doesn't pollute project run cost charts.
+        const consultRows = await db.execute(sql `
+      SELECT
+        cs.id,
+        COALESCE(cs.agent_id::text, cs.id::text) AS agent_id,
+        COALESCE(cs.agent_name, CASE WHEN cs.mode = 'model' THEN 'Model consult' ELSE 'Agent consult' END) AS agent_name,
+        cs.model AS model_id,
+        cs.input_tokens,
+        cs.output_tokens,
+        (cs.input_tokens + cs.output_tokens) AS cost_tokens,
+        cs.cost_usd::text AS cost_usd,
+        cs.premium_requests,
+        cs.created_at,
+        'consult'::text AS source
+      FROM consult_sessions cs
+      WHERE cs.project_id = ${projectId}
+    `);
+        allRows.push(...consultRows.rows);
+    }
     const mtdRows = allRows.filter((r) => new Date(r.created_at) >= startOfMonth);
     function aggregate(raws) {
         const agentMap = new Map();
+        const modelMap = new Map();
+        const sourceMap = new Map();
         let totalInput = 0;
         let totalOutput = 0;
         let totalCost = 0;
+        let totalPremium = 0;
         for (const r of raws) {
             const input = Number(r.input_tokens ?? 0);
             const output = Number(r.output_tokens ?? 0);
             const cost = parseFloat(r.cost_usd ?? '0') || 0;
+            // Stream D — D6: prefer the persisted column when present (paid/agent
+            // runs), otherwise estimate from the model multiplier so live_session
+            // rows still contribute a sensible figure.
+            const stored = r.premium_requests == null ? null : Number(r.premium_requests);
+            const premium = stored !== null && Number.isFinite(stored)
+                ? stored
+                : estimatePremiumRequests(r.model_id ?? undefined);
             totalInput += input;
             totalOutput += output;
             totalCost += cost;
+            totalPremium += premium;
             const existing = agentMap.get(r.agent_id);
             if (existing) {
                 existing.runCount++;
                 existing.inputTokens += input;
                 existing.outputTokens += output;
                 existing.costUsd += cost;
+                existing.premiumRequests += premium;
             }
             else {
                 agentMap.set(r.agent_id, {
@@ -152,6 +201,44 @@ export async function getCostSummary(db, projectId) {
                     inputTokens: input,
                     outputTokens: output,
                     costUsd: cost,
+                    premiumRequests: premium,
+                });
+            }
+            const modelKey = r.model_id ?? 'unknown';
+            const existingModel = modelMap.get(modelKey);
+            if (existingModel) {
+                existingModel.runCount++;
+                existingModel.inputTokens += input;
+                existingModel.outputTokens += output;
+                existingModel.costUsd += cost;
+                existingModel.premiumRequests += premium;
+            }
+            else {
+                modelMap.set(modelKey, {
+                    modelId: modelKey,
+                    runCount: 1,
+                    inputTokens: input,
+                    outputTokens: output,
+                    costUsd: cost,
+                    premiumRequests: premium,
+                });
+            }
+            const existingSource = sourceMap.get(r.source);
+            if (existingSource) {
+                existingSource.runCount++;
+                existingSource.inputTokens += input;
+                existingSource.outputTokens += output;
+                existingSource.costUsd += cost;
+                existingSource.premiumRequests += premium;
+            }
+            else {
+                sourceMap.set(r.source, {
+                    source: r.source,
+                    runCount: 1,
+                    inputTokens: input,
+                    outputTokens: output,
+                    costUsd: cost,
+                    premiumRequests: premium,
                 });
             }
         }
@@ -159,11 +246,32 @@ export async function getCostSummary(db, projectId) {
             totalInputTokens: totalInput,
             totalOutputTokens: totalOutput,
             totalCostUsd: totalCost,
+            totalPremiumRequests: Math.round(totalPremium * 10_000) / 10_000,
             byAgent: Array.from(agentMap.values()),
+            byModel: Array.from(modelMap.values()),
+            bySource: Array.from(sourceMap.values()),
         };
+    }
+    // Stream D — D6: resolve the project's cost model preference.
+    let costModel = (process.env.SQUADBOARD_COST_MODEL === 'gh_multipliers')
+        ? 'gh_multipliers'
+        : 'usd';
+    try {
+        const proj = await db.execute(sql `
+      SELECT cost_model FROM projects WHERE id = ${projectId} LIMIT 1
+    `);
+        const stored = proj.rows[0]?.cost_model;
+        if (stored === 'usd' || stored === 'gh_multipliers') {
+            costModel = stored;
+        }
+    }
+    catch {
+        // Pre-D6 schema or transient error — keep env default.
     }
     return {
         projectId,
+        sources,
+        costModel,
         mtd: aggregate(mtdRows),
         allTime: aggregate(allRows),
     };

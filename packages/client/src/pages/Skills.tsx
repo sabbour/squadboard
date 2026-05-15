@@ -11,7 +11,7 @@
  * that will be injected into the agent's system prompt.
  */
 
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { useParams } from 'react-router'
 import {
   Body1,
@@ -29,6 +29,7 @@ import {
   Textarea,
   tokens,
 } from '@fluentui/react-components'
+import { Add20Regular, ArrowUpload20Regular, BookStarRegular, Library20Regular } from '@fluentui/react-icons'
 import { useProject } from '../api/projects.ts'
 import {
   useCloneCuratedSkill,
@@ -36,6 +37,7 @@ import {
   useCuratedSkills,
   useDeleteSkill,
   useFormulateSkill,
+  useImportSkillFromMd,
   useSkills,
   useUpdateSkill,
   type FormulateModelInfo,
@@ -44,6 +46,7 @@ import {
 } from '../api/skills.ts'
 import FormulatePanel from '../components/formulate/FormulatePanel.tsx'
 import PageHeader from '../components/layout/PageHeader.tsx'
+import EmptyState from '../components/layout/EmptyState.tsx'
 
 const KEBAB_RE = /^[a-z][a-z0-9-]*$/
 
@@ -63,6 +66,9 @@ export default function Skills() {
   const { data: project } = useProject(projectId)
   const { data: skills = [], isLoading } = useSkills(projectId)
   const deleteSkill = useDeleteSkill(projectId)
+  const importMd = useImportSkillFromMd(projectId)
+  const importInputRef = useRef<HTMLInputElement | null>(null)
+  const [importMessage, setImportMessage] = useState<{ kind: 'ok' | 'error'; text: string } | null>(null)
 
   const [showCreate, setShowCreate] = useState(false)
   const [showCurated, setShowCurated] = useState(false)
@@ -80,6 +86,17 @@ export default function Skills() {
     deleteSkill.mutate(s.id)
   }
 
+  async function handleImportFile(file: File) {
+    setImportMessage(null)
+    try {
+      const text = await file.text()
+      const created = await importMd.mutateAsync({ content: text, filename: file.name })
+      setImportMessage({ kind: 'ok', text: `Imported "${created.name}" (key: ${created.key}).` })
+    } catch (err) {
+      setImportMessage({ kind: 'error', text: err instanceof Error ? err.message : 'Import failed' })
+    }
+  }
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
       <PageHeader
@@ -88,19 +105,80 @@ export default function Skills() {
         description="Prompt-augmentation snippets agents can be assigned to specialise their behaviour."
         actions={
           <>
-            <Button appearance="secondary" onClick={() => setShowCurated(true)}>Browse curated</Button>
-            <Button appearance="primary" onClick={() => setShowCreate(true)}>New skill</Button>
+            <input
+              ref={importInputRef}
+              type="file"
+              accept=".md,text/markdown"
+              style={{ display: 'none' }}
+              onChange={(e) => {
+                const f = e.target.files?.[0]
+                if (f) handleImportFile(f)
+                e.target.value = ''
+              }}
+            />
+            <Button
+              appearance="secondary"
+              icon={<ArrowUpload20Regular />}
+              onClick={() => importInputRef.current?.click()}
+              disabled={importMd.isPending}
+            >
+              {importMd.isPending ? 'Importing…' : 'Import .md'}
+            </Button>
+            <Button appearance="secondary" icon={<Library20Regular />} onClick={() => setShowCurated(true)}>Browse curated</Button>
+            <Button appearance="primary" icon={<Add20Regular />} onClick={() => setShowCreate(true)}>New skill</Button>
           </>
         }
       />
 
       <div style={{ flex: 1, overflow: 'auto', padding: '24px', maxWidth: '1100px', width: '100%', margin: '0 auto' }}>
+        {importMessage && (
+          <div
+            style={{
+              padding: '8px 12px',
+              borderRadius: '6px',
+              marginBottom: '12px',
+              fontSize: '13px',
+              background: importMessage.kind === 'ok' ? tokens.colorPaletteGreenBackground2 : tokens.colorPaletteRedBackground2,
+              color: importMessage.kind === 'ok' ? tokens.colorPaletteGreenForeground2 : tokens.colorPaletteRedForeground2,
+              border: `1px solid ${importMessage.kind === 'ok' ? tokens.colorPaletteGreenBorderActive : tokens.colorPaletteRedBorderActive}`,
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              gap: '8px',
+            }}
+          >
+            <span>{importMessage.text}</span>
+            <Button size="small" appearance="subtle" onClick={() => setImportMessage(null)}>Dismiss</Button>
+          </div>
+        )}
         {isLoading && <Body1 style={{ color: tokens.colorNeutralForeground3 }}>Loading…</Body1>}
         {!isLoading && skills.length === 0 && (
-          <div style={{ textAlign: 'center', padding: '48px 16px', color: 'var(--text-muted)' }}>
-            <Body1 style={{ display: 'block', marginBottom: tokens.spacingVerticalM }}>No skills yet.</Body1>
-            <Button appearance="secondary" onClick={() => setShowCurated(true)}>Browse the curated library</Button>
-          </div>
+          /* Wave 10 C5: Ceremonies-style empty state with the full Skills triplet
+             (Browse curated + New + Import). Stream D's Import.md and curated
+             provenance remain intact. */
+          <EmptyState
+            icon={<BookStarRegular />}
+            title="No skills yet"
+            description="Skills inject prompt fragments into agents to specialise their behaviour. Browse the curated library, author one from scratch, or import a SKILL.md from another project."
+            actions={
+              <>
+                <Button
+                  appearance="secondary"
+                  icon={<ArrowUpload20Regular />}
+                  onClick={() => importInputRef.current?.click()}
+                  disabled={importMd.isPending}
+                >
+                  {importMd.isPending ? 'Importing…' : 'Import .md'}
+                </Button>
+                <Button appearance="secondary" icon={<Library20Regular />} onClick={() => setShowCurated(true)}>
+                  Browse curated
+                </Button>
+                <Button appearance="primary" icon={<Add20Regular />} onClick={() => setShowCreate(true)}>
+                  New skill
+                </Button>
+              </>
+            }
+          />
         )}
         {Array.from(grouped.entries()).sort(([a], [b]) => a.localeCompare(b)).map(([cat, items]) => (
           <section key={cat} style={{ marginBottom: '24px' }}>
@@ -135,6 +213,39 @@ export default function Skills() {
   )
 }
 
+function SourceBadge({ source }: { source: Skill['source'] }) {
+  const meta = (() => {
+    switch (source) {
+      case 'curated':
+        return { label: 'Built-in catalog', bg: tokens.colorBrandBackground2, fg: tokens.colorBrandForeground1 }
+      case 'imported':
+        return { label: 'Imported', bg: tokens.colorPaletteGreenBackground2, fg: tokens.colorPaletteGreenForeground2 }
+      case 'project':
+        return { label: 'Project', bg: tokens.colorNeutralBackground3, fg: tokens.colorNeutralForeground2 }
+      case 'custom':
+      default:
+        return { label: 'Custom', bg: tokens.colorNeutralBackground3, fg: tokens.colorNeutralForeground2 }
+    }
+  })()
+  return (
+    <span
+      style={{
+        fontSize: '10px',
+        padding: '1px 6px',
+        borderRadius: '8px',
+        background: meta.bg,
+        color: meta.fg,
+        textTransform: 'uppercase',
+        letterSpacing: '0.04em',
+        fontWeight: 600,
+      }}
+      title={`Skill provenance: ${meta.label.toLowerCase()}`}
+    >
+      {meta.label}
+    </span>
+  )
+}
+
 function SkillRow({ skill, onEdit, onDelete }: { skill: Skill; onEdit: () => void; onDelete: () => void }) {
   return (
     <div style={{
@@ -142,15 +253,23 @@ function SkillRow({ skill, onEdit, onDelete }: { skill: Skill; onEdit: () => voi
       background: 'var(--surface)', display: 'flex', gap: '16px', alignItems: 'flex-start',
     }}>
       <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px', flexWrap: 'wrap' }}>
           <Body1Strong style={{ color: tokens.colorNeutralForeground1 }}>{skill.name}</Body1Strong>
           <code style={{ fontSize: '11px', color: tokens.colorNeutralForeground3, fontFamily: tokens.fontFamilyMonospace }}>{skill.key}</code>
-          {skill.curatedKey && (
-            <span style={{ fontSize: '10px', padding: '1px 6px', borderRadius: '8px', background: tokens.colorBrandBackground2, color: tokens.colorBrandForeground1 }}>curated</span>
+          <SourceBadge source={skill.source} />
+          {skill.curatedKey && skill.source !== 'curated' && (
+            <span style={{ fontSize: '10px', padding: '1px 6px', borderRadius: '8px', background: tokens.colorBrandBackground2, color: tokens.colorBrandForeground1 }}>
+              cloned from {skill.curatedKey}
+            </span>
           )}
         </div>
         {skill.description && (
           <Caption1 style={{ display: 'block', color: tokens.colorNeutralForeground3, margin: '0 0 6px' }}>{skill.description}</Caption1>
+        )}
+        {skill.sourceUri && (
+          <Caption1 style={{ display: 'block', color: tokens.colorNeutralForeground3, margin: '0 0 6px', fontFamily: tokens.fontFamilyMonospace, fontSize: '11px' }}>
+            ↳ {skill.sourceUri}
+          </Caption1>
         )}
         <details style={{ fontSize: '12px' }}>
           <summary style={{ cursor: 'pointer', color: 'var(--text-muted)' }}>Prompt addendum</summary>

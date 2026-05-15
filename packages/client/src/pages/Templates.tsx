@@ -199,6 +199,10 @@ function TemplateGrid({
   const instantiateWorkflow = useInstantiateWorkflowTemplate(projectId)
   const [applyTarget, setApplyTarget] = useState<TemplateSummary | null>(null)
   const [applyError, setApplyError] = useState<string | null>(null)
+  // Stream D — D7: "Mine" filter limits to templates whose projectId === the
+  // currently-open project (i.e. ones the user actually saved here). "All"
+  // continues to surface globals + every project's templates.
+  const [scopeFilter, setScopeFilter] = useState<'all' | 'mine'>('all')
 
   async function handleApply(tpl: TemplateSummary, name?: string, squadPath?: string) {
     setApplyError(null)
@@ -258,60 +262,107 @@ function TemplateGrid({
     )
   }
 
+  const visible = scopeFilter === 'mine'
+    ? templates.filter((t) => t.projectId === projectId)
+    : templates
+
   return (
     <>
+      {/* Stream D — D7: scope filter (All vs templates saved by this project) */}
+      <div style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: tokens.spacingHorizontalS,
+        padding: `${tokens.spacingVerticalS} ${tokens.spacingHorizontalXXL} 0`,
+      }}>
+        <Caption1 style={{ color: tokens.colorNeutralForeground3 }}>Scope:</Caption1>
+        <TabList
+          selectedValue={scopeFilter}
+          onTabSelect={(_e: SelectTabEvent, d: SelectTabData) => setScopeFilter(d.value as 'all' | 'mine')}
+          size="small"
+        >
+          <Tab value="all">All ({templates.length})</Tab>
+          <Tab value="mine">
+            My templates ({templates.filter((t) => t.projectId === projectId).length})
+          </Tab>
+        </TabList>
+      </div>
+
       {applyError && (
         <div style={{ padding: `${tokens.spacingVerticalS} ${tokens.spacingHorizontalXXL}` }}>
           <Caption1 style={{ color: tokens.colorPaletteRedForeground1 }}>{applyError}</Caption1>
         </div>
       )}
-      <div className={styles.grid}>
-        {templates.map((tpl) => (
-          <div key={tpl.id} className={styles.card}>
-            <span style={{ fontWeight: 600, fontSize: '14px', color: tokens.colorNeutralForeground1 }}>
-              {tpl.name}
-            </span>
-            {tpl.description && (
-              <Caption1 style={{ color: tokens.colorNeutralForeground3 }}>
-                {tpl.description}
+      {visible.length === 0 ? (
+        <div className={styles.center}>
+          <Body1 style={{ color: tokens.colorNeutralForeground3 }}>
+            No {kind} templates saved from this project yet.
+          </Body1>
+        </div>
+      ) : (
+        <div className={styles.grid}>
+          {visible.map((tpl) => (
+            <div key={tpl.id} className={styles.card}>
+              <span style={{ fontWeight: 600, fontSize: '14px', color: tokens.colorNeutralForeground1 }}>
+                {tpl.name}
+              </span>
+              {tpl.description && (
+                <Caption1 style={{ color: tokens.colorNeutralForeground3 }}>
+                  {tpl.description}
+                </Caption1>
+              )}
+              <Caption1 style={{ color: tokens.colorNeutralForeground4, fontSize: '11px' }}>
+                {safeRelativeTime(tpl.createdAt)}
+                {tpl.projectId === projectId && (
+                  <span style={{
+                    marginLeft: tokens.spacingHorizontalS,
+                    padding: `1px ${tokens.spacingHorizontalXS}`,
+                    borderRadius: tokens.borderRadiusSmall,
+                    background: tokens.colorBrandBackground2,
+                    color: tokens.colorBrandForeground2,
+                    fontSize: '10px',
+                    fontWeight: 600,
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.04em',
+                  }}>
+                    mine
+                  </span>
+                )}
               </Caption1>
-            )}
-            <Caption1 style={{ color: tokens.colorNeutralForeground4, fontSize: '11px' }}>
-              {safeRelativeTime(tpl.createdAt)}
-            </Caption1>
-            <div style={{ display: 'flex', gap: tokens.spacingHorizontalS, marginTop: tokens.spacingVerticalXS }}>
-              <Button
-                appearance="outline"
-                size="small"
-                icon={<Play20Regular />}
-                onClick={() => {
-                  if (kind === 'team') {
-                    void handleApply(tpl)
-                  } else {
-                    setApplyTarget(tpl)
+              <div style={{ display: 'flex', gap: tokens.spacingHorizontalS, marginTop: tokens.spacingVerticalXS }}>
+                <Button
+                  appearance="outline"
+                  size="small"
+                  icon={<Play20Regular />}
+                  onClick={() => {
+                    if (kind === 'team') {
+                      void handleApply(tpl)
+                    } else {
+                      setApplyTarget(tpl)
+                    }
+                  }}
+                  disabled={
+                    instantiateTeam.isPending ||
+                    instantiateProject.isPending ||
+                    instantiateWorkflow.isPending
                   }
-                }}
-                disabled={
-                  instantiateTeam.isPending ||
-                  instantiateProject.isPending ||
-                  instantiateWorkflow.isPending
-                }
-              >
-                Apply
-              </Button>
-              <Button
-                appearance="subtle"
-                size="small"
-                icon={<Delete20Regular />}
-                onClick={() => deleteTemplate.mutate(tpl.id)}
-                disabled={deleteTemplate.isPending}
-              >
-                Delete
-              </Button>
+                >
+                  Apply
+                </Button>
+                <Button
+                  appearance="subtle"
+                  size="small"
+                  icon={<Delete20Regular />}
+                  onClick={() => deleteTemplate.mutate(tpl.id)}
+                  disabled={deleteTemplate.isPending}
+                >
+                  Delete
+                </Button>
+              </div>
             </div>
-          </div>
-        ))}
-      </div>
+          ))}
+        </div>
+      )}
 
       {applyTarget && (
         <ApplyTemplateDialog

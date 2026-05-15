@@ -179,7 +179,14 @@ function onBusEvent(event: BusEvent): void {
 let wss: WebSocketServer | null = null;
 
 export function initWebSocketServer(httpServer: HttpServer): WebSocketServer {
-  wss = new WebSocketServer({ server: httpServer, path: '/ws' });
+  // Mounted under /api/ws so the dev-server Vite proxy (which only forwards
+  // /api with `ws: true`) routes the WebSocket upgrade to the Express server
+  // in development. The client opens `${WS_BASE}/api/ws` (see
+  // packages/client/src/realtime/ws-client.ts); keeping the server path in
+  // sync is critical — a mismatch (e.g. server on /ws, client on /api/ws)
+  // leaves the badge stuck on yellow "Reconnecting" forever in dev because
+  // every handshake fails immediately.
+  wss = new WebSocketServer({ server: httpServer, path: '/api/ws' });
 
   wss.on('connection', (ws: WebSocket, _req: IncomingMessage) => {
     const userId = randomUUID();
@@ -211,7 +218,7 @@ export function initWebSocketServer(httpServer: HttpServer): WebSocketServer {
     console.error('[ws] server error:', err);
   });
 
-  console.log('[ws] WebSocket server attached to HTTP server at /ws');
+  console.log('[ws] WebSocket server attached to HTTP server at /api/ws');
   return wss;
 }
 

@@ -60,9 +60,23 @@ async function getProjectIdForWorkflowRun(workflowRunId: string): Promise<string
  *
  * @returns The new workflowRunId.
  */
+/**
+ * Stream D — D4: ceremony trigger source. Persisted on workflow_runs.trigger_source
+ * so the UI can show "Manual" / "Schedule" / "Event:issue.created" badges.
+ */
+export type TriggerSource = {
+  kind: 'manual' | 'manual_force' | 'on_schedule' | 'on_event' | 'unknown';
+  detail?: string;
+  eventType?: string;
+  scheduleId?: string;
+  anchorIssueId?: string;
+  by?: string;
+};
+
 export async function createWorkflowRun(
   issueId: string,
   workflowVersionId: string,
+  trigger?: TriggerSource,
 ): Promise<string> {
   const db = getDb();
   const { workflowRuns, stepRuns, workflowVersions } = schema;
@@ -95,6 +109,7 @@ export async function createWorkflowRun(
       status: 'pending',
       currentStepIndex: 0,
       requestChangesPolicy,
+      triggerSource: trigger ?? null,
     })
     .returning({ id: workflowRuns.id });
 

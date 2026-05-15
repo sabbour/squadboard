@@ -11,6 +11,7 @@
 
 import { eq, desc } from 'drizzle-orm';
 import { getDb, getPool, schema } from '../../db/index.js';
+import { writeTemplateMirror } from './template-storage.js';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -125,11 +126,17 @@ export async function importWorkflow(
 /**
  * Snapshot the ceremony's current YAML into the templates table.
  */
+export interface SaveAsWorkflowTemplateResult {
+  templateId: string;
+  storagePath: string | null;
+  storageError: string | null;
+}
+
 export async function saveAsTemplate(
   ceremonyId: string,
   name: string,
   description?: string,
-): Promise<string> {
+): Promise<SaveAsWorkflowTemplateResult> {
   const db   = getDb();
   const pool = getPool();
 
@@ -142,6 +149,7 @@ export async function saveAsTemplate(
     .limit(1);
 
   const client = await pool.connect();
+  let templateId: string;
   try {
     await client.query('BEGIN');
     const res = await client.query<{ id: string }>(`
@@ -150,13 +158,31 @@ export async function saveAsTemplate(
       RETURNING id
     `, [name, description ?? null, JSON.stringify(payload), ceremony?.projectId ?? null]);
     await client.query('COMMIT');
-    return res.rows[0].id;
+    templateId = res.rows[0].id;
   } catch (err) {
     await client.query('ROLLBACK');
     throw err;
   } finally {
     client.release();
   }
+
+  // Stream D — D7: project-local mirror (only when the ceremony is bound to
+  // a project — global/system workflow templates have no .squad/ directory).
+  let storagePath: string | null = null;
+  let storageError: string | null = null;
+  if (ceremony?.projectId) {
+    const mirror = await writeTemplateMirror(ceremony.projectId, 'workflow', payload, {
+      id: templateId,
+      name,
+      description,
+    });
+    storagePath = mirror.storagePath;
+    storageError = mirror.error;
+  } else {
+    storageError = 'ceremony has no projectId — skipping disk mirror';
+  }
+
+  return { templateId, storagePath, storageError };
 }
 
 // ---------------------------------------------------------------------------

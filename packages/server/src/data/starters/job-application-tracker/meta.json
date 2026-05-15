@@ -1,0 +1,32 @@
+{
+  "slug": "job-application-tracker",
+  "title": "Job Application Tracker",
+  "blurb": "A Squad sample that opens a real browser, scrapes job listings from any job board, and analyzes them with a team of four AI specialists — matching opportunities to your profile, researching companies, preparing application strategies, and c",
+  "tags": [
+    "ceremonies",
+    "routing",
+    "multi-agent"
+  ],
+  "agentCount": 4,
+  "routingRuleCount": 5,
+  "ceremonyCount": 1,
+  "defaultModel": null,
+  "teamName": "Job Search Analysis Squad",
+  "warnings": [],
+  "source": {
+    "origin": "github",
+    "repo": "bradygaster/Squad-IRL",
+    "ref": "main"
+  },
+  "files": [
+    ".gitignore",
+    "README.md",
+    "index.ts",
+    "job-scraper.ts",
+    "package.json",
+    "squad.config.ts",
+    "tsconfig.json"
+  ],
+  "htmlUrl": "https://github.com/bradygaster/Squad-IRL/tree/main/job-application-tracker",
+  "bundledAt": "2026-05-15T07:48:08.525Z"
+}

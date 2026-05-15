@@ -53,3 +53,34 @@ Major doc cuts:
 
 - **2026-05-14 MCP docs (backlog batch 1):** Integrated into backlog batch 1 orchestration. Decision recorded, inbox entry merged to decisions.md. Team session log updated.
 
+## Wave 10 Docs Refresh — 2026-05-15
+
+- **Scope:** Wave 10 (Streams A–E) introduced dogfood loop, cost multipliers, templates, agent lifecycle semantics, and ceremony redesigns. Docs needed refresh to cover MCP `capture` tool, `list_agents` status filtering (disabled vs retired), cost models, templates, and end-to-end setup.
+
+- **Files changed:**
+  - `packages/server/src/mcp/README.md` — Updated `list_agents` table entry to mention status filtering. Added detailed "Tool Reference" section with examples for `list_agents` (B9 semantics: active | disabled | retired | all) and `capture` (A4 dogfood loop). Added link to `.squad/dogfood.md`.
+  - `docs/mcp-config-example.json` — Created as a reference template for `.copilot/mcp-config.json` setup, with `SQUADBOARD_DEFAULT_PROJECT_ID` placeholder.
+  - `README.md` (root) — Added three subsections after "Build for Production":
+    - **Dogfood Mode** — When running under Copilot CLI with Squad coordinator, directives auto-capture to Squadboard board. References `.squad/dogfood.md` and MCP tool reference.
+    - **Cost Tracking** — Explains two cost models (legacy USD vs GitHub Copilot multipliers). Shows env var + API methods to switch. Points to `packages/server/src/sdk/cost-tracker.ts`.
+    - **Templates** — Brief section on save-as-template API + on-disk mirror at `.squad/squadboard/templates/`. Shows curl example.
+  - `CHANGELOG.md` — Created with Wave 10 section. Grouped features by stream (A: Dogfood, B: Semantics, D: Pricing/Ceremony/Templates, E: Docs). Added "Upgrade Notes" subsection with explicit instructions for `SQUADBOARD_COST_MODEL` env var and dogfood setup. Created template for future releases (0.1.0 initial hacking phase, versioning guidelines).
+
+- **Verification:**
+  - `pnpm build` passed all 4 workspace projects with no regressions. ✅
+  - Skimmed each doc for "first 60 seconds rule" (runnable command early):
+    - MCP README: Transport table + tool list appears early, followed by examples. ✅
+    - Root README: Prerequisites, clone, `pnpm install`, `pnpm run dev` in first 70 lines. ✅
+    - CHANGELOG: Human-readable for operators; "Upgrade Notes" subsection makes migration path explicit. ✅
+
+- **Patterns discovered:**
+  - Wave 10 docs bridge three audiences: (1) End users (Dogfood, Cost Tracking, Templates), (2) MCP clients (tool reference + examples), (3) Operators (CHANGELOG upgrade notes). Each section explicitly references upstream docs (`.squad/dogfood.md`, `packages/server/src/sdk/cost-tracker.ts`).
+  - `capture` tool docs are critical entry point for understanding the dogfood loop; must be co-located with `list_agents` + project-ID resolution.
+  - CHANGELOG format: Group by stream/feature, then list concrete changes, then provide operator-facing upgrade notes with code samples.
+
+- **Open questions for Kujan (CHANGELOG coordination):**
+  - Should the Wave 10 section header stay generic ("Wave 10: Dogfood + Multipliers + Templates") or reference specific streams/PRs?
+  - Are there additional breaking changes or deprecations I should surface in the Upgrade Notes (e.g., any config format changes, deprecated endpoints)?
+  - Should CHANGELOG include commit hashes / PR references, or keep it narrative-only for now (hacking phase)?
+  - Is the 0.1.0 template appropriate for this release, or should we wait for a formal v1.0 roadmap?
+

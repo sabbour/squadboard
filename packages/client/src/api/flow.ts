@@ -115,3 +115,93 @@ export function useProjectFlow(projectId: string) {
     refetchInterval: 10000,
   })
 }
+
+// ---------------------------------------------------------------------------
+// Stream D — D8: agent-centric flow graph (Phase 12 reframe).
+//
+// Backed by GET /api/projects/:projectId/flow/graph which returns
+// { agents: FlowAgent[], edges: FlowLineageEdge[] }. These types mirror
+// the server's flow-agents.ts public types.
+// ---------------------------------------------------------------------------
+
+export type FlowAgentInstanceKind =
+  | 'workflow_run'
+  | 'issue_run'
+  | 'live_session'
+  | 'consult_session'
+
+export type FlowAgentInstanceStatus =
+  | 'active'
+  | 'idle'
+  | 'completed'
+  | 'failed'
+  | 'pending'
+
+export interface FlowAgentInstance {
+  instanceId: string
+  instanceKind: FlowAgentInstanceKind
+  status: FlowAgentInstanceStatus
+  currentStep?: { stepId: string; label: string; startedAt: string }
+  currentIssue?: { issueId: string; title: string }
+  startedAt: string
+  lastHeartbeatAt?: string
+  endedAt?: string
+  model?: string
+}
+
+export interface FlowAgent {
+  agentId: string
+  name: string
+  role: string
+  avatarUrl?: string
+  instances: FlowAgentInstance[]
+}
+
+export type FlowLineageRelation =
+  | 'fan_out'
+  | 'split'
+  | 'consult'
+  | 'handoff'
+  | 'spawn'
+
+export interface FlowLineageEdge {
+  fromInstanceId: string
+  toInstanceId: string
+  relation: FlowLineageRelation
+  createdAt: string
+  triggerStepId?: string
+}
+
+export interface FlowGraph {
+  agents: FlowAgent[]
+  edges: FlowLineageEdge[]
+}
+
+interface FlowGraphEnvelope {
+  ok: boolean
+  data: FlowGraph
+  error?: string
+}
+
+/**
+ * Fetch the project's agent-instance graph + lineage edges.
+ *
+ * Polls every 10s by default to mirror useProjectFlow refresh cadence —
+ * the agent view should feel live.
+ */
+export function useAgentFlow(projectId: string) {
+  return useQuery<FlowGraph>({
+    queryKey: ['flow', 'agents', projectId],
+    queryFn: async () => {
+      const env = await apiFetch<FlowGraphEnvelope>(
+        `/api/projects/${projectId}/flow/graph`,
+      )
+      if (!env.ok) {
+        throw new Error(env.error ?? 'Failed to load agent flow graph')
+      }
+      return env.data
+    },
+    enabled: Boolean(projectId),
+    refetchInterval: 10000,
+  })
+}

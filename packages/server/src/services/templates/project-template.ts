@@ -16,6 +16,7 @@ import path from 'node:path';
 import { eq, desc } from 'drizzle-orm';
 import { getDb, getPool, schema } from '../../db/index.js';
 import { computeCharterHash } from '../charter-compiler.js';
+import { writeTemplateMirror } from './template-storage.js';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -404,15 +405,22 @@ export async function importProject(
 // saveAsTemplate
 // ---------------------------------------------------------------------------
 
+export interface SaveAsTemplateResult {
+  templateId: string;
+  storagePath: string | null;
+  storageError: string | null;
+}
+
 export async function saveAsTemplate(
   projectId: string,
   name: string,
   description?: string,
-): Promise<string> {
+): Promise<SaveAsTemplateResult> {
   const pool = getPool();
   const payload = await exportProject(projectId);
 
   const client = await pool.connect();
+  let templateId: string;
   try {
     await client.query('BEGIN');
     const res = await client.query<{ id: string }>(`
@@ -421,13 +429,26 @@ export async function saveAsTemplate(
       RETURNING id
     `, [name, description ?? null, JSON.stringify(payload), projectId]);
     await client.query('COMMIT');
-    return res.rows[0].id;
+    templateId = res.rows[0].id;
   } catch (err) {
     await client.query('ROLLBACK');
     throw err;
   } finally {
     client.release();
   }
+
+  // Stream D — D7: project-local mirror under .squad/squadboard/templates/.
+  const mirror = await writeTemplateMirror(projectId, 'project', payload, {
+    id: templateId,
+    name,
+    description,
+  });
+
+  return {
+    templateId,
+    storagePath: mirror.storagePath,
+    storageError: mirror.error,
+  };
 }
 
 // ---------------------------------------------------------------------------

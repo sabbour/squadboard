@@ -30,6 +30,25 @@ issueRunsRouter.post('/', async (req, res) => {
             return;
         }
         const db = getDb();
+        // Wave 10 B9: defense-in-depth — refuse to dispatch a run against a
+        // disabled or retired agent. UI pickers already filter to active, but
+        // direct API callers (MCP, scripts, curl, tests) must hit the same
+        // gate so a run can never start with a non-active agent.
+        const [agentRow] = await db
+            .select({ id: schema.agents.id, name: schema.agents.name, status: schema.agents.status })
+            .from(schema.agents)
+            .where(eq(schema.agents.id, agentId))
+            .limit(1);
+        if (!agentRow) {
+            res.status(404).json({ error: 'Agent not found' });
+            return;
+        }
+        if (agentRow.status !== 'active') {
+            res.status(422).json({
+                error: `Agent "${agentRow.name}" is ${agentRow.status} — re-enable it before running.`,
+            });
+            return;
+        }
         const [run] = await db
             .insert(schema.issueRuns)
             .values({

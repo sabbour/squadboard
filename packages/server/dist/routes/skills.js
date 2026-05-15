@@ -9,6 +9,8 @@
  *   PATCH  /api/projects/:projectId/skills/:id              — update
  *   DELETE /api/projects/:projectId/skills/:id              — delete
  *   POST   /api/projects/:projectId/skills/clone-curated    — clone curated entry
+ *   POST   /api/projects/:projectId/skills/import-from-md   — import a SKILL.md (Wave 10 D2)
+ *   POST   /api/projects/:projectId/skills/formulate        — AI-author from a draft
  *   GET    /api/projects/:projectId/agents/:agentId/skills  — assigned skills
  *   POST   /api/projects/:projectId/agents/:agentId/skills  — bulk assign
  *   DELETE /api/projects/:projectId/agents/:agentId/skills/:skillId — unassign
@@ -88,6 +90,40 @@ projectSkillsRouter.post('/clone-curated', async (req, res) => {
     }
     catch (err) {
         handleError(res, err, 'skills');
+    }
+});
+projectSkillsRouter.post('/import-from-md', async (req, res) => {
+    try {
+        const { projectId } = req.params;
+        const body = req.body;
+        if (!body || typeof body.content !== 'string' || !body.content.trim()) {
+            res.status(400).json({ ok: false, error: 'content is required (raw markdown body)' });
+            return;
+        }
+        const created = await skillsService.importSkillFromMd(projectId, {
+            content: body.content,
+            filename: typeof body.filename === 'string' ? body.filename : undefined,
+            sourceUri: typeof body.sourceUri === 'string' ? body.sourceUri : undefined,
+        });
+        res.status(201).json({ ok: true, data: created });
+    }
+    catch (err) {
+        handleError(res, err, 'skills/import-from-md');
+    }
+});
+projectSkillsRouter.post('/formulate', async (req, res) => {
+    try {
+        const { projectId } = req.params;
+        const { draft } = req.body;
+        if (!draft || typeof draft !== 'string') {
+            res.status(400).json({ ok: false, error: 'draft is required' });
+            return;
+        }
+        const result = await skillsService.formulateSkill(projectId, draft);
+        res.json({ ok: true, data: result });
+    }
+    catch (err) {
+        handleError(res, err, 'skills/formulate');
     }
 });
 projectSkillsRouter.patch('/:id', async (req, res) => {

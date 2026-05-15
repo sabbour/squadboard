@@ -1,5 +1,6 @@
-import { useState } from 'react'
-import { useCostSummary, useBudget, type CostSource } from '../../api/costs.ts'
+import { useEffect, useState } from 'react'
+import { useCostSummary, useBudget, type CostModel, type CostSource } from '../../api/costs.ts'
+import { useUpdateProject } from '../../api/projects.ts'
 import { Warning20Regular } from '@fluentui/react-icons'
 import {
   Body1,
@@ -12,6 +13,7 @@ import {
   TableCellLayout,
   TabList,
   Tab,
+  Tooltip,
   tokens,
   type SelectTabData,
   type SelectTabEvent,
@@ -19,6 +21,26 @@ import {
 
 interface CostDashboardProps {
   projectId: string
+}
+
+// Wave 10 C6: shared style for numeric columns — right-align + tabular-nums
+// so the digit columns visually queue down the table even with mixed widths.
+const NUMERIC_CELL: React.CSSProperties = {
+  textAlign: 'right',
+  fontVariantNumeric: 'tabular-nums',
+  fontFamily: tokens.fontFamilyMonospace,
+}
+
+const NUMERIC_HEADER: React.CSSProperties = {
+  textAlign: 'right',
+}
+
+// Sticky header so the column labels stay visible when long lists scroll.
+const STICKY_HEADER: React.CSSProperties = {
+  position: 'sticky',
+  top: 0,
+  background: tokens.colorNeutralBackground1,
+  zIndex: 1,
 }
 
 function fmt(usd: number | null | undefined): string {
@@ -35,6 +57,11 @@ function fmtK(n: number | null | undefined): string {
   const v = Number.isFinite(n) ? Number(n) : 0
   if (v >= 1000) return `${(v / 1000).toFixed(1)}k`
   return String(v)
+}
+
+function fmtPremium(n: number | null | undefined): string {
+  const v = Number.isFinite(n) ? Number(n) : 0
+  return v >= 100 ? v.toFixed(0) : v.toFixed(2)
 }
 
 function BudgetBar({ percent, budgetUsd, spend }: { percent: number; budgetUsd: number; spend: number }) {
@@ -85,6 +112,15 @@ export default function CostDashboard({ projectId }: CostDashboardProps) {
     sources: TAB_TO_SOURCES[tab],
   })
   const { data: budget, isLoading: budgetLoading } = useBudget(projectId)
+  const updateProject = useUpdateProject(projectId)
+
+  // Stream D — D6: cost-model toggle. Defaults to whatever the server says
+  // (project setting → env). Local state lets users flip without round-trip
+  // delay; the change is persisted via PATCH /api/projects/:id.
+  const [costModel, setCostModel] = useState<CostModel>('usd')
+  useEffect(() => {
+    if (summary?.costModel) setCostModel(summary.costModel)
+  }, [summary?.costModel])
 
   if (summaryLoading || budgetLoading) {
     return (
@@ -101,6 +137,12 @@ export default function CostDashboard({ projectId }: CostDashboardProps) {
   }
 
   const overBudget = budget && budget.monthlyBudgetUsd !== null && budget.percentUsed > 100
+  const showPremium = costModel === 'gh_multipliers'
+
+  function handleCostModelChange(next: CostModel) {
+    setCostModel(next)
+    updateProject.mutate({ costModel: next })
+  }
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '20px', padding: '24px', maxWidth: '900px' }}>
@@ -114,6 +156,28 @@ export default function CostDashboard({ projectId }: CostDashboardProps) {
         <Tab value="consult">Consult</Tab>
         <Tab value="all">All</Tab>
       </TabList>
+
+      {/* Stream D — D6: cost-model toggle */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+        <span style={{ fontSize: '12px', textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--text-muted)', fontWeight: 600 }}>
+          Cost model
+        </span>
+        <TabList
+          size="small"
+          selectedValue={costModel}
+          onTabSelect={(_e: SelectTabEvent, data: SelectTabData) => handleCostModelChange(data.value as CostModel)}
+        >
+          <Tab value="usd">USD (token pricing)</Tab>
+          <Tab value="gh_multipliers">
+            <Tooltip
+              content="GitHub Copilot premium-request multipliers. Auto-select −10%, FedRAMP/data residency +10%. Source: docs.github.com/copilot/billing/copilot-requests"
+              relationship="label"
+            >
+              <span>GitHub premium requests</span>
+            </Tooltip>
+          </Tab>
+        </TabList>
+      </div>
 
       {/* Budget exceeded alert */}
       {overBudget && (
@@ -154,11 +218,18 @@ export default function CostDashboard({ projectId }: CostDashboardProps) {
           Month-to-date spend
         </span>
         <span style={{ fontSize: '36px', fontWeight: 700, letterSpacing: '-0.02em', color: 'var(--text)', fontVariantNumeric: 'tabular-nums' }}>
-          {fmtShort(summary.totalMtd)}
+          {showPremium
+            ? `${fmtPremium(summary.totalMtdPremiumRequests)} premium req`
+            : fmtShort(summary.totalMtd)}
         </span>
+        {showPremium && (
+          <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
+            Equivalent USD spend (token pricing): {fmtShort(summary.totalMtd)}
+          </span>
+        )}
 
-        {/* Budget progress bar — only when budget is set */}
-        {budget && budget.monthlyBudgetUsd !== null && (
+        {/* Budget progress bar — only when budget is set (USD model only) */}
+        {!showPremium && budget && budget.monthlyBudgetUsd !== null && (
           <BudgetBar
             percent={budget.percentUsed}
             budgetUsd={budget.monthlyBudgetUsd}
@@ -175,33 +246,44 @@ export default function CostDashboard({ projectId }: CostDashboardProps) {
         {summary.byAgent.length === 0 ? (
           <div style={{ padding: '20px 16px', fontSize: '13px', color: 'var(--text-muted)' }}>No agent cost data yet.</div>
         ) : (
-          <Table size="small">
-            <TableHeader>
-              <TableRow>
-                {['Agent', 'Runs', 'Total Cost', 'Avg / Run'].map((h) => (
-                  <TableHeaderCell key={h} style={{ textAlign: h === 'Agent' ? 'left' : 'right' }}>
-                    {h}
-                  </TableHeaderCell>
-                ))}
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {summary.byAgent.map((row) => (
-                <TableRow key={row.agentId}>
-                  <TableCell>
-                    <TableCellLayout style={{ fontWeight: 500 }}>{row.agentName}</TableCellLayout>
-                  </TableCell>
-                  <TableCell style={{ textAlign: 'right', color: 'var(--text-muted)' }}>{row.runs.toLocaleString()}</TableCell>
-                  <TableCell style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
-                    {fmt(row.totalUsd)}
-                  </TableCell>
-                  <TableCell style={{ textAlign: 'right', color: 'var(--text-muted)', fontVariantNumeric: 'tabular-nums' }}>
-                    {fmt(row.avgUsdPerRun)}
-                  </TableCell>
+          <div style={{ maxHeight: '420px', overflow: 'auto' }}>
+            <Table size="small">
+              <TableHeader style={STICKY_HEADER}>
+                <TableRow>
+                  <TableHeaderCell>Agent</TableHeaderCell>
+                  <TableHeaderCell style={NUMERIC_HEADER}>Runs</TableHeaderCell>
+                  <TableHeaderCell style={NUMERIC_HEADER}>Total Cost</TableHeaderCell>
+                  <TableHeaderCell style={NUMERIC_HEADER}>Avg / Run</TableHeaderCell>
+                  {showPremium && (
+                    <TableHeaderCell style={NUMERIC_HEADER}>Premium req</TableHeaderCell>
+                  )}
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+              </TableHeader>
+              <TableBody>
+                {summary.byAgent.map((row) => (
+                  <TableRow key={row.agentId}>
+                    <TableCell>
+                      <TableCellLayout style={{ fontWeight: 500 }}>{row.agentName}</TableCellLayout>
+                    </TableCell>
+                    <TableCell style={{ ...NUMERIC_CELL, color: tokens.colorNeutralForeground3 }}>
+                      {row.runs.toLocaleString()}
+                    </TableCell>
+                    <TableCell style={NUMERIC_CELL}>
+                      {fmt(row.totalUsd)}
+                    </TableCell>
+                    <TableCell style={{ ...NUMERIC_CELL, color: tokens.colorNeutralForeground3 }}>
+                      {fmt(row.avgUsdPerRun)}
+                    </TableCell>
+                    {showPremium && (
+                      <TableCell style={NUMERIC_CELL}>
+                        {fmtPremium(row.totalPremiumRequests)}
+                      </TableCell>
+                    )}
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
         )}
       </div>
 
@@ -213,38 +295,50 @@ export default function CostDashboard({ projectId }: CostDashboardProps) {
         {summary.byModel.length === 0 ? (
           <div style={{ padding: '20px 16px', fontSize: '13px', color: 'var(--text-muted)' }}>No model cost data yet.</div>
         ) : (
-          <Table size="small">
-            <TableHeader>
-              <TableRow>
-                {['Model', 'Runs', 'Tokens In', 'Tokens Out', 'Cost'].map((h) => (
-                  <TableHeaderCell key={h} style={{ textAlign: h === 'Model' ? 'left' : 'right' }}>
-                    {h}
-                  </TableHeaderCell>
-                ))}
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {summary.byModel.map((row) => (
-                <TableRow key={row.model}>
-                  <TableCell>
-                    <TableCellLayout style={{ fontWeight: 500, fontFamily: 'monospace', fontSize: '11px' }}>
-                      {row.model}
-                    </TableCellLayout>
-                  </TableCell>
-                  <TableCell style={{ textAlign: 'right', color: 'var(--text-muted)' }}>{row.runs.toLocaleString()}</TableCell>
-                  <TableCell style={{ textAlign: 'right', color: 'var(--text-muted)', fontVariantNumeric: 'tabular-nums' }}>
-                    {fmtK(row.tokensIn)}
-                  </TableCell>
-                  <TableCell style={{ textAlign: 'right', color: 'var(--text-muted)', fontVariantNumeric: 'tabular-nums' }}>
-                    {fmtK(row.tokensOut)}
-                  </TableCell>
-                  <TableCell style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
-                    {fmt(row.totalUsd)}
-                  </TableCell>
+          <div style={{ maxHeight: '420px', overflow: 'auto' }}>
+            <Table size="small">
+              <TableHeader style={STICKY_HEADER}>
+                <TableRow>
+                  <TableHeaderCell>Model</TableHeaderCell>
+                  <TableHeaderCell style={NUMERIC_HEADER}>Runs</TableHeaderCell>
+                  <TableHeaderCell style={NUMERIC_HEADER}>Tokens In</TableHeaderCell>
+                  <TableHeaderCell style={NUMERIC_HEADER}>Tokens Out</TableHeaderCell>
+                  <TableHeaderCell style={NUMERIC_HEADER}>Cost</TableHeaderCell>
+                  {showPremium && (
+                    <TableHeaderCell style={NUMERIC_HEADER}>Premium req</TableHeaderCell>
+                  )}
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+              </TableHeader>
+              <TableBody>
+                {summary.byModel.map((row) => (
+                  <TableRow key={row.model}>
+                    <TableCell>
+                      <TableCellLayout style={{ fontWeight: 500, fontFamily: tokens.fontFamilyMonospace, fontSize: '11px' }}>
+                        {row.model}
+                      </TableCellLayout>
+                    </TableCell>
+                    <TableCell style={{ ...NUMERIC_CELL, color: tokens.colorNeutralForeground3 }}>
+                      {row.runs.toLocaleString()}
+                    </TableCell>
+                    <TableCell style={{ ...NUMERIC_CELL, color: tokens.colorNeutralForeground3 }}>
+                      {fmtK(row.tokensIn)}
+                    </TableCell>
+                    <TableCell style={{ ...NUMERIC_CELL, color: tokens.colorNeutralForeground3 }}>
+                      {fmtK(row.tokensOut)}
+                    </TableCell>
+                    <TableCell style={NUMERIC_CELL}>
+                      {fmt(row.totalUsd)}
+                    </TableCell>
+                    {showPremium && (
+                      <TableCell style={NUMERIC_CELL}>
+                        {fmtPremium(row.totalPremiumRequests)}
+                      </TableCell>
+                    )}
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
         )}
       </div>
     </div>

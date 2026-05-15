@@ -1,0 +1,32 @@
+{
+  "slug": "social-media-manager",
+  "title": "Social Media Content Manager",
+  "blurb": "A Squad sample that takes a content theme or product description and generates platform-optimized social media posts for Twitter, LinkedIn, and Instagram — complete with timing recommendations and engagement monitoring strategies.",
+  "tags": [
+    "ceremonies",
+    "routing",
+    "multi-agent"
+  ],
+  "agentCount": 4,
+  "routingRuleCount": 5,
+  "ceremonyCount": 1,
+  "defaultModel": null,
+  "teamName": "Social Media Content Manager Squad",
+  "warnings": [],
+  "source": {
+    "origin": "github",
+    "repo": "bradygaster/Squad-IRL",
+    "ref": "main"
+  },
+  "files": [
+    "README.md",
+    "content-briefs",
+    "content-input.ts",
+    "index.ts",
+    "package.json",
+    "squad.config.ts",
+    "tsconfig.json"
+  ],
+  "htmlUrl": "https://github.com/bradygaster/Squad-IRL/tree/main/social-media-manager",
+  "bundledAt": "2026-05-15T07:48:09.853Z"
+}

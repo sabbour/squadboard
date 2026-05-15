@@ -82,6 +82,8 @@ interface RawMcpRow {
   headersIv: string | null;
   headersTag: string | null;
   enabled: boolean;
+  source: string;
+  sourceUri: string | null;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -160,6 +162,9 @@ export interface ScrubbedMcpServer {
   args: string[];
   headers: ScrubbedHeader[];
   enabled: boolean;
+  /** Provenance — Wave 10 D3. 'curated' | 'imported' | 'custom' | 'project'. */
+  source: 'curated' | 'imported' | 'custom' | 'project';
+  sourceUri: string | null;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -186,6 +191,8 @@ function scrub(row: RawMcpRow): ScrubbedMcpServer {
     args,
     headers: names.map((n) => ({ name: n.name, hasSecret: hasCipher })),
     enabled: row.enabled,
+    source: (row.source as ScrubbedMcpServer['source']) ?? 'custom',
+    sourceUri: row.sourceUri ?? null,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
   };
@@ -297,6 +304,196 @@ export async function deleteMcpServer(projectId: string, mcpServerId: string): P
 }
 
 // ---------------------------------------------------------------------------
+// Import — Wave 10 D3.
+//
+// Accept an MCP server config JSON document and persist it. The accepted
+// shape is the standard MCP server config (Claude / VS Code / Continue all
+// use this shape):
+//
+//   {
+//     "name": "github",                       // required
+//     "description": "GitHub MCP",            // optional
+//     "command": "npx",                       // → transport: 'stdio'
+//     "args": ["-y", "@modelcontextprotocol/server-github"],
+//     "env": { "GITHUB_TOKEN": "ghp_…" }      // env vars become headers (with WARNING masking)
+//   }
+//
+// or HTTP variant:
+//
+//   {
+//     "name": "remote-mcp",
+//     "url": "https://mcp.example.com/sse",   // → transport: 'http'
+//     "headers": { "Authorization": "Bearer …" }   // becomes encrypted-header rows
+//   }
+//
+// Or a bundle: { "mcpServers": { "github": {…}, "remote": {…} } } (Claude format)
+//                                                                  ↑ each entry imported
+//
+// Idempotent — duplicate `name` for the project skips the entry.
+// ---------------------------------------------------------------------------
+
+export interface ImportMcpInput {
+  /** Raw JSON document — string OR pre-parsed object */
+  content: string | unknown;
+  /** Optional filename for error messages */
+  filename?: string;
+  /** Optional source URI to record */
+  sourceUri?: string;
+}
+
+export interface ImportMcpResult {
+  imported: Array<{ id: string; name: string; transport: McpTransport }>;
+  skipped: Array<{ name: string; reason: string }>;
+}
+
+interface ParsedMcpEntry {
+  name: string;
+  description: string | null;
+  transport: McpTransport;
+  url: string | null;
+  command: string | null;
+  args: string[];
+  headers: HeaderInput[];
+}
+
+function normalizeMcpEntry(name: string, raw: unknown): ParsedMcpEntry | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const r = raw as Record<string, unknown>;
+
+  const description =
+    typeof r.description === 'string' ? r.description.trim() : null;
+
+  const url = typeof r.url === 'string' ? r.url.trim() : null;
+  const command = typeof r.command === 'string' ? r.command.trim() : null;
+  let transport: McpTransport;
+  if (url && !command) transport = 'http';
+  else if (command && !url) transport = 'stdio';
+  else if (typeof r.transport === 'string' && (r.transport === 'http' || r.transport === 'stdio')) transport = r.transport;
+  else if (url) transport = 'http';
+  else if (command) transport = 'stdio';
+  else return null;
+
+  const args = Array.isArray(r.args) ? (r.args.filter((a) => typeof a === 'string') as string[]) : [];
+
+  const headers: HeaderInput[] = [];
+  if (r.headers && typeof r.headers === 'object' && !Array.isArray(r.headers)) {
+    for (const [hname, hval] of Object.entries(r.headers as Record<string, unknown>)) {
+      if (typeof hval === 'string' && hname.trim()) headers.push({ name: hname.trim(), value: hval });
+    }
+  }
+  // env → headers when stdio (downstream MCP launchers read env from headers map)
+  if (transport === 'stdio' && r.env && typeof r.env === 'object' && !Array.isArray(r.env)) {
+    for (const [hname, hval] of Object.entries(r.env as Record<string, unknown>)) {
+      if (typeof hval === 'string' && hname.trim()) headers.push({ name: hname.trim(), value: hval });
+    }
+  }
+
+  return {
+    name: name.trim().slice(0, 80),
+    description: description ? description.slice(0, 280) : null,
+    transport,
+    url,
+    command,
+    args,
+    headers,
+  };
+}
+
+export async function importMcpServersFromJson(
+  projectId: string,
+  input: ImportMcpInput,
+): Promise<ImportMcpResult> {
+  let parsed: unknown;
+  if (typeof input.content === 'string') {
+    if (!input.content.trim()) {
+      throw Object.assign(new Error('content is required'), { status: 400 });
+    }
+    try {
+      parsed = JSON.parse(input.content);
+    } catch (err) {
+      throw Object.assign(new Error(`invalid JSON: ${(err as Error).message}`), { status: 400 });
+    }
+  } else {
+    parsed = input.content;
+  }
+
+  // Build candidate map name → raw entry
+  const candidates = new Map<string, unknown>();
+  if (Array.isArray(parsed)) {
+    for (const item of parsed) {
+      if (item && typeof item === 'object' && typeof (item as Record<string, unknown>).name === 'string') {
+        candidates.set(((item as Record<string, unknown>).name as string).trim(), item);
+      }
+    }
+  } else if (parsed && typeof parsed === 'object') {
+    const p = parsed as Record<string, unknown>;
+    if (p.mcpServers && typeof p.mcpServers === 'object' && !Array.isArray(p.mcpServers)) {
+      for (const [name, entry] of Object.entries(p.mcpServers as Record<string, unknown>)) {
+        if (name && typeof entry === 'object' && entry) candidates.set(name.trim(), entry);
+      }
+    } else if (typeof p.name === 'string') {
+      candidates.set(p.name.trim(), p);
+    } else if (Object.keys(p).length > 0) {
+      // Bare map of name → config (no top-level `mcpServers` wrapper)
+      for (const [name, entry] of Object.entries(p)) {
+        if (entry && typeof entry === 'object') candidates.set(name.trim(), entry);
+      }
+    }
+  }
+
+  if (candidates.size === 0) {
+    throw Object.assign(new Error('no mcp server entries found in payload'), { status: 400 });
+  }
+
+  const existing = await listMcpServers(projectId);
+  const existingByName = new Set(existing.map((m) => m.name));
+
+  const result: ImportMcpResult = { imported: [], skipped: [] };
+  for (const [name, raw] of candidates) {
+    const norm = normalizeMcpEntry(name, raw);
+    if (!norm) {
+      result.skipped.push({ name, reason: 'missing url/command or invalid shape' });
+      continue;
+    }
+    if (existingByName.has(norm.name)) {
+      result.skipped.push({ name: norm.name, reason: 'already exists' });
+      continue;
+    }
+    try {
+      const created = await createMcpServer(projectId, {
+        name: norm.name,
+        description: norm.description,
+        transport: norm.transport,
+        url: norm.url,
+        command: norm.command,
+        args: norm.args,
+        headers: norm.headers,
+        enabled: true,
+      });
+      // Tag provenance so the UI can render the right badge.
+      if (input.sourceUri) {
+        const db = getDb();
+        await db
+          .update(schema.mcpServers)
+          .set({ source: 'imported', sourceUri: input.sourceUri })
+          .where(and(eq(schema.mcpServers.projectId, projectId), eq(schema.mcpServers.id, created.id)));
+      } else {
+        const db = getDb();
+        await db
+          .update(schema.mcpServers)
+          .set({ source: 'imported' })
+          .where(and(eq(schema.mcpServers.projectId, projectId), eq(schema.mcpServers.id, created.id)));
+      }
+      existingByName.add(created.name);
+      result.imported.push({ id: created.id, name: created.name, transport: created.transport });
+    } catch (err) {
+      result.skipped.push({ name: norm.name, reason: (err as Error).message });
+    }
+  }
+  return result;
+}
+
+// ---------------------------------------------------------------------------
 // Connection test — minimal smoke check (no real handshake).
 // ---------------------------------------------------------------------------
 
@@ -345,6 +542,8 @@ export async function listAgentMcpServers(projectId: string, agentId: string): P
       headersIv: schema.mcpServers.headersIv,
       headersTag: schema.mcpServers.headersTag,
       enabled: schema.mcpServers.enabled,
+      source: schema.mcpServers.source,
+      sourceUri: schema.mcpServers.sourceUri,
       createdAt: schema.mcpServers.createdAt,
       updatedAt: schema.mcpServers.updatedAt,
     })

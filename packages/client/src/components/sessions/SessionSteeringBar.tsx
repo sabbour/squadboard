@@ -6,7 +6,7 @@ import {
   ArrowSwap20Regular,
   PersonAdd20Regular,
 } from '@fluentui/react-icons'
-import { useAgents, type Agent } from '../../api/agents.ts'
+import { useActiveAgents, type Agent } from '../../api/agents.ts'
 import {
   useInjectMessage,
   useInterruptSession,
@@ -35,7 +35,8 @@ export default function SessionSteeringBar({
   } | null>(null)
   const [steerError, setSteerError] = useState<string | null>(null)
 
-  const { data: agents = [] } = useAgents(projectId)
+  // Wave 10 B9: handoff / invite pickers must surface only active agents.
+  const { data: agents = [] } = useActiveAgents(projectId)
   const inject = useInjectMessage(projectId, sessionId)
   const interrupt = useInterruptSession(projectId, sessionId)
   const handoff = useHandoffSession(projectId, sessionId)

@@ -1,7 +1,7 @@
 import fs from 'node:fs/promises';
 import crypto from 'node:crypto';
 /**
- * Parse a charter.md file and extract structured metadata.
+ * Parse charter markdown content into structured metadata.
  *
  * Extraction rules:
  *   - name  → first `# Heading` in the file
@@ -11,8 +11,7 @@ import crypto from 'node:crypto';
  *   - style → first paragraph under `## Style`
  *   - reviewerAuthority → bullet list items under `## Reviewer authority` (or `## Review authority`)
  */
-export async function parseCharter(charterPath) {
-    const content = await fs.readFile(charterPath, 'utf-8');
+export function parseCharterContent(content) {
     const lines = content.split('\n');
     let name = '';
     let role = '';
@@ -141,23 +140,32 @@ export async function parseCharter(charterPath) {
             }
         }
     }
-    // Fallback: if name still empty, use filename dir
-    if (!name) {
-        const parts = charterPath.split('/');
-        name = parts[parts.length - 2] ?? 'unknown';
-    }
     // Fallback: role from Expertise line in identity block
     if (!role && expertise.length > 0) {
         role = expertise[0];
     }
     return {
-        name,
+        name: name || 'unknown',
         role: role || 'Agent',
         model: model || undefined,
         expertise,
         style: style || undefined,
         reviewerAuthority: reviewerAuthority.length > 0 ? reviewerAuthority : undefined,
     };
+}
+/**
+ * Parse a charter.md file and extract structured metadata.
+ * Reads the file at `charterPath` then delegates to `parseCharterContent`.
+ */
+export async function parseCharter(charterPath) {
+    const content = await fs.readFile(charterPath, 'utf-8');
+    return parseCharterContent(content);
+}
+/**
+ * Compute an md5 hash of raw charter content for change detection.
+ */
+export function computeContentHash(content) {
+    return crypto.createHash('md5').update(content).digest('hex');
 }
 /**
  * Generate and write a charter.md from metadata.
@@ -183,9 +191,10 @@ ${styleSection}${reviewerSection}`;
 }
 /**
  * Compute md5 hash of a charter file's content for change detection.
+ * Reads from disk; use `computeContentHash` if you already have the content in memory.
  */
 export async function computeCharterHash(charterPath) {
     const content = await fs.readFile(charterPath);
-    return crypto.createHash('md5').update(content).digest('hex');
+    return computeContentHash(content);
 }
 //# sourceMappingURL=charter-compiler.js.map

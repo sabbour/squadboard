@@ -1,5 +1,33 @@
 import { and, eq, ilike, inArray, sql } from 'drizzle-orm';
-import { getDb, schema } from '../db/index.js';
+import { getDb, getPool, schema } from '../db/index.js';
+// ---------------------------------------------------------------------------
+// Column validation helpers
+// ---------------------------------------------------------------------------
+/**
+ * Throws a 400 error if `columnId` is not found in the project's column_meta.
+ * Call this before any write that targets a column slug.
+ */
+export async function assertColumnExists(projectId, columnId) {
+    const pool = getPool();
+    const { rows } = await pool.query(`SELECT column_id FROM column_meta WHERE project_id = $1 AND column_id = $2`, [projectId, columnId]);
+    if (rows.length === 0) {
+        throw Object.assign(new Error(`Column '${columnId}' does not exist for this project`), { status: 400 });
+    }
+}
+/**
+ * Returns the slug of the project's default column (is_default=true).
+ * Falls back to the lowest-position column, then to 'backlog' if the table is empty.
+ */
+async function getDefaultColumnId(projectId) {
+    const pool = getPool();
+    const { rows: defRows } = await pool.query(`SELECT column_id FROM column_meta
+     WHERE project_id = $1 AND is_default = true
+     ORDER BY position ASC LIMIT 1`, [projectId]);
+    if (defRows.length > 0)
+        return defRows[0].column_id;
+    const { rows: posRows } = await pool.query(`SELECT column_id FROM column_meta WHERE project_id = $1 ORDER BY position ASC LIMIT 1`, [projectId]);
+    return posRows.length > 0 ? posRows[0].column_id : 'backlog';
+}
 // ---------------------------------------------------------------------------
 // Issues
 // ---------------------------------------------------------------------------
@@ -77,7 +105,25 @@ export async function createIssue(projectId, data) {
     if (!data.title?.trim()) {
         throw Object.assign(new Error('`title` is required'), { status: 400 });
     }
-    const status = data.status ?? 'backlog';
+    const title = data.title.trim();
+    // Default to the project's is_default column; fall back to position-0 then 'backlog'.
+    const status = data.status ?? await getDefaultColumnId(projectId);
+    // Validate the target column exists in this project's column_meta.
+    await assertColumnExists(projectId, status);
+    // Dedup guard: return any non-archived issue with the same (projectId, title)
+    // created in the last 60 seconds instead of inserting a duplicate. This is a
+    // soft guard against runaway fan-out retries — it does NOT replace a unique index.
+    const sixtySecondsAgo = new Date(Date.now() - 60_000);
+    const [recent] = await db
+        .select()
+        .from(issues)
+        .where(and(eq(issues.projectId, projectId), eq(issues.title, title), eq(issues.archived, 0), sql `${issues.createdAt} >= ${sixtySecondsAgo}`))
+        .limit(1);
+    if (recent) {
+        console.warn(`[createIssue] dedup hit — returning existing issue ${recent.id} ` +
+            `(title="${title}", project=${projectId}). Possible duplicate caller.`);
+        return recent;
+    }
     // Find max position in target column
     const [maxRow] = await db
         .select({ maxPos: sql `COALESCE(MAX(${issues.position}), -1)` })
@@ -88,7 +134,7 @@ export async function createIssue(projectId, data) {
         .insert(issues)
         .values({
         projectId,
-        title: data.title.trim(),
+        title,
         body: data.body ?? '',
         status,
         assigneeId: data.assigneeId ?? null,
@@ -143,6 +189,8 @@ export async function archiveIssue(projectId, id) {
 export async function moveIssue(projectId, id, newStatus, position) {
     const db = getDb();
     const { issues } = schema;
+    // Validate the target column exists for this project.
+    await assertColumnExists(projectId, newStatus);
     const [existing] = await db
         .select()
         .from(issues)
@@ -243,11 +291,43 @@ export async function bulkAction(projectId, action, issueIds, payload) {
 }
 export async function listComments(issueId) {
     const db = getDb();
-    return db
+    // Enrich with agent metadata for `authorKind = 'agent'` comments so the
+    // client doesn't have to join in JS. Human + system rows pass through as-is.
+    const rows = await db
         .select()
         .from(schema.comments)
         .where(eq(schema.comments.issueId, issueId))
         .orderBy(schema.comments.createdAt);
+    const agentIds = Array.from(new Set(rows
+        .filter((r) => r.authorKind === 'agent' && typeof r.authorRef === 'string' && r.authorRef.length > 0)
+        .map((r) => r.authorRef)));
+    let agentMap = new Map();
+    if (agentIds.length > 0) {
+        // authorRef may be either an agent UUID or an agent name (mention dispatch
+        // writes the agent name as authorRef). Look up by both.
+        const byId = await db
+            .select({ id: schema.agents.id, name: schema.agents.name, role: schema.agents.role })
+            .from(schema.agents)
+            .where(inArray(schema.agents.id, agentIds.filter((s) => /^[0-9a-f-]{36}$/i.test(s))));
+        const byName = await db
+            .select({ id: schema.agents.id, name: schema.agents.name, role: schema.agents.role })
+            .from(schema.agents)
+            .where(inArray(schema.agents.name, agentIds.filter((s) => !/^[0-9a-f-]{36}$/i.test(s))));
+        agentMap = new Map([...byId, ...byName].flatMap((a) => [
+            [a.id, a],
+            [a.name, a],
+        ]));
+    }
+    return rows.map((r) => {
+        const isAgent = r.authorKind === 'agent';
+        const agent = isAgent && r.authorRef ? agentMap.get(r.authorRef) : undefined;
+        return {
+            ...r,
+            authorName: agent?.name ?? (r.authorKind === 'human' ? 'You' : null),
+            authorRole: agent?.role ?? null,
+            agentId: agent?.id ?? null,
+        };
+    });
 }
 export async function addComment(issueId, input, legacyAuthorId) {
     // Backward-compat: callers that passed (issueId, body, authorId) still work.

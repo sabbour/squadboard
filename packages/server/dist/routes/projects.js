@@ -33,7 +33,7 @@ router.get('/:id', async (req, res) => {
     res.json(project);
 });
 router.patch('/:id', async (req, res) => {
-    const { defaultModel } = (req.body ?? {});
+    const { defaultModel, costModel } = (req.body ?? {});
     const updates = {};
     if (defaultModel !== undefined) {
         let normalized = null;
@@ -47,6 +47,19 @@ router.patch('/:id', async (req, res) => {
             }
         }
         updates.defaultModel = normalized;
+    }
+    // Stream D — D6: cost model toggle. 'usd' | 'gh_multipliers' | null (use env default).
+    if (costModel !== undefined) {
+        if (costModel === null || costModel === '') {
+            updates.costModel = null;
+        }
+        else if (costModel === 'usd' || costModel === 'gh_multipliers') {
+            updates.costModel = costModel;
+        }
+        else {
+            res.status(400).json({ error: "costModel must be 'usd', 'gh_multipliers', or null" });
+            return;
+        }
     }
     if (Object.keys(updates).length === 0) {
         res.status(400).json({ error: 'No supported fields to update' });

@@ -7,6 +7,7 @@
  *
  *   GET    /api/projects/:projectId/mcp-servers                 — list (scrubbed)
  *   POST   /api/projects/:projectId/mcp-servers                 — create
+ *   POST   /api/projects/:projectId/mcp-servers/import-from-json — import (Wave 10 D3)
  *   GET    /api/projects/:projectId/mcp-servers/:id             — get (scrubbed)
  *   PATCH  /api/projects/:projectId/mcp-servers/:id             — update
  *   DELETE /api/projects/:projectId/mcp-servers/:id             — delete
@@ -76,6 +77,23 @@ projectMcpRouter.post('/', async (req, res) => {
     });
     res.status(201).json({ ok: true, data: created });
   } catch (err) { handleError(res, err, 'mcp'); }
+});
+
+projectMcpRouter.post('/import-from-json', async (req, res) => {
+  try {
+    const { projectId } = req.params as { projectId: string };
+    const body = req.body as { content?: string | unknown; filename?: string; sourceUri?: string };
+    if (body.content === undefined || body.content === null) {
+      res.status(400).json({ ok: false, error: 'content is required (raw JSON string or object)' });
+      return;
+    }
+    const result = await mcpService.importMcpServersFromJson(projectId, {
+      content: body.content,
+      filename: typeof body.filename === 'string' ? body.filename : undefined,
+      sourceUri: typeof body.sourceUri === 'string' ? body.sourceUri : undefined,
+    });
+    res.status(201).json({ ok: true, data: result });
+  } catch (err) { handleError(res, err, 'mcp/import-from-json'); }
 });
 
 projectMcpRouter.patch('/:id', async (req, res) => {

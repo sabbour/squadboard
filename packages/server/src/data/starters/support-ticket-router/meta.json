@@ -1,0 +1,33 @@
+{
+  "slug": "support-ticket-router",
+  "title": "Support Ticket Router",
+  "blurb": "A Squad sample that reads real support ticket files from a folder and triages them with a four-agent AI squad — classifying priority, matching known issues, drafting responses, and producing a prioritized action queue.",
+  "tags": [
+    "ceremonies",
+    "routing",
+    "multi-agent"
+  ],
+  "agentCount": 4,
+  "routingRuleCount": 5,
+  "ceremonyCount": 1,
+  "defaultModel": null,
+  "teamName": "Support Ticket Router Squad",
+  "warnings": [],
+  "source": {
+    "origin": "github",
+    "repo": "bradygaster/Squad-IRL",
+    "ref": "main"
+  },
+  "files": [
+    ".gitignore",
+    "README.md",
+    "index.ts",
+    "package.json",
+    "sample-tickets",
+    "squad.config.ts",
+    "ticket-reader.ts",
+    "tsconfig.json"
+  ],
+  "htmlUrl": "https://github.com/bradygaster/Squad-IRL/tree/main/support-ticket-router",
+  "bundledAt": "2026-05-15T07:48:09.967Z"
+}

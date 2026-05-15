@@ -3,14 +3,22 @@
  *
  * Mounts at /api/projects/:id/team
  *
- * POST /export                             → { ok, data: TeamPayload }
+ * POST /export                             → { ok, data: { payload: TeamPayload } }
  * POST /import                             → { ok, data: { imported, skipped } }
- * POST /save-as-template                   → { ok, data: { templateId } }
+ * POST /save-as-template                   → { ok, data: { template: { id, kind, name, description, createdAt } } }
  * POST /instantiate-template/:templateId   → { ok, data: { imported, skipped } }
+ *
+ * Wave 10 B7: previously /export returned the bare TeamPayload at `data` and
+ * /save-as-template returned `{ templateId }`, both of which mismatched the
+ * client hooks `useExportTeam` (reads `.payload`) and `useSaveTeamAsTemplate`
+ * (reads `.template`). Aligned with the project-portability conventions so
+ * the team round-trip survives the same Hockney r5 envelope contract.
  */
 
 import { Router } from 'express';
 import type { Request, Response } from 'express';
+import { eq } from 'drizzle-orm';
+import { getDb, schema } from '../db/index.js';
 import {
   exportTeam,
   importTeam,
@@ -21,6 +29,23 @@ import {
 
 const router = Router({ mergeParams: true });
 
+async function fetchTemplateSummary(id: string) {
+  const db = getDb();
+  const [row] = await db
+    .select()
+    .from(schema.templates)
+    .where(eq(schema.templates.id, id))
+    .limit(1);
+  if (!row) return null;
+  return {
+    id:          row.id,
+    kind:        row.kind,
+    name:        row.name,
+    description: row.description ?? null,
+    createdAt:   row.createdAt,
+  };
+}
+
 // ---------------------------------------------------------------------------
 // POST /api/projects/:id/team/export
 // ---------------------------------------------------------------------------
@@ -28,7 +53,7 @@ router.post('/export', async (req: Request, res: Response) => {
   try {
     const projectId = req.params.id as string;
     const payload = await exportTeam(projectId);
-    res.json({ ok: true, data: payload });
+    res.json({ ok: true, data: { payload } });
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     res.status(500).json({ ok: false, error: msg });
@@ -71,8 +96,27 @@ router.post('/save-as-template', async (req: Request, res: Response) => {
       return;
     }
 
-    const templateId = await saveAsTemplate(projectId, name.trim(), description);
-    res.status(201).json({ ok: true, data: { templateId } });
+    const { templateId, storagePath, storageError } = await saveAsTemplate(
+      projectId,
+      name.trim(),
+      description,
+    );
+    const template = await fetchTemplateSummary(templateId);
+    res.status(201).json({
+      ok: true,
+      data: {
+        template: template ?? {
+          id: templateId,
+          kind: 'team',
+          name: name.trim(),
+          description: description ?? null,
+          createdAt: new Date().toISOString(),
+        },
+        // Stream D — D7
+        storagePath,
+        storageError,
+      },
+    });
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     res.status(500).json({ ok: false, error: msg });

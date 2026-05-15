@@ -108,6 +108,7 @@ router.get('/now', async (_req: Request, res: Response) => {
       status: string;
       startedAt: Date;
       currentStepKind: string | null;
+      triggerSource: Record<string, unknown> | null;
     }>(
       `SELECT
          wr.id,
@@ -116,7 +117,8 @@ router.get('/now', async (_req: Request, res: Response) => {
          w.name       AS "workflowName",
          wr.status,
          wr.created_at AS "startedAt",
-         sr.step_type  AS "currentStepKind"
+         sr.step_type  AS "currentStepKind",
+         wr.trigger_source AS "triggerSource"
        FROM workflow_runs wr
        INNER JOIN issues   i  ON wr.issue_id = i.id
        INNER JOIN projects p  ON i.project_id = p.id
@@ -163,6 +165,7 @@ router.get('/now', async (_req: Request, res: Response) => {
       status: r.status,
       startedAt: r.startedAt instanceof Date ? r.startedAt.toISOString() : r.startedAt,
       currentStepKind: r.currentStepKind,
+      triggerSource: r.triggerSource ?? null,
     }));
 
     return res.json({ liveSessions, issueRuns, workflowRuns });

@@ -27,6 +27,10 @@ export const projects = pgTable('projects', {
   // Project-level default model used by the auto-model resolution chain
   // (sdk/model-defaults.ts). Null means "use BUILTIN_FALLBACK".
   defaultModel: text('default_model'),
+  // Stream D — D6: which cost model the Costs page renders for this project.
+  // 'usd' = legacy token-derived USD, 'gh_multipliers' = GitHub Copilot
+  // premium-request multipliers. Null falls back to env SQUADBOARD_COST_MODEL.
+  costModel: text('cost_model'),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 });
@@ -194,6 +198,8 @@ export const issueRuns = pgTable('issue_runs', {
   inputTokens: integer('input_tokens').default(0),
   outputTokens: integer('output_tokens').default(0),
   costUsd: text('cost_usd').default('0'),
+  // Stream D — D6: GitHub Copilot premium-request consumption
+  premiumRequests: numeric('premium_requests', { precision: 12, scale: 4 }).default('0'),
   // Demo 8: routing audit fields
   routingTier: integer('routing_tier'),        // 1 | 2 | 3 — which tier resolved this run
   routingScore: numeric('routing_score', { precision: 5, scale: 4 }), // Tier-2 keyword score
@@ -216,6 +222,10 @@ export const workflowRuns = pgTable('workflow_runs', {
   pinnedAgentRevisions: text('pinned_agent_revisions'),  // JSON: {agentName: charterHash}; inherited from parent
   variables: jsonb('variables').default('{}'),            // propagated from parent on fan_out
   inlineStepsJson: text('inline_steps_json'),            // JSON: WorkflowStep[] for fan_out child workflows
+  // Stream D — D4: provenance for how this run was spawned. {kind: 'manual'|'manual_force'|'on_schedule'|'on_event'|'unknown', detail?: string, eventType?, anchorIssueId?, scheduleId?, by?}
+  triggerSource: jsonb('trigger_source'),
+  // Stream D — D6: GitHub Copilot premium-request consumption (rolled up from child issue_runs)
+  premiumRequests: numeric('premium_requests', { precision: 12, scale: 4 }).default('0'),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 });
@@ -679,6 +689,17 @@ export const skills = pgTable('skills', {
   category: text('category'),
   promptAddendum: text('prompt_addendum').notNull(),
   curatedKey: text('curated_key'),
+  /**
+   * Provenance tag — Wave 10 D2.
+   *   'curated'  — cloned from the bundled curated library (curatedKey is set)
+   *   'imported' — uploaded as a SKILL.md (or other portable format) by a user
+   *   'custom'   — hand-authored or AI-formulated in-app
+   *   'project'  — auto-created by the project bootstrap (legacy)
+   * Default is 'custom' so existing rows keep their behaviour.
+   */
+  source: text('source').notNull().default('custom'),
+  /** Optional source URI (file://… or https://…) when source='imported'. */
+  sourceUri: text('source_uri'),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 });
@@ -705,6 +726,9 @@ export const tools = pgTable('tools', {
   mcpServerId: uuid('mcp_server_id'),
   inputSchema: jsonb('input_schema'),
   outputSchema: jsonb('output_schema'),
+  /** Provenance tag — Wave 10 D3. See `skills.source` for vocabulary. */
+  source: text('source').notNull().default('custom'),
+  sourceUri: text('source_uri'),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 });
@@ -737,6 +761,9 @@ export const mcpServers = pgTable('mcp_servers', {
   headersIv: text('headers_iv'),
   headersTag: text('headers_tag'),
   enabled: boolean('enabled').notNull().default(true),
+  /** Provenance tag — Wave 10 D3. See `skills.source` for vocabulary. */
+  source: text('source').notNull().default('custom'),
+  sourceUri: text('source_uri'),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 });
@@ -791,6 +818,8 @@ export const consultSessions = pgTable('consult_sessions', {
   inputTokens: integer('input_tokens').notNull().default(0),
   outputTokens: integer('output_tokens').notNull().default(0),
   costUsd: numeric('cost_usd', { precision: 12, scale: 6 }).notNull().default('0'),
+  // Stream D — D6: GitHub Copilot premium-request consumption
+  premiumRequests: numeric('premium_requests', { precision: 12, scale: 4 }).notNull().default('0'),
   messageCount: integer('message_count').notNull().default(0),
   // When user switches mode mid-conversation we fork a new session and
   // record the parent here so the UI can render breadcrumb/lineage.

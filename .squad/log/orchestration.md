@@ -41,3 +41,18 @@ Permanent record of deployment waves, specialist coordination, and team fanouts.
 **Root cause discovery:** Reconnecting badge + stale timer bug was **client-side state machine**, NOT server. No handoff to Hockney required.
 
 **Status:** All deliverables local-only (hacking phase, no upstream push).
+
+---
+
+## Wave 10 (2026-05-15T18:27:32Z)
+
+**Scope:** MCP Phase 1 starter tools + diagnostics path resolver.
+
+**Specialists:**
+1. **Hockney-8 (MCP + diagnostics)** — Extended `createMcpServer()` factory: +4 tools (`list_projects`, `list_inbox`, `capture`, `get_routing`), total now 11 across stdio + HTTP. Diagnostics false-negative bug fixed via `resolveSquadDir()` helper (tolerated `.squad/` vs `parent/.squad/` layouts). Commits: `85dd8780` (diagnostics), `1838253d` (MCP tools). README added at `packages/server/src/mcp/README.md`.
+
+**Directives captured:**
+- None new; Wave 8 queued asks now delivered.
+
+**Status:** All deliverables local-only (hacking phase, no upstream push).
+

@@ -1,20 +1,38 @@
 /**
  * pages/ProjectFlow.tsx — Phase 12 project-wide flow board.
  *
- * Renders the project's columns as horizontal swim-lanes, each containing
- * stacked issue cards. Each card surfaces the most recent active run
- * summary or the most recent deliverable. Clicking a card jumps to the
- * board with the card pre-opened on the Flow tab.
+ * Tabbed view (Stream D — D8):
+ *   - "Agents" (default): agent-centric lineage graph powered by
+ *     useAgentFlow() / AgentFlowGraph. This is the new Phase-12-reframe
+ *     pivot — flow is now about *who's doing what*, not just *what's in
+ *     which column*.
+ *   - "Issues": original kanban-with-active-run swim-lane view. Preserved
+ *     unchanged so the existing workflow continues to work and so users
+ *     who prefer the issue-centric perspective can still get to it.
+ *
+ * Clicking a card on the Issues tab still jumps to the board with the
+ * card pre-opened on its Flow tab.
  */
+import { useState } from 'react'
 import { useNavigate, useParams } from 'react-router'
-import { tokens } from '@fluentui/react-components'
+import {
+  TabList,
+  Tab,
+  tokens,
+  type SelectTabData,
+  type SelectTabEvent,
+} from '@fluentui/react-components'
 import { useProject } from '../api/projects.ts'
 import {
   useProjectFlow,
+  useAgentFlow,
   type ProjectFlowColumn,
   type ProjectFlowIssue,
 } from '../api/flow.ts'
 import PageHeader from '../components/layout/PageHeader.tsx'
+import AgentFlowGraph from '../components/flow/AgentFlowGraph.tsx'
+
+type FlowView = 'agents' | 'issues'
 
 export default function ProjectFlow() {
   const { id } = useParams<{ id: string }>()
@@ -23,7 +41,18 @@ export default function ProjectFlow() {
   const { data: flow, isLoading, error } = useProjectFlow(projectId)
   const navigate = useNavigate()
 
+  // Stream D — D8: agent view is the new default; issues view kept for
+  // backwards-compatibility and quick access to the kanban-style lanes.
+  const [activeView, setActiveView] = useState<FlowView>('agents')
+  const {
+    data: agentGraph,
+    isLoading: agentLoading,
+    error: agentError,
+  } = useAgentFlow(projectId)
+
   const totalIssues = flow?.columns.reduce((sum, c) => sum + c.issues.length, 0) ?? 0
+  const totalAgents = agentGraph?.agents.length ?? 0
+  const totalInstances = agentGraph?.agents.reduce((sum, a) => sum + a.instances.length, 0) ?? 0
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
@@ -31,38 +60,79 @@ export default function ProjectFlow() {
       <PageHeader
         eyebrow={project?.name}
         title="Flow"
-        description="Live issue flow across columns · click a card to inspect its DAG."
+        description={
+          activeView === 'agents'
+            ? 'Live agent activity across the project · click an instance for details.'
+            : 'Live issue flow across columns · click a card to inspect its DAG.'
+        }
         actions={
-          <>
-            <Chip label="Active runs" value={flow?.activeRunsCount ?? 0} color="#388bfd" />
-            <Chip label="Pending reviews" value={flow?.pendingReviewsCount ?? 0} color="#d29922" />
-            <Chip label="Issues" value={totalIssues} color="#7d8590" />
-          </>
+          activeView === 'agents' ? (
+            <>
+              <Chip label="Agents" value={totalAgents} color="#388bfd" />
+              <Chip label="Active instances" value={totalInstances} color="#3fb950" />
+            </>
+          ) : (
+            <>
+              <Chip label="Active runs" value={flow?.activeRunsCount ?? 0} color="#388bfd" />
+              <Chip label="Pending reviews" value={flow?.pendingReviewsCount ?? 0} color="#d29922" />
+              <Chip label="Issues" value={totalIssues} color="#7d8590" />
+            </>
+          )
         }
       />
 
+      {/* Stream D — D8: view switcher */}
+      <div style={{
+        padding: `${tokens.spacingVerticalS} 24px 0`,
+        borderBottom: '1px solid var(--border)',
+      }}>
+        <TabList
+          selectedValue={activeView}
+          onTabSelect={(_e: SelectTabEvent, d: SelectTabData) => setActiveView(d.value as FlowView)}
+        >
+          <Tab value="agents">Agents</Tab>
+          <Tab value="issues">Issues</Tab>
+        </TabList>
+      </div>
+
       {/* Body */}
       <div style={{ flex: 1, overflow: 'auto', padding: '20px 24px' }}>
-        {isLoading && (
-          <div style={{ color: 'var(--text-muted)', fontSize: 13 }}>Loading flow…</div>
-        )}
-        {error && (
-          <div style={{ color: '#ff7b72', fontSize: 13 }}>
-            Failed to load flow: {String(error)}
-          </div>
-        )}
-        {flow && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-            {flow.columns.map((col) => (
-              <SwimLane
-                key={col.slug}
-                column={col}
-                onOpen={(issueId) =>
-                  navigate(`/projects/${projectId}/board?openIssue=${issueId}&tab=flow`)
-                }
-              />
-            ))}
-          </div>
+        {activeView === 'agents' ? (
+          <>
+            {agentLoading && (
+              <div style={{ color: 'var(--text-muted)', fontSize: 13 }}>Loading agent flow…</div>
+            )}
+            {agentError && (
+              <div style={{ color: '#ff7b72', fontSize: 13 }}>
+                Failed to load agent flow: {String(agentError)}
+              </div>
+            )}
+            {agentGraph && <AgentFlowGraph graph={agentGraph} />}
+          </>
+        ) : (
+          <>
+            {isLoading && (
+              <div style={{ color: 'var(--text-muted)', fontSize: 13 }}>Loading flow…</div>
+            )}
+            {error && (
+              <div style={{ color: '#ff7b72', fontSize: 13 }}>
+                Failed to load flow: {String(error)}
+              </div>
+            )}
+            {flow && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                {flow.columns.map((col) => (
+                  <SwimLane
+                    key={col.slug}
+                    column={col}
+                    onOpen={(issueId) =>
+                      navigate(`/projects/${projectId}/board?openIssue=${issueId}&tab=flow`)
+                    }
+                  />
+                ))}
+              </div>
+            )}
+          </>
         )}
       </div>
     </div>

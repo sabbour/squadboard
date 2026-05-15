@@ -30,6 +30,70 @@ export type { CastMember, AgentRole, UniverseId } from '@bradygaster/squad-sdk/c
 export type { LocalUniverseId } from './local-universes.js';
 
 /**
+ * Squadboard-side extended roles — augment the SDK's sealed `AgentRole` union
+ * with the 7 non-tech roles described in `.github/agents/squad.agent.md`
+ * (emoji table) and `.squad/routing.md`. Each extended role declares a base
+ * SDK role it falls back to for downstream casting/charter operations.
+ *
+ * Wave 10 D1: HireTeamModal lets users hire any of the 16 total roles. When
+ * a user selects an extended role as `requiredRoles`, the server maps it
+ * through `EXTENDED_ROLE_TO_BASE_ROLE` before calling `engine.castTeam` so
+ * the SDK pipeline keeps producing valid teams. The original extended-role
+ * label is preserved on the casted member's `extendedRole` field so the UI
+ * can render the "PM"/"Sales"/etc emoji + label, while the underlying agent
+ * inherits a real charter from the mapped BASE_ROLE.
+ */
+export type ExtendedAgentRole =
+  | 'pm'
+  | 'designer-nontech'
+  | 'founder'
+  | 'sales'
+  | 'marketing'
+  | 'customer-success'
+  | 'research';
+
+export const EXTENDED_ROLE_TO_BASE_ROLE: Record<ExtendedAgentRole, AgentRole> = {
+  pm: 'lead',
+  'designer-nontech': 'designer',
+  founder: 'lead',
+  sales: 'developer',
+  marketing: 'developer',
+  'customer-success': 'reviewer',
+  research: 'developer',
+};
+
+/**
+ * Display metadata for extended roles. Emoji + label are sourced from
+ * `.github/agents/squad.agent.md` (Standard role emoji mapping table).
+ */
+export const EXTENDED_ROLE_METADATA: Record<ExtendedAgentRole, { emoji: string; label: string }> = {
+  pm: { emoji: '🎯', label: 'PM' },
+  'designer-nontech': { emoji: '🎨', label: 'Designer' },
+  founder: { emoji: '👔', label: 'Founder' },
+  sales: { emoji: '💼', label: 'Sales' },
+  marketing: { emoji: '📣', label: 'Marketing' },
+  'customer-success': { emoji: '🎧', label: 'Customer Success' },
+  research: { emoji: '🔬', label: 'Research' },
+};
+
+export type SquadboardAgentRole = AgentRole | ExtendedAgentRole;
+
+const EXTENDED_ROLE_SET = new Set<string>(Object.keys(EXTENDED_ROLE_TO_BASE_ROLE));
+
+export function isExtendedRole(role: string): role is ExtendedAgentRole {
+  return EXTENDED_ROLE_SET.has(role);
+}
+
+/**
+ * Resolve any Squadboard role (base or extended) to the SDK's `AgentRole`
+ * the casting engine and BASE_ROLE catalogue understand.
+ */
+export function resolveBaseRole(role: SquadboardAgentRole): AgentRole {
+  if (isExtendedRole(role)) return EXTENDED_ROLE_TO_BASE_ROLE[role];
+  return role;
+}
+
+/**
  * Extends the SDK's sealed `UniverseId` union with Squadboard-local universes.
  * Use this type wherever a universe id may come from either source.
  */
@@ -89,7 +153,14 @@ export function listUniverses(): CastUniverseDescriptor[] {
 export interface CastTeamRequest {
   universe: ExtendedUniverseId;
   teamSize?: number;
-  requiredRoles?: AgentRole[];
+  /**
+   * Required roles. May contain SDK base roles or Squadboard-extended roles
+   * (PM, Designer (non-tech), Founder, Sales, Marketing, Customer Success,
+   * Research). Extended roles are mapped through `EXTENDED_ROLE_TO_BASE_ROLE`
+   * before being passed to the SDK casting engine; the original extended role
+   * is preserved on the casted member's `extendedRole` field.
+   */
+  requiredRoles?: SquadboardAgentRole[];
 }
 
 export interface CastedMember extends CastMember {
@@ -99,6 +170,12 @@ export interface CastedMember extends CastMember {
   suggestedRoleTitle: string;
   /** kebab-case version of the character name, suitable for use as an agent name */
   agentName: string;
+  /**
+   * Squadboard-extended role label (PM, Sales, Marketing, …) when the user
+   * requested a non-tech role and this member was assigned to satisfy it.
+   * `null` when the member was cast against a base SDK role.
+   */
+  extendedRole: ExtendedAgentRole | null;
 }
 
 /**
@@ -108,19 +185,35 @@ export interface CastedMember extends CastMember {
  *
  * Routes to the SDK engine for SDK universes and to a local casting path for
  * Squadboard-registered universes (The Office, Seinfeld, The Simpsons).
+ *
+ * Extended roles (PM, Sales, …) are translated to their base SDK roles
+ * before the SDK call. The first character cast against each extended-role
+ * slot is tagged with the original extended-role label so downstream UI
+ * (e.g. HireTeamModal) can render the correct emoji/badge.
  */
 export function castTeam(req: CastTeamRequest): CastedMember[] {
+  const requestedRoles = req.requiredRoles ?? [];
+  const baseRoles = requestedRoles.map(resolveBaseRole);
+
+  // Track unmatched extended-role slots so we can stamp them onto the
+  // first member returned for each base role (consumed in declaration order).
+  const extendedQueue: Array<ExtendedAgentRole | null> = requestedRoles.map((role) =>
+    isExtendedRole(role) ? role : null,
+  );
+
+  let members: CastMember[];
   if (isLocalUniverseId(req.universe)) {
-    const members = castLocalTeam(req.universe, req.teamSize ?? 5, req.requiredRoles ?? []);
-    return members.map(enrich);
+    members = castLocalTeam(req.universe, req.teamSize ?? 5, baseRoles);
+  } else {
+    const config: CastingConfig = {
+      universe: req.universe as UniverseId,
+      teamSize: req.teamSize,
+      requiredRoles: baseRoles,
+    };
+    members = engine.castTeam(config);
   }
-  const config: CastingConfig = {
-    universe: req.universe as UniverseId,
-    teamSize: req.teamSize,
-    requiredRoles: req.requiredRoles,
-  };
-  const members = engine.castTeam(config);
-  return members.map(enrich);
+
+  return members.map((m) => enrich(m, baseRoles, extendedQueue));
 }
 
 /**
@@ -188,14 +281,35 @@ function formatRole(role: AgentRole): string {
     .join(' ');
 }
 
-function enrich(member: CastMember): CastedMember {
+function enrich(
+  member: CastMember,
+  baseRoles: AgentRole[] = [],
+  extendedQueue: Array<ExtendedAgentRole | null> = [],
+): CastedMember {
   const suggestedRoleId = AGENT_ROLE_TO_BASE_ROLE[member.role];
   const baseRole = getRoleById(suggestedRoleId);
+
+  // If the user requested an extended role for this base role, claim the
+  // first matching slot (FIFO). This preserves the user's intent ("I want a
+  // Marketing person") while letting the SDK pick the underlying base role.
+  let extendedRole: ExtendedAgentRole | null = null;
+  for (let i = 0; i < extendedQueue.length; i++) {
+    const requested = extendedQueue[i];
+    if (requested && baseRoles[i] === member.role) {
+      extendedRole = requested;
+      extendedQueue[i] = null; // consume
+      break;
+    }
+  }
+
   return {
     ...member,
     suggestedRoleId,
-    suggestedRoleTitle: baseRole?.title ?? member.role,
+    suggestedRoleTitle: extendedRole
+      ? EXTENDED_ROLE_METADATA[extendedRole].label
+      : (baseRole?.title ?? member.role),
     agentName: kebabify(member.name),
+    extendedRole,
   };
 }
 

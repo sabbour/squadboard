@@ -1,0 +1,32 @@
+{
+  "slug": "options-trader",
+  "title": "Options Day Trader",
+  "blurb": "A Squad sample that opens TradingView in a real browser, reads live chart signals (VWAP, EMA 9/21, RSI, VIX), and feeds them to a four-agent analysis squad that produces trade recommendations for 0DTE debit spreads. Uses SPX as the default ",
+  "tags": [
+    "ceremonies",
+    "routing",
+    "multi-agent"
+  ],
+  "agentCount": 4,
+  "routingRuleCount": 5,
+  "ceremonyCount": 1,
+  "defaultModel": null,
+  "teamName": "Options Day Trader",
+  "warnings": [],
+  "source": {
+    "origin": "github",
+    "repo": "bradygaster/Squad-IRL",
+    "ref": "main"
+  },
+  "files": [
+    ".gitignore",
+    "README.md",
+    "chart-reader.ts",
+    "index.ts",
+    "package.json",
+    "squad.config.ts",
+    "tsconfig.json"
+  ],
+  "htmlUrl": "https://github.com/bradygaster/Squad-IRL/tree/main/options-trader",
+  "bundledAt": "2026-05-15T07:48:09.260Z"
+}

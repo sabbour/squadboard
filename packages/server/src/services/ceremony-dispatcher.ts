@@ -158,6 +158,12 @@ async function handleEvent(event: BusEvent): Promise<void> {
       await spawnCeremonyRun(m.id, {
         trigger: `on_event:${event.type}`,
         anchorIssueId,
+        triggerSource: {
+          kind: 'on_event',
+          eventType: event.type,
+          detail: eventId,
+          anchorIssueId,
+        },
       });
     } catch (err) {
       console.error(

@@ -29,7 +29,7 @@ import {
   useSessionStream,
   type LiveSession as LiveSessionRow,
 } from '../api/sessions.ts'
-import { useAgents, useModels } from '../api/agents.ts'
+import { useAgents, useActiveAgents, useModels } from '../api/agents.ts'
 import AgentActivityFeed from '../components/sessions/AgentActivityFeed.tsx'
 import SessionSteeringBar from '../components/sessions/SessionSteeringBar.tsx'
 
@@ -209,7 +209,8 @@ function StatusBadge({ status }: { status: LiveSessionRow['status'] }) {
 
 function NewSessionView({ projectId }: { projectId: string }) {
   const navigate = useNavigate()
-  const agentsQuery = useAgents(projectId)
+  // Wave 10 B9: only active agents are pickable for a new live session.
+  const agentsQuery = useActiveAgents(projectId)
   const modelsQuery = useModels()
 
   const [agentId, setAgentId] = useState<string | null>(null)

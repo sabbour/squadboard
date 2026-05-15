@@ -143,3 +143,72 @@ Always run `git status --short -- packages/client/` first. Stage each file indiv
 
 **Status:** PARTIAL COMPLETE — Batch A landed. Batch B retrying as keyser-5.
 
+
+---
+
+## 2026-05-15 — keyser-3 timeout / keyser-4 Batch B completion
+
+**keyser-3** timed out partway through the columns feature task. Batch A landed cleanly as commit `c6dfcd6c` ("feat(board): dynamic column list — KanbanBoard consumes useColumnMeta") before the timeout.
+
+**keyser-4** picked up from where keyser-3 left off and shipped Batch B as commit `e4d87359` ("feat(board): add/remove/reorder columns in ColumnSettingsPanel + CaptureModal dropdown"):
+
+- `ColumnSettingsPanel.tsx`: DnD reorder, add column inline form, delete with confirm + reassign, make-default star, semantic badge + select, 480px drawer, updated reset confirm text.
+- `CaptureModal.tsx`: replaced hardcoded COLUMNS with `useColumnMeta(projectId)` + static fallback for empty projectId.
+
+TypeScript (`npx tsc --noEmit`) was clean before commit.
+
+## 2026-05-15 — UI bundle: 5 fixes in one wave
+
+Five small UI fixes Ahmed batched together. Per-file commits, TS clean.
+
+| Fix | File(s) | Commit |
+|-----|---------|--------|
+| 1. Fluent2 spacing on CeremonyList | `pages/CeremonyList.tsx` | `8b3f7197` |
+| 2. Widen Consult form (880→1200) | `pages/Consult.tsx` | `16414e90` |
+| 3+5. Project switcher Menu + System anchored bottom | `components/Layout.tsx` | `d72fd8a7` |
+| 4. PresenceBar alignment + WS stale-timer fix | `pages/Board.tsx`, `realtime/ws-client.ts` | `5673d57b` |
+
+### Patterns worth remembering
+
+**Fluent2 page padding canon (per Fenster's typography canon):** every
+list/data surface needs `tokens.spacingHorizontalXXL` + `tokens.spacingVerticalL`
+on the scroll container so content breathes against the sidebar. Empty
+states use `spacingHorizontalXXL` + `spacingVerticalXXL`. Never use a single
+axis token (`padding: tokens.spacingVerticalXXL`) for both axes — that's
+semantically wrong even when the px value happens to be the same.
+
+**Sidebar bottom-anchor pattern:** Fluent's `NavDrawerBody` is already
+`display: flex; flex-direction: column` (and `flex: 1; overflow: auto`
+from `useDrawerBodyStyles_unstable`). Drop a `<div style={{ flex: 1 }} />`
+spacer between the top items and the section you want anchored to the
+bottom. No CSS overrides needed.
+
+**Two `marginLeft: 'auto'` siblings = visual middle-pin trap:** in a
+flex row with three children where two carry `marginLeft: 'auto'`, the
+middle child gets pinned to the visual centre instead of right-aligned.
+Always pick a single right-aligned anchor; subsequent siblings ride
+along with the natural flex gap.
+
+**Project switcher = Fluent2 `Menu`:** replaced the plain navigate-to-/
+button with a `Menu` + `MenuTrigger` + `MenuList` populated from
+`useProjects()`. The selection handler swaps the project segment in
+`location.pathname` while preserving the category segment after it
+(via `extractProjectCategory()`), so switching from foo's Boards to bar
+lands on bar's Boards. Unknown / non-project routes fall back to
+`/projects/<id>/dashboard`. Sub-paths beyond the segment are dropped
+intentionally — switching projects lands on the category root, not a
+stale sub-resource id.
+
+**WS reconnect `connect()` must cancel pending timers:** if `connect()`
+runs while a reconnect timer is scheduled (e.g. route change during
+backoff), the stale timer can fire after the new socket opens and
+spawn a second competing socket. Added `cancelReconnect()` at the top
+of `connect()` to drop the orphan timer. Pattern: any method that
+restarts the connection lifecycle must cancel scheduled work from the
+prior lifecycle.
+
+### Lesson reinforced
+Per-file `git add -- <path>` again. The repo currently has uncommitted
+work from other agents (mcmanus history, server/index.ts, vite cache
+churn). Per-file staging kept all four commits clean — only my
+intentional changes landed.

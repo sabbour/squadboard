@@ -250,7 +250,11 @@ issueWorkflowRouter.post('/start', async (req, res) => {
             res.status(404).json({ error: 'No workflow attached to this issue' });
             return;
         }
-        const workflowRunId = await createWorkflowRun(issueId, attachment.workflowVersionId);
+        const workflowRunId = await createWorkflowRun(issueId, attachment.workflowVersionId, {
+            kind: 'manual',
+            anchorIssueId: issueId,
+            detail: 'POST /workflows/:issueId/start',
+        });
         res.status(201).json({ workflowRunId, message: 'Workflow execution started' });
     }
     catch (err) {

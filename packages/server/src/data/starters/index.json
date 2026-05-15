@@ -1,0 +1,282 @@
+{
+  "generatedAt": "2026-05-15T07:48:10.117Z",
+  "source": {
+    "origin": "github",
+    "repo": "bradygaster/Squad-IRL",
+    "ref": "main"
+  },
+  "starters": [
+    {
+      "slug": "receipt-scanner",
+      "title": "🧾 Receipt Scanner & Expense Analyzer",
+      "blurb": "A Squad-powered sample that reads receipt files from a folder and processes them",
+      "tags": [
+        "ceremonies",
+        "routing",
+        "multi-agent"
+      ],
+      "agentCount": 4,
+      "routingRuleCount": 5,
+      "ceremonyCount": 1
+    },
+    {
+      "slug": "ab-test-orchestrator",
+      "title": "A/B Test Orchestrator — Squad Edition",
+      "blurb": "A Squad sample that turns an experiment hypothesis into a complete A/B test plan. Provide a hypothesis at the terminal or point it at an experiment brief file, and four AI specialists collaborate to design your test.",
+      "tags": [
+        "ceremonies",
+        "routing",
+        "multi-agent"
+      ],
+      "agentCount": 4,
+      "routingRuleCount": 5,
+      "ceremonyCount": 1
+    },
+    {
+      "slug": "appointment-scheduler",
+      "title": "Appointment Scheduler",
+      "blurb": "A Squad sample that turns plain-text scheduling requests into optimized meeting proposals across timezones. Describe who needs to meet, when, and what to avoid — four AI specialists handle the rest.",
+      "tags": [
+        "ceremonies",
+        "routing",
+        "multi-agent"
+      ],
+      "agentCount": 4,
+      "routingRuleCount": 5,
+      "ceremonyCount": 1
+    },
+    {
+      "slug": "bug-triage",
+      "title": "Bug Triage — GitHub Issues Edition",
+      "blurb": "A Squad-powered GitHub issue triage system — fetches real open issues from any repo using the gh CLI and triages them with a team of AI specialists.",
+      "tags": [
+        "ceremonies",
+        "routing",
+        "multi-agent"
+      ],
+      "agentCount": 4,
+      "routingRuleCount": 5,
+      "ceremonyCount": 1
+    },
+    {
+      "slug": "compliance-checker",
+      "title": "Compliance Checker — Codebase Compliance Scanner",
+      "blurb": "A Squad-powered compliance checker that scans a real project folder and evaluates compliance across security, licensing, documentation, and data privacy — with a team of four AI specialists.",
+      "tags": [
+        "ceremonies",
+        "routing",
+        "multi-agent"
+      ],
+      "agentCount": 4,
+      "routingRuleCount": 5,
+      "ceremonyCount": 1
+    },
+    {
+      "slug": "content-creation",
+      "title": "Content Creation Workflow — Squad Edition",
+      "blurb": "A Squad sample that takes a blog topic and produces a polished, SEO-optimized article through a four-agent content pipeline: research → outline → write → edit.",
+      "tags": [
+        "ceremonies",
+        "routing",
+        "multi-agent"
+      ],
+      "agentCount": 4,
+      "routingRuleCount": 5,
+      "ceremonyCount": 1
+    },
+    {
+      "slug": "contract-reviewer",
+      "title": "Contract Reviewer — Squad Edition",
+      "blurb": "A real Squad-powered contract review tool. Point it at a contract file and a team of four AI legal specialists will extract clauses, score risk, suggest negotiation alternatives, and deliver an executive summary — all with 🔴🟡🟢 traffic-li",
+      "tags": [
+        "ceremonies",
+        "routing",
+        "multi-agent"
+      ],
+      "agentCount": 4,
+      "routingRuleCount": 5,
+      "ceremonyCount": 1
+    },
+    {
+      "slug": "gmail",
+      "title": "Email Inbox Triage — Gmail Edition",
+      "blurb": "A Squad sample that opens your real Gmail inbox in a browser, scrapes the visible emails using Playwright, and feeds them to a four-agent AI triage squad for actionable advice.",
+      "tags": [
+        "ceremonies",
+        "routing",
+        "multi-agent"
+      ],
+      "agentCount": 4,
+      "routingRuleCount": 5,
+      "ceremonyCount": 1
+    },
+    {
+      "slug": "inventory-manager",
+      "title": "Inventory Manager",
+      "blurb": "A Squad-powered inventory analysis demo. Reads a CSV file of product data and feeds it to a four-agent Squad that predicts stockouts, optimises reorder points, finds cost savings, and produces an actionable restock plan.",
+      "tags": [
+        "ceremonies",
+        "routing",
+        "multi-agent"
+      ],
+      "agentCount": 4,
+      "routingRuleCount": 5,
+      "ceremonyCount": 1
+    },
+    {
+      "slug": "job-application-tracker",
+      "title": "Job Application Tracker",
+      "blurb": "A Squad sample that opens a real browser, scrapes job listings from any job board, and analyzes them with a team of four AI specialists — matching opportunities to your profile, researching companies, preparing application strategies, and c",
+      "tags": [
+        "ceremonies",
+        "routing",
+        "multi-agent"
+      ],
+      "agentCount": 4,
+      "routingRuleCount": 5,
+      "ceremonyCount": 1
+    },
+    {
+      "slug": "linkedin-monitor",
+      "title": "LinkedIn Monitor & Engagement Tracker",
+      "blurb": "A Squad sample that opens your real LinkedIn in a browser, scrapes your notifications and messages using Playwright, and feeds them to a four-agent AI squad that tells you what needs your attention — with direct links to take action.",
+      "tags": [
+        "ceremonies",
+        "routing",
+        "multi-agent"
+      ],
+      "agentCount": 4,
+      "routingRuleCount": 5,
+      "ceremonyCount": 1
+    },
+    {
+      "slug": "meeting-recap",
+      "title": "Meeting Recap & Action Item Generator",
+      "blurb": "A Squad sample that turns meeting transcripts into structured recaps with action items, decisions, and follow-ups. Paste your notes directly or point to a transcript file — four AI specialists do the rest.",
+      "tags": [
+        "ceremonies",
+        "routing",
+        "multi-agent"
+      ],
+      "agentCount": 4,
+      "routingRuleCount": 5,
+      "ceremonyCount": 1
+    },
+    {
+      "slug": "mood-playlist-builder",
+      "title": "Mood Playlist Builder",
+      "blurb": "Create a playlist based on how you feel, refine the songs interactively, save everything in markdown, and instantly open a YouTube playlist.",
+      "tags": [
+        "routing",
+        "multi-agent"
+      ],
+      "agentCount": 3,
+      "routingRuleCount": 4,
+      "ceremonyCount": 0
+    },
+    {
+      "slug": "mtg-commander-deck-builder",
+      "title": "MTG Commander Deck Builder",
+      "blurb": "A Squad sample that scrapes EDHREC card recommendations using Playwright, then hands them to a four-agent AI squad to build a complete 100-card Commander deck. Supports follow-up modifications in a conversation loop.",
+      "tags": [
+        "ceremonies",
+        "routing",
+        "multi-agent"
+      ],
+      "agentCount": 4,
+      "routingRuleCount": 6,
+      "ceremonyCount": 1
+    },
+    {
+      "slug": "options-trader",
+      "title": "Options Day Trader",
+      "blurb": "A Squad sample that opens TradingView in a real browser, reads live chart signals (VWAP, EMA 9/21, RSI, VIX), and feeds them to a four-agent analysis squad that produces trade recommendations for 0DTE debit spreads. Uses SPX as the default ",
+      "tags": [
+        "ceremonies",
+        "routing",
+        "multi-agent"
+      ],
+      "agentCount": 4,
+      "routingRuleCount": 5,
+      "ceremonyCount": 1
+    },
+    {
+      "slug": "price-monitor",
+      "title": "Price Monitor & Deal Finder",
+      "blurb": "A Squad sample that opens a real browser, scrapes product prices from any shopping page, and feeds them to a four-agent deal analysis squad for actionable buy/wait/skip advice.",
+      "tags": [
+        "ceremonies",
+        "routing",
+        "multi-agent"
+      ],
+      "agentCount": 4,
+      "routingRuleCount": 5,
+      "ceremonyCount": 1
+    },
+    {
+      "slug": "real-estate-analyzer",
+      "title": "Real Estate Investment Analyzer",
+      "blurb": "A Squad sample that opens Redfin or Zillow in a browser, scrapes visible property listings using Playwright, and feeds them to a four-agent AI squad for investment analysis.",
+      "tags": [
+        "ceremonies",
+        "routing",
+        "multi-agent"
+      ],
+      "agentCount": 4,
+      "routingRuleCount": 5,
+      "ceremonyCount": 1
+    },
+    {
+      "slug": "realtor-sales-package",
+      "title": "Realtor Home Sales Package Builder",
+      "blurb": "A Squad sample that scrapes Redfin and Zillow using Playwright and feeds the listings to a four-agent AI squad that builds a client-ready Comparative Market Analysis (CMA) sales package for realtors.",
+      "tags": [
+        "ceremonies",
+        "routing",
+        "multi-agent"
+      ],
+      "agentCount": 4,
+      "routingRuleCount": 5,
+      "ceremonyCount": 1
+    },
+    {
+      "slug": "social-media-manager",
+      "title": "Social Media Content Manager",
+      "blurb": "A Squad sample that takes a content theme or product description and generates platform-optimized social media posts for Twitter, LinkedIn, and Instagram — complete with timing recommendations and engagement monitoring strategies.",
+      "tags": [
+        "ceremonies",
+        "routing",
+        "multi-agent"
+      ],
+      "agentCount": 4,
+      "routingRuleCount": 5,
+      "ceremonyCount": 1
+    },
+    {
+      "slug": "support-ticket-router",
+      "title": "Support Ticket Router",
+      "blurb": "A Squad sample that reads real support ticket files from a folder and triages them with a four-agent AI squad — classifying priority, matching known issues, drafting responses, and producing a prioritized action queue.",
+      "tags": [
+        "ceremonies",
+        "routing",
+        "multi-agent"
+      ],
+      "agentCount": 4,
+      "routingRuleCount": 5,
+      "ceremonyCount": 1
+    },
+    {
+      "slug": "travel-planner",
+      "title": "Travel Planner — A Squad of Travel Experts",
+      "blurb": "Trip planning sucks. You're bouncing between Google Maps, TripAdvisor, Booking.com, Reddit threads, and your friend's cousin's blog. Visa requirements, flight connections, neighborhood vibes, whether that $200 hotel is worth it — it's fragm",
+      "tags": [
+        "ceremonies",
+        "routing",
+        "large-team"
+      ],
+      "agentCount": 5,
+      "routingRuleCount": 6,
+      "ceremonyCount": 1
+    }
+  ]
+}

@@ -84,6 +84,8 @@ function scrub(row) {
         args,
         headers: names.map((n) => ({ name: n.name, hasSecret: hasCipher })),
         enabled: row.enabled,
+        source: row.source ?? 'custom',
+        sourceUri: row.sourceUri ?? null,
         createdAt: row.createdAt,
         updatedAt: row.updatedAt,
     };
@@ -192,6 +194,146 @@ export async function deleteMcpServer(projectId, mcpServerId) {
         .returning({ id: schema.mcpServers.id });
     return result.length > 0;
 }
+function normalizeMcpEntry(name, raw) {
+    if (!raw || typeof raw !== 'object')
+        return null;
+    const r = raw;
+    const description = typeof r.description === 'string' ? r.description.trim() : null;
+    const url = typeof r.url === 'string' ? r.url.trim() : null;
+    const command = typeof r.command === 'string' ? r.command.trim() : null;
+    let transport;
+    if (url && !command)
+        transport = 'http';
+    else if (command && !url)
+        transport = 'stdio';
+    else if (typeof r.transport === 'string' && (r.transport === 'http' || r.transport === 'stdio'))
+        transport = r.transport;
+    else if (url)
+        transport = 'http';
+    else if (command)
+        transport = 'stdio';
+    else
+        return null;
+    const args = Array.isArray(r.args) ? r.args.filter((a) => typeof a === 'string') : [];
+    const headers = [];
+    if (r.headers && typeof r.headers === 'object' && !Array.isArray(r.headers)) {
+        for (const [hname, hval] of Object.entries(r.headers)) {
+            if (typeof hval === 'string' && hname.trim())
+                headers.push({ name: hname.trim(), value: hval });
+        }
+    }
+    // env → headers when stdio (downstream MCP launchers read env from headers map)
+    if (transport === 'stdio' && r.env && typeof r.env === 'object' && !Array.isArray(r.env)) {
+        for (const [hname, hval] of Object.entries(r.env)) {
+            if (typeof hval === 'string' && hname.trim())
+                headers.push({ name: hname.trim(), value: hval });
+        }
+    }
+    return {
+        name: name.trim().slice(0, 80),
+        description: description ? description.slice(0, 280) : null,
+        transport,
+        url,
+        command,
+        args,
+        headers,
+    };
+}
+export async function importMcpServersFromJson(projectId, input) {
+    let parsed;
+    if (typeof input.content === 'string') {
+        if (!input.content.trim()) {
+            throw Object.assign(new Error('content is required'), { status: 400 });
+        }
+        try {
+            parsed = JSON.parse(input.content);
+        }
+        catch (err) {
+            throw Object.assign(new Error(`invalid JSON: ${err.message}`), { status: 400 });
+        }
+    }
+    else {
+        parsed = input.content;
+    }
+    // Build candidate map name → raw entry
+    const candidates = new Map();
+    if (Array.isArray(parsed)) {
+        for (const item of parsed) {
+            if (item && typeof item === 'object' && typeof item.name === 'string') {
+                candidates.set(item.name.trim(), item);
+            }
+        }
+    }
+    else if (parsed && typeof parsed === 'object') {
+        const p = parsed;
+        if (p.mcpServers && typeof p.mcpServers === 'object' && !Array.isArray(p.mcpServers)) {
+            for (const [name, entry] of Object.entries(p.mcpServers)) {
+                if (name && typeof entry === 'object' && entry)
+                    candidates.set(name.trim(), entry);
+            }
+        }
+        else if (typeof p.name === 'string') {
+            candidates.set(p.name.trim(), p);
+        }
+        else if (Object.keys(p).length > 0) {
+            // Bare map of name → config (no top-level `mcpServers` wrapper)
+            for (const [name, entry] of Object.entries(p)) {
+                if (entry && typeof entry === 'object')
+                    candidates.set(name.trim(), entry);
+            }
+        }
+    }
+    if (candidates.size === 0) {
+        throw Object.assign(new Error('no mcp server entries found in payload'), { status: 400 });
+    }
+    const existing = await listMcpServers(projectId);
+    const existingByName = new Set(existing.map((m) => m.name));
+    const result = { imported: [], skipped: [] };
+    for (const [name, raw] of candidates) {
+        const norm = normalizeMcpEntry(name, raw);
+        if (!norm) {
+            result.skipped.push({ name, reason: 'missing url/command or invalid shape' });
+            continue;
+        }
+        if (existingByName.has(norm.name)) {
+            result.skipped.push({ name: norm.name, reason: 'already exists' });
+            continue;
+        }
+        try {
+            const created = await createMcpServer(projectId, {
+                name: norm.name,
+                description: norm.description,
+                transport: norm.transport,
+                url: norm.url,
+                command: norm.command,
+                args: norm.args,
+                headers: norm.headers,
+                enabled: true,
+            });
+            // Tag provenance so the UI can render the right badge.
+            if (input.sourceUri) {
+                const db = getDb();
+                await db
+                    .update(schema.mcpServers)
+                    .set({ source: 'imported', sourceUri: input.sourceUri })
+                    .where(and(eq(schema.mcpServers.projectId, projectId), eq(schema.mcpServers.id, created.id)));
+            }
+            else {
+                const db = getDb();
+                await db
+                    .update(schema.mcpServers)
+                    .set({ source: 'imported' })
+                    .where(and(eq(schema.mcpServers.projectId, projectId), eq(schema.mcpServers.id, created.id)));
+            }
+            existingByName.add(created.name);
+            result.imported.push({ id: created.id, name: created.name, transport: created.transport });
+        }
+        catch (err) {
+            result.skipped.push({ name: norm.name, reason: err.message });
+        }
+    }
+    return result;
+}
 export async function testMcpServer(projectId, mcpServerId) {
     const start = Date.now();
     const row = await rawGet(projectId, mcpServerId);
@@ -237,6 +379,8 @@ export async function listAgentMcpServers(projectId, agentId) {
         headersIv: schema.mcpServers.headersIv,
         headersTag: schema.mcpServers.headersTag,
         enabled: schema.mcpServers.enabled,
+        source: schema.mcpServers.source,
+        sourceUri: schema.mcpServers.sourceUri,
         createdAt: schema.mcpServers.createdAt,
         updatedAt: schema.mcpServers.updatedAt,
     })

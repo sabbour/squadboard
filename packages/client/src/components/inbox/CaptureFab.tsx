@@ -1,6 +1,11 @@
 /**
  * CaptureFab — Phase 14 per-project floating action button.
  *
+ * @deprecated Wave 10 B2: Conjure replaces Capture. The blue "+ Capture"
+ * button in Layout has been removed; this FAB is kept as a thin shim for one
+ * release while the per-project board is migrated to a Conjure entry point.
+ * Removal is a separate wave.
+ *
  * Mounted from per-project pages (currently only the Board — see scope rule)
  * to give a one-click path into the CaptureModal with the active project
  * pre-selected.
@@ -15,6 +20,13 @@ import { tokens } from '@fluentui/react-components'
 import { Add24Regular } from '@fluentui/react-icons'
 import CaptureModal from './CaptureModal.tsx'
 import type { ColumnId } from '../../api/issues.ts'
+
+// Wave 10 B2: deprecation notice (one per page load).
+if (typeof window !== 'undefined' && !(window as unknown as { __squadboardCaptureFabWarned?: boolean }).__squadboardCaptureFabWarned) {
+  // eslint-disable-next-line no-console
+  console.warn('[squadboard] CaptureFab is deprecated; use Conjure (Consult intent flow) instead. Removal is a separate wave.')
+  ;(window as unknown as { __squadboardCaptureFabWarned?: boolean }).__squadboardCaptureFabWarned = true
+}
 
 interface CaptureFabProps {
   projectId: string

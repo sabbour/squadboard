@@ -3,6 +3,7 @@ import { getDb, schema } from '../db/index.js';
 import { resolveWorkspace } from './workspace.js';
 import { executeAgentRun } from '../sdk/bridge.js';
 import { recordRunCompletion } from '../services/output-validator.js';
+import { eventBus } from '../realtime/event-bus.js';
 const LEASE_TTL_SECONDS = 90;
 const HEARTBEAT_INTERVAL_MS = 30_000;
 /**
@@ -78,6 +79,14 @@ export async function runWorker(issueRunId) {
         await markFailed(db, issueRunId, 'Missing agent, issue, or project record');
         return;
     }
+    // Wave 10 B9: defense-in-depth — even if the route accepted this run while
+    // the agent was active, the operator may have disabled or retired it
+    // before the worker picked it up. Refuse to spend tokens on a non-active
+    // agent and surface a clear failure reason instead.
+    if (agent.status !== 'active') {
+        await markFailed(db, issueRunId, `Agent "${agent.name}" is ${agent.status} — re-enable it before retrying this run.`);
+        return;
+    }
     // Resolve the workflow version attached to this issue (for Invariant 4)
     const workflowVersionId = await resolveWorkflowVersionId(db, run.issueId);
     // --- Resolve workspace ---
@@ -105,11 +114,19 @@ export async function runWorker(issueRunId) {
         WHERE id = ${issueRunId}
           AND status = 'running'
       `);
+            // ── Flow heartbeat (throttled to 1/s in the bus) ─────────────────────
+            eventBus.emitFlowHeartbeat(project.id, issueRunId, { instanceId: issueRunId, status: 'active' });
         }
         catch (err) {
             console.error(`[stepper] heartbeat failed for ${issueRunId}:`, err);
         }
     }, HEARTBEAT_INTERVAL_MS);
+    // ── Flow event: issue_run started ──────────────────────────────────────────
+    eventBus.emitFlowEvent('flow.instance.started', project.id, {
+        instanceId: issueRunId,
+        agentId: run.agentId,
+        kind: 'issue_run',
+    });
     // --- Call SDK bridge ---
     try {
         // For peer_review runs, prepend the inputContext (prior step output + review prompt)
@@ -140,14 +157,20 @@ export async function runWorker(issueRunId) {
             // Invariant 4: validate output schema (if attached) BEFORE marking completed.
             // recordRunCompletion fires after sendAndWait, before run is finalised.
             await recordRunCompletion(issueRunId, result.output ?? '', workflowVersionId);
+            // ── Flow event: issue_run ended (completed) ────────────────────────────
+            eventBus.emitFlowEvent('flow.instance.ended', project.id, { instanceId: issueRunId, status: 'completed' });
         }
         else {
             await markFailed(db, issueRunId, result.errorMessage ?? 'Agent run failed');
+            // ── Flow event: issue_run ended (failed) ───────────────────────────────
+            eventBus.emitFlowEvent('flow.instance.ended', project.id, { instanceId: issueRunId, status: 'failed' });
         }
     }
     catch (err) {
         clearInterval(heartbeatTimer);
         await markFailed(db, issueRunId, err instanceof Error ? err.message : String(err));
+        // ── Flow event: issue_run ended (failed — exception path) ─────────────────
+        eventBus.emitFlowEvent('flow.instance.ended', project.id, { instanceId: issueRunId, status: 'failed' });
     }
 }
 // ---------------------------------------------------------------------------

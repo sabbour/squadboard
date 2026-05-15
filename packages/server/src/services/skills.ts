@@ -52,6 +52,9 @@ export interface CreateSkillInput {
   category?: string | null;
   promptAddendum: string;
   curatedKey?: string | null;
+  /** Provenance — defaults to 'custom' if omitted. See `skills.source`. */
+  source?: 'curated' | 'imported' | 'custom' | 'project' | null;
+  sourceUri?: string | null;
 }
 
 export interface UpdateSkillInput {
@@ -93,6 +96,8 @@ export async function createSkill(projectId: string, input: CreateSkillInput) {
       category: input.category ?? null,
       promptAddendum: input.promptAddendum,
       curatedKey: input.curatedKey ?? null,
+      source: input.source ?? 'custom',
+      sourceUri: input.sourceUri ?? null,
     })
     .returning();
   return row;
@@ -153,6 +158,127 @@ export async function cloneCuratedSkill(projectId: string, curatedKey: string) {
     category: entry.category,
     promptAddendum: entry.promptAddendum,
     curatedKey: entry.key,
+    source: 'curated',
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Import — Wave 10 D2.
+//
+// Accept a SKILL.md (or skill.md) file in the upstream Squad SKILL format and
+// turn it into a skills row. The accepted format is a YAML frontmatter block
+// + markdown body:
+//
+//   ---
+//   key: my-skill                # required, kebab-case
+//   name: My Skill               # required
+//   description: Optional one-liner
+//   category: review             # optional
+//   ---
+//   When the user asks for X, do Y…    ← becomes promptAddendum
+//
+// We are deliberately permissive: missing frontmatter falls back to filename →
+// key, h1 heading → name, and the entire body becomes promptAddendum.
+//
+// Behaviour:
+//   - duplicate `key` for the project → idempotent, returns existing row
+//   - source is recorded as 'imported' so the UI shows the right badge
+// ---------------------------------------------------------------------------
+
+export interface ImportSkillFromMdInput {
+  /** Raw .md file contents */
+  content: string;
+  /** Optional original filename, used as key/name fallback */
+  filename?: string;
+  /** Optional URI to record on the row (e.g. file:///absolute/path) */
+  sourceUri?: string;
+}
+
+const FRONTMATTER_RE = /^---\s*\n([\s\S]*?)\n---\s*\n?/;
+const H1_RE = /^#\s+(.+)$/m;
+
+function parseFrontmatter(raw: string): { meta: Record<string, string>; body: string } {
+  const m = FRONTMATTER_RE.exec(raw);
+  if (!m) return { meta: {}, body: raw };
+  const meta: Record<string, string> = {};
+  for (const line of m[1].split('\n')) {
+    const idx = line.indexOf(':');
+    if (idx <= 0) continue;
+    const k = line.slice(0, idx).trim();
+    let v = line.slice(idx + 1).trim();
+    if ((v.startsWith('"') && v.endsWith('"')) || (v.startsWith("'") && v.endsWith("'"))) {
+      v = v.slice(1, -1);
+    }
+    if (k) meta[k] = v;
+  }
+  return { meta, body: raw.slice(m[0].length) };
+}
+
+function slugify(input: string): string {
+  return input
+    .toLowerCase()
+    .replace(/\.md$/, '')
+    .replace(/[\s_]+/g, '-')
+    .replace(/[^a-z0-9-]/g, '')
+    .replace(/-+/g, '-')
+    .replace(/^-|-$/g, '')
+    .slice(0, 40);
+}
+
+export async function importSkillFromMd(projectId: string, input: ImportSkillFromMdInput) {
+  const raw = (input.content ?? '').toString();
+  if (!raw.trim()) {
+    throw Object.assign(new Error('content is required'), { status: 400 });
+  }
+
+  const { meta, body } = parseFrontmatter(raw);
+
+  // Resolve key — prefer frontmatter, then filename, then h1, then 'imported-skill'
+  let key = (meta.key ?? '').trim().toLowerCase();
+  if (!key && input.filename) key = slugify(input.filename);
+  if (!key) {
+    const h1 = H1_RE.exec(body);
+    if (h1) key = slugify(h1[1]);
+  }
+  if (!key) key = 'imported-skill';
+  key = slugify(key) || 'imported-skill';
+
+  // Resolve name — prefer frontmatter, then h1, then key
+  let name = (meta.name ?? '').trim();
+  if (!name) {
+    const h1 = H1_RE.exec(body);
+    if (h1) name = h1[1].trim();
+  }
+  if (!name) name = key.replace(/-/g, ' ');
+  name = name.slice(0, 80);
+
+  const description = (meta.description ?? '').trim().slice(0, 280) || null;
+  const category = (meta.category ?? '').trim().toLowerCase().slice(0, 30) || 'imported';
+
+  // promptAddendum is everything after frontmatter, with the optional h1 stripped
+  // (we already promoted it to `name`).
+  let promptAddendum = body.replace(H1_RE, '').trim();
+  if (!promptAddendum) {
+    throw Object.assign(new Error('Markdown body is empty — nothing to import.'), { status: 400 });
+  }
+
+  // Idempotent — return the existing skill if the key is already taken.
+  const db = getDb();
+  const existing = await db
+    .select()
+    .from(schema.skills)
+    .where(and(eq(schema.skills.projectId, projectId), eq(schema.skills.key, key)))
+    .limit(1);
+  if (existing[0]) return existing[0];
+
+  return createSkill(projectId, {
+    key,
+    name,
+    description,
+    category,
+    promptAddendum,
+    source: 'imported',
+    sourceUri: input.sourceUri ?? null,
   });
 }
 
@@ -172,6 +298,8 @@ export async function listAgentSkills(projectId: string, agentId: string) {
       category: schema.skills.category,
       promptAddendum: schema.skills.promptAddendum,
       curatedKey: schema.skills.curatedKey,
+      source: schema.skills.source,
+      sourceUri: schema.skills.sourceUri,
       createdAt: schema.skills.createdAt,
       updatedAt: schema.skills.updatedAt,
       assignedAt: schema.agentSkills.assignedAt,

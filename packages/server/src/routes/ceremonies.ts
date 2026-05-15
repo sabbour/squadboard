@@ -448,6 +448,11 @@ ceremoniesRouter.post('/:id/run', async (req: Request, res: Response) => {
     const runId = await spawnCeremonyRun(id, {
       trigger: 'manual',
       anchorIssueId,
+      triggerSource: {
+        kind: 'manual',
+        anchorIssueId,
+        detail: 'POST /ceremonies/:id/run',
+      },
     });
     if (!runId) {
       res.status(409).json({

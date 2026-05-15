@@ -18,10 +18,13 @@
  * advancing its `next_fire_at` to a future placeholder before spawning,
  * then write the canonical recomputed value once the spawn resolves.
  */
-import { eq, and, lte, sql } from 'drizzle-orm';
+import { eq, and, lte, sql, not, exists } from 'drizzle-orm';
 import { CronExpressionParser } from 'cron-parser';
 import { getDb, schema } from '../db/index.js';
 import { createWorkflowRun } from '../engine/workflow-runner.js';
+// In-memory consecutive-failure tracker per schedule id.
+// Resets on process restart; a persistent counter is a follow-up.
+const sweepFailureCount = new Map();
 // ---------------------------------------------------------------------------
 // Cron helpers
 // ---------------------------------------------------------------------------
@@ -96,10 +99,21 @@ export async function disableSchedule(scheduleId) {
 // first-class concept in the UI.
 async function resolveAnchorIssue(projectId) {
     const db = getDb();
+    // Root cause (verbal-spam-loop-rootcause.md, 2026-05-15):
+    // After a fan-out materialises, the newest issues in the project are the
+    // fan-out children (e.g. "Foo — verbal"). The old query (ORDER BY created_at
+    // DESC, no filter) would pick a child as the next ceremony anchor, triggering
+    // another fan-out on it, compounding titles indefinitely each cron tick.
+    //
+    // Fix: exclude any issue that appears as a child_issue_id in issue_links with
+    // link_type = 'fan_out'. Only top-level (non-child) issues are eligible anchors.
     const [issue] = await db
         .select({ id: schema.issues.id })
         .from(schema.issues)
-        .where(eq(schema.issues.projectId, projectId))
+        .where(and(eq(schema.issues.projectId, projectId), not(exists(db
+        .select({ id: schema.issueLinks.id })
+        .from(schema.issueLinks)
+        .where(and(eq(schema.issueLinks.childIssueId, schema.issues.id), eq(schema.issueLinks.linkType, 'fan_out')))))))
         .orderBy(sql `${schema.issues.createdAt} DESC`)
         .limit(1);
     return issue?.id ?? null;
@@ -115,6 +129,10 @@ async function resolveAnchorIssue(projectId) {
  *
  * `opts.anchorIssueId` overrides the auto-resolved anchor (used by the
  * event dispatcher when the event payload carries an issue id).
+ *
+ * Stream D — D4: callers may pass `opts.triggerSource` for richer provenance
+ * than the bare `opts.trigger` string. When omitted the helper will derive a
+ * sensible TriggerSource from the legacy `trigger` field.
  */
 export async function spawnCeremonyRun(workflowId, opts = { trigger: 'manual' }) {
     const db = getDb();
@@ -156,10 +174,28 @@ export async function spawnCeremonyRun(workflowId, opts = { trigger: 'manual' })
             `(project ${workflow.projectId} has zero issues)`);
         return null;
     }
-    const runId = await createWorkflowRun(anchorIssueId, activeVersion.id);
+    const triggerSource = opts.triggerSource ?? deriveTriggerSource(opts.trigger, anchorIssueId);
+    const runId = await createWorkflowRun(anchorIssueId, activeVersion.id, triggerSource);
     console.log(`[ceremony] spawned workflow_run ${runId} for ${workflow.slug} ` +
         `(trigger=${opts.trigger}, anchor=${anchorIssueId})`);
     return runId;
+}
+function deriveTriggerSource(trigger, anchorIssueId) {
+    if (trigger === 'manual' || trigger === 'manual_force') {
+        return { kind: trigger, anchorIssueId };
+    }
+    if (trigger === 'on_schedule') {
+        return { kind: 'on_schedule', anchorIssueId };
+    }
+    if (trigger.startsWith('on_event:')) {
+        return {
+            kind: 'on_event',
+            eventType: trigger.slice('on_event:'.length),
+            detail: trigger,
+            anchorIssueId,
+        };
+    }
+    return { kind: 'unknown', detail: trigger, anchorIssueId };
 }
 // ---------------------------------------------------------------------------
 // sweepDueSchedules — main heartbeat entry point
@@ -190,6 +226,11 @@ export async function sweepDueSchedules(now = new Date()) {
             }
             const runId = await spawnCeremonyRun(sched.workflowId, {
                 trigger: 'on_schedule',
+                triggerSource: {
+                    kind: 'on_schedule',
+                    scheduleId: sched.id,
+                    detail: sched.cronExpr,
+                },
             });
             // Recompute the true next fire time AFTER firing, so cron expressions
             // like '*/5 * * * *' advance from the actual fire instant.
@@ -206,9 +247,29 @@ export async function sweepDueSchedules(now = new Date()) {
                 result.fired += 1;
             else
                 result.skipped += 1;
+            // Reset failure count on a clean fire/skip.
+            sweepFailureCount.delete(sched.id);
         }
         catch (err) {
-            console.error(`[ceremony] sweep error for schedule ${sched.id}:`, err);
+            const failCount = (sweepFailureCount.get(sched.id) ?? 0) + 1;
+            sweepFailureCount.set(sched.id, failCount);
+            console.error(`[ceremony] sweep error for schedule ${sched.id} (consecutive failures: ${failCount}):`, err);
+            // On repeated failure, push nextFireAt to 1 h from now to prevent
+            // a re-entry storm driven by the tentative 5-min placeholder set above.
+            if (failCount >= 2) {
+                const backoffUntil = new Date(now.getTime() + 60 * 60_000);
+                try {
+                    await db
+                        .update(schema.ceremonySchedules)
+                        .set({ nextFireAt: backoffUntil, updatedAt: new Date() })
+                        .where(eq(schema.ceremonySchedules.id, sched.id));
+                    console.warn(`[ceremony] schedule ${sched.id} backed off until ${backoffUntil.toISOString()} ` +
+                        `after ${failCount} consecutive failures`);
+                }
+                catch (backoffErr) {
+                    console.error(`[ceremony] failed to write backoff for schedule ${sched.id}:`, backoffErr);
+                }
+            }
             result.errors += 1;
         }
     }

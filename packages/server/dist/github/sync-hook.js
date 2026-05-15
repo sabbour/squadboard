@@ -9,6 +9,7 @@ import { eventBus } from '../realtime/event-bus.js';
 import { getDb, getPool, schema } from '../db/index.js';
 import { eq } from 'drizzle-orm';
 import { GitHubSync } from './sync.js';
+import { GitHubClient } from './client.js';
 async function getGhConfig(projectId) {
     const db = getDb();
     const [project] = await db
@@ -61,7 +62,7 @@ async function handleIssueEvent(event) {
     const cfg = await getGhConfig(projectId).catch(() => null);
     if (!cfg)
         return;
-    const sync = new GitHubSync(projectId, cfg.token, cfg.owner, cfg.repo);
+    const sync = new GitHubSync(projectId, new GitHubClient(cfg.token, cfg.owner, cfg.repo));
     if (type === 'issue.deleted') {
         // Close on GitHub when deleted locally (can't actually delete via API without admin)
         if (issue.githubIssueNumber != null) {
@@ -100,7 +101,7 @@ async function handleCommentEvent(event) {
     const cfg = await getGhConfig(projectId).catch(() => null);
     if (!cfg)
         return;
-    const sync = new GitHubSync(projectId, cfg.token, cfg.owner, cfg.repo);
+    const sync = new GitHubSync(projectId, new GitHubClient(cfg.token, cfg.owner, cfg.repo));
     sync.pushComment(comment, githubIssueNumber).catch((err) => {
         const msg = err instanceof Error ? err.message : String(err);
         logError({

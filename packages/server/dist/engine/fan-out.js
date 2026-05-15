@@ -17,6 +17,7 @@
 import { sql } from 'drizzle-orm';
 import { getPool } from '../db/index.js';
 import { spawnFanOutChildren, } from '../sdk/fan-out-adapter.js';
+import { eventBus } from '../realtime/event-bus.js';
 // ---------------------------------------------------------------------------
 // resolveTargets — resolve split_by to concrete SplitTarget[]
 // ---------------------------------------------------------------------------
@@ -105,14 +106,32 @@ export async function materializeFanOut(parentWorkflowRunId, parentStepRunId, fa
         // ── Step 1: BEGIN ────────────────────────────────────────────────────────
         await client.query('BEGIN');
         // ── Step 2: UPDATE parent stepRun → status='splitting' ──────────────────
-        await client.query(`UPDATE step_runs
+        // Guard: only claim if the step is still 'pending'. If rowCount=0, a
+        // concurrent materialization already claimed this step — bail out cleanly.
+        const claimResult = await client.query(`UPDATE step_runs
           SET status = 'splitting', updated_at = NOW()
-        WHERE id = $1`, [parentStepRunId]);
+        WHERE id = $1 AND status = 'pending'`, [parentStepRunId]);
+        if ((claimResult.rowCount ?? 0) === 0) {
+            await client.query('ROLLBACK');
+            console.warn(`[fan-out] concurrent materialization detected for step_run ${parentStepRunId} — bailing out (already claimed)`);
+            return [];
+        }
         // ── Steps 3 + 4: INSERT child workflowRuns + step_runs ──────────────────
         const childWorkflowRunIds = [];
         for (const target of targets) {
-            // Create child issue (subtask)
-            const childTitle = `${issue.title} — ${target.label}`;
+            // Title compound guard: if the parent title already ends with
+            // " — <label>", a second-pass re-fan would produce a doubly-suffixed
+            // title. Log a warning and keep the parent title as-is.
+            const labelSuffix = ` — ${target.label}`;
+            let childTitle;
+            if (issue.title.endsWith(labelSuffix)) {
+                console.warn(`[fan-out] title compound guard: parent title "${issue.title}" already ends ` +
+                    `with "${labelSuffix}". Skipping re-append (possible double fan-out pass).`);
+                childTitle = issue.title;
+            }
+            else {
+                childTitle = `${issue.title} — ${target.label}`;
+            }
             const childIssueResult = await client.query(`INSERT INTO issues (project_id, title, body, status, assignee_id)
          VALUES ($1, $2, $3, 'todo', $4)
          RETURNING id`, [issue.projectId, childTitle, issue.body ?? '', target.agentId ?? null]);
@@ -198,6 +217,18 @@ export async function materializeFanOut(parentWorkflowRunId, parentStepRunId, fa
 }
 export async function materializeAndSpawnFanOut(parentWorkflowRunId, parentStepRunId, fanOutStep, issue, db) {
     const childWorkflowRunIds = await materializeFanOut(parentWorkflowRunId, parentStepRunId, fanOutStep, issue, db);
+    // ── Flow event: lineage edges created for each child ────────────────────────
+    if (childWorkflowRunIds.length > 0) {
+        const createdAt = new Date().toISOString();
+        for (const childId of childWorkflowRunIds) {
+            eventBus.emitFlowEvent('flow.lineage.edge.created', issue.projectId, {
+                fromInstanceId: parentWorkflowRunId,
+                toInstanceId: childId,
+                relation: 'fan_out',
+                createdAt,
+            });
+        }
+    }
     // Phase 15: serial mode = byte-identical pre-Phase-15 behaviour.
     const mode = fanOutStep.mode ?? 'serial';
     if (mode !== 'parallel') {

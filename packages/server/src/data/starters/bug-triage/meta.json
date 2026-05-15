@@ -1,0 +1,33 @@
+{
+  "slug": "bug-triage",
+  "title": "Bug Triage — GitHub Issues Edition",
+  "blurb": "A Squad-powered GitHub issue triage system — fetches real open issues from any repo using the gh CLI and triages them with a team of AI specialists.",
+  "tags": [
+    "ceremonies",
+    "routing",
+    "multi-agent"
+  ],
+  "agentCount": 4,
+  "routingRuleCount": 5,
+  "ceremonyCount": 1,
+  "defaultModel": null,
+  "teamName": "Bug Triage Squad",
+  "warnings": [],
+  "source": {
+    "origin": "github",
+    "repo": "bradygaster/Squad-IRL",
+    "ref": "main"
+  },
+  "files": [
+    ".gitignore",
+    "README.md",
+    "index.ts",
+    "issue-fetcher.ts",
+    "issues.json",
+    "package.json",
+    "squad.config.ts",
+    "tsconfig.json"
+  ],
+  "htmlUrl": "https://github.com/bradygaster/Squad-IRL/tree/main/bug-triage",
+  "bundledAt": "2026-05-15T07:48:07.667Z"
+}

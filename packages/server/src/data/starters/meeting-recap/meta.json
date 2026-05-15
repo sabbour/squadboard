@@ -1,0 +1,31 @@
+{
+  "slug": "meeting-recap",
+  "title": "Meeting Recap & Action Item Generator",
+  "blurb": "A Squad sample that turns meeting transcripts into structured recaps with action items, decisions, and follow-ups. Paste your notes directly or point to a transcript file — four AI specialists do the rest.",
+  "tags": [
+    "ceremonies",
+    "routing",
+    "multi-agent"
+  ],
+  "agentCount": 4,
+  "routingRuleCount": 5,
+  "ceremonyCount": 1,
+  "defaultModel": null,
+  "teamName": "Meeting Recap Squad",
+  "warnings": [],
+  "source": {
+    "origin": "github",
+    "repo": "bradygaster/Squad-IRL",
+    "ref": "main"
+  },
+  "files": [
+    "README.md",
+    "index.ts",
+    "package.json",
+    "sample-transcripts",
+    "squad.config.ts",
+    "tsconfig.json"
+  ],
+  "htmlUrl": "https://github.com/bradygaster/Squad-IRL/tree/main/meeting-recap",
+  "bundledAt": "2026-05-15T07:48:08.858Z"
+}
