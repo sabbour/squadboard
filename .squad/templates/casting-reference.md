@@ -21,8 +21,13 @@ On-demand reference for Squad's casting system. Loaded during Init Mode or when 
 | Marvel Cinematic Universe | 25 | large, action, ensemble | heroism, teamwork, powers, scale |
 | DC Universe | 18 | large, action, ensemble | justice, duality, powers, mythology |
 | Futurama | 12 | medium, sci-fi, comedy | future, robots, space, absurdity |
+| Mad Men | 14 | medium, drama, ensemble, workplace | advertising, marketing, business, ambition, period |
+| The Office | 18 | large, comedy, ensemble, workplace | workplace, dysfunction, paper, sales, business, satire |
+| Parks and Recreation | 15 | medium, comedy, ensemble, workplace | government, civic, workplace, optimism, bureaucracy |
+| Silicon Valley | 10 | medium, comedy, ensemble, tech | startup, tech, disruption, coding, vc, satire |
+| Succession | 12 | medium, drama, ensemble, business | corporate, family, power, ambition, finance |
 
-**Total: 15 universes** — capacity range 6–25.
+**Total: 20 universes** — capacity range 6–25.
 
 ## Selection Algorithm
 

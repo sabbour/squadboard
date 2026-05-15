@@ -180,29 +180,45 @@ When spawning agents, include the role emoji in the `description` parameter to m
 
 | Role Pattern | Emoji | Examples |
 |--------------|-------|----------|
+| PM, Product Manager, Product Owner | 🎯 | "Product Manager", "PM", "Product Owner" |
+| Designer, UX Designer, Visual Designer | 🎨 | "UX Designer", "Visual Designer", "Brand Designer" |
+| Founder, CEO, Executive | 👔 | "Founder", "CEO", "Executive Director" |
 | Lead, Architect, Tech Lead | 🏗️ | "Lead", "Senior Architect", "Technical Lead" |
-| Frontend, UI, Design | ⚛️ | "Frontend Dev", "UI Engineer", "Designer" |
+| Frontend, UI, Design | ⚛️ | "Frontend Dev", "UI Engineer" |
 | Backend, API, Server | 🔧 | "Backend Dev", "API Engineer", "Server Dev" |
 | Test, QA, Quality | 🧪 | "Tester", "QA Engineer", "Quality Assurance" |
 | DevOps, Infra, Platform | ⚙️ | "DevOps", "Infrastructure", "Platform Engineer" |
 | Docs, DevRel, Technical Writer | 📝 | "DevRel", "Technical Writer", "Documentation" |
 | Data, Database, Analytics | 📊 | "Data Engineer", "Database Admin", "Analytics" |
 | Security, Auth, Compliance | 🔒 | "Security Engineer", "Auth Specialist" |
+| Sales, Account, Business Development | 💼 | "Sales Lead", "Account Executive", "BD Manager" |
+| Marketing, Growth, Comms | 📣 | "Marketing Lead", "Growth Manager", "Brand Marketing" |
+| Finance, Accounting, Controller | 💰 | "Finance Lead", "Controller", "Accountant" |
+| HR, People, Recruiting, Talent | 👥 | "HR Manager", "People Ops", "Recruiter" |
+| Legal, Counsel, Compliance | ⚖️ | "Legal Counsel", "GC", "Compliance Officer" |
+| Operations, Ops, Program Manager | 📦 | "Operations Lead", "Program Manager", "Chief of Staff" |
+| Customer Success, Support, Account Mgmt | 🎧 | "CS Manager", "Support Engineer", "Account Manager" |
+| Research, User Research, Data Science | 🔬 | "User Researcher", "Data Scientist", "Researcher" |
 | Scribe | 📋 | "Session Logger" (always Scribe) |
 | Ralph | 🔄 | "Work Monitor" (always Ralph) |
 | @copilot | 🤖 | "Coding Agent" (GitHub Copilot) |
 
 **How to determine emoji:**
 1. Look up the agent in `team.md` (already cached after first message)
-2. Match the role string against the patterns above (case-insensitive, partial match)
+2. Match the role string against the patterns above (case-insensitive, partial match). Order in the table is priority order — more specific patterns higher up.
 3. Use the first matching emoji
 4. If no match, use 👤 as fallback
 
-**Examples:**
+**Examples (tech roles):**
 - `name: "keaton"`, `description: "🏗️ Keaton: Reviewing architecture proposal"`
 - `name: "fenster"`, `description: "🔧 Fenster: Refactoring auth module"`
 - `name: "hockney"`, `description: "🧪 Hockney: Writing test cases"`
 - `name: "scribe"`, `description: "📋 Scribe: Log session & merge decisions"`
+
+**Examples (non-tech roles):**
+- `name: "leslie"`, `description: "🎯 Leslie: Triaging Q3 product backlog"` (Parks & Rec → PM)
+- `name: "michael"`, `description: "💼 Michael: Drafting enterprise contract terms"` (The Office → Sales)
+- `name: "donna"`, `description: "📦 Donna: Coordinating launch dependencies"` (Parks & Rec → Ops)
 
 The `name` parameter generates the human-readable agent ID shown in the tasks panel — it MUST be the agent's lowercase cast name (e.g., `"eecom"`, `"fido"`). Without it, the platform shows generic slugs like "general-purpose-task" instead of the cast name. The emoji in `description` makes task spawn notifications visually consistent with the launch table shown to users.
 

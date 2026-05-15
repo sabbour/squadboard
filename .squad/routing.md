@@ -55,3 +55,27 @@ How to decide who handles what.
 | MCP tool / slash command surface | Kobayashi | Hockney (engine wiring), Redfoot (docs) |
 | GitHub adapter / push / PR / webhooks / check runs | Hockney | Kobayashi (idempotency), Redfoot (setup docs) |
 
+## Non-tech Work Types
+
+When a project includes business/non-tech members, route accordingly. These complement (not replace) the tech work types above.
+
+| Work Type | Primary Role | Examples |
+|-----------|--------------|---------|
+| Product strategy, prioritization, roadmap, backlog grooming | PM | Quarterly planning, feature triage, scope decisions |
+| Visual design, brand, illustration, design system | Designer | Logo, marketing site, design tokens, brand guide |
+| Sales pipeline, deals, customer outreach, contracts | Sales | Lead qualification, demo prep, contract drafts |
+| Marketing, launches, content, growth, positioning | Marketing | Launch plan, blog posts, positioning docs, ad copy |
+| Finance, budgets, forecasting, billing, reporting | Finance | Budget review, invoice triage, runway forecasts |
+| Recruiting, people ops, performance, culture | HR | Job descriptions, interview rubrics, onboarding |
+| Contracts, compliance, IP, terms of service | Legal | NDA review, ToS drafts, vendor contracts |
+| Operations, program mgmt, vendor mgmt, logistics | Operations | Vendor selection, launch coordination, ops playbooks |
+| Customer success, support, account management | Customer Success | Onboarding flows, support docs, churn analysis |
+| User research, surveys, interviews, data analysis | Research | User interviews, survey design, insights synthesis |
+
+**Cross-functional rules:**
+1. If a non-tech member is on the roster, the Lead/Architect coordinates handoffs between tech and non-tech members.
+2. PM owns prioritization across both tech and non-tech work — when capacity is constrained, PM trims scope.
+3. Marketing and Sales gate user-facing copy/positioning — they're reject-authority for launch announcements.
+4. Legal gates contracts, terms, and any external commitments — reject-authority for outbound docs with legal weight.
+5. Finance gates spending decisions over a stated threshold (project-defined) — coordinator should ask the user to set a threshold when Finance joins.
+
