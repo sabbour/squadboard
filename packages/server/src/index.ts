@@ -28,10 +28,12 @@ import castingRouter from './routes/casting.js';
 import castRouter from './routes/cast.js';
 import reviewPoliciesRouter from './routes/review-policies.js';
 import inboxRouter from './routes/inbox.js';
+import { consultRouter, projectConsultRouter } from './routes/consult.js';
 import { projectFlowRouter, issueFlowRouter } from './routes/flow.js';
 import { curatedSkillsRouter, projectSkillsRouter, agentSkillsRouter } from './routes/skills.js';
 import { projectToolsRouter, agentToolsRouter } from './routes/tools.js';
 import { projectMcpRouter, agentMcpRouter } from './routes/mcp.js';
+import { createMcpHttpRouter } from './mcp/http-transport.js';
 import { dispatcher } from './engine/dispatcher.js';
 // Phase 10: side-effect import — registers the on_event ceremony listener
 // against the in-process event bus.
@@ -67,10 +69,12 @@ async function main(): Promise<void> {
 
   app.use('/api/health', healthRouter);
   app.use('/api/inbox', inboxRouter);
+  app.use('/api/consult', consultRouter);
   app.use('/api/projects', projectsRouter);
   app.use('/api/squad', squadRouter);
   app.use('/api/projects/:projectId/agents', agentsRouter);
   app.use('/api/projects/:projectId/sessions', projectSessionsRouter);
+  app.use('/api/projects/:projectId/consult', projectConsultRouter);
   app.use('/api/projects/:projectId/issues', issuesRouter);
   app.use('/api/projects/:projectId/issues', commentsMentionRouter);
   app.use('/api/projects/:projectId/issues', issueDeliverablesRouter);
@@ -138,6 +142,12 @@ async function main(): Promise<void> {
     res.json(presence);
   });
 
+  // Phase 18: Squadboard exposes itself as an MCP server over Streamable HTTP
+  // for VS Code (Insiders) + any HTTP-capable MCP client. Mounted *before* the
+  // SPA fallback so /mcp doesn't return index.html. Stdio path
+  // (packages/server/src/mcp/index.ts) stays for Claude Desktop / Cursor.
+  app.use('/mcp', createMcpHttpRouter());
+
   if (existsSync(CLIENT_DIST)) {
     app.use(express.static(CLIENT_DIST));
     // SPA fallback — let the React router handle unknown paths
@@ -195,3 +205,4 @@ main().catch((err: unknown) => {
   console.error('[squadboard] fatal startup error:', msg);
   process.exit(1);
 });
+
