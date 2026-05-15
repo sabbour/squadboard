@@ -456,8 +456,9 @@ function NewSessionView({
         title="New consult"
         description="Brainstorm with an agent (charter-bound, propose-only) or a raw model. Nothing you say here side-effects your project until you accept a proposal."
       />
-      {/* Fix: margin: 0 auto centers the card; maxWidth fills available space without right-pinning */}
-      <div className={styles.scroll} style={{ maxWidth: '880px', width: '100%', margin: '0 auto' }}>
+      {/* Fluent2: form card uses up to 1200px so it breathes on wider viewports
+          while still capping for readability on ultra-wide screens. */}
+      <div className={styles.scroll} style={{ maxWidth: '1200px', width: '100%', margin: '0 auto' }}>
         <Card style={{ padding: tokens.spacingVerticalL, display: 'flex', flexDirection: 'column', gap: tokens.spacingVerticalM }}>
 
           {/* Mode toggle — full-width at top so it never competes for column space */}
