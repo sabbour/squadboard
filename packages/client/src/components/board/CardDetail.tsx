@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
-import { tokens } from '@fluentui/react-components'
+import { useNavigate } from 'react-router'
+import { tokens, Button, Tooltip } from '@fluentui/react-components'
+import { Lightbulb20Regular } from '@fluentui/react-icons'
 import { type Issue } from '../../api/issues.ts'
 import { useLabels } from '../../api/labels.ts'
 import { useIssueRuns } from '../../api/runs.ts'
@@ -30,6 +32,7 @@ type Tab = 'overview' | 'runs' | 'deliverables' | 'flow'
 
 export default function CardDetail({ projectId, issue, onClose, initialTab }: CardDetailProps) {
   const panelRef = useRef<HTMLDivElement>(null)
+  const navigate = useNavigate()
   const [activeTab, setActiveTab] = useState<Tab>(initialTab ?? 'overview')
   const [showAttachModal, setShowAttachModal] = useState(false)
   const { data: labels } = useLabels(projectId)
@@ -114,22 +117,38 @@ export default function CardDetail({ projectId, issue, onClose, initialTab }: Ca
             >
               {COLUMN_LABELS[issue.column] ?? issue.column}
             </span>
-            <button
-              onClick={onClose}
-              style={{
-                background: 'none',
-                border: 'none',
-                color: tokens.colorNeutralForeground2,
-                fontSize: '18px',
-                cursor: 'pointer',
-                padding: '2px 6px',
-                borderRadius: '4px',
-              }}
-              onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.color = tokens.colorNeutralForeground1 }}
-              onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.color = tokens.colorNeutralForeground2 }}
-            >
-              ✕
-            </button>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+              <Tooltip content="Consult about this issue (open Ask)" relationship="label">
+                <Button
+                  appearance="subtle"
+                  size="small"
+                  icon={<Lightbulb20Regular />}
+                  onClick={() => {
+                    navigate(
+                      `/projects/${projectId}/consult/new?prefill=issue:${issue.id}`,
+                    )
+                  }}
+                >
+                  Consult
+                </Button>
+              </Tooltip>
+              <button
+                onClick={onClose}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  color: tokens.colorNeutralForeground2,
+                  fontSize: '18px',
+                  cursor: 'pointer',
+                  padding: '2px 6px',
+                  borderRadius: '4px',
+                }}
+                onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.color = tokens.colorNeutralForeground1 }}
+                onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.color = tokens.colorNeutralForeground2 }}
+              >
+                ✕
+              </button>
+            </div>
           </div>
 
           {/* Tabs */}

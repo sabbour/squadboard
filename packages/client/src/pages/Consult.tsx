@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useRef } from 'react'
-import { useParams, useNavigate } from 'react-router'
+import { useParams, useNavigate, useSearchParams } from 'react-router'
 import {
   Button,
   Card,
@@ -176,6 +176,7 @@ export default function Consult() {
   }>()
   const navigate = useNavigate()
   const styles = useStyles()
+  const [searchParams, setSearchParams] = useSearchParams()
 
   const sessionsQuery = useConsultSessions(
     projectId ? { projectId } : { global: true },
@@ -192,6 +193,78 @@ export default function Consult() {
     else navigate('/consult/new')
   }
 
+  // ----- Phase 17: context prefill from search params -----
+  // Supported:
+  //   ?prefill=issue:<issueId>           (requires :id in route)
+  //   ?prefill=ceremony:<ceremonyId>     (requires :id in route)
+  //   ?prefill=text:<urlencoded>
+  //   ?name=<urlencoded>
+  const prefillRaw = searchParams.get('prefill')
+  const prefillNameParam = searchParams.get('name') ?? undefined
+  const [prefill, setPrefill] = useState<{ content?: string; name?: string }>({})
+
+  useEffect(() => {
+    let cancelled = false
+    async function resolve() {
+      if (!prefillRaw) {
+        setPrefill({ name: prefillNameParam })
+        return
+      }
+      try {
+        if (prefillRaw.startsWith('issue:') && projectId) {
+          const issueId = prefillRaw.slice('issue:'.length)
+          const res = await fetch(`/api/projects/${projectId}/issues/${issueId}`)
+          const env = await res.json()
+          const issue = env?.data
+          if (!cancelled && issue) {
+            const head = `Help me think through this issue.\n\n**${issue.title}**`
+            const body = issue.body ? `\n\n${issue.body}` : ''
+            setPrefill({
+              content: `${head}${body}\n\nWhat's the best way to approach this?`,
+              name: prefillNameParam ?? `Re: ${issue.title}`,
+            })
+          }
+        } else if (prefillRaw.startsWith('ceremony:') && projectId) {
+          const cid = prefillRaw.slice('ceremony:'.length)
+          const res = await fetch(`/api/projects/${projectId}/ceremonies/${cid}`)
+          const env = await res.json()
+          const detail = env?.data
+          const cer = detail?.ceremony ?? detail
+          if (!cancelled && cer) {
+            const desc = cer.description ? `\n\n${cer.description}` : ''
+            setPrefill({
+              content: `Help me think through this ceremony.\n\n**${cer.name}**${desc}\n\nIs this the right shape, and what should we tweak?`,
+              name: prefillNameParam ?? `Re: ${cer.name}`,
+            })
+          }
+        } else if (prefillRaw.startsWith('text:')) {
+          const text = decodeURIComponent(prefillRaw.slice('text:'.length))
+          if (!cancelled) setPrefill({ content: text, name: prefillNameParam })
+        } else {
+          if (!cancelled) setPrefill({ name: prefillNameParam })
+        }
+      } catch (err) {
+        console.warn('consult prefill failed', err)
+        if (!cancelled) setPrefill({ name: prefillNameParam })
+      }
+    }
+    resolve()
+    return () => {
+      cancelled = true
+    }
+  }, [prefillRaw, prefillNameParam, projectId])
+
+  const handleCreated = (id: string) => {
+    // Strip prefill params off the URL once the session is live
+    if (prefillRaw || prefillNameParam) {
+      const next = new URLSearchParams(searchParams)
+      next.delete('prefill')
+      next.delete('name')
+      setSearchParams(next, { replace: true })
+    }
+    handleSelect(id)
+  }
+
   return (
     <div className={styles.root}>
       <SessionList
@@ -206,7 +279,12 @@ export default function Consult() {
         {activeSessionId && activeSessionId !== 'new' ? (
           <SessionView sessionId={activeSessionId} projectId={projectId ?? null} />
         ) : (
-          <NewSessionView projectId={projectId ?? null} onCreated={handleSelect} />
+          <NewSessionView
+            projectId={projectId ?? null}
+            onCreated={handleCreated}
+            prefillContent={prefill.content}
+            prefillName={prefill.name}
+          />
         )}
       </div>
     </div>
