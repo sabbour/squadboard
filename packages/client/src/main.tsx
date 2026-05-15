@@ -17,7 +17,7 @@ const queryClient = new QueryClient({
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
-    <FluentProvider theme={webLightTheme}>
+    <FluentProvider theme={webLightTheme} style={{ height: '100%' }}>
       <QueryClientProvider client={queryClient}>
         <BrowserRouter>
           <App />
