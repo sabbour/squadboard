@@ -16,6 +16,7 @@ import { AttachWorkflowModal } from '../workflows/AttachWorkflowModal.tsx'
 import { ReviewPanel } from '../reviews/ReviewPanel.tsx'
 import DeliverableList from '../deliverables/DeliverableList.tsx'
 import { useDeliverables } from '../../api/deliverables.ts'
+import IssueFlowDag from '../flow/IssueFlowDag.tsx'
 import { formatDistanceToNow } from 'date-fns'
 
 interface CardDetailProps {
@@ -24,7 +25,7 @@ interface CardDetailProps {
   onClose: () => void
 }
 
-type Tab = 'overview' | 'runs' | 'deliverables'
+type Tab = 'overview' | 'runs' | 'deliverables' | 'flow'
 
 export default function CardDetail({ projectId, issue, onClose }: CardDetailProps) {
   const panelRef = useRef<HTMLDivElement>(null)
@@ -132,11 +133,12 @@ export default function CardDetail({ projectId, issue, onClose }: CardDetailProp
 
           {/* Tabs */}
           <div style={{ display: 'flex', padding: '0 20px', gap: '2px' }}>
-            {(['overview', 'runs', 'deliverables'] as Tab[]).map((tab) => {
+            {(['overview', 'runs', 'deliverables', 'flow'] as Tab[]).map((tab) => {
               let label: string
               if (tab === 'overview') label = 'Overview'
               else if (tab === 'runs')
                 label = runs && runs.length > 0 ? `Runs (${runs.length})` : 'Runs'
+              else if (tab === 'flow') label = 'Flow'
               else
                 label =
                   deliverables && deliverables.length > 0
@@ -366,6 +368,12 @@ export default function CardDetail({ projectId, issue, onClose }: CardDetailProp
 
           {activeTab === 'deliverables' && (
             <DeliverableList projectId={projectId} issueId={issue.id} />
+          )}
+
+          {activeTab === 'flow' && (
+            <div style={{ height: 600, marginTop: -20, marginLeft: -20, marginRight: -20, borderTop: `1px solid ${tokens.colorNeutralStroke2}` }}>
+              <IssueFlowDag projectId={projectId} issueId={issue.id} />
+            </div>
           )}
         </div>
       </div>

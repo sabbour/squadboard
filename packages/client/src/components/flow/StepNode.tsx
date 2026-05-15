@@ -1,0 +1,159 @@
+/**
+ * components/flow/StepNode.tsx — generic step-run node renderer for the DAG.
+ *
+ * Custom React Flow node component used for all five step kinds
+ * (route, agent_run, approve, fan_out, handoff). Visual differences:
+ *  - subtle accent colour and an icon glyph per kind
+ *  - status-driven border + status badge (pending/running/completed/failed/...)
+ *  - optional pulse animation while running
+ */
+import { Handle, Position } from '@xyflow/react'
+import { tokens } from '@fluentui/react-components'
+import { type FlowStepRun } from '../../api/flow.ts'
+
+export interface StepNodeData extends Record<string, unknown> {
+  step: FlowStepRun
+}
+
+const KIND_ICON: Record<string, string> = {
+  route: '🧭',
+  agent_run: '⚙️',
+  approve: '✅',
+  fan_out: '🌿',
+  handoff: '🤝',
+}
+
+const KIND_LABEL: Record<string, string> = {
+  route: 'Route',
+  agent_run: 'Agent run',
+  approve: 'Approve',
+  fan_out: 'Fan-out',
+  handoff: 'Handoff',
+}
+
+export function statusColors(status: string, kind: string): {
+  border: string
+  badgeBg: string
+  badgeFg: string
+  label: string
+  pulse: boolean
+} {
+  // Approve steps in pending/running surface as "waiting review" amber.
+  if (kind === 'approve' && (status === 'pending' || status === 'running')) {
+    return {
+      border: '#d29922',
+      badgeBg: 'rgba(210, 153, 34, 0.18)',
+      badgeFg: '#d29922',
+      label: 'Waiting review',
+      pulse: status === 'running',
+    }
+  }
+  switch (status) {
+    case 'pending':
+      return { border: '#48515a', badgeBg: 'rgba(125, 133, 144, 0.2)', badgeFg: '#9da7b3', label: 'Pending', pulse: false }
+    case 'running':
+      return { border: '#388bfd', badgeBg: 'rgba(56, 139, 253, 0.2)', badgeFg: '#58a6ff', label: 'Running', pulse: true }
+    case 'splitting':
+    case 'waiting_children':
+      return {
+        border: '#a371f7',
+        badgeBg: 'rgba(163, 113, 247, 0.2)',
+        badgeFg: '#bc8cff',
+        label: status === 'splitting' ? 'Splitting' : 'Waiting children',
+        pulse: status === 'splitting',
+      }
+    case 'completed':
+      return { border: '#3fb950', badgeBg: 'rgba(63, 185, 80, 0.18)', badgeFg: '#3fb950', label: 'Completed', pulse: false }
+    case 'failed':
+      return { border: '#f85149', badgeBg: 'rgba(248, 81, 73, 0.2)', badgeFg: '#ff7b72', label: 'Failed', pulse: false }
+    case 'cancelled':
+      return { border: '#7d8590', badgeBg: 'rgba(125, 133, 144, 0.2)', badgeFg: '#9da7b3', label: 'Cancelled', pulse: false }
+    default:
+      return { border: '#48515a', badgeBg: 'rgba(125, 133, 144, 0.2)', badgeFg: '#9da7b3', label: status, pulse: false }
+  }
+}
+
+export default function StepNode({ data }: { data: StepNodeData }) {
+  const step = data.step
+  const colors = statusColors(step.status, step.kind)
+  const icon = KIND_ICON[step.kind] ?? '•'
+  const kindLabel = KIND_LABEL[step.kind] ?? step.kind
+
+  return (
+    <>
+      <Handle type="target" position={Position.Top} style={{ background: '#48515a' }} />
+      <div
+        style={{
+          width: 220,
+          minHeight: 86,
+          borderRadius: 8,
+          border: `1.5px solid ${colors.border}`,
+          background: tokens.colorNeutralBackground2,
+          padding: '8px 10px',
+          fontSize: 12,
+          color: tokens.colorNeutralForeground1,
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 4,
+          boxShadow: colors.pulse
+            ? `0 0 0 4px ${colors.border}33`
+            : '0 1px 3px rgba(0, 0, 0, 0.25)',
+          transition: 'box-shadow 200ms ease-out',
+          animation: colors.pulse ? 'sb-flow-pulse 1.6s ease-in-out infinite' : undefined,
+        }}
+      >
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <span style={{ fontSize: 11, color: tokens.colorNeutralForeground3, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+            <span style={{ marginRight: 4 }}>{icon}</span>
+            {kindLabel}
+          </span>
+          <span
+            style={{
+              fontSize: 10,
+              fontWeight: 600,
+              padding: '2px 6px',
+              borderRadius: 999,
+              background: colors.badgeBg,
+              color: colors.badgeFg,
+            }}
+          >
+            {colors.label}
+          </span>
+        </div>
+        <div
+          style={{
+            fontSize: 13,
+            fontWeight: 500,
+            color: tokens.colorNeutralForeground1,
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            whiteSpace: 'nowrap',
+          }}
+          title={step.label}
+        >
+          {step.label}
+        </div>
+        {(step.agentName ?? step.agentRole) && (
+          <div
+            style={{
+              fontSize: 11,
+              color: tokens.colorNeutralForeground2,
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap',
+            }}
+          >
+            {step.agentName ?? '—'}
+            {step.agentRole ? <span style={{ color: tokens.colorNeutralForeground3 }}> · {step.agentRole}</span> : null}
+          </div>
+        )}
+        {step.deliverables.length > 0 && (
+          <div style={{ fontSize: 10, color: tokens.colorNeutralForeground3 }}>
+            📎 {step.deliverables.length} deliverable{step.deliverables.length === 1 ? '' : 's'}
+          </div>
+        )}
+      </div>
+      <Handle type="source" position={Position.Bottom} style={{ background: '#48515a' }} />
+    </>
+  )
+}
