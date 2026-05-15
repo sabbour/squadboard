@@ -354,13 +354,26 @@ async function openSdkConsult(session: ConsultSession): Promise<RunningConsult> 
 
   await client.connect();
 
-  const sdkSession = await client.createSession({
+  // Phase 17: in agent mode, expose ONLY the propose_* tools — no shell,
+  // file edits, or read access. The whole point of consult mode is that
+  // the agent recommends actions, not takes them. In model mode, expose
+  // no tools at all (raw thinking partner).
+  const sessionConfig: Record<string, unknown> = {
     model: resolved.model,
     streaming: true,
     systemMessage: { mode: 'replace', content: systemPrompt },
     workingDirectory: workspacePath,
     onPermissionRequest: () => ({ kind: 'approved' }),
-  });
+  };
+  if (session.mode === 'agent') {
+    const proposeTools = buildProposeTools(session.id);
+    sessionConfig.tools = proposeTools;
+    sessionConfig.availableTools = proposeTools.map((t) => t.name);
+  } else {
+    sessionConfig.availableTools = [];
+  }
+
+  const sdkSession = await client.createSession(sessionConfig);
 
   await consultService.setSessionSdkId(session.id, sdkSession.sessionId);
   if (resolved.model && resolved.model !== session.model) {
@@ -464,6 +477,170 @@ export async function endRunningConsult(
 export async function shutdownAllConsults(): Promise<void> {
   const ids = [...runningConsults.keys()];
   await Promise.allSettled(ids.map((id) => endRunningConsult(id, 'cancelled')));
+}
+
+// ---------------------------------------------------------------------------
+// PROPOSE-ONLY TOOL SURFACE (agent mode)
+// ---------------------------------------------------------------------------
+
+interface ConsultTool {
+  name: string;
+  description: string;
+  parameters: Record<string, unknown>;
+  handler: (args: unknown, invocation: { sessionId: string; toolCallId: string; toolName: string }) => Promise<string>;
+}
+
+/**
+ * Build the propose-only tool registry for an agent-mode consult session.
+ * Each tool persists a row in `consult_proposals` (status='pending'),
+ * emits `consult.proposal_created`, and returns a string telling the
+ * agent that the user will see a proposal card to Accept/Edit/Discard.
+ *
+ * The agent CANNOT take direct actions — only propose them. Acceptance
+ * is the human user's privilege and is handled by acceptProposal() above.
+ */
+function buildProposeTools(consultId: string): ConsultTool[] {
+  const handle = async (
+    kind: ConsultProposalKind,
+    payload: Record<string, unknown>,
+    callId: string,
+    description: string,
+  ): Promise<string> => {
+    const proposal = await consultService.createProposal({
+      sessionId: consultId,
+      messageId: null,
+      kind,
+      payload,
+    });
+    eventBus.emitConsultEvent('consult.proposal_created', consultId, {
+      sessionId: consultId,
+      proposal,
+    });
+    eventBus.emitConsultEvent('consult.tool_call', consultId, {
+      sessionId: consultId,
+      toolName: `propose_${kind}`,
+      args: payload,
+      result: { proposalId: proposal.id, kind },
+    });
+    void callId;
+    return `Proposal created (${description}). The user will see a card with Accept / Edit / Discard buttons. Tell them what you proposed and why; do not assume it has been actioned.`;
+  };
+
+  return [
+    {
+      name: 'propose_issue',
+      description:
+        'Propose a new issue / card on the project board. Renders as a card the user can Accept, Edit, or Discard. Do not call unless the user clearly wants to capture a unit of work.',
+      parameters: {
+        type: 'object',
+        properties: {
+          title: { type: 'string', description: 'Short, action-oriented title.' },
+          body: { type: 'string', description: 'Markdown body — context, acceptance criteria.' },
+          projectId: {
+            type: 'string',
+            description:
+              'Project UUID. Optional in project-scoped consults (defaults to the consult\'s project). Required in cross-project consults.',
+          },
+          columnSlug: {
+            type: 'string',
+            enum: ['backlog', 'todo', 'in_progress', 'in_review', 'done'],
+            description: 'Target board column. Defaults to backlog.',
+          },
+        },
+        required: ['title'],
+      },
+      handler: async (args, inv) => {
+        const a = (args ?? {}) as Record<string, unknown>;
+        return handle('issue', a, inv.toolCallId, `issue: ${String(a.title ?? '')}`);
+      },
+    },
+    {
+      name: 'propose_ceremony',
+      description:
+        'Propose a new narrative ceremony (Markdown). The user will Accept, Edit, or Discard before it lands as a draft for the Ceremonies Review page.',
+      parameters: {
+        type: 'object',
+        properties: {
+          name: { type: 'string', description: 'Human-readable ceremony name.' },
+          description: { type: 'string', description: 'One-sentence purpose of the ceremony.' },
+          narrativeMarkdown: {
+            type: 'string',
+            description: 'Plain-prose ceremony narrative — agents, steps, gates.',
+          },
+          projectId: {
+            type: 'string',
+            description: 'Project UUID. Defaults to the consult\'s project; required in cross-project consults.',
+          },
+        },
+        required: ['name', 'narrativeMarkdown'],
+      },
+      handler: async (args, inv) => {
+        const a = (args ?? {}) as Record<string, unknown>;
+        return handle('ceremony', a, inv.toolCallId, `ceremony: ${String(a.name ?? '')}`);
+      },
+    },
+    {
+      name: 'propose_inbox_item',
+      description:
+        'Propose a captured idea / draft for the Inbox — not yet a structured issue. The user will refine and decide what project to file it under.',
+      parameters: {
+        type: 'object',
+        properties: {
+          summary: { type: 'string', description: 'Free-form draft text — the raw idea.' },
+          suggestedProjectId: {
+            type: 'string',
+            description: 'Optional project hint. Leave empty for unrouted capture.',
+          },
+        },
+        required: ['summary'],
+      },
+      handler: async (args, inv) => {
+        const a = (args ?? {}) as Record<string, unknown>;
+        const summary = String(a.summary ?? '');
+        return handle('inbox_item', a, inv.toolCallId, `inbox: ${summary.slice(0, 60)}`);
+      },
+    },
+    {
+      name: 'propose_capture_to_decision',
+      description:
+        'Propose recording a decision in this project\'s .squad/decisions/inbox/ as a Markdown note (one decision per file). Use for choices the user explicitly wants captured for posterity.',
+      parameters: {
+        type: 'object',
+        properties: {
+          key: { type: 'string', description: 'Short decision title (becomes the heading + filename).' },
+          value: { type: 'string', description: 'Body of the decision — what was decided and why.' },
+        },
+        required: ['key', 'value'],
+      },
+      handler: async (args, inv) => {
+        const a = (args ?? {}) as Record<string, unknown>;
+        return handle('capture_to_decision', a, inv.toolCallId, `decision: ${String(a.key ?? '')}`);
+      },
+    },
+    {
+      name: 'propose_assign_agent_to_issue',
+      description:
+        'Propose assigning a specific agent to an existing issue, which on Accept creates a routed run.',
+      parameters: {
+        type: 'object',
+        properties: {
+          issueId: { type: 'string', description: 'UUID of the issue to assign.' },
+          agentName: { type: 'string', description: 'Name of the agent in this project.' },
+          rationale: { type: 'string', description: 'Why this agent? Shown on the proposal card.' },
+        },
+        required: ['issueId', 'agentName'],
+      },
+      handler: async (args, inv) => {
+        const a = (args ?? {}) as Record<string, unknown>;
+        return handle(
+          'assign_agent_to_issue',
+          a,
+          inv.toolCallId,
+          `assign ${String(a.agentName ?? '')} → ${String(a.issueId ?? '')}`,
+        );
+      },
+    },
+  ];
 }
 
 // ---------------------------------------------------------------------------
