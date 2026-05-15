@@ -329,8 +329,8 @@ function SessionList({
           </div>
         )}
         {!loading && sessions.length === 0 && (
-          <div style={{ padding: '24px', color: tokens.colorNeutralForeground3, textAlign: 'center' }}>
-            <Caption1>No conversations yet. Start one to brainstorm.</Caption1>
+          <div style={{ padding: '24px', textAlign: 'center' }}>
+            <Body1 style={{ color: tokens.colorNeutralForeground2 }}>No conversations yet. Start one to brainstorm.</Body1>
           </div>
         )}
         {sessions.map((s) => (
@@ -450,36 +450,38 @@ function NewSessionView({
         title="New consult"
         description="Brainstorm with an agent (charter-bound, propose-only) or a raw model. Nothing you say here side-effects your project until you accept a proposal."
       />
-      <div className={styles.scroll} style={{ maxWidth: '720px', alignSelf: 'center', width: '100%' }}>
+      {/* Fix: margin: 0 auto centers the card; maxWidth fills available space without right-pinning */}
+      <div className={styles.scroll} style={{ maxWidth: '880px', width: '100%', margin: '0 auto' }}>
         <Card style={{ padding: tokens.spacingVerticalL, display: 'flex', flexDirection: 'column', gap: tokens.spacingVerticalM }}>
 
-          {/* Config grid: 2-column layout for compact knobs */}
+          {/* Mode toggle — full-width at top so it never competes for column space */}
+          <Field label="Mode" style={{ gridColumn: '1 / -1' }}>
+            <div style={{ display: 'flex', gap: tokens.spacingHorizontalS }}>
+              {/* appearance='subtle' when unselected keeps both options visually clickable */}
+              <Button
+                appearance={mode === 'agent' ? 'primary' : 'subtle'}
+                icon={<Bot20Regular />}
+                onClick={() => setMode('agent')}
+                disabled={!projectId}
+                size="small"
+              >
+                Agent
+              </Button>
+              <Button
+                appearance={mode === 'model' ? 'primary' : 'subtle'}
+                icon={<Brain20Regular />}
+                onClick={() => setMode('model')}
+                size="small"
+              >
+                Model
+              </Button>
+            </div>
+          </Field>
+
+          {/* Config grid: 2 balanced columns below the mode toggle */}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: tokens.spacingHorizontalM }}>
 
-            {/* Row 1 Col 1: Mode toggle */}
-            <Field label="Mode">
-              <div style={{ display: 'flex', gap: tokens.spacingHorizontalS }}>
-                <Button
-                  appearance={mode === 'agent' ? 'primary' : 'secondary'}
-                  icon={<Bot20Regular />}
-                  onClick={() => setMode('agent')}
-                  disabled={!projectId}
-                  size="small"
-                >
-                  Agent
-                </Button>
-                <Button
-                  appearance={mode === 'model' ? 'primary' : 'secondary'}
-                  icon={<Brain20Regular />}
-                  onClick={() => setMode('model')}
-                  size="small"
-                >
-                  Model
-                </Button>
-              </div>
-            </Field>
-
-            {/* Row 1 Col 2: Agent picker (agent mode) or Model picker (model mode) */}
+            {/* Col 1: Agent picker (agent mode) or Model dropdown (model mode) */}
             {mode === 'agent' ? (
               <Field label="Agent" required>
                 {agentsQuery.isLoading ? (
@@ -517,7 +519,7 @@ function NewSessionView({
               </Field>
             )}
 
-            {/* Row 2 Col 1: Model override (agent mode) or empty spacer (model mode) */}
+            {/* Col 2: Model override (agent mode) or Name (model mode) */}
             {mode === 'agent' ? (
               <Field label="Model override (optional)">
                 <Dropdown
@@ -532,17 +534,25 @@ function NewSessionView({
                 </Dropdown>
               </Field>
             ) : (
-              <div />
+              <Field label="Name (optional)">
+                <Input
+                  value={name}
+                  onChange={(_, d) => setName(d.value)}
+                  placeholder="auto-derived from first message"
+                />
+              </Field>
             )}
 
-            {/* Row 2 Col 2: Name */}
-            <Field label="Name (optional)">
-              <Input
-                value={name}
-                onChange={(_, d) => setName(d.value)}
-                placeholder="auto-derived from first message"
-              />
-            </Field>
+            {/* Name — full-width below the two-col row in agent mode */}
+            {mode === 'agent' && (
+              <Field label="Name (optional)" style={{ gridColumn: '1 / -1' }}>
+                <Input
+                  value={name}
+                  onChange={(_, d) => setName(d.value)}
+                  placeholder="auto-derived from first message"
+                />
+              </Field>
+            )}
           </div>
 
           {/* Hero textarea — the focal point */}
@@ -552,7 +562,7 @@ function NewSessionView({
               value={firstMessage}
               onChange={(_, d) => setFirstMessage(d.value)}
               placeholder="What's on your mind? Paste a brief, ask a question, or describe a problem you want to think through together."
-              rows={6}
+              rows={8}
             />
           </div>
 
