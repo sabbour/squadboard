@@ -6,10 +6,12 @@ import { useRoutingLog, useRoutingStats, useRefreshKeywords } from '../api/routi
 import AgentGrid from '../components/agents/AgentGrid.tsx'
 import AgentDetailPanel from '../components/agents/AgentDetailPanel.tsx'
 import HireAgentModal from '../components/agents/HireAgentModal.tsx'
+import HireTeamModal from '../components/agents/HireTeamModal.tsx'
 import { RoutingTierBadge } from '../components/routing/RoutingTierBadge.tsx'
 import { RoutingLogTable } from '../components/routing/RoutingLogTable.tsx'
 import { RoutingStatsPanel } from '../components/routing/RoutingStatsPanel.tsx'
-import { ArrowSync20Regular, Bot20Regular, ArrowSwap20Regular } from '@fluentui/react-icons'
+import { CastPanel } from '../components/routing/CastPanel.tsx'
+import { ArrowSync20Regular, Bot20Regular, ArrowSwap20Regular, People20Regular } from '@fluentui/react-icons'
 import { Subtitle1 } from '@fluentui/react-components'
 
 interface RouteTestResult {
@@ -185,6 +187,7 @@ export default function Agents() {
   const { data: agents = [], isLoading, isError } = useAgents(projectId)
   const [selectedAgent, setSelectedAgent] = useState<Agent | null>(null)
   const [showHireModal, setShowHireModal] = useState(false)
+  const [showHireTeamModal, setShowHireTeamModal] = useState(false)
   const [activeTab, setActiveTab] = useState<'agents' | 'routing'>('agents')
 
   const { data: routingLog = [], isLoading: logLoading } = useRoutingLog(projectId)
@@ -258,27 +261,50 @@ export default function Agents() {
             </button>
           )}
           {activeTab === 'agents' && (
-            <button
-              onClick={() => setShowHireModal(true)}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '6px',
-                background: '#238636',
-                border: '1px solid #2ea043',
-                borderRadius: 'var(--radius)',
-                color: 'white',
-                padding: '7px 14px',
-                fontSize: '13px',
-                fontWeight: 500,
-                cursor: 'pointer',
-              }}
-              onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.background = '#2ea043' }}
-              onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.background = '#238636' }}
-            >
-              <span style={{ fontSize: '16px', lineHeight: 1 }}>+</span>
-              Hire Agent
-            </button>
+            <>
+              <button
+                onClick={() => setShowHireTeamModal(true)}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  background: 'var(--bg)',
+                  border: '1px solid var(--border)',
+                  borderRadius: 'var(--radius)',
+                  color: 'var(--text)',
+                  padding: '7px 14px',
+                  fontSize: '13px',
+                  fontWeight: 500,
+                  cursor: 'pointer',
+                }}
+                onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.background = 'var(--surface)' }}
+                onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.background = 'var(--bg)' }}
+              >
+                <People20Regular />
+                Hire Team
+              </button>
+              <button
+                onClick={() => setShowHireModal(true)}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  background: '#238636',
+                  border: '1px solid #2ea043',
+                  borderRadius: 'var(--radius)',
+                  color: 'white',
+                  padding: '7px 14px',
+                  fontSize: '13px',
+                  fontWeight: 500,
+                  cursor: 'pointer',
+                }}
+                onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.background = '#2ea043' }}
+                onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.background = '#238636' }}
+              >
+                <span style={{ fontSize: '16px', lineHeight: 1 }}>+</span>
+                Hire Agent
+              </button>
+            </>
           )}
         </div>
       </div>
@@ -317,7 +343,7 @@ export default function Agents() {
             {!isLoading && !isError && (
               <>
                 <AgentGrid agents={agents} onSelectAgent={setSelectedAgent} />
-                <TestRoutingPanel projectId={projectId} />
+                {import.meta.env.DEV && <TestRoutingPanel projectId={projectId} />}
               </>
             )}
           </>
@@ -325,6 +351,20 @@ export default function Agents() {
 
         {activeTab === 'routing' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+            {/* Cast — try the full 3-tier router on a hypothetical issue */}
+            <div>
+              <p style={{ fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '12px', fontWeight: 600 }}>
+                Cast Issue
+              </p>
+              <CastPanel
+                projectId={projectId}
+                onUseAgent={(agentId) => {
+                  const agent = agents.find((a) => a.id === agentId)
+                  if (agent) setSelectedAgent(agent)
+                }}
+              />
+            </div>
+
             {/* Stats */}
             <div>
               <p style={{ fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '12px', fontWeight: 600 }}>
@@ -364,6 +404,14 @@ export default function Agents() {
         <HireAgentModal
           projectId={projectId}
           onClose={() => setShowHireModal(false)}
+        />
+      )}
+
+      {/* Hire Team modal */}
+      {showHireTeamModal && (
+        <HireTeamModal
+          projectId={projectId}
+          onClose={() => setShowHireTeamModal(false)}
         />
       )}
     </div>
