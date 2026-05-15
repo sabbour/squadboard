@@ -87,10 +87,21 @@ function deriveAnchorIssueId(event: BusEvent): string | undefined {
 // Lookup matching ceremonies
 // ---------------------------------------------------------------------------
 
+// UUID v4/v5 shape guard — rejects synthetic sentinels like '__heartbeat__'.
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 async function findMatchingCeremonies(
   projectId: string,
   eventType: BusEventType,
 ): Promise<{ id: string; slug: string }[]> {
+  if (!UUID_RE.test(projectId)) {
+    // Belt-and-suspenders: skip DB query for non-UUID project IDs (e.g.
+    // synthetic sentinels) to avoid crashing the Postgres UUID parser.
+    console.debug(
+      `[ceremony] findMatchingCeremonies skipped — projectId is not a UUID: ${projectId}`,
+    );
+    return [];
+  }
   const db = getDb();
   // We compare triggerConfig->>'eventType' directly. Drizzle doesn't have a
   // first-class JSONB ->> helper for this scalar comparison so we use sql``.
@@ -116,6 +127,12 @@ async function handleEvent(event: BusEvent): Promise<void> {
   // Skip our own re-entrant events to avoid infinite loops if a ceremony
   // emits another bus event during execution.
   if (event.type === 'workflow.advanced') return;
+
+  // Heartbeat events are server-wide infrastructure telemetry — they are not
+  // project-scoped and must never reach ceremony matching.  Primary fix is
+  // that emitHeartbeatEvent() now emits on the separate 'heartbeat' channel,
+  // but this guard is belt-and-suspenders in case of future regressions.
+  if (event.type.startsWith('heartbeat.')) return;
 
   let matches: { id: string; slug: string }[];
   try {

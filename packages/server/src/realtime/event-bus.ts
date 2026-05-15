@@ -178,13 +178,23 @@ class EventBus extends EventEmitter {
     this.emit('event', event);
   }
   /**
-   * Phase 3 Heartbeat: sweep telemetry event. Scope key is `__heartbeat__`
-   * (server-wide; not project-scoped). type is 'heartbeat.sweep.completed'
-   * or 'heartbeat.sweep.error'.
+   * Phase 3 Heartbeat: sweep telemetry event.
+   *
+   * Emitted on the separate `'heartbeat'` channel — NOT on `'event'` — so
+   * project-scoped subscribers (e.g. ceremony-dispatcher) never see these.
+   * Heartbeat events are server-wide infrastructure telemetry; they carry no
+   * project UUID and must not be routed through project-event pipelines.
+   *
+   * Subscribers: use `eventBus.on('heartbeat', handler)`.
    */
   emitHeartbeatEvent(type: HeartbeatEventType, payload: unknown): void {
-    const event: BusEvent = { type, projectId: '__heartbeat__', payload };
-    this.emit('event', event);
+    this.emit('heartbeat', { type, payload });
+  }
+
+  /** Subscribe to server-wide heartbeat sweep telemetry events. */
+  onHeartbeat(handler: (event: { type: HeartbeatEventType; payload: unknown }) => void): () => void {
+    this.on('heartbeat', handler);
+    return () => this.off('heartbeat', handler);
   }
   /**
    * Phase 19 (Now view): Subscribe to ALL events across ALL projects.

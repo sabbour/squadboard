@@ -74,3 +74,19 @@ Session log: `.squad/log/2026-05-15T12:35:00Z-squad-fanout.md`
 **TSC:** Clean on new code. 2 pre-existing errors in `conjure-classifier.ts` (not my code, not my responsibility to fix).
 
 **Guardrails respected:** Did not touch `ceremony-scheduler.ts`, `routes/templates.ts`, `sdk/squad-stream.ts`, `sdk/consult-stream.ts`.
+
+---
+
+## 2026-05-15 — P0 Heartbeat Bus Isolation Fix
+
+**Symptom:** `[ceremony] dispatcher lookup failed for heartbeat.sweep.completed: error: invalid input syntax for type uuid: "__heartbeat__"` spammed every 5 s. Every `ready-workflow-steps` tick emitted 2 errors.
+
+**Root cause:** `emitHeartbeatEvent()` emitted on the shared `'event'` channel with `projectId: '__heartbeat__'` (a synthetic sentinel). `ceremony-dispatcher.ts` fanned all `'event'` emissions to `findMatchingCeremonies()`, which passed `'__heartbeat__'` as a Postgres UUID column value → `22P02` crash.
+
+**Fix — two layers:**
+1. **Primary (event-bus.ts):** `emitHeartbeatEvent()` now emits on the `'heartbeat'` channel (not `'event'`). The `'event'` channel contract is now enforced: every payload carries a valid project UUID. Added `onHeartbeat()` helper for typed subscriptions.
+2. **Belt-and-suspenders (ceremony-dispatcher.ts):** Early return in `handleEvent` for `event.type.startsWith('heartbeat.')`. UUID regex guard in `findMatchingCeremonies` returns `[]` silently for non-UUID projectIds.
+
+**Smoke test results:** UUID errors: 0, dispatcher lookup failures: 0, sweeps running (acted=2). TypeScript clean (two pre-existing unrelated errors in `conjure-classifier.ts` unchanged).
+
+**Lesson:** The `'event'` channel must be treated as a typed contract: `projectId` is always a UUID. Server-wide synthetic scope keys (`__heartbeat__`, `consult:<id>`, `__global__`) belong on their own named channels. Any new server-wide emitter MUST use a separate channel or face the same crash.
