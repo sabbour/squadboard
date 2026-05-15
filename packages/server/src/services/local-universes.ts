@@ -74,13 +74,6 @@ export const LOCAL_UNIVERSES: Record<LocalUniverseId, LocalUniverseTemplate> = {
         preferredRoles: ['devops', 'security'],
       },
       {
-        name: 'Phyllis Vance',
-        personality: 'Warmly observant; documents everything with quiet precision.',
-        backstory:
-          'Steady presence who notices the details other people gloss over and writes them down. Has a memory like a filing cabinet and a patience for process that makes her invaluable during reviews. Kind, but will not let a mistake slide just to keep the peace.',
-        preferredRoles: ['scribe', 'reviewer'],
-      },
-      {
         name: 'Kevin Malone',
         personality: 'Surprisingly insightful under layers of apparent chaos.',
         backstory:
@@ -107,34 +100,6 @@ export const LOCAL_UNIVERSES: Record<LocalUniverseId, LocalUniverseTemplate> = {
         backstory:
           'Deeply attuned to how things feel from the outside — if a UX is confusing or a message lands wrong, Kelly will know before the metrics do. Her instincts about tone and presentation are genuine even when her focus wanders. Excellent at spotting when a product is technically correct but emotionally off.',
         preferredRoles: ['designer', 'prompt-engineer'],
-      },
-      {
-        name: 'Ryan Howard',
-        personality: 'Ambitious and trend-chasing; moves fast and reframes failures as pivots.',
-        backstory:
-          'Started as a temp with big ideas and a higher opinion of himself than the evidence suggested. Good at recognising new patterns early, less good at following through to production. Excellent in a sprint, unreliable across a quarter.',
-        preferredRoles: ['developer', 'lead'],
-      },
-      {
-        name: 'Toby Flenderson',
-        personality: 'Cautious and methodical; writes the policy nobody reads until they need it.',
-        backstory:
-          'HR rep who keeps meticulous records and a deep awareness of what can go wrong. His documentation is unglamorous but comprehensive — the kind that saves the team six months later. Muted in meetings but quietly invaluable when the process is actually under stress.',
-        preferredRoles: ['scribe', 'reviewer'],
-      },
-      {
-        name: 'Creed Bratton',
-        personality: 'Unknowably experienced; operates on information no one else has access to.',
-        backstory:
-          'Nobody is quite sure what Creed\'s actual job is, but he\'s been around long enough that he knows where all the bodies are buried — figuratively and possibly literally. Has a supernatural ability to avoid accountability while occasionally surfacing a genuinely alarming security insight.',
-        preferredRoles: ['security'],
-      },
-      {
-        name: 'Meredith Palmer',
-        personality: 'Blunt and battle-tested; has encountered every edge case in the human condition.',
-        backstory:
-          'Supplier relations expert who has navigated enough chaotic vendor situations to know that real-world systems never behave like the happy path. Finds bugs not through formal process but through a willingness to try the thing no one else will try. Durable under pressure.',
-        preferredRoles: ['tester', 'devops'],
       },
     ],
   },
@@ -284,39 +249,11 @@ export const LOCAL_UNIVERSES: Record<LocalUniverseId, LocalUniverseTemplate> = {
         preferredRoles: ['prompt-engineer', 'designer'],
       },
       {
-        name: 'Chief Wiggum',
-        personality: 'Confidently incorrect; finds bugs through blundering into them.',
-        backstory:
-          'Springfield\'s police chief operates on a combination of authority and misplaced certainty that paradoxically uncovers real problems. He will file a security incident report about something that is actually a legitimate feature, and occasionally he will be right. Useful for exploratory testing.',
-        preferredRoles: ['security', 'tester'],
-      },
-      {
-        name: 'Principal Skinner',
-        personality: 'Procedurally faithful; documents the process whether or not the process works.',
-        backstory:
-          'Has lived his life by the rulebook and written more than a few chapters of it himself. His documentation is complete and follows the template. His reviews catch process violations with the precision of someone who has memorised the handbook. Chafes at workarounds.',
-        preferredRoles: ['scribe', 'reviewer'],
-      },
-      {
         name: 'Ned Flanders',
         personality: 'Earnestly principled; every review comes back with comprehensive, kindly notes.',
         backstory:
           'The most thorough reviewer in Springfield, who finds every issue and wraps every note in gentle concern for your wellbeing. His feedback is detailed and correct, even when it is delivered with a neighborino. Maintains standards without ever being cruel about it.',
         preferredRoles: ['reviewer', 'scribe'],
-      },
-      {
-        name: 'Professor Frink',
-        personality: 'Wildly technical; can solve the problem and simultaneously introduce three new ones.',
-        backstory:
-          'Springfield\'s resident inventor whose solutions tend to work brilliantly in the lab and catastrophically at scale. Brings genuine deep technical expertise to any architecture discussion, plus a word salad of caveats. Best in early-stage design where the caveats are actually useful.',
-        preferredRoles: ['developer', 'prompt-engineer'],
-      },
-      {
-        name: 'Milhouse Van Houten',
-        personality: 'Careful and eager; tests every case because he has seen every case go wrong.',
-        backstory:
-          'A cautious thinker whose personal experience with failure has made him comprehensive about edge cases. He writes test scenarios that cover the unhappy paths others assume won\'t happen. Reliable, if not always confident — needs a lead who trusts him enough for him to do his best work.',
-        preferredRoles: ['tester', 'developer'],
       },
     ],
   },
@@ -394,34 +331,6 @@ export const LOCAL_UNIVERSES: Record<LocalUniverseId, LocalUniverseTemplate> = {
         backstory:
           'Has been the department\'s institutional memory for longer than anyone will admit. His files are meticulously organised, his process notes are complete, and his error rate — on the actual work — is close to zero. The team has never appreciated this, which may be why the docs are so thorough.',
         preferredRoles: ['scribe', 'reviewer'],
-      },
-      {
-        name: 'Mark Brendanawicz',
-        personality: 'Pragmatic and steady; solves the problem in front of him without glamorising it.',
-        backstory:
-          'City planner who brings a contractor\'s attitude to government work — scope the job, do the job, document what was done. Gets pulled into other people\'s drama but keeps his own work clean and on time. Reliable in a way that is easy to take for granted.',
-        preferredRoles: ['developer', 'tester'],
-      },
-      {
-        name: 'Jean-Ralphio Saperstein',
-        personality: 'Theatrically over-pitched; can make any idea sound like a billion-dollar opportunity.',
-        backstory:
-          'A man who treats every interaction as an audition for a larger role. His pitches are spectacular, his follow-through is not, and somewhere in the gap is a genuinely creative instinct that occasionally produces something real. Best deployed on the prompt layer where vibes are load-bearing.',
-        preferredRoles: ['prompt-engineer', 'designer'],
-      },
-      {
-        name: 'Tammy Swanson',
-        personality: 'Ruthlessly manipulative gatekeeper; nothing gets approved without surviving her.',
-        backstory:
-          'Maintains control through a combination of charm, institutional knowledge, and the willingness to make things very uncomfortable for anyone who tries to go around her. Reviews are comprehensive and occasionally weaponised. The codebase is, against all odds, extremely secure.',
-        preferredRoles: ['security', 'reviewer'],
-      },
-      {
-        name: 'Mona-Lisa Saperstein',
-        personality: 'Chaotically creative; operates on pure vibes with zero filter.',
-        backstory:
-          'Brings a feral energy to creative work that either produces something brilliant or crashes the demo, with little warning either way. Her design instincts are genuine even when her process is nonexistent. Useful when a prompt or a UI needs to feel alive rather than correct.',
-        preferredRoles: ['designer', 'prompt-engineer'],
       },
     ],
   },
