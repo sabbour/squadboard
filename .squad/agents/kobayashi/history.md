@@ -75,4 +75,21 @@ Three tiers (first match wins):
 - Code commit: `785db624`
 - Decision: `.squad/decisions/inbox/kobayashi-local-universe-registry.md` (commit `7354cab7`)
 
+---
+
+## Wave 6 Addendum (2026-05-15T10:38:30Z)
+
+**Run:** kobayashi-4b (quick follow-up)
+**Task:** Add Parks and Recreation to local universe registry
+
+**Outcome:**
+- Extended `LocalUniverseId` with `'parks-and-rec'`, added 14-character template to `LOCAL_UNIVERSES` (Leslie, Ron, Tom, Ann, April, Andy, Ben, Chris, Donna, Jerry/Garry, Mark, Jean-Ralphio, Tammy Two, Mona-Lisa). Full 9-role AgentRole coverage.
+- Updated hire-formulator.ts prompt to list all 6 universes.
+- Extended `CastingUniverseId` in client agents.ts with `'parks-and-rec'`.
+- Both `tsc --noEmit` clean.
+- Commit: `185f88d6`
+- Decision: `.squad/decisions/inbox/kobayashi-parks-and-rec-universe.md`
+- Picker now shows 6 universes (2 SDK + 4 local). Total local characters: 53.
+
+
 **Status:** COMPLETE — API stable for client. Ready for Keyser Batch B.
