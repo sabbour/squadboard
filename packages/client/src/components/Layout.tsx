@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { Outlet, useParams, useNavigate, useLocation } from 'react-router'
 import { apiFetch } from '../api/client.ts'
-import squadboardLogo from '../assets/squadboard-horizontal.svg'
+import squadboardLogo from '../assets/squadboard-horizontal.png'
 import {
   NavDrawer,
   NavDrawerBody,
