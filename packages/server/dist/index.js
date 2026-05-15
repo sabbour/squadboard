@@ -28,6 +28,7 @@ import castingRouter from './routes/casting.js';
 import castRouter from './routes/cast.js';
 import reviewPoliciesRouter from './routes/review-policies.js';
 import inboxRouter from './routes/inbox.js';
+import { projectFlowRouter, issueFlowRouter } from './routes/flow.js';
 import { dispatcher } from './engine/dispatcher.js';
 // Phase 10: side-effect import — registers the on_event ceremony listener
 // against the in-process event bus.
@@ -65,6 +66,9 @@ async function main() {
     app.use('/api/projects/:projectId/labels', labelsRouter);
     app.use('/api/projects/:projectId/issues/:issueId/runs', issueRunsRouter);
     app.use('/api/projects/:projectId/runs', projectRunsRouter);
+    // Phase 12: flow visualisation aggregators
+    app.use('/api/projects/:projectId/flow', projectFlowRouter);
+    app.use('/api/projects/:projectId/issues/:issueId/flow', issueFlowRouter);
     app.use('/api/projects/:projectId/routing', routingRouter);
     app.use('/api/models', modelsRouter);
     app.use('/api/roles', rolesRouter);
