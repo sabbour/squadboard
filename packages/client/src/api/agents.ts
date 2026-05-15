@@ -141,7 +141,7 @@ export function useModels() {
 // into Squadboard agents.
 // ---------------------------------------------------------------------------
 
-export type CastingUniverseId = 'usual-suspects' | 'oceans-eleven' | 'the-office' | 'seinfeld' | 'the-simpsons'
+export type CastingUniverseId = 'usual-suspects' | 'oceans-eleven' | 'the-office' | 'seinfeld' | 'the-simpsons' | 'parks-and-rec'
 
 export type CastingAgentRole =
   | 'lead'

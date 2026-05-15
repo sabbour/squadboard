@@ -1808,3 +1808,275 @@ The route handler simply calls `classifyConjure()` from the existing service, ex
 | `packages/client/src/components/inbox/CaptureFab.tsx` | Refactored in Step 3 |
 | `packages/client/src/components/formulate/FormulatePanel.tsx` | Reused inside ConjureModal for the prose input |
 | `packages/client/src/components/Layout.tsx` | Button label/icon updated in Step 3 |
+# Decision: Ceremony Pages — Fluent2 Redesign
+
+**Author:** Fenster (UX Designer)  
+**Date:** 2026-05-15T10:18:00.000-07:00  
+**Wave:** fenster-4 (retry after fenster-3 API timeout)  
+**Pages affected:** `/projects/:id/ceremonies` + `/projects/:id/ceremonies/new`
+
+---
+
+## Pattern chosen for Create flow: Pattern A (Conjure-first)
+
+**Rationale:** The user complaint was "too busy". Pattern A removes the intro callout, collapses trigger selection to a single `Dropdown + Field` (saves ~150px of radio cards), and hides all advanced metadata behind an `Accordion`. The Formulate hero card IS the intro — no redundant text above it. The manual structured form is hidden behind a subtle "or build it manually →" toggle and auto-expands after Formulate fires.
+
+---
+
+## Badge color mapping (canonical — follow for Schedules page and any future list)
+
+| Category | Value            | appearance  | color         |
+|----------|------------------|-------------|---------------|
+| Trigger  | `manual`         | `outline`   | `subtle`      |
+| Trigger  | `on_issue_entry` | `filled`    | `brand`       |
+| Trigger  | `on_event`       | `filled`    | `brand`       |
+| Trigger  | `on_schedule`    | `filled`    | `informative` |
+| Kind     | `narrative`      | `outline`   | `success`     |
+| Kind     | `workflow`       | `outline`   | `warning`     |
+| Kind     | `review_policy`  | `outline`   | `severe`      |
+| Kind     | `ceremony`       | `outline`   | `subtle`      |
+
+---
+
+## "Advanced" Accordion contents (create mode)
+
+The `Accordion` item titled **"Advanced"** contains:
+1. **Description** — `Textarea`, optional, shown in ceremony list
+2. **Kind** — `Dropdown` (`workflow` / `ceremony` / `review_policy` / `narrative`), helper text: "Use workflow for most automations. narrative is documentation-only."
+
+---
+
+## Small reusable mini-components extracted
+
+| Component | Path | Purpose |
+|-----------|------|---------|
+| `TriggerBadge` | `packages/client/src/components/ceremony/CeremonyBadges.tsx` | Renders trigger kind as Fluent Badge with canonical color |
+| `KindBadge`    | `packages/client/src/components/ceremony/CeremonyBadges.tsx` | Renders ceremony kind as Fluent Badge with canonical color |
+
+Both are reusable in any future list page (Schedules, Runs log, etc.).
+
+---
+
+## What was changed
+
+### CeremonyList.tsx
+- Replaced hand-rolled `<table>` + plain `<h1>` with Fluent2 `DataGrid` + `PageHeader`
+- Added `TriggerBadge` and `KindBadge` to Trigger and Kind columns
+- `Created` column: `safeRelativeTime` + `Tooltip` showing absolute date
+- Toolbar: `Review drafts` subtle button + `CounterBadge` + `+ New ceremony` primary button
+- Empty state: centred card with CTA
+- Background: `tokens.colorNeutralBackground1`, all spacing via Fluent tokens
+
+### CeremonyEditor.tsx (/new route)
+- Removed dismissable intro callout entirely
+- Formulate hero card is now the only top-level element in create mode
+- "or build it manually →" subtle button reveals the structured form
+- Trigger: `RadioGroup` with 4 stacked cards → `Dropdown` inside `Field` (description as `hint`)
+- Metadata (description + kind): collapsed inside `Accordion` titled "Advanced"
+- `Create` button disabled until name differs from "New Ceremony"
+- After Formulate fires: structured form auto-expands with populated values
+- Edit mode unchanged: compact header + split left/right pane layout
+- Fixed unclosed `<>` JSX fragment (root cause of TypeScript errors)
+- Removed unused `Dismiss16Regular` icon import
+
+---
+
+## TypeScript
+
+`npx tsc --noEmit` — clean, zero errors.
+
+---
+
+# keyser-columns-batch-b — Batch B Ship Decision Record
+
+**Date:** 2026-05-15  
+**Author:** keyser (spawn 4)  
+**Commit:** `e4d87359`
+
+---
+
+## Commit
+
+`e4d87359` — `feat(board): add/remove/reorder columns in ColumnSettingsPanel + CaptureModal dropdown`
+
+Files changed:
+- `packages/client/src/components/board/ColumnSettingsPanel.tsx`
+- `packages/client/src/components/inbox/CaptureModal.tsx`
+
+---
+
+## Drag-and-drop pattern (Kobayashi recommendation confirmed)
+
+Used `@hello-pangea/dnd` (`DragDropContext` + `Droppable` + `Draggable`) matching the existing pattern in `KanbanBoard.tsx`. `ReOrder20Regular` icon as the drag handle anchored to `provided.dragHandleProps`. Optimistic local state (`orderedIds`) is applied immediately on drop; the `useReorderColumns` mutation is called in the background and reverts `orderedIds` to the previous value `onError`.
+
+---
+
+## Issue count decision for delete confirms
+
+**Approach chosen: reuse `useIssues(projectId)` inside `ColumnSettingsPanel`.**
+
+Rationale: `useIssues` is already called in `Board.tsx` (parent), so the TanStack Query cache is warm — no extra network request is made. Issue counts per column are derived by iterating `allIssues` and grouping by `issue.column`. This avoids a prop-drilling change to `Board.tsx` (which is outside Batch B scope) and avoids 409-driven UX (which would delay feedback until after a round-trip). If the column has ≥1 issues the reassign picker is shown immediately; if 0 issues a simple "Delete this column?" confirmation is shown. In both cases `reassignTo` is always passed to the API (defaulting to the project's `isDefault=true` column as a safe sentinel when there are zero issues).
+
+---
+
+## CaptureModal follow-ups noticed
+
+1. **Column reset on project switch** — when the user changes the project dropdown, the column state resets to the new project's `isDefault` column. A `prevProjectIdRef` guards against resetting on every `columnMeta` refetch.
+2. **`lockedColumn` guard** — if `lockedColumn` is set (per-project FAB), the auto-reset is skipped so the lock is preserved.
+3. **`existingItemId` guard** — if the modal is hydrating an existing item, the auto-reset is also skipped; `hydrateFromItem` owns column state in that case.
+4. **Fallback list** — when `projectId === ''` (global Capture button before a project is picked), `FALLBACK_COLUMNS` (the 5 seed slugs) is used so the dropdown is never empty.
+5. **`column` type** — still typed as `ColumnId` (= `string` after Batch A), which is fully compatible with dynamic column slugs.
+
+No blocking issues found in CaptureModal. The `handlePublish` call passes `columnSlug: column` to the API which is now a dynamic slug — this is correct as long as the server accepts any registered column slug for the project (which it should, given the server-side columns API).
+
+---
+
+# Decision: Local Universe Registry — The Office, Seinfeld, The Simpsons
+
+**Date:** 2026-05-15
+**Author:** Kobayashi (SDK Integrator)
+**Requested by:** Ahmed Sabbour
+
+---
+
+## Problem
+
+Ahmed reported that the Hire Team picker only showed "The Usual Suspects" and "Ocean's Eleven", despite requesting Seinfeld in a previous session. The SDK's `UniverseId` type is a sealed union (`'usual-suspects' | 'oceans-eleven' | 'custom'`) with no extensibility API — the SDK ships exactly two named universes and there is no `registerUniverse()` or equivalent.
+
+---
+
+## Decision: Squadboard-side Local Registry (not SDK PR / fork)
+
+**Chosen:** A `local-universes.ts` module in `packages/server/src/services/` that lives entirely within the Squadboard monorepo and is merged with the SDK output at the `casting-engine.ts` wrapper layer.
+
+**Rationale:**
+- PRing the SDK would introduce an upstream dependency on a release cycle we do not control; the SDK maintainer may not want show-specific content in the core package.
+- Forking the SDK requires maintaining a divergent copy, which has compounding cost.
+- The `casting-engine.ts` wrapper is Kobayashi's file and is explicitly the right place for SDK augmentation per the charter. Merging in `listUniverses()` and routing in `castTeam()` is a surgical, localised change.
+- Future universes (Mad Men, Parks & Rec, Succession) can be added to `LOCAL_UNIVERSES` in minutes — no SDK interaction required.
+
+**Workaround for sealed type:** `ExtendedUniverseId = Exclude<UniverseId, 'custom'> | LocalUniverseId` gives the type system what it needs without touching the SDK or casting it to `any` at the boundary.
+
+---
+
+## Universes Added (this batch)
+
+| Universe | Label | Characters |
+|---|---|---|
+| `the-office` | The Office | 15 |
+| `seinfeld` | Seinfeld | 10 |
+| `the-simpsons` | The Simpsons | 14 |
+
+**Total new characters:** 39
+**Total universes now available:** 5 (2 SDK + 3 local)
+
+---
+
+## Future Additions
+
+If Ahmed wants more universes (Mad Men, Parks & Rec, Succession, etc.), the `LOCAL_UNIVERSES` record in `local-universes.ts` is the right place — just add a new `LocalUniverseId` member to the union and a corresponding entry in the record. `listUniverses()` and `castTeam()` pick them up automatically.
+
+---
+
+## Open Question
+
+**Should `listUniverses()` accept a per-project override?**
+Some projects might only want a subset of universes (e.g. a workplace-comedy project could default to The Office and hide heist themes). Currently the full merged list is always returned. A future `project.universeAllowlist` config field could filter this. Out of scope now — flagged for follow-up.
+
+---
+
+# Decision: Non-tech Role Coverage + New Business Universes
+
+**Author:** McManus (Lead Architect)  
+**Date:** 2026-05-15T10:26:30.000-07:00  
+**Round:** r5  
+**Status:** APPROVED (self-authored governance expansion)  
+**Files changed:**
+- `.squad/templates/casting-reference.md`
+- `.github/agents/squad.agent.md`
+- `.squad/routing.md`
+
+---
+
+## Context
+
+Ahmed requested non-tech business roles and additional casts on two prior occasions. Neither shipped. This decision closes both gaps in a single coordinated round.
+
+---
+
+## 1. New Universes Added (5)
+
+Four universes were requested; Silicon Valley was added as an optional fifth on the basis of a clean tech-startup fit with no table bloat.
+
+| Universe | Capacity | Shape Tags | Rationale |
+|----------|----------|------------|-----------|
+| **Mad Men** | 14 | medium, drama, ensemble, workplace | Fills the advertising/marketing/ambition signal space — ideal for projects with brand, growth, or B2B focus. Period drama adds period-appropriate resonance. |
+| **The Office** | 18 | large, comedy, ensemble, workplace | The canonical ensemble workplace comedy. Sales, dysfunction, business — exact fit for teams that include Sales or Ops members. |
+| **Parks and Recreation** | 15 | medium, comedy, ensemble, workplace | Government/civic/optimism resonance. Strong fit for civic-tech, public-sector, or mission-driven projects. Optimism tag distinguishes it from the dysfunction of The Office. |
+| **Silicon Valley** | 10 | medium, comedy, ensemble, tech | Tech-startup satire. Fills the startup/VC/disruption resonance gap — no prior universe covered the tech-startup idiom without going full sci-fi. Capacity 10 slots cleanly between Firefly and Ocean's Eleven. |
+| **Succession** | 12 | medium, drama, ensemble, business | Corporate power/finance/family dynamics. Ideal for projects with Finance, Legal, or executive-level stakeholder emphasis. Ambition + finance tags complement Mad Men without overlapping. |
+
+**Total before:** 15 universes. **Total after:** 20 universes.
+
+Casting policy `allowlist_universes` is `["*"]` — no `policy.json` edit required. New universes are immediately selectable on the next casting call.
+
+---
+
+## 2. Role-Emoji Additions (11 new rows)
+
+Each emoji was chosen to avoid collision with existing assignments (📋 Scribe, 📊 Data, 📝 Docs, ⚛️ Frontend, 🔧 Backend, 🧪 Test, ⚙️ DevOps, 🔒 Security, 🏗️ Lead, 🔄 Ralph, 🤖 Copilot) and to have strong semantic fit.
+
+| Role | Emoji | Collision check | Semantic rationale |
+|------|-------|-----------------|-------------------|
+| PM, Product Manager, Product Owner | 🎯 | Clear | Target/goal — PM owns outcomes, not outputs. |
+| Designer, UX Designer, Visual Designer | 🎨 | Clear | Palette — universal design symbol. Added as a *distinct* row from `Frontend, UI, Design` to break the old ambiguity where "Designer" matched ⚛️. |
+| Founder, CEO, Executive | 👔 | Clear | Business attire — executive/leadership signal. Placed above Lead so CEO doesn't accidentally match Lead first. |
+| Sales, Account, Business Development | 💼 | Clear | Briefcase — classic business/sales symbol. |
+| Marketing, Growth, Comms | 📣 | Clear | Megaphone — broadcast/outreach. Distinct from 📊 Data and 📝 Docs. |
+| Finance, Accounting, Controller | 💰 | Clear | Money bag — unambiguous finance signal. |
+| HR, People, Recruiting, Talent | 👥 | Clear | Two people — people-ops symbol. Distinct from 👤 fallback (single person). |
+| Legal, Counsel, Compliance | ⚖️ | Clear | Scales — universal legal symbol. Note: Security row retains "Compliance" for technical compliance; Legal row is legal-side compliance only. Pattern matching resolves correctly because "Legal" and "Counsel" are distinct tokens from "Security" and "Auth". |
+| Operations, Ops, Program Manager | 📦 | Clear | Box/logistics — operations symbol. "Program Manager" is included because PgMs typically own cross-functional operations work, distinct from PM (product). |
+| Customer Success, Support, Account Mgmt | 🎧 | Clear | Headset — support/customer-success symbol. Distinct from Sales (💼) even though both touch customer accounts. |
+| Research, User Research, Data Science | 🔬 | Clear | Microscope — research/inquiry symbol. Distinct from 📊 Data (infrastructure/analytics) vs. 🔬 Research (qualitative/study). |
+
+---
+
+## 3. Role-Emoji Table Reordering
+
+The matching rule is first-match-wins (case-insensitive partial match). The old ordering allowed `Designer` to fall through to `Frontend, UI, Design → ⚛️`. The new ordering places more specific patterns above general ones:
+
+**Key reordering decisions:**
+- `PM / Product Manager / Product Owner → 🎯` placed **above** `Lead, Architect, Tech Lead → 🏗️` — a PM is not a tech lead.
+- `Designer, UX Designer, Visual Designer → 🎨` placed **above** `Frontend, UI, Design → ⚛️` — "Designer" alone is now unambiguous.
+- `Founder, CEO, Executive → 👔` placed above `Lead` — an executive is not a tech lead.
+- All 11 new business roles placed below the 8 tech rows but above Scribe/Ralph/@copilot.
+- Scribe, Ralph, @copilot remain at the bottom — they are singletons matched by exact name, not role patterns.
+
+The matching note was updated to: *"Order in the table is priority order — more specific patterns higher up."*
+
+---
+
+## 4. Non-tech Routing Subsection
+
+Added `## Non-tech Work Types` to `.squad/routing.md` with:
+- 10 work-type rows mapping business functions to primary roles.
+- 5 cross-functional gate rules establishing reject-authority for PM (scope), Marketing/Sales (copy/positioning), Legal (contracts), and Finance (spending).
+
+Gate rules follow the same reject-authority pattern already established for Kujan (durability) and Redfoot (user-facing copy).
+
+---
+
+## 5. Compatibility
+
+- **Zero breaking change for existing all-tech teams.** The emoji table additions are additive; no existing pattern was removed or reordered in a way that changes an existing role's assignment (Lead still → 🏗️, Frontend still → ⚛️ when no "Designer" token present).
+- **New universes are opt-in via selection algorithm.** They only surface when resonance signals or LRU bonuses favour them.
+- **Routing additions are additive.** The non-tech table is a new section; existing tech routing rows are unchanged.
+
+---
+
+## 6. Future Considerations
+
+- **Silicon Valley** was added proactively. If it proves noisy for non-tech projects, the LRU penalty will naturally deprioritise it.
+- **Finance threshold rule** (cross-functional rule #5) asks the coordinator to prompt the user for a spending threshold when Finance joins — this is deliberate, not an oversight. The threshold is project-specific and cannot be defaulted here.
+- **Legal + Security "Compliance" overlap** is resolved by token priority: "Legal" and "Counsel" are distinct first-match tokens. A role string of "Compliance Officer" would match Legal (⚖️) since Legal appears higher in the table. If the intent is Security compliance, the role string should include "Security" or "Auth".

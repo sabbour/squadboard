@@ -6,12 +6,12 @@
  * Rather than forking or PRing the SDK, Squadboard maintains this registry and
  * merges it with `engine.getUniverses()` in casting-engine.ts at runtime.
  *
- * Universes here: The Office, Seinfeld, The Simpsons.
+ * Universes here: The Office, Seinfeld, The Simpsons, Parks and Recreation.
  */
 
 import type { AgentRole } from '@bradygaster/squad-sdk/casting';
 
-export type LocalUniverseId = 'the-office' | 'seinfeld' | 'the-simpsons';
+export type LocalUniverseId = 'the-office' | 'seinfeld' | 'the-simpsons' | 'parks-and-rec';
 
 export interface LocalUniverseCharacter {
   name: string;
@@ -317,6 +317,111 @@ export const LOCAL_UNIVERSES: Record<LocalUniverseId, LocalUniverseTemplate> = {
         backstory:
           'A cautious thinker whose personal experience with failure has made him comprehensive about edge cases. He writes test scenarios that cover the unhappy paths others assume won\'t happen. Reliable, if not always confident — needs a lead who trusts him enough for him to do his best work.',
         preferredRoles: ['tester', 'developer'],
+      },
+    ],
+  },
+
+  'parks-and-rec': {
+    id: 'parks-and-rec',
+    label: 'Parks and Recreation',
+    characters: [
+      {
+        name: 'Leslie Knope',
+        personality: 'Unstoppably optimistic planner; has a binder for every contingency.',
+        backstory:
+          'Deputy director of the Pawnee Parks Department who treats every project as a civic mission worth dying on a hill for. Her preparation is legendary — she has considered angles no one else thought to check. Turns disagreement into compromise through sheer relentless enthusiasm.',
+        preferredRoles: ['lead'],
+      },
+      {
+        name: 'Ron Swanson',
+        personality: 'Libertarian gatekeeping; says no by default and means it.',
+        backstory:
+          'A government employee philosophically opposed to government who has channelled that contradiction into exceptional systems-hardening. He reviews everything, approves almost nothing, and is almost always right when he does refuse. The infrastructure he builds stays up because he built it to outlast him.',
+        preferredRoles: ['reviewer', 'devops', 'security'],
+      },
+      {
+        name: 'Tom Haverford',
+        personality: 'Vibes-first entrepreneur; pitches before the spec exists and somehow sells it.',
+        backstory:
+          'Has launched more ventures than he has completed, but his instincts about presentation, branding, and user desire are genuinely sharp. Makes ugly things look great and dull things sound exciting. Best when someone else is handling the implementation details.',
+        preferredRoles: ['designer', 'prompt-engineer'],
+      },
+      {
+        name: 'Ann Perkins',
+        personality: 'Sensibly grounded; finds the flaw everyone else is too excited to notice.',
+        backstory:
+          'A nurse who wandered into city government and became the most reliable person in the department. Has a calm, clinical eye for what is actually wrong versus what people are pretending is fine. Her feedback is direct, accurate, and delivered without drama.',
+        preferredRoles: ['tester', 'reviewer'],
+      },
+      {
+        name: 'April Ludgate',
+        personality: 'Deadpan and secretly excellent; competence hidden behind visible contempt.',
+        backstory:
+          'Internship that became a career despite her apparent best efforts to prevent it. Beneath the studied indifference is sharp situational awareness and a talent for cutting through nonsense. Treats access control like a personal project — nothing gets past her without a reason she has approved.',
+        preferredRoles: ['developer', 'security'],
+      },
+      {
+        name: 'Andy Dwyer',
+        personality: 'Enthusiastic learner; ships with conviction and learns the theory after.',
+        backstory:
+          'Started as a shoeless man in a pit and became a children\'s entertainer, a police officer, and a shoe shiner in the time it takes most people to update a resume. Learns entirely by doing and retains more than his approach suggests. Brings infectious energy to any build sprint.',
+        preferredRoles: ['developer', 'prompt-engineer'],
+      },
+      {
+        name: 'Ben Wyatt',
+        personality: 'Methodical and precise; runs the numbers before he runs anything else.',
+        backstory:
+          'Former teenage mayor who turned a fiscal catastrophe into a public administration career built on rigorous accountability. Has a gift for finding the quiet structural flaw before it becomes a public disaster. Steady under pressure; his calm is the team\'s anchor when deadlines close in.',
+        preferredRoles: ['lead', 'tester'],
+      },
+      {
+        name: 'Chris Traeger',
+        personality: 'Relentlessly positive motivator; turns every standup into a wellness event.',
+        backstory:
+          'State auditor whose constitutionally unusual physiology and correspondingly unusual mindset make him the most enthusiastic person in any room by several standard deviations. His feedback is always framed as an opportunity. Somehow this works — teams around him produce more, if also more anxiously.',
+        preferredRoles: ['lead', 'prompt-engineer'],
+      },
+      {
+        name: 'Donna Meagle',
+        personality: 'Self-possessed and immovable; knows the system and works it on her own terms.',
+        backstory:
+          'Senior office administrator who has outlasted every initiative, reorg, and visiting consultant because she understands where the actual levers are. Does not get pulled into drama she did not create and does not apologise for the boundaries she keeps. The pipelines she touches run smoothly.',
+        preferredRoles: ['devops', 'reviewer'],
+      },
+      {
+        name: 'Jerry Gergich',
+        personality: 'Quietly diligent; produces flawless documentation nobody credits and everyone relies on.',
+        backstory:
+          'Has been the department\'s institutional memory for longer than anyone will admit. His files are meticulously organised, his process notes are complete, and his error rate — on the actual work — is close to zero. The team has never appreciated this, which may be why the docs are so thorough.',
+        preferredRoles: ['scribe', 'reviewer'],
+      },
+      {
+        name: 'Mark Brendanawicz',
+        personality: 'Pragmatic and steady; solves the problem in front of him without glamorising it.',
+        backstory:
+          'City planner who brings a contractor\'s attitude to government work — scope the job, do the job, document what was done. Gets pulled into other people\'s drama but keeps his own work clean and on time. Reliable in a way that is easy to take for granted.',
+        preferredRoles: ['developer', 'tester'],
+      },
+      {
+        name: 'Jean-Ralphio Saperstein',
+        personality: 'Theatrically over-pitched; can make any idea sound like a billion-dollar opportunity.',
+        backstory:
+          'A man who treats every interaction as an audition for a larger role. His pitches are spectacular, his follow-through is not, and somewhere in the gap is a genuinely creative instinct that occasionally produces something real. Best deployed on the prompt layer where vibes are load-bearing.',
+        preferredRoles: ['prompt-engineer', 'designer'],
+      },
+      {
+        name: 'Tammy Swanson',
+        personality: 'Ruthlessly manipulative gatekeeper; nothing gets approved without surviving her.',
+        backstory:
+          'Maintains control through a combination of charm, institutional knowledge, and the willingness to make things very uncomfortable for anyone who tries to go around her. Reviews are comprehensive and occasionally weaponised. The codebase is, against all odds, extremely secure.',
+        preferredRoles: ['security', 'reviewer'],
+      },
+      {
+        name: 'Mona-Lisa Saperstein',
+        personality: 'Chaotically creative; operates on pure vibes with zero filter.',
+        backstory:
+          'Brings a feral energy to creative work that either produces something brilliant or crashes the demo, with little warning either way. Her design instincts are genuine even when her process is nonexistent. Useful when a prompt or a UI needs to feel alive rather than correct.',
+        preferredRoles: ['designer', 'prompt-engineer'],
       },
     ],
   },
