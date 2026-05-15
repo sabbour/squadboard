@@ -1,6 +1,7 @@
 // Agent session runner — SquadClient (ACP) only, no fallbacks.
 
 import { readFile } from 'node:fs/promises';
+import { resolveModel } from './model-defaults.js';
 
 export interface SessionOptions {
   agentName: string;
@@ -8,7 +9,9 @@ export interface SessionOptions {
   workspacePath: string;
   squadPath: string;
   task: string; // issue title + body
-  model?: string; // optional — passed through from agent.model
+  model?: string; // optional — passed through from session/run
+  agentModel?: string | null; // optional — agent's configured model
+  projectDefaultModel?: string | null; // optional — project-level default
 }
 
 export interface SessionResult {
@@ -17,6 +20,8 @@ export interface SessionResult {
   costUsd: string;
   inputTokens?: number;
   outputTokens?: number;
+  resolvedModel: string;
+  modelResolvedVia: 'session' | 'agent' | 'project' | 'fallback';
 }
 
 /**
@@ -48,6 +53,12 @@ export async function createAgentSession(options: SessionOptions): Promise<Sessi
   const charter = await readFile(options.charterPath, 'utf8')
     .catch(() => `(charter not found at: ${options.charterPath})`);
 
+  const resolved = resolveModel({
+    sessionModel: options.model,
+    agentModel: options.agentModel ?? null,
+    projectDefaultModel: options.projectDefaultModel ?? null,
+  });
+
   const token = process.env.GITHUB_TOKEN ?? process.env.SQUADBOARD_GITHUB_TOKEN;
 
   const { SquadClient } = await import('@bradygaster/squad-sdk/client');
@@ -59,7 +70,7 @@ export async function createAgentSession(options: SessionOptions): Promise<Sessi
   await client.connect();
   try {
     const session = await client.createSession({
-      model: options.model,
+      model: resolved.model,
       systemMessage: { mode: 'replace', content: charter },
       workingDirectory: options.workspacePath,
     });
@@ -76,6 +87,8 @@ export async function createAgentSession(options: SessionOptions): Promise<Sessi
       costUsd: '0.000',
       inputTokens,
       outputTokens,
+      resolvedModel: resolved.model,
+      modelResolvedVia: resolved.via,
     };
   } finally {
     await client.disconnect().catch(() => {});

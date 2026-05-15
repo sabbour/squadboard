@@ -1,12 +1,13 @@
 import { readFile } from 'node:fs/promises';
 import type { Agent } from '../db/schema.js';
 import { getDb } from '../db/index.js';
-import { issueRuns } from '../db/schema.js';
+import { issueRuns, projects as projectsTable } from '../db/schema.js';
 import { eq } from 'drizzle-orm';
 import { createAgentSession } from './squad-client.js';
 import { OutputStreamer } from './output-streamer.js';
 import { CostTracker } from './cost-tracker.js';
 import { BudgetGuard, BudgetExceededError } from './budget-guard.js';
+import { BUILTIN_FALLBACK } from './model-defaults.js';
 
 export type { IssueRun } from '../db/schema.js';
 
@@ -61,22 +62,30 @@ export async function executeAgentRun(input: AgentRunInput): Promise<AgentRunOut
     // 2. Build session context.
     const task = `# ${input.issueTitle}\n\n${input.issueBody}`;
 
-    // 3. Call SquadClient.createSession() directly (bypass SquadCoordinator).
+    // 3. Look up project default model (auto-resolution chain).
+    const [projectRow] = await db
+      .select({ defaultModel: projectsTable.defaultModel })
+      .from(projectsTable)
+      .where(eq(projectsTable.id, input.projectId));
+
+    // 4. Call SquadClient.createSession() directly (bypass SquadCoordinator).
     const result = await createAgentSession({
       agentName: input.agent.name,
       charterPath: input.agent.charterPath,
       workspacePath: input.workspacePath,
       squadPath: input.projectSquadPath,
       task,
-      model: input.agent.model ?? undefined,
+      agentModel: input.agent.model ?? null,
+      projectDefaultModel: projectRow?.defaultModel ?? null,
     });
 
-    // 4. Stream output to DB.
+    // 5. Stream output to DB.
     await streamer.write(result.output);
     await streamer.flush();
 
-    // 5. Record costs with granular input/output split.
-    const modelId = input.agent.model ?? 'claude-sonnet-4';
+    // 6. Record costs with granular input/output split, using resolved model id
+    // so cost tracker always has a real pricing key (never 'auto'/null).
+    const modelId = result.resolvedModel || BUILTIN_FALLBACK;
     if (result.inputTokens != null && result.outputTokens != null) {
       await tracker.recordCost(result.inputTokens, result.outputTokens, modelId);
     } else {

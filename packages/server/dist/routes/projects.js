@@ -32,6 +32,38 @@ router.get('/:id', async (req, res) => {
     }
     res.json(project);
 });
+router.patch('/:id', async (req, res) => {
+    const { defaultModel } = (req.body ?? {});
+    const updates = {};
+    if (defaultModel !== undefined) {
+        let normalized = null;
+        if (typeof defaultModel === 'string') {
+            const trimmed = defaultModel.trim();
+            if (trimmed === '' || trimmed.toLowerCase() === 'auto') {
+                normalized = null;
+            }
+            else {
+                normalized = trimmed;
+            }
+        }
+        updates.defaultModel = normalized;
+    }
+    if (Object.keys(updates).length === 0) {
+        res.status(400).json({ error: 'No supported fields to update' });
+        return;
+    }
+    const db = getDb();
+    const [updated] = await db
+        .update(schema.projects)
+        .set(updates)
+        .where(eq(schema.projects.id, req.params.id))
+        .returning();
+    if (!updated) {
+        res.status(404).json({ error: 'Project not found' });
+        return;
+    }
+    res.json(updated);
+});
 router.delete('/:id', async (req, res) => {
     const db = getDb();
     const deleted = await db

@@ -5,12 +5,17 @@ export interface Project {
   id: string
   name: string
   squadPath: string
+  defaultModel: string | null
   createdAt: string
 }
 
 export interface CreateProjectInput {
   name: string
   squadPath: string
+}
+
+export interface UpdateProjectInput {
+  defaultModel?: string | null
 }
 
 export function useProjects() {
@@ -25,6 +30,21 @@ export function useProject(id: string) {
     queryKey: ['projects', id],
     queryFn: () => apiFetch<Project>(`/api/projects/${id}`),
     enabled: Boolean(id),
+  })
+}
+
+export function useUpdateProject(id: string) {
+  const queryClient = useQueryClient()
+  return useMutation<Project, Error, UpdateProjectInput>({
+    mutationFn: (input) =>
+      apiFetch<Project>(`/api/projects/${id}`, {
+        method: 'PATCH',
+        body: JSON.stringify(input),
+      }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['projects', id] })
+      void queryClient.invalidateQueries({ queryKey: ['projects'] })
+    },
   })
 }
 

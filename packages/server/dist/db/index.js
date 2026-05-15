@@ -380,6 +380,11 @@ async function bootstrapSchema() {
       ADD COLUMN IF NOT EXISTS github_app_installation_id  TEXT,
       ADD COLUMN IF NOT EXISTS github_app_private_key      TEXT;
 
+    -- Project-level default model (used by auto-resolution chain when neither
+    -- the session nor the agent specifies one). NULL = use built-in fallback.
+    ALTER TABLE projects
+      ADD COLUMN IF NOT EXISTS default_model TEXT;
+
     -- github_sync_log: audit trail for every sync operation
     CREATE TABLE IF NOT EXISTS github_sync_log (
       id           UUID        PRIMARY KEY DEFAULT gen_random_uuid(),

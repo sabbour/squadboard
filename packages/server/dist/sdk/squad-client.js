@@ -1,5 +1,6 @@
 // Agent session runner — SquadClient (ACP) only, no fallbacks.
 import { readFile } from 'node:fs/promises';
+import { resolveModel } from './model-defaults.js';
 /**
  * Extract text from SquadClient.sendAndWait() return value.
  * @github/copilot-sdk returns AssistantMessageEvent:
@@ -32,6 +33,11 @@ function extractOutput(result) {
 export async function createAgentSession(options) {
     const charter = await readFile(options.charterPath, 'utf8')
         .catch(() => `(charter not found at: ${options.charterPath})`);
+    const resolved = resolveModel({
+        sessionModel: options.model,
+        agentModel: options.agentModel ?? null,
+        projectDefaultModel: options.projectDefaultModel ?? null,
+    });
     const token = process.env.GITHUB_TOKEN ?? process.env.SQUADBOARD_GITHUB_TOKEN;
     const { SquadClient } = await import('@bradygaster/squad-sdk/client');
     const client = new SquadClient({
@@ -41,7 +47,7 @@ export async function createAgentSession(options) {
     await client.connect();
     try {
         const session = await client.createSession({
-            model: options.model,
+            model: resolved.model,
             systemMessage: { mode: 'replace', content: charter },
             workingDirectory: options.workspacePath,
         });
@@ -55,6 +61,8 @@ export async function createAgentSession(options) {
             costUsd: '0.000',
             inputTokens,
             outputTokens,
+            resolvedModel: resolved.model,
+            modelResolvedVia: resolved.via,
         };
     }
     finally {

@@ -535,3 +535,18 @@ stepRunsRouter.post('/:id/review', async (req: Request, res: Response) => {
     handleError(res, err);
   }
 });
+
+// ---------------------------------------------------------------------------
+// workflowTemplatesRouter — /api/workflows/templates
+//
+// Read-only catalog of built-in workflow templates (for the "Create workflow"
+// UI). Lives here for simplicity; the templates themselves are static code in
+// `workflows/templates/`.
+// ---------------------------------------------------------------------------
+import { getBuiltinTemplates } from '../workflows/templates/index.js';
+
+export const workflowTemplatesRouter = Router();
+
+workflowTemplatesRouter.get('/', (_req: Request, res: Response) => {
+  res.json({ ok: true, data: getBuiltinTemplates() });
+});

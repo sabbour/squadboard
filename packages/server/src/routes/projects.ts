@@ -43,6 +43,43 @@ router.get('/:id', async (req: Request, res: Response) => {
   res.json(project);
 });
 
+router.patch('/:id', async (req: Request, res: Response) => {
+  const { defaultModel } = (req.body ?? {}) as { defaultModel?: string | null };
+  const updates: Partial<typeof schema.projects.$inferInsert> = {};
+
+  if (defaultModel !== undefined) {
+    let normalized: string | null = null;
+    if (typeof defaultModel === 'string') {
+      const trimmed = defaultModel.trim();
+      if (trimmed === '' || trimmed.toLowerCase() === 'auto') {
+        normalized = null;
+      } else {
+        normalized = trimmed;
+      }
+    }
+    updates.defaultModel = normalized;
+  }
+
+  if (Object.keys(updates).length === 0) {
+    res.status(400).json({ error: 'No supported fields to update' });
+    return;
+  }
+
+  const db = getDb();
+  const [updated] = await db
+    .update(schema.projects)
+    .set(updates)
+    .where(eq(schema.projects.id, req.params.id as string))
+    .returning();
+
+  if (!updated) {
+    res.status(404).json({ error: 'Project not found' });
+    return;
+  }
+
+  res.json(updated);
+});
+
 router.delete('/:id', async (req: Request, res: Response) => {
   const db = getDb();
   const deleted = await db

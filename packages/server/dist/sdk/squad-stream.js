@@ -18,9 +18,10 @@
 import { readFile } from 'node:fs/promises';
 import { eq, sql as drizzleSql } from 'drizzle-orm';
 import { getDb } from '../db/index.js';
-import { liveSessions, liveSessionEvents, agents as agentsTable } from '../db/schema.js';
+import { liveSessions, liveSessionEvents, agents as agentsTable, projects as projectsTable } from '../db/schema.js';
 import { eventBus } from '../realtime/event-bus.js';
 import { estimateCost } from './pricing.js';
+import { resolveModel } from './model-defaults.js';
 /** Read the field from an unknown SDK event without type errors. */
 function pickString(obj, ...keys) {
     if (!obj || typeof obj !== 'object')
@@ -276,6 +277,7 @@ export async function startLiveSession(input) {
     const db = getDb();
     let agentName = input.agentName ?? null;
     let charterPath = input.charterPath ?? null;
+    let agentModel = null;
     if (input.agentId && (!agentName || !charterPath)) {
         const [row] = await db
             .select({ name: agentsTable.name, charterPath: agentsTable.charterPath, model: agentsTable.model })
@@ -284,8 +286,25 @@ export async function startLiveSession(input) {
         if (row) {
             agentName = agentName ?? row.name;
             charterPath = charterPath ?? row.charterPath;
+            agentModel = row.model ?? null;
         }
     }
+    else if (input.agentId) {
+        const [row] = await db
+            .select({ model: agentsTable.model })
+            .from(agentsTable)
+            .where(eq(agentsTable.id, input.agentId));
+        agentModel = row?.model ?? null;
+    }
+    const [projectRow] = await db
+        .select({ defaultModel: projectsTable.defaultModel })
+        .from(projectsTable)
+        .where(eq(projectsTable.id, input.projectId));
+    const resolved = resolveModel({
+        sessionModel: input.model,
+        agentModel,
+        projectDefaultModel: projectRow?.defaultModel ?? null,
+    });
     const charter = charterPath
         ? await readFile(charterPath, 'utf8').catch(() => `(charter not found at: ${charterPath})`)
         : 'You are a Squad agent helping the user inside Squadboard. Be concise and helpful.';
@@ -297,7 +316,7 @@ export async function startLiveSession(input) {
         agentName,
         title: input.title ?? summariseTitle(input.prompt),
         status: 'active',
-        model: input.model ?? null,
+        model: resolved.model,
     })
         .returning();
     if (!created)
@@ -312,7 +331,7 @@ export async function startLiveSession(input) {
     let session;
     try {
         session = await client.createSession({
-            ...(input.model ? { model: input.model } : {}),
+            model: resolved.model,
             streaming: true,
             systemMessage: { mode: 'replace', content: charter },
             workingDirectory: input.workspacePath,
@@ -340,13 +359,14 @@ export async function startLiveSession(input) {
         projectId: input.projectId,
         client,
         session,
-        model: input.model ?? null,
+        model: resolved.model,
     });
     runningSessions.set(created.id, running);
     await running.publishLifecycle('session.started', {
         title: created.title,
         agentName,
-        model: input.model,
+        model: resolved.model,
+        modelResolvedVia: resolved.via,
         sdkSessionId: session.sessionId,
     });
     // Fire-and-forget: surface failures via session.error event.

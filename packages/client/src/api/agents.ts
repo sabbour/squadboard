@@ -112,3 +112,23 @@ export function useUpdateCharter(projectId: string, agentId: string) {
     },
   })
 }
+
+export interface ModelInfo {
+  id: string
+  label: string
+  vendor: 'anthropic' | 'openai' | 'google' | 'other'
+  tier: 'fast' | 'balanced' | 'powerful'
+  multiplier?: number
+  contextWindow?: number
+  supportsVision?: boolean
+  supportsReasoningEffort?: boolean
+  policyState?: 'enabled' | 'disabled' | 'unconfigured'
+}
+
+export function useModels() {
+  return useQuery<ModelInfo[]>({
+    queryKey: ['models'],
+    queryFn: () => apiFetch<Envelope<ModelInfo[]>>('/api/models').then(unwrap),
+    staleTime: 5 * 60 * 1000,
+  })
+}

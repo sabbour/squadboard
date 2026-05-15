@@ -1,10 +1,17 @@
 import { useState } from 'react'
 import { useParams } from 'react-router'
-import { useProject } from '../api/projects.ts'
+import { useProject, useUpdateProject } from '../api/projects.ts'
+import { useModels } from '../api/agents.ts'
 import { useBudget } from '../api/costs.ts'
 import { apiFetch } from '../api/client.ts'
 import { McpConfigPanel } from '../components/settings/McpConfigPanel.tsx'
 import { ReviewPolicySection } from '../components/settings/ReviewPolicySection.tsx'
+import {
+  Dropdown,
+  Option,
+  Field,
+  Spinner,
+} from '@fluentui/react-components'
 import {
   TextDescription20Regular,
   PlugConnected20Regular,
@@ -169,6 +176,93 @@ function BudgetSection({ projectId }: { projectId: string }) {
   )
 }
 
+function DefaultModelSection({
+  projectId,
+  current,
+}: {
+  projectId: string
+  current: string | null
+}) {
+  const { data: models, isLoading } = useModels()
+  const update = useUpdateProject(projectId)
+  const [pending, setPending] = useState<string | null>(current)
+  const [saved, setSaved] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  const value = pending ?? '__auto__'
+
+  async function handleChange(next: string | null) {
+    setPending(next)
+    setError(null)
+    try {
+      await update.mutateAsync({ defaultModel: next })
+      setSaved(true)
+      setTimeout(() => setSaved(false), 2500)
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : 'Save failed')
+    }
+  }
+
+  return (
+    <div
+      style={{
+        background: 'var(--surface)',
+        border: '1px solid var(--border)',
+        borderRadius: '8px',
+        padding: '14px 16px',
+        display: 'flex',
+        flexDirection: 'column',
+        gap: '8px',
+        maxWidth: '480px',
+        marginTop: '12px',
+      }}
+    >
+      <label
+        style={{
+          fontSize: '11px',
+          color: 'var(--text-muted)',
+          textTransform: 'uppercase',
+          letterSpacing: '0.05em',
+          fontWeight: 600,
+        }}
+      >
+        Default model
+      </label>
+      <p style={{ fontSize: '11px', color: 'var(--text-muted)', margin: 0 }}>
+        Used when an agent's model is "auto" and the request doesn't specify one.
+        Resolution chain: <em>session → agent → project → built-in fallback</em>.
+      </p>
+      {isLoading ? (
+        <Spinner size="tiny" label="Loading models…" />
+      ) : (
+        <Field>
+          <Dropdown
+            value={value === '__auto__' ? 'Auto (use built-in fallback)' : value}
+            selectedOptions={[value]}
+            onOptionSelect={(_, data) => {
+              const next = data.optionValue === '__auto__' ? null : data.optionValue ?? null
+              void handleChange(next)
+            }}
+          >
+            <Option value="__auto__">Auto (use built-in fallback)</Option>
+            {(models ?? []).map((m) => (
+              <Option key={m.id} value={m.id} text={m.label}>
+                {m.label}
+              </Option>
+            ))}
+          </Dropdown>
+        </Field>
+      )}
+      {saved && (
+        <p style={{ fontSize: '11px', color: '#3fb950', margin: 0 }}>✓ Saved</p>
+      )}
+      {error && (
+        <p style={{ fontSize: '11px', color: '#f85149', margin: 0 }}>{error}</p>
+      )}
+    </div>
+  )
+}
+
 export default function Settings() {
   const { id: projectId = '' } = useParams<{ id: string }>()
   const { data: project, isLoading, isError } = useProject(projectId)
@@ -275,6 +369,7 @@ export default function Settings() {
                   Squad path: <code style={{ fontFamily: 'monospace', color: 'var(--text-muted)' }}>{project.squadPath}</code>
                 </p>
               </div>
+              <DefaultModelSection projectId={projectId} current={project.defaultModel ?? null} />
             </>
           )}
 
