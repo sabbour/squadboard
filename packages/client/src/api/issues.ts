@@ -1,7 +1,9 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { apiFetch } from './client.ts'
 
-export type ColumnId = 'backlog' | 'todo' | 'in_progress' | 'in_review' | 'done'
+// Widened from a 5-value union to string — columns are now per-project and dynamic.
+// Kept as a named alias for call-site clarity and migration safety.
+export type ColumnId = string
 
 export interface Label {
   id: string
