@@ -123,3 +123,9 @@ Heartbeat refactor (r2, commit ea091186): 6-sweep registry with 30s/5s intervals
 
 **Next:** Await Wave 6 spawn for implementation orchestration.
 
+---
+
+- r5 (2026-05-15T10:26:30.000-07:00) — added Office/Parks&Rec/Mad Men/Succession/SiliconValley universes + 11 non-tech roles with role-emoji mappings + non-tech routing table. Decision in inbox.
+
+- **2026-05-15 Non-tech Role Set Narrowed (Wave 7):** Removed HR, Legal, Operations, Finance from supported non-tech roles per Ahmed's scope decision. Squad's non-tech role coverage now: PM, Designer, Founder, Sales, Marketing, Customer Success, Research (7 roles, down from 11). Updated surfaces: squad.agent.md (4 emoji rows + Donna example), routing.md (4 work-type rows + 2 cross-functional rules). casting-reference.md untouched (no role-fit hints present). Commit: 14b61f37. **Companion Wave 7 work:** Kobayashi trimmed each local universe to 10 characters (Office 15→10, Simpsons 14→10, Parks&Rec 14→10, Seinfeld stayed at 10). Total: 53→40 characters. Both role narrowing and universe trim are paired Ahmed directives for scope reduction on the non-tech surface area. Orchestration log: `.squad/orchestration-log/2026-05-15T17-50-29Z-mcmanus.md`.
+

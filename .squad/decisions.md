@@ -2,6 +2,171 @@
 
 ## Active Decisions
 
+# 2026-05-15T17:52:56Z: User directive — Cap each local universe at 10 characters
+**By:** Ahmed Sabbour (via Copilot)
+**What:** Reduce the local universe registry (`packages/server/src/services/local-universes.ts`) so each universe has at most 10 characters. Keep the most popular/iconic characters; drop peripheral or recurring-guest characters.
+**Why:** Universe trim — preserve the recognisable core, reduce noise in the Hire Team picker.
+
+**Per-universe targets:**
+- The Office: 15 → 10 (drop 5)
+- Seinfeld: 10 → 10 (already at cap, no change)
+- The Simpsons: 14 → 10 (drop 4)
+- Parks & Recreation: 14 → 10 (drop 4)
+
+Total: 53 → 40 characters.
+
+**Constraint:** After trimming, each universe must still cover all 9 SDK roles (`lead | developer | tester | prompt-engineer | security | devops | designer | scribe | reviewer`) across its remaining `preferredRoles` arrays so best-fit casting still produces complete teams.
+
+---
+
+# 2026-05-15T17:50:29Z: User directive — Drop 4 non-tech roles
+**By:** Ahmed Sabbour (via Copilot)
+**What:** Remove HR, Legal, Operations, and Finance from the non-tech role set. Squad's non-tech role coverage is now: PM, Designer, Founder, Sales, Marketing, Customer Success, Research (7 roles, not 11).
+**Why:** User scope narrowing — these 4 roles were added in McManus r5 (`c2dd1b53`) but Ahmed has decided they are out of scope for Squad's supported non-tech coverage.
+
+**Implementation surfaces affected:**
+- `.github/agents/squad.agent.md` — role-emoji table: drop the 4 rows (👥 HR, ⚖️ Legal, 💰 Finance, 📦 Operations); also drop the Donna 📦 example since it referenced Operations
+- `.squad/routing.md` — "Non-tech Work Types" table: drop the 4 rows; cross-functional rules: drop rule #4 (Legal gates external commitments) and rule #5 (Finance gates spend over threshold); renumber remaining rules
+- `.squad/templates/casting-reference.md` — drop any HR/Legal/Operations/Finance role-fit hints if present
+
+**Note:** Character `preferredRoles` arrays in `packages/server/src/services/local-universes.ts` are NOT affected — those use SDK role enums (`lead | developer | tester | prompt-engineer | security | devops | designer | scribe | reviewer`), not the non-tech role labels being removed.
+
+---
+
+# Non-tech Role Set Narrowed (2026-05-15)
+
+## Decision
+
+Narrowed Squad's supported non-tech role coverage from **11 roles to 7 roles**.
+
+**Removed (4):**
+- HR / People / Recruiting / Talent
+- Legal / Counsel / Compliance
+- Operations / Ops / Program Manager
+- Finance / Accounting / Controller
+
+**Remaining (7):**
+- PM / Product Manager / Product Owner
+- Designer / UX Designer / Visual Designer
+- Founder / CEO / Executive
+- Sales / Account / Business Development
+- Marketing / Growth / Comms
+- Customer Success / Support / Account Management
+- Research / User Research / Data Science
+
+## Why
+
+Ahmed Sabbour's scope narrowing decision (2026-05-15). Non-tech role coverage scope reduced to core revenue/engagement/discovery functions. Compliance and operations functions deferred.
+
+## What Changed
+
+### `.github/agents/squad.agent.md`
+
+**Standard role emoji mapping table:**
+- Removed 4 rows: Finance (💰), HR (👥), Legal (⚖️), Operations (📦)
+
+**Examples (non-tech roles) block:**
+- Changed example from `donna` (📦 Operations) to `chris` (🎧 Customer Success)
+- Both from Parks & Rec universe; maintains example variety
+
+### `.squad/routing.md`
+
+**Non-tech Work Types table:**
+- Removed 4 rows: Finance, HR, Legal, Operations
+
+**Cross-functional rules (numbered list):**
+- Removed rule #4 (Legal gates contracts/external commitments)
+- Removed rule #5 (Finance gates spending decisions)
+- Renumbered remaining 3 rules (1, 2, 3) sequentially
+
+### `.squad/templates/casting-reference.md`
+
+- No changes — file contains no role-fit hints or character examples mapping to removed roles
+- Succession universe's "finance" tag is a thematic resonance signal, not a role assignment
+
+## Commit
+
+```
+14b61f37 chore(squad): remove HR/Legal/Operations/Finance from non-tech role set
+```
+
+## Next
+
+- Any future non-tech requests in HR/Legal/Operations/Finance scope default to manual routing (user specifies handler or task routes to PM/Founder for prioritization)
+- If these roles are re-added, reverse this decision and restore squad.agent.md / routing.md surfaces
+
+---
+
+# Decision: Local universe character cap = 10
+
+**Author:** Kobayashi (Squad SDK Integrator)
+**Date:** 2026-05-15
+**Commit:** `54f2dc5e`
+**File touched:** `packages/server/src/services/local-universes.ts` (data-only; no API change)
+
+## What
+
+Cap each local universe in `LOCAL_UNIVERSES` at exactly **10 characters**. Total roster shrinks from **53 → 40** across 4 universes.
+
+| Universe              | Before | After | Dropped (count) |
+|-----------------------|-------:|------:|-----------------|
+| The Office            |     15 |    10 | 5               |
+| Seinfeld              |     10 |    10 | 0 (already at cap) |
+| The Simpsons          |     14 |    10 | 4               |
+| Parks and Recreation  |     14 |    10 | 4               |
+| **Total**             | **53** | **40** | **13**         |
+
+## Why
+
+Ahmed's preference (2026-05-15): the Hire Team picker should surface the popular/iconic core of each show, not the long tail of recurring-guest characters. Keeping the picker tight reduces decision fatigue for the user choosing a hire and keeps each universe's voice consistent (lead-cast tone, no third-tier dilution).
+
+## Dropped characters
+
+- **The Office (5):** Phyllis Vance, Ryan Howard, Toby Flenderson, Creed Bratton, Meredith Palmer
+- **The Simpsons (4):** Chief Wiggum, Principal Skinner, Professor Frink, Milhouse Van Houten
+- **Parks and Recreation (4):** Mark Brendanawicz, Jean-Ralphio Saperstein, Tammy Swanson, Mona-Lisa Saperstein
+
+No keep/drop swaps were exercised — Ahmed's recommended drops aligned with my judgment on popularity and on SDK role-coverage feasibility.
+
+## Final rosters (the 40)
+
+- **The Office (10):** Michael Scott, Jim Halpert, Pam Beesly, Dwight Schrute, Andy Bernard, Stanley Hudson, Kevin Malone, Angela Martin, Oscar Martinez, Kelly Kapoor
+- **Seinfeld (10):** Jerry Seinfeld, George Costanza, Elaine Benes, Cosmo Kramer, Newman, Frank Costanza, Estelle Costanza, Susan Ross, J. Peterman, David Puddy
+- **The Simpsons (10):** Homer Simpson, Marge Simpson, Bart Simpson, Lisa Simpson, Mr. Burns, Smithers, Moe Szyslak, Apu Nahasapeemapetilon, Krusty the Clown, Ned Flanders
+- **Parks and Recreation (10):** Leslie Knope, Ron Swanson, Tom Haverford, Ann Perkins, April Ludgate, Andy Dwyer, Ben Wyatt, Chris Traeger, Donna Meagle, Jerry Gergich
+
+## SDK role coverage — verified per universe
+
+Hard requirement: the union of `preferredRoles` across each universe's 10 characters must contain all 9 `AgentRole` values: `lead | developer | tester | prompt-engineer | security | devops | designer | scribe | reviewer`.
+
+| Universe       | lead | developer | tester | prompt-engineer | security | devops | designer | scribe | reviewer |
+|----------------|:----:|:---------:|:------:|:---------------:|:--------:|:------:|:--------:|:------:|:--------:|
+| The Office     | ✅   | ✅        | ✅     | ✅              | ✅       | ✅     | ✅       | ✅     | ✅       |
+| Seinfeld       | ✅   | ✅        | ✅     | ✅              | ✅       | ✅     | ✅       | ✅     | ✅       |
+| The Simpsons   | ✅   | ✅        | ✅     | ✅              | ✅       | ✅     | ✅       | ✅     | ✅       |
+| Parks and Rec  | ✅   | ✅        | ✅     | ✅              | ✅       | ✅     | ✅       | ✅     | ✅       |
+
+All 4 universes pass the 9-role coverage check after the trim.
+
+## What changes
+
+- The Hire Team picker (data-driven from `castingRouter.listUniverses()`) will render 10 cards per local universe instead of 15 / 10 / 14 / 14.
+- `LocalUniverseId`, `LocalUniverseTemplate`, `LocalUniverseCharacter`, `LOCAL_UNIVERSES`, `getLocalUniverseIds()`, `getLocalUniverse()`, `isLocalUniverseId()` — all unchanged in shape. Pure data trim.
+
+## What stays the same
+
+- `LocalUniverseId` union: still `'the-office' | 'seinfeld' | 'the-simpsons' | 'parks-and-rec'`.
+- SDK universes (`usual-suspects`, `oceans-eleven`) unaffected — they're owned by `@bradygaster/squad-sdk/casting`, not by this registry.
+- `casting-engine.ts` dispatch glue, `hire-formulator.ts` prompt, `packages/client/src/api/agents.ts` `CastingUniverseId` — none touched (per directive scope).
+- Coordinator-side casting templates (`.squad/templates/casting-reference.md`) — separate code path, not in scope.
+
+## Verification performed
+
+1. `npx tsc --noEmit` from `packages/server` — clean for `local-universes.ts`. (Two pre-existing errors remain in `conjure-classifier.ts` — `ResolveModelResult.modelId` / `.source` — unrelated to this change.)
+2. `grep -cE "^        name: '"` returns **40**; per-universe `awk` count returns 10/10/10/10.
+3. Recursive grep across `packages/**/*.ts*` for each of the 13 dropped names — **no stale references**. Hire Team UI is purely data-driven from the API, so no client-side string fix-ups required.
+
+---
 
 # Fenster Typography Canon
 **Date:** 2026-05-15

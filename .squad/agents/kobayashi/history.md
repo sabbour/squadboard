@@ -93,3 +93,9 @@ Three tiers (first match wins):
 
 
 **Status:** COMPLETE — API stable for client. Ready for Keyser Batch B.
+
+---
+
+## Learnings
+
+- **2026-05-15 Wave 7 — Universe Trim (2026-05-15T17:52:56Z)** — Trimmed 4 local universes to 10 chars each (53 → 40 total) per Ahmed's scope preference. Dropped peripheral characters: Office (Phyllis, Ryan, Toby, Creed, Meredith), Simpsons (Wiggum, Skinner, Frink, Milhouse), Parks & Rec (Mark, Jean-Ralphio, Tammy, Mona-Lisa). Seinfeld already at cap. Verified all 9 SDK roles (`lead | developer | tester | prompt-engineer | security | devops | designer | scribe | reviewer`) still covered in each universe via `preferredRoles` union scan; no swap-overrides needed. `tsc --noEmit` clean for `local-universes.ts` (only pre-existing unrelated errors in `conjure-classifier.ts`). No callsites referenced dropped names by string. Commit: `54f2dc5e`. **Companion Wave 7 work:** McManus narrowed non-tech roles from 11 to 7 (removed HR, Legal, Operations, Finance). Both role narrowing and universe trim are paired Ahmed directives for scope reduction on the non-tech surface area. Orchestration log: `.squad/orchestration-log/2026-05-15T17-52-56Z-kobayashi.md`.
