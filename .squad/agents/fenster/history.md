@@ -80,3 +80,27 @@
 
 **Status:** COMPLETE — no follow-up needed for Phase 19. Ready for next wave.
 
+
+---
+
+## Wave 6 (2026-05-15T10:18:00Z) — fenster-4 (retry after fenster-3 timeout)
+
+**Run:** fenster-4  
+**Task:** Fluent2 redesign of Ceremonies list + New Ceremony create flow
+
+**Note:** fenster-3 completed all code changes in the working tree but timed out before committing. This wave is a clean commit pass — verified TS, then committed.
+
+**Commits:**
+- `c07ad75d` — `fix(ui): migrate Ceremonies list to Fluent2 (DataGrid + PageHeader + Badges)` — CeremonyList.tsx + CeremonyBadges.tsx
+- `2974fbb2` — `fix(ui): tighten New Ceremony create flow (Conjure-first, hide advanced)` — CeremonyEditor.tsx
+
+**Key decisions:**
+- Pattern A (Conjure-first) for /new create flow
+- Hand-rolled table → Fluent DataGrid; plain div eyebrow → PageHeader
+- Trigger column: TriggerBadge; Kind column: KindBadge (both in CeremonyBadges.tsx)
+- Advanced accordion: Description + Kind
+- Fixed unclosed JSX fragment bug + unused Dismiss16Regular import
+
+**Decision doc:** `.squad/decisions/inbox/fenster-ceremony-pages-fluent2.md`
+
+**Status:** COMPLETE — TypeScript clean, two commits landed.
