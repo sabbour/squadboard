@@ -8,9 +8,9 @@
 
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
-import { access, writeFile, readFile, unlink, mkdir } from 'node:fs/promises';
+import { access, writeFile, readFile, unlink, mkdir, stat } from 'node:fs/promises';
 import { constants } from 'node:fs';
-import { join } from 'node:path';
+import { basename, isAbsolute, join, resolve } from 'node:path';
 import { homedir } from 'node:os';
 import { randomUUID } from 'node:crypto';
 import { eq } from 'drizzle-orm';
@@ -49,6 +49,109 @@ function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
       setTimeout(() => reject(new Error(`Timed out after ${ms}ms`)), ms),
     ),
   ]);
+}
+
+/**
+ * Resolve a stored `projects.path` to the actual `.squad/` directory on disk.
+ *
+ * Historical inconsistency in how the path is stored:
+ *   - Some projects store the **project root** (parent of `.squad/`).
+ *   - Some projects store the **`.squad/` directory itself** (e.g. the `foo`
+ *     repo, where `path = /…/foo/.squad`).
+ *
+ * The schema comment claims "path to .squad/ directory" while several
+ * services (sdk-state, project-squad) treat it as the .squad/ dir directly.
+ * Diagnostics used to blindly `join(path, '.squad')`, which double-nested
+ * for the second convention and made every collection check fail.
+ *
+ * This resolver is tolerant of both layouts:
+ *   1. Resolve to absolute (so a relative `projects.path` doesn't pivot off
+ *      the server's CWD silently).
+ *   2. If `basename === '.squad'` AND that dir exists → use as-is.
+ *   3. Else if `<path>/.squad/` exists → use that.
+ *   4. Else → return `{ ok: false, reason }` so the caller can surface ONE
+ *      clear "project path is wrong" diagnostic instead of N cascading
+ *      "missing collection" errors.
+ */
+export interface ResolvedSquadDir {
+  ok: true;
+  /** Absolute path to the project root (parent of `.squad/`). */
+  projectRoot: string;
+  /** Absolute path to the `.squad/` directory. */
+  squadDir: string;
+  /** Whether `projects.path` itself pointed at `.squad/` (vs the parent). */
+  storedAsSquadDir: boolean;
+}
+
+export interface UnresolvedSquadDir {
+  ok: false;
+  /** Absolute path we resolved `projects.path` to. */
+  resolvedPath: string;
+  /** Human-readable reason the squad dir could not be located. */
+  reason: string;
+}
+
+export async function resolveSquadDir(
+  storedPath: string,
+): Promise<ResolvedSquadDir | UnresolvedSquadDir> {
+  const absolute = isAbsolute(storedPath) ? storedPath : resolve(storedPath);
+
+  let exists = false;
+  let isDir = false;
+  try {
+    const st = await stat(absolute);
+    exists = true;
+    isDir = st.isDirectory();
+  } catch {
+    /* fall through */
+  }
+
+  if (!exists) {
+    return {
+      ok: false,
+      resolvedPath: absolute,
+      reason: `project path does not exist: ${absolute}`,
+    };
+  }
+  if (!isDir) {
+    return {
+      ok: false,
+      resolvedPath: absolute,
+      reason: `project path is not a directory: ${absolute}`,
+    };
+  }
+
+  // Convention A: stored path IS the .squad/ directory itself.
+  if (basename(absolute) === '.squad') {
+    return {
+      ok: true,
+      projectRoot: resolve(absolute, '..'),
+      squadDir: absolute,
+      storedAsSquadDir: true,
+    };
+  }
+
+  // Convention B: stored path is the project root; .squad/ lives under it.
+  const nested = join(absolute, '.squad');
+  try {
+    const st = await stat(nested);
+    if (st.isDirectory()) {
+      return {
+        ok: true,
+        projectRoot: absolute,
+        squadDir: nested,
+        storedAsSquadDir: false,
+      };
+    }
+  } catch {
+    /* fall through */
+  }
+
+  return {
+    ok: false,
+    resolvedPath: absolute,
+    reason: `no .squad/ directory found at ${absolute} or ${nested}`,
+  };
 }
 
 // ─── Individual checks ────────────────────────────────────────────────────────
@@ -164,11 +267,23 @@ async function checkSquadDirShape(projectId: string): Promise<DiagnosticResult> 
     }
 
     const projectPath = rows[0]!.path;
-    const squadDir = join(projectPath, '.squad');
+    const resolved = await resolveSquadDir(projectPath);
 
-    // Check .squad/ exists
-    await access(squadDir, constants.F_OK);
+    // Single clear failure when the registered project path itself is wrong.
+    // Cascading "missing collection" errors mask the actual problem.
+    if (!resolved.ok) {
+      return {
+        id: 'squad_dir.shape',
+        label: '.squad/ directory shape',
+        status: 'fail',
+        detail: `${resolved.reason} (projects.path = "${projectPath}")`,
+        remediation:
+          'Update the project record so `path` points to either the project root (containing .squad/) or the .squad/ directory itself.',
+        durationMs: Date.now() - start,
+      };
+    }
 
+    const { squadDir } = resolved;
     const requiredCollections = ['agents', 'log'];
     const requiredFiles = ['routing.md', 'decisions.md'];
     const issues: string[] = [];
@@ -194,7 +309,7 @@ async function checkSquadDirShape(projectId: string): Promise<DiagnosticResult> 
         id: 'squad_dir.shape',
         label: '.squad/ directory shape',
         status: 'warn',
-        detail: issues.join('; '),
+        detail: `${issues.join('; ')} (resolved squad dir: ${squadDir})`,
         durationMs: Date.now() - start,
       };
     }
@@ -203,7 +318,7 @@ async function checkSquadDirShape(projectId: string): Promise<DiagnosticResult> 
       id: 'squad_dir.shape',
       label: '.squad/ directory shape',
       status: 'ok',
-      detail: `All required .squad/ collections present at ${projectPath}`,
+      detail: `All required .squad/ collections present at ${squadDir}`,
       durationMs: Date.now() - start,
     };
   } catch (err) {
@@ -381,7 +496,12 @@ async function checkDiskWriteable(projectId?: string): Promise<DiagnosticResult>
         .from(schema.projects)
         .where(eq(schema.projects.id, projectId));
       if (rows.length > 0) {
-        targets.push({ label: '.squad/', dir: join(rows[0]!.path, '.squad') });
+        const resolved = await resolveSquadDir(rows[0]!.path);
+        if (resolved.ok) {
+          targets.push({ label: '.squad/', dir: resolved.squadDir });
+        }
+        // If resolution failed, skip the squad-dir target — checkSquadDirShape
+        // will already surface the actionable error; no need to double-report.
       }
     } catch {
       // ignore — we still check the global target
