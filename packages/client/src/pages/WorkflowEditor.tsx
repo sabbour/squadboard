@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router'
 import { useWorkflow, useCreateWorkflow, useUpdateWorkflow } from '../api/workflows.ts'
 import WorkflowStepFlow, { type WorkflowStep } from '../components/workflows/WorkflowStepFlow.tsx'
 import TemplatePicker from '../components/workflows/TemplatePicker.tsx'
+import { ApproveStepPolicyInspector } from '../components/workflows/ApproveStepPolicyInspector.tsx'
 import { ClipboardPaste20Regular, Warning20Regular, Checkmark20Regular } from '@fluentui/react-icons'
 
 // ---------------------------------------------------------------------------
@@ -450,8 +451,32 @@ export default function WorkflowEditor() {
           >
             Step preview
           </div>
-          <div style={{ flex: 1, overflow: 'auto', padding: '24px 0' }}>
-            <WorkflowStepFlow steps={steps} />
+          <div style={{ flex: 1, overflow: 'auto' }}>
+            <div style={{ padding: '24px 0' }}>
+              <WorkflowStepFlow steps={steps} />
+            </div>
+            <div
+              style={{
+                padding: '8px 12px',
+                borderTop: '1px solid var(--border)',
+                borderBottom: '1px solid var(--border)',
+                fontSize: '11px',
+                color: 'var(--text-muted)',
+                fontWeight: 600,
+                textTransform: 'uppercase',
+                letterSpacing: '0.05em',
+                background: 'var(--bg)',
+              }}
+            >
+              Review policies
+            </div>
+            {projectId && (
+              <ApproveStepPolicyInspector
+                projectId={projectId}
+                yaml={yaml}
+                onChangeYaml={handleYamlChange}
+              />
+            )}
           </div>
         </div>
       </div>
