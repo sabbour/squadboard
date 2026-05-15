@@ -42,7 +42,7 @@ const columns: TableColumnDefinition<Ceremony>[] = [
     columnId: 'name',
     renderHeaderCell: () => 'Name',
     renderCell: (item) => (
-      <TableCellLayout style={{ fontWeight: 600 }}>{item.name}</TableCellLayout>
+      <TableCellLayout style={{ fontWeight: tokens.fontWeightSemibold }}>{item.name}</TableCellLayout>
     ),
   }),
   createTableColumn<Ceremony>({
@@ -181,7 +181,7 @@ export default function CeremonyList() {
       />
 
       {!hasCeremonies ? (
-        /* Empty state */
+        /* Empty state — Fluent2 page padding (24px both axes) */
         <div
           style={{
             flex: 1,
@@ -190,7 +190,10 @@ export default function CeremonyList() {
             alignItems: 'center',
             justifyContent: 'center',
             gap: tokens.spacingVerticalM,
-            padding: tokens.spacingVerticalXXL,
+            paddingTop: tokens.spacingVerticalXXL,
+            paddingBottom: tokens.spacingVerticalXXL,
+            paddingLeft: tokens.spacingHorizontalXXL,
+            paddingRight: tokens.spacingHorizontalXXL,
           }}
         >
           <Subtitle1 style={{ color: tokens.colorNeutralForeground1 }}>
@@ -209,8 +212,17 @@ export default function CeremonyList() {
           </Button>
         </div>
       ) : (
-        /* DataGrid */
-        <div style={{ flex: 1, overflow: 'auto' }}>
+        /* DataGrid — Fluent2 page padding so the list breathes */
+        <div
+          style={{
+            flex: 1,
+            overflow: 'auto',
+            paddingTop: tokens.spacingVerticalL,
+            paddingBottom: tokens.spacingVerticalXXL,
+            paddingLeft: tokens.spacingHorizontalXXL,
+            paddingRight: tokens.spacingHorizontalXXL,
+          }}
+        >
           <DataGrid
             items={ceremonies}
             columns={columns}
