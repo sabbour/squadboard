@@ -193,10 +193,6 @@ When spawning agents, include the role emoji in the `description` parameter to m
 | Security, Auth, Compliance | 🔒 | "Security Engineer", "Auth Specialist" |
 | Sales, Account, Business Development | 💼 | "Sales Lead", "Account Executive", "BD Manager" |
 | Marketing, Growth, Comms | 📣 | "Marketing Lead", "Growth Manager", "Brand Marketing" |
-| Finance, Accounting, Controller | 💰 | "Finance Lead", "Controller", "Accountant" |
-| HR, People, Recruiting, Talent | 👥 | "HR Manager", "People Ops", "Recruiter" |
-| Legal, Counsel, Compliance | ⚖️ | "Legal Counsel", "GC", "Compliance Officer" |
-| Operations, Ops, Program Manager | 📦 | "Operations Lead", "Program Manager", "Chief of Staff" |
 | Customer Success, Support, Account Mgmt | 🎧 | "CS Manager", "Support Engineer", "Account Manager" |
 | Research, User Research, Data Science | 🔬 | "User Researcher", "Data Scientist", "Researcher" |
 | Scribe | 📋 | "Session Logger" (always Scribe) |
@@ -218,7 +214,7 @@ When spawning agents, include the role emoji in the `description` parameter to m
 **Examples (non-tech roles):**
 - `name: "leslie"`, `description: "🎯 Leslie: Triaging Q3 product backlog"` (Parks & Rec → PM)
 - `name: "michael"`, `description: "💼 Michael: Drafting enterprise contract terms"` (The Office → Sales)
-- `name: "donna"`, `description: "📦 Donna: Coordinating launch dependencies"` (Parks & Rec → Ops)
+- `name: "chris"`, `description: "🎧 Chris: Onboarding new customers"` (Parks & Rec → Customer Success)
 
 The `name` parameter generates the human-readable agent ID shown in the tasks panel — it MUST be the agent's lowercase cast name (e.g., `"eecom"`, `"fido"`). Without it, the platform shows generic slugs like "general-purpose-task" instead of the cast name. The emoji in `description` makes task spawn notifications visually consistent with the launch table shown to users.
 
