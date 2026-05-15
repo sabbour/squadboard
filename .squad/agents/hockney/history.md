@@ -137,3 +137,36 @@ Anchor filter fix (r3, commit 4ecb5525): `resolveAnchorIssue()` now excludes fan
 **TypeScript:** `npx tsc --noEmit` → only 2 pre-existing conjure-classifier.ts errors. Zero new errors from this change.
 
 **Decision filed:** `.squad/decisions/inbox/hockney-phase19-backend.md`
+
+---
+
+## 2026-05-15 — Phase 12 Reframe: Agent-Centric Flow Data API
+
+**Task:** Build the data API powering the new agent-centric Flow page. Per Ahmed's request: "I want the flow page to be agent centric, see instances of agents, what are they active on, lineage of what triggered them, visually."
+
+**Batch A** — `ce01a382` — Schema queries + 3 routes + service
+**Batch B** — `9a9fb8a3` — WS event hooks (workflow-runner, stepper, fan-out, consult-stream)
+
+**Scope:**
+- `services/flow-agents.ts` (new): `getFlowAgents()` + `getFlowLineage()`. Uses CTE-based UNION ALL query across 4 data sources (workflow_runs, issue_runs, live_sessions, consult_sessions). LATERAL join for current step attribution. Trailing-24h cap of 50 completed rows per source type.
+- `routes/flow.ts`: Added `GET /agents`, `GET /lineage`, `GET /graph` sub-routes to existing `projectFlowRouter`. Original `GET /flow` kanban payload unchanged.
+- `realtime/event-bus.ts`: Added `FlowEventType` union, `emitFlowEvent()`, and `emitFlowHeartbeat()` (in-memory 1/s throttle per instanceId).
+- `engine/workflow-runner.ts`: Surgical adds — `flow.instance.started` on `createWorkflowRun`, heartbeat/ended in `advanceToNextStep`, ended in `handleAgentRunStep` failure path. Added `getProjectIdForWorkflowRun()` internal helper.
+- `engine/stepper.ts`: `flow.instance.started` before SDK call, heartbeat in DB timer, ended on success and both failure paths.
+- `engine/fan-out.ts`: `flow.lineage.edge.created` for each child run after `materializeFanOut()` commits.
+- `sdk/consult-stream.ts`: `flow.instance.started` after `startConsultSession`, `flow.instance.ended` in `endRunningConsult`.
+
+**Route count:** 3 new endpoints.
+
+**Data gaps logged in decision doc:**
+- `workflow_runs` with no step agent and no issue assignee excluded silently.
+- `consult_sessions` mode='model' excluded (no agentId).
+- No issue_run→issue_run direct lineage (schema gap).
+- No workflow_run→consult_session cross-source edges (no FK).
+- `parentInstanceId` not emitted in flow.instance.started for issue_runs (deferred).
+
+**TypeScript:** `npx tsc --noEmit` → only 2 pre-existing conjure-classifier.ts errors. Zero new errors.
+
+**Smoke test:** Dev server started, all 3 new endpoints returned `{ ok: true, data: {...} }` with correct shapes. Project "foo" returned 11 agents, fenster with 1 consult_session instance, hockney with 1 issue_run instance. Original `/flow` returned 5 columns + activeRunsCount intact.
+
+**Decision filed:** `.squad/decisions/inbox/hockney-flow-agent-api.md`
