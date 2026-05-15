@@ -220,9 +220,19 @@ export function useDiscardProposal(sessionId: string) {
 export function usePromoteConsult(sessionId: string) {
   const qc = useQueryClient()
   return useMutation<
-    { kind: 'inbox' | 'issue' | 'ceremony'; artifact: Record<string, unknown> },
+    {
+      kind: 'inbox' | 'issue' | 'ceremony'
+      artifact: Record<string, unknown>
+      summarised?: boolean
+      modelUsed?: string
+    },
     Error,
-    { kind: 'inbox' | 'issue' | 'ceremony'; projectId?: string; columnSlug?: string }
+    {
+      kind: 'inbox' | 'issue' | 'ceremony'
+      projectId?: string
+      columnSlug?: string
+      rawTranscript?: boolean
+    }
   >({
     mutationFn: (input) =>
       apiFetch(`/api/consult/${sessionId}/promote`, {

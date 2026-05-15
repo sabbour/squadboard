@@ -3,6 +3,7 @@ import { useParams, useNavigate, useSearchParams } from 'react-router'
 import {
   Button,
   Card,
+  Checkbox,
   Dropdown,
   Field,
   Input,
@@ -980,6 +981,7 @@ function PromoteDialog({
   const [kind, setKind] = useState<'inbox' | 'issue' | 'ceremony'>('inbox')
   const [targetProjectId, setTargetProjectId] = useState<string>(projectId ?? '')
   const [columnSlug, setColumnSlug] = useState<string>('backlog')
+  const [rawTranscript, setRawTranscript] = useState<boolean>(false)
   const [error, setError] = useState<string | null>(null)
 
   const projects = projectsQuery.data ?? []
@@ -992,6 +994,7 @@ function PromoteDialog({
         kind,
         projectId: kind === 'inbox' ? (targetProjectId || undefined) : targetProjectId,
         columnSlug: kind === 'issue' ? columnSlug : undefined,
+        rawTranscript,
       })
       const a = r.artifact
       if (kind === 'issue' && a.url) navigate(String(a.url))
@@ -1055,6 +1058,22 @@ function PromoteDialog({
             </Dropdown>
           </Field>
         )}
+        <Field>
+          <Checkbox
+            checked={rawTranscript}
+            onChange={(_, d) => setRawTranscript(Boolean(d.checked))}
+            label={
+              <span>
+                Skip LLM summarisation — promote raw transcript only.{' '}
+                <span style={{ color: tokens.colorNeutralForeground3 }}>
+                  By default, an LLM extracts a clean title and body from the conversation
+                  before promoting; use this if the model is unavailable or you only want
+                  a paper trail.
+                </span>
+              </span>
+            }
+          />
+        </Field>
         {error && <Caption1 style={{ color: tokens.colorPaletteRedForeground1 }}>{error}</Caption1>}
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
           <Button appearance="subtle" onClick={onClose}>Cancel</Button>

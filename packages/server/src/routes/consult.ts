@@ -311,6 +311,7 @@ consultRouter.post('/:sessionId/promote', async (req: Request, res: Response) =>
       kind?: string;
       projectId?: string;
       columnSlug?: string;
+      rawTranscript?: boolean;
     };
     const kind = (body.kind ?? '').toLowerCase();
     if (!VALID_PROMOTE_KINDS.has(kind)) {
@@ -326,6 +327,7 @@ consultRouter.post('/:sessionId/promote', async (req: Request, res: Response) =>
       kind: kind as 'inbox' | 'issue' | 'ceremony',
       projectId: body.projectId ?? null,
       columnSlug: body.columnSlug ?? null,
+      rawTranscript: body.rawTranscript === true,
     });
     res.status(201).json(result);
   } catch (err) {

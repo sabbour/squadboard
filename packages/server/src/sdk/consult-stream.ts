@@ -919,17 +919,39 @@ export interface PromoteConsultInput {
   kind: 'inbox' | 'issue' | 'ceremony';
   projectId?: string | null;
   columnSlug?: string | null;
+  /**
+   * Skip LLM extraction and just promote a deterministic transcript dump.
+   * Defaults to false. Use as an escape hatch when models are unavailable
+   * or when the caller only wants a paper trail.
+   */
+  rawTranscript?: boolean;
 }
 
 export interface PromoteConsultResult {
   kind: PromoteConsultInput['kind'];
   artifact: Record<string, unknown>;
+  /** Whether LLM summarisation was applied (false = raw transcript fallback). */
+  summarised: boolean;
+  /** Model used for summarisation, if any. */
+  modelUsed?: string;
+}
+
+interface ConsultSummary {
+  title: string;
+  body: string;
+}
+
+interface CeremonySummary extends ConsultSummary {
+  description: string;
 }
 
 /**
  * Promote a consult conversation to an inbox item, new issue, or ceremony.
- * In todo 7 this calls the LLM to summarise/extract; for the moment it
- * builds a deterministic transcript dump so the surface is already wired.
+ *
+ * Calls the formulator (LLM) to extract a clean title + summary from the
+ * full transcript. If the LLM is unavailable (no token, no model, parse
+ * error, etc.) we fall back to a deterministic transcript dump so the
+ * surface degrades gracefully and never blocks the user.
  */
 export async function promoteConsult(input: PromoteConsultInput): Promise<PromoteConsultResult> {
   const detail = await consultService.getConsultSessionDetail(input.sessionId);
@@ -938,27 +960,63 @@ export async function promoteConsult(input: PromoteConsultInput): Promise<Promot
   const transcriptMd = renderTranscript(detail.messages, detail.name ?? 'Consult conversation');
   const projectId = input.projectId ?? detail.projectId ?? null;
 
+  // Try LLM summarisation unless explicitly opted out
+  let summary: ConsultSummary | CeremonySummary | null = null;
+  let summarised = false;
+  let modelUsed: string | undefined;
+
+  if (!input.rawTranscript && detail.messages.length > 1) {
+    try {
+      const result = await summariseConsultForPromotion({
+        kind: input.kind,
+        projectId,
+        sessionName: detail.name,
+        transcriptMd,
+      });
+      summary = result.summary;
+      summarised = true;
+      modelUsed = result.modelUsed;
+    } catch (err) {
+      console.warn('[consult.promote] LLM summarisation failed, falling back to transcript:', err);
+    }
+  }
+
+  const fallbackTitle = detail.name?.trim() || 'Promoted from consult';
+  const finalTitle = (summary?.title ?? fallbackTitle).slice(0, 200);
+  const finalBody = summary?.body ?? transcriptMd;
+
   if (input.kind === 'inbox') {
     const inboxService = await import('../services/inbox.js');
     const item = await inboxService.createInboxItem({
-      originalDraft: transcriptMd,
+      originalDraft: summary
+        ? `# ${finalTitle}\n\n${finalBody}\n\n---\n\n<details><summary>Original consult transcript</summary>\n\n${transcriptMd}\n\n</details>`
+        : transcriptMd,
       suggestedProjectId: projectId,
       userId: null,
     });
-    return { kind: 'inbox', artifact: { inboxItemId: item.id, suggestedProjectId: projectId } };
+    return {
+      kind: 'inbox',
+      summarised,
+      modelUsed,
+      artifact: { inboxItemId: item.id, suggestedProjectId: projectId },
+    };
   }
 
   if (input.kind === 'issue') {
     if (!projectId) throw Object.assign(new Error('issue promotion requires a projectId'), { status: 400 });
     const issuesService = await import('../services/issues.js');
-    const title = detail.name?.trim() || 'Promoted from consult';
+    const body = summary
+      ? `${finalBody}\n\n---\n\n<details><summary>Original consult transcript</summary>\n\n${transcriptMd}\n\n</details>`
+      : transcriptMd;
     const created = await issuesService.createIssue(projectId, {
-      title: title.slice(0, 200),
-      body: transcriptMd,
+      title: finalTitle,
+      body,
       status: (input.columnSlug as 'backlog' | 'todo' | 'in_progress' | 'in_review' | 'done') ?? 'backlog',
     });
     return {
       kind: 'issue',
+      summarised,
+      modelUsed,
       artifact: { issueId: created.id, projectId, url: `/projects/${projectId}/board` },
     };
   }
@@ -966,14 +1024,20 @@ export async function promoteConsult(input: PromoteConsultInput): Promise<Promot
   // ceremony
   if (!projectId) throw Object.assign(new Error('ceremony promotion requires a projectId'), { status: 400 });
   const db = getDb();
-  const slug = slugify(detail.name ?? 'consult-ceremony');
+  const slug = slugify(summary?.title ?? detail.name ?? 'consult-ceremony');
+  const ceremonySummary = summary as CeremonySummary | null;
+  const description = ceremonySummary?.description ?? 'Promoted from a consult session';
+  const yamlContent = summary
+    ? `# ${finalTitle}\n\n${finalBody}\n\n---\n\n<details><summary>Original consult transcript</summary>\n\n${transcriptMd}\n\n</details>`
+    : transcriptMd;
+
   const [narrative] = await db
     .insert(schema.workflows)
     .values({
       projectId,
-      name: detail.name ?? 'Consult-promoted ceremony',
+      name: finalTitle || (detail.name ?? 'Consult-promoted ceremony'),
       slug,
-      description: 'Promoted from a consult session',
+      description,
       triggerKind: 'manual',
       triggerConfig: {},
       kind: 'narrative',
@@ -984,16 +1048,117 @@ export async function promoteConsult(input: PromoteConsultInput): Promise<Promot
   await db.insert(schema.workflowVersions).values({
     workflowId: narrative.id,
     version: 1,
-    yamlContent: transcriptMd,
+    yamlContent,
     isActive: true,
   });
   return {
     kind: 'ceremony',
+    summarised,
+    modelUsed,
     artifact: {
       ceremonyId: narrative.id,
       projectId,
       url: `/projects/${projectId}/ceremonies/review`,
     },
+  };
+}
+
+/**
+ * Build a kind-specific extraction prompt and call the formulator. Returns
+ * the parsed/normalised summary or throws so the caller can fall back.
+ */
+async function summariseConsultForPromotion(args: {
+  kind: 'inbox' | 'issue' | 'ceremony';
+  projectId: string | null;
+  sessionName: string | null;
+  transcriptMd: string;
+}): Promise<{ summary: ConsultSummary | CeremonySummary; modelUsed: string }> {
+  const { runFormulator, extractJsonObject } = await import('../services/formulator.js');
+
+  const transcriptForPrompt = args.transcriptMd.length > 12_000
+    ? args.transcriptMd.slice(0, 12_000) + '\n\n[…transcript truncated…]'
+    : args.transcriptMd;
+
+  let systemMessage: string;
+  let userPrompt: string;
+
+  if (args.kind === 'inbox') {
+    systemMessage =
+      'You are a precise JSON-only assistant. Read a brainstorm transcript between a user and an AI thinking partner, then extract a concise capture suitable for the user\'s inbox. Return only the requested JSON object — no markdown fences, no prose.';
+    userPrompt = [
+      'Extract a concise inbox capture from this brainstorm transcript.',
+      '',
+      'Return JSON with this exact shape:',
+      '{',
+      '  "title": "string, 60 chars or less, imperative voice",',
+      '  "body": "string, plain markdown, 4–10 sentences capturing the core idea, key decisions, and any open questions"',
+      '}',
+      '',
+      'Transcript:',
+      transcriptForPrompt,
+    ].join('\n');
+  } else if (args.kind === 'issue') {
+    systemMessage =
+      'You are a precise JSON-only assistant. Read a brainstorm transcript between a user and an AI thinking partner, then extract a clean GitHub-style issue. Return only the requested JSON object — no markdown fences, no prose.';
+    userPrompt = [
+      'Extract a clean issue from this brainstorm transcript.',
+      '',
+      'Return JSON with this exact shape:',
+      '{',
+      '  "title": "string, 80 chars or less, imperative voice (e.g. \\"Add foo\\" not \\"Adding foo\\")",',
+      '  "body": "string, plain markdown with sections: ## Summary, ## Acceptance Criteria, ## Notes (only if relevant). Distill what the work actually is — do not include the conversation."',
+      '}',
+      '',
+      'Transcript:',
+      transcriptForPrompt,
+    ].join('\n');
+  } else {
+    systemMessage =
+      'You are a precise JSON-only assistant. Read a brainstorm transcript between a user and an AI thinking partner, then extract a draft narrative ceremony spec. Return only the requested JSON object — no markdown fences, no prose.';
+    userPrompt = [
+      'Extract a draft narrative ceremony from this brainstorm transcript.',
+      '',
+      'Return JSON with this exact shape:',
+      '{',
+      '  "title": "string, 80 chars or less, names the ceremony (e.g. \\"Daily Triage\\")",',
+      '  "description": "string, one or two sentences summarising what the ceremony does",',
+      '  "body": "string, plain markdown with sections: ## Purpose, ## Steps (numbered list of agent actions), ## Inputs, ## Outputs"',
+      '}',
+      '',
+      'Transcript:',
+      transcriptForPrompt,
+    ].join('\n');
+  }
+
+  const { raw, modelUsed } = await runFormulator({
+    prompt: userPrompt,
+    projectId: args.projectId ?? undefined,
+    systemMessage,
+  });
+
+  const parsed = extractJsonObject(raw) as Record<string, unknown>;
+  if (!parsed || typeof parsed !== 'object') {
+    throw new Error('formulator did not return a JSON object');
+  }
+  const title = typeof parsed.title === 'string' ? parsed.title.trim() : '';
+  const body = typeof parsed.body === 'string' ? parsed.body.trim() : '';
+  if (!title || !body) {
+    throw new Error('formulator JSON missing title or body');
+  }
+
+  if (args.kind === 'ceremony') {
+    const description =
+      typeof parsed.description === 'string' && parsed.description.trim()
+        ? parsed.description.trim()
+        : 'Promoted from a consult session';
+    return {
+      summary: { title, body, description },
+      modelUsed: modelUsed.model,
+    };
+  }
+  return {
+    summary: { title, body },
+    modelUsed: modelUsed.model,
   };
 }
 
