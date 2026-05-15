@@ -1,6 +1,7 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useMemo } from 'react'
 import { Outlet, useParams, useNavigate, useLocation } from 'react-router'
 import { apiFetch } from '../api/client.ts'
+import { useProjects } from '../api/projects.ts'
 import squadboardLogo from '../assets/squadboard-horizontal.png'
 import {
   NavDrawer,
@@ -9,6 +10,11 @@ import {
   NavItem,
   NavSectionHeader,
   Button,
+  Menu,
+  MenuTrigger,
+  MenuPopover,
+  MenuList,
+  MenuItem,
   makeStyles,
   tokens,
 } from '@fluentui/react-components'
@@ -127,6 +133,35 @@ const PROJECT_NAV_GROUPS: Array<{ heading: string; items: Array<{ label: string;
 
 const PROJECT_NAV_ITEMS = PROJECT_NAV_GROUPS.flatMap((g) => g.items)
 
+// Set of route segments that exist under /projects/:id/<segment>. Used by the
+// project switcher to decide whether the current category can be preserved
+// when the user picks a different project.
+const PROJECT_SCOPED_SEGMENTS: ReadonlySet<string> = new Set([
+  ...PROJECT_NAV_ITEMS.map((item) => item.segment),
+  'settings',
+  'inbox',
+  'consult',
+  'diagnostics',
+  'ceremonies', // already in PROJECT_NAV_ITEMS but explicit for clarity
+])
+
+/**
+ * Given the current pathname, return the project-scoped category segment
+ * (e.g. 'board', 'flow', 'agents') if the URL is under `/projects/:id/...`,
+ * or `null` otherwise. Sub-paths beyond the segment are intentionally
+ * dropped — switching projects lands on the category root for the new
+ * project, not on a stale sub-resource id that won't exist in the target.
+ */
+function extractProjectCategory(pathname: string, currentProjectId: string | undefined): string | null {
+  if (!currentProjectId) return null
+  const prefix = `/projects/${currentProjectId}/`
+  if (!pathname.startsWith(prefix)) return null
+  const rest = pathname.slice(prefix.length)
+  const seg = rest.split('/')[0] ?? ''
+  if (!seg) return null
+  return PROJECT_SCOPED_SEGMENTS.has(seg) ? seg : null
+}
+
 export default function Layout() {
   const { id } = useParams<{ id?: string }>()
   const navigate = useNavigate()
@@ -135,6 +170,32 @@ export default function Layout() {
 
   const [projectName, setProjectName] = useState<string | null>(null)
   const [captureOpen, setCaptureOpen] = useState(false)
+  const projectsQuery = useProjects()
+  const projects = projectsQuery.data
+
+  // Sorted alphabetically; the active project is filtered out of the menu.
+  const switcherProjects = useMemo(() => {
+    if (!projects) return []
+    return [...projects]
+      .filter((p) => p.id !== id)
+      .sort((a, b) => a.name.localeCompare(b.name))
+  }, [projects, id])
+
+  // The category segment we want to preserve when switching projects.
+  const currentCategory = useMemo(
+    () => extractProjectCategory(location.pathname, id),
+    [location.pathname, id],
+  )
+
+  function handleProjectSwitch(newProjectId: string) {
+    if (currentCategory) {
+      void navigate(`/projects/${newProjectId}/${currentCategory}`)
+    } else {
+      // Fall back to the project home (Dashboard) when the current route
+      // doesn't map to a recognised project-scoped category.
+      void navigate(`/projects/${newProjectId}/dashboard`)
+    }
+  }
 
   useEffect(() => {
     if (!id) { setProjectName(null); return }
@@ -238,15 +299,6 @@ export default function Layout() {
             Consult
           </NavItem>
 
-          {/* Phase 3: System / Operations — Diagnostics and Heartbeat */}
-          <NavSectionHeader>SYSTEM</NavSectionHeader>
-          <NavItem icon={<HeartPulse24Regular />} value="diagnostics">
-            Diagnostics
-          </NavItem>
-          <NavItem icon={<Heart24Regular />} value="heartbeat">
-            Heartbeat
-          </NavItem>
-
           {id && (
             <>
               {PROJECT_NAV_GROUPS.map((group) => (
@@ -261,6 +313,21 @@ export default function Layout() {
               ))}
             </>
           )}
+
+          {/* Spacer — pushes the SYSTEM section to the visual bottom of the
+              sidebar regardless of how many project groups are above it. */}
+          <div style={{ flex: 1 }} />
+
+          {/* Phase 3: System / Operations — Diagnostics and Heartbeat.
+              Anchored to the bottom of the sidebar so project-scoped categories
+              come first. */}
+          <NavSectionHeader>SYSTEM</NavSectionHeader>
+          <NavItem icon={<HeartPulse24Regular />} value="diagnostics">
+            Diagnostics
+          </NavItem>
+          <NavItem icon={<Heart24Regular />} value="heartbeat">
+            Heartbeat
+          </NavItem>
         </NavDrawerBody>
 
         {id && (
@@ -277,16 +344,33 @@ export default function Layout() {
         <div className={styles.topBar}>
           <div className={styles.topBarLeft}>
             {projectName && (
-              <Button
-                appearance="subtle"
-                iconPosition="after"
-                icon={<ChevronDown16Regular />}
-                className={styles.projectSwitcher}
-                onClick={() => void navigate('/')}
-                title="Switch project"
-              >
-                {projectName}
-              </Button>
+              <Menu>
+                <MenuTrigger disableButtonEnhancement>
+                  <Button
+                    appearance="subtle"
+                    iconPosition="after"
+                    icon={<ChevronDown16Regular />}
+                    className={styles.projectSwitcher}
+                    title="Switch project"
+                  >
+                    {projectName}
+                  </Button>
+                </MenuTrigger>
+                <MenuPopover>
+                  <MenuList>
+                    {switcherProjects.length === 0 ? (
+                      <MenuItem disabled>No other projects</MenuItem>
+                    ) : (
+                      switcherProjects.map((p) => (
+                        <MenuItem key={p.id} onClick={() => handleProjectSwitch(p.id)}>
+                          {p.name}
+                        </MenuItem>
+                      ))
+                    )}
+                    <MenuItem onClick={() => void navigate('/')}>All projects…</MenuItem>
+                  </MenuList>
+                </MenuPopover>
+              </Menu>
             )}
           </div>
           <div className={styles.topBarRight}>
