@@ -57,6 +57,8 @@ import { stopAllSyncLoops } from './github/sync.js';
 import templatesRouter from './routes/templates.js';
 import teamPortabilityRouter from './routes/team-portability.js';
 import projectPortabilityRouter from './routes/project-portability.js';
+// Conjure smart-create — Phase 1 classify endpoint
+import conjureRouter from './routes/conjure.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -164,6 +166,9 @@ async function main(): Promise<void> {
   // Demo 9: peer review endpoints (not project-scoped)
   app.use('/api/workflow-runs', workflowRunsRouter);
   app.use('/api/step-runs', stepRunsRouter);
+
+  // Conjure smart-create — POST /api/conjure/classify
+  app.use('/api/conjure', conjureRouter);
 
   // Demo 12: presence REST endpoint (GET /api/projects/:id/presence)
   app.get('/api/projects/:id/presence', (req, res) => {
