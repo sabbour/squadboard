@@ -39,7 +39,12 @@ import {
   previewNextFireTimes,
   computeNextFire,
 } from '../services/ceremony-scheduler.js';
-import { convertNarrativeToExecutable } from '../services/narrative-bridge.js';
+import {
+  translateNarrative,
+  TranslatorError,
+  TranslatorThrottledError,
+  type TranslatorAvailableAgent,
+} from '../services/ceremony-translator.js';
 import { getBuiltinTemplates } from '../workflows/templates/index.js';
 
 // ---------------------------------------------------------------------------
@@ -48,9 +53,11 @@ import { getBuiltinTemplates } from '../workflows/templates/index.js';
 
 const VALID_TRIGGER_KINDS = ['on_issue_entry', 'on_schedule', 'on_event', 'manual'] as const;
 const VALID_KINDS = ['workflow', 'ceremony', 'review_policy', 'narrative'] as const;
+const VALID_STATUSES = ['active', 'draft', 'paused', 'archived'] as const;
 
 type TriggerKind = (typeof VALID_TRIGGER_KINDS)[number];
 type CeremonyKind = (typeof VALID_KINDS)[number];
+type CeremonyStatus = (typeof VALID_STATUSES)[number];
 
 function handleError(res: Response, err: unknown): void {
   console.error('[ceremonies] error:', err);
@@ -66,11 +73,27 @@ function isValidKind(s: unknown): s is CeremonyKind {
   return typeof s === 'string' && (VALID_KINDS as readonly string[]).includes(s);
 }
 
+function isValidStatus(s: unknown): s is CeremonyStatus {
+  return typeof s === 'string' && (VALID_STATUSES as readonly string[]).includes(s);
+}
+
 function slugify(name: string): string {
   return name
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-|-$/g, '');
+}
+
+/** Extract `# Heading` (or `## Heading`) from the first non-blank markdown line. */
+function extractFirstMarkdownHeading(markdown: string): string | null {
+  for (const line of markdown.split('\n')) {
+    const trimmed = line.trim();
+    if (!trimmed) continue;
+    const m = trimmed.match(/^#{1,6}\s+(.+?)\s*#*$/);
+    if (m) return m[1];
+    return null;
+  }
+  return null;
 }
 
 // ---------------------------------------------------------------------------
@@ -128,6 +151,42 @@ ceremoniesRouter.post('/', async (req: Request, res: Response) => {
     }
     if (!isValidKind(kind)) {
       res.status(400).json({ error: `kind must be one of: ${VALID_KINDS.join(', ')}` });
+      return;
+    }
+
+    // Narrative rows store markdown verbatim in yamlContent — skip the YAML
+    // validator and synthesise name/slug from the request body or the first
+    // markdown heading.
+    if (kind === 'narrative') {
+      const db = getDb();
+      const { name, description } = req.body as { name?: string; description?: string };
+      const derivedName = (name && name.trim()) || extractFirstMarkdownHeading(yamlContent) || 'Narrative ceremony';
+      const slug = slugify(derivedName);
+
+      const [narrative] = await db
+        .insert(schema.workflows)
+        .values({
+          projectId,
+          name: derivedName,
+          slug,
+          description: description ?? null,
+          triggerKind,
+          triggerConfig,
+          kind,
+        })
+        .returning();
+
+      const [version] = await db
+        .insert(schema.workflowVersions)
+        .values({
+          workflowId: narrative.id,
+          version: 1,
+          yamlContent,
+          isActive: true,
+        })
+        .returning();
+
+      res.status(201).json({ ceremony: narrative, version });
       return;
     }
 
@@ -239,12 +298,19 @@ ceremoniesRouter.patch('/:id', async (req: Request, res: Response) => {
     let newVersion: typeof schema.workflowVersions.$inferSelect | null = null;
 
     if (body.yamlContent !== undefined) {
-      const { valid, errors } = validateWorkflowYaml(body.yamlContent);
-      if (!valid) {
-        res.status(422).json({ error: 'Invalid ceremony YAML', errors });
-        return;
+      // Narrative ceremonies store markdown verbatim — skip the YAML validator.
+      const targetKind = body.kind ?? workflow.kind;
+      const isNarrative = targetKind === 'narrative';
+
+      let definition: Awaited<ReturnType<typeof parseWorkflowYaml>> | null = null;
+      if (!isNarrative) {
+        const { valid, errors } = validateWorkflowYaml(body.yamlContent);
+        if (!valid) {
+          res.status(422).json({ error: 'Invalid ceremony YAML', errors });
+          return;
+        }
+        definition = await parseWorkflowYaml(body.yamlContent);
       }
-      const definition = await parseWorkflowYaml(body.yamlContent);
 
       const existing = await db
         .select({ version: schema.workflowVersions.version })
@@ -269,16 +335,21 @@ ceremoniesRouter.patch('/:id', async (req: Request, res: Response) => {
           workflowId: id,
           version: nextVer,
           yamlContent: body.yamlContent,
-          jsonSchema: definition.outputSchema ? JSON.stringify(definition.outputSchema) : null,
+          jsonSchema: definition?.outputSchema ? JSON.stringify(definition.outputSchema) : null,
           isActive: true,
         })
         .returning();
       newVersion = created;
 
       // Auto-sync ceremony name/description from YAML when yaml is updated.
-      if (body.name === undefined) body.name = definition.name;
-      if (body.description === undefined && definition.description) {
-        body.description = definition.description;
+      if (definition) {
+        if (body.name === undefined) body.name = definition.name;
+        if (body.description === undefined && definition.description) {
+          body.description = definition.description;
+        }
+      } else if (isNarrative && body.name === undefined) {
+        const heading = extractFirstMarkdownHeading(body.yamlContent);
+        if (heading) body.name = heading;
       }
     }
 
@@ -305,9 +376,15 @@ ceremoniesRouter.patch('/:id', async (req: Request, res: Response) => {
 });
 
 // DELETE /:id — archive (deactivate all versions). Schedules cascade-deleted.
+//
+// Phase 11 protection: hard-delete is disallowed for active ceremonies (the
+// review page's Discard button is the only call site that needs hard delete,
+// and it only ever targets drafts). Pass `?force=true` to override and
+// archive a non-draft row regardless of status.
 ceremoniesRouter.delete('/:id', async (req: Request, res: Response) => {
   try {
     const { projectId, id } = req.params as Record<string, string>;
+    const force = (req.query.force as string | undefined) === 'true';
     const db = getDb();
 
     const [workflow] = await db
@@ -321,10 +398,26 @@ ceremoniesRouter.delete('/:id', async (req: Request, res: Response) => {
       return;
     }
 
+    // For draft ceremonies (typically auto-translated rows on the review page)
+    // we hard-delete the row + its versions. For active rows we soft-archive
+    // so the audit trail is preserved unless ?force=true is passed.
+    if (workflow.status === 'draft' || force) {
+      // Detach any other rows that reference this one as their narrative
+      // source (parent_narrative_id ON DELETE SET NULL is enforced by the FK).
+      await db.delete(schema.workflows).where(eq(schema.workflows.id, id));
+      res.json({ message: 'Ceremony deleted', ceremonyId: id });
+      return;
+    }
+
     await db
       .update(schema.workflowVersions)
       .set({ isActive: false })
       .where(eq(schema.workflowVersions.workflowId, id));
+
+    await db
+      .update(schema.workflows)
+      .set({ status: 'archived', updatedAt: new Date() })
+      .where(eq(schema.workflows.id, id));
 
     res.json({ message: 'Ceremony archived', ceremonyId: id });
   } catch (err) {
@@ -390,20 +483,99 @@ ceremoniesRouter.post('/:id/preview-cron', (req: Request, res: Response) => {
   }
 });
 
-// POST /:id/convert — 501 stub for Phase 11
+// POST /:id/convert — Phase 11: translate the narrative source row into a
+// draft executable ceremony. The narrative row is preserved (kind='narrative')
+// and the new draft row links back via parent_narrative_id. Caller must
+// activate the draft (PATCH or /activate) before triggers fire.
 ceremoniesRouter.post('/:id/convert', async (req: Request, res: Response) => {
   try {
-    const { id } = req.params as Record<string, string>;
-    await convertNarrativeToExecutable(id);
-    // Should never reach here in Phase 10.
-    res.status(200).json({ ceremonyId: id });
+    const { projectId, id } = req.params as Record<string, string>;
+    const result = await runTranslateForNarrative({ projectId, narrativeId: id });
+    if (result.kind === 'error') {
+      res.status(result.status).json(result.body);
+      return;
+    }
+    res.status(201).json(result.body);
   } catch (err) {
-    if (err instanceof Error && err.message.includes('NotImplemented')) {
-      res.status(501).json({
-        error: 'narrative-bridge not yet implemented (Phase 11)',
+    handleError(res, err);
+  }
+});
+
+// POST /:id/activate — Phase 11: flip a draft ceremony to status='active'.
+// From this moment its triggers (schedule / event / on_issue_entry) can fire.
+ceremoniesRouter.post('/:id/activate', async (req: Request, res: Response) => {
+  try {
+    const { projectId, id } = req.params as Record<string, string>;
+    const db = getDb();
+
+    const [workflow] = await db
+      .select()
+      .from(schema.workflows)
+      .where(and(eq(schema.workflows.id, id), eq(schema.workflows.projectId, projectId)))
+      .limit(1);
+
+    if (!workflow) {
+      res.status(404).json({ error: 'Ceremony not found' });
+      return;
+    }
+    if (workflow.kind === 'narrative') {
+      res.status(409).json({
+        error: "narrative ceremonies have no executable steps — convert first, then activate the draft",
       });
       return;
     }
+
+    const [updated] = await db
+      .update(schema.workflows)
+      .set({ status: 'active', updatedAt: new Date() })
+      .where(eq(schema.workflows.id, id))
+      .returning();
+
+    res.json({ ceremony: updated, message: 'Ceremony activated' });
+  } catch (err) {
+    handleError(res, err);
+  }
+});
+
+// POST /:id/translate — Phase 11 retry hook. Re-runs the translator on the
+// most recent narrative version. Honours an exponential-backoff between
+// attempts persisted in last_translation_attempt_at:
+//   1st retry: immediate · 2nd: ≥30s · 3rd+: ≥2min
+ceremoniesRouter.post('/:id/translate', async (req: Request, res: Response) => {
+  try {
+    const { projectId, id } = req.params as Record<string, string>;
+    const db = getDb();
+    const [narrative] = await db
+      .select()
+      .from(schema.workflows)
+      .where(and(eq(schema.workflows.id, id), eq(schema.workflows.projectId, projectId)))
+      .limit(1);
+
+    if (!narrative) {
+      res.status(404).json({ error: 'Ceremony not found' });
+      return;
+    }
+    if (narrative.kind !== 'narrative') {
+      res.status(409).json({ error: '/translate can only be invoked on kind=narrative ceremonies' });
+      return;
+    }
+
+    const backoffWaitMs = computeRetryBackoffMs(narrative.lastTranslationAttemptAt ?? null);
+    if (backoffWaitMs > 0) {
+      res.status(429).json({
+        error: 'translator backoff in effect',
+        retryAfterMs: backoffWaitMs,
+      });
+      return;
+    }
+
+    const result = await runTranslateForNarrative({ projectId, narrativeId: id });
+    if (result.kind === 'error') {
+      res.status(result.status).json(result.body);
+      return;
+    }
+    res.status(201).json(result.body);
+  } catch (err) {
     handleError(res, err);
   }
 });
@@ -533,6 +705,196 @@ ceremoniesRouter.delete('/:id/schedules/:sId', async (req: Request, res: Respons
     handleError(res, err);
   }
 });
+
+// ---------------------------------------------------------------------------
+// Phase 11 helpers — narrative translation
+// ---------------------------------------------------------------------------
+
+/**
+ * Compute the minimum delay (ms) callers must wait between translation
+ * attempts on the same narrative. Returns 0 when the call is allowed.
+ *
+ *   - 1st attempt (no previous attempt) ........... 0 ms
+ *   - 2nd attempt (≤30s after previous) ......... 30s
+ *   - 3rd+ attempt (≤2min after previous) ..... 120s
+ *
+ * This is a best-effort check; the in-memory throttle inside the translator
+ * service is the hard ceiling.
+ */
+export function computeRetryBackoffMs(lastAttemptAt: Date | string | null): number {
+  if (!lastAttemptAt) return 0;
+  const last = typeof lastAttemptAt === 'string' ? new Date(lastAttemptAt) : lastAttemptAt;
+  const elapsed = Date.now() - last.getTime();
+  if (elapsed >= 120_000) return 0;
+  if (elapsed >= 30_000) return 0;
+  return Math.max(0, 30_000 - elapsed);
+}
+
+interface TranslateOk {
+  kind: 'ok';
+  body: {
+    narrativeId: string;
+    draftCeremonyId: string;
+    yamlContent: string;
+    triggerKind: TriggerKind;
+    triggerConfig: Record<string, unknown>;
+    rationale: string;
+    warnings: string[];
+  };
+}
+
+interface TranslateFail {
+  kind: 'error';
+  status: number;
+  body: { narrativeId?: string; error: string; retryable: boolean };
+}
+
+/**
+ * Translate the narrative ceremony at `narrativeId` and persist the resulting
+ * draft executable ceremony. On failure, the narrative row is marked with
+ * `lastTranslationError` and `lastTranslationAttemptAt`.
+ *
+ * Used by /:id/convert, /:id/translate, /import-narrative, and the starter
+ * project materialiser.
+ */
+export async function runTranslateForNarrative(opts: {
+  projectId: string;
+  narrativeId: string;
+}): Promise<TranslateOk | TranslateFail> {
+  const { projectId, narrativeId } = opts;
+  const db = getDb();
+
+  const [narrative] = await db
+    .select()
+    .from(schema.workflows)
+    .where(and(eq(schema.workflows.id, narrativeId), eq(schema.workflows.projectId, projectId)))
+    .limit(1);
+
+  if (!narrative) {
+    return { kind: 'error', status: 404, body: { error: 'Ceremony not found', retryable: false } };
+  }
+  if (narrative.kind !== 'narrative') {
+    return {
+      kind: 'error',
+      status: 409,
+      body: {
+        narrativeId,
+        error: 'convert can only be invoked on kind=narrative ceremonies',
+        retryable: false,
+      },
+    };
+  }
+
+  // Pull the narrative markdown from the latest version row. Narrative rows
+  // store their markdown verbatim in `yamlContent` (the column is reused).
+  const versions = await db
+    .select()
+    .from(schema.workflowVersions)
+    .where(eq(schema.workflowVersions.workflowId, narrativeId));
+
+  const latest = versions.find((v) => v.isActive) ?? versions.sort((a, b) => b.version - a.version)[0];
+  if (!latest || !latest.yamlContent || !latest.yamlContent.trim()) {
+    return {
+      kind: 'error',
+      status: 422,
+      body: {
+        narrativeId,
+        error: 'narrative has no markdown content to translate',
+        retryable: false,
+      },
+    };
+  }
+
+  // Resolve the project's agents so the translator picks valid names.
+  const agentRows = await db
+    .select({ name: schema.agents.name, role: schema.agents.role })
+    .from(schema.agents)
+    .where(eq(schema.agents.projectId, projectId));
+  const availableAgents: TranslatorAvailableAgent[] = agentRows.map((a) => ({
+    name: a.name,
+    role: a.role,
+  }));
+
+  // Mark the attempt timestamp before invoking — even on failure we want the
+  // backoff window to start from "now".
+  await db
+    .update(schema.workflows)
+    .set({ lastTranslationAttemptAt: new Date(), updatedAt: new Date() })
+    .where(eq(schema.workflows.id, narrativeId));
+
+  let translation;
+  try {
+    translation = await translateNarrative({
+      narrativeMarkdown: latest.yamlContent,
+      ceremonyName: narrative.name,
+      projectId,
+      availableAgents,
+    });
+  } catch (err) {
+    const retryable = err instanceof TranslatorError ? err.retryable : true;
+    const status = err instanceof TranslatorThrottledError ? 429 : 502;
+    const message = err instanceof Error ? err.message : String(err);
+
+    await db
+      .update(schema.workflows)
+      .set({ lastTranslationError: message, updatedAt: new Date() })
+      .where(eq(schema.workflows.id, narrativeId));
+
+    return {
+      kind: 'error',
+      status,
+      body: { narrativeId, error: message, retryable },
+    };
+  }
+
+  // Translation succeeded — clear any prior error.
+  await db
+    .update(schema.workflows)
+    .set({ lastTranslationError: null, updatedAt: new Date() })
+    .where(eq(schema.workflows.id, narrativeId));
+
+  // Persist the draft executable ceremony.
+  const definition = await parseWorkflowYaml(translation.yamlContent);
+  const slug = slugify(definition.name || `${narrative.slug}-executable`);
+
+  const [draft] = await db
+    .insert(schema.workflows)
+    .values({
+      projectId,
+      name: definition.name || `${narrative.name} (executable)`,
+      slug,
+      description: definition.description ?? narrative.description ?? null,
+      triggerKind: translation.triggerKind,
+      triggerConfig: translation.triggerConfig,
+      kind: 'ceremony',
+      status: 'draft',
+      parentNarrativeId: narrative.id,
+    })
+    .returning();
+
+  await db
+    .insert(schema.workflowVersions)
+    .values({
+      workflowId: draft.id,
+      version: 1,
+      yamlContent: translation.yamlContent,
+      jsonSchema: definition.outputSchema ? JSON.stringify(definition.outputSchema) : null,
+      isActive: true,
+    });
+
+  return {
+    kind: 'ok',
+    body: {
+      narrativeId: narrative.id,
+      draftCeremonyId: draft.id,
+      yamlContent: translation.yamlContent,
+      triggerKind: translation.triggerKind,
+      triggerConfig: translation.triggerConfig,
+      rationale: translation.rationale,
+      warnings: translation.warnings,
+    },
+  };
+}
 
 // ---------------------------------------------------------------------------
 // Top-level /api/ceremonies router (templates, validate)

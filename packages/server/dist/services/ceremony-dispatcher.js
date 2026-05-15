@@ -87,7 +87,7 @@ async function findMatchingCeremonies(projectId, eventType) {
     const rows = await db
         .select({ id: schema.workflows.id, slug: schema.workflows.slug })
         .from(schema.workflows)
-        .where(and(eq(schema.workflows.projectId, projectId), eq(schema.workflows.triggerKind, 'on_event'), sql `${schema.workflows.triggerConfig}->>'eventType' = ${eventType}`));
+        .where(and(eq(schema.workflows.projectId, projectId), eq(schema.workflows.triggerKind, 'on_event'), eq(schema.workflows.status, 'active'), sql `${schema.workflows.triggerConfig}->>'eventType' = ${eventType}`));
     return rows;
 }
 // ---------------------------------------------------------------------------

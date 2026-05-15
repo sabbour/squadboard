@@ -1,0 +1,348 @@
+/**
+ * services/ceremony-translator.ts — Phase 11
+ *
+ * Translates a markdown narrative ceremony into an executable ceremony YAML
+ * via a one-shot SquadClient (ACP) session.
+ *
+ * The LLM is instructed to respond with a strict JSON envelope:
+ *
+ *   { yamlContent, triggerKind, triggerConfig, warnings, rationale }
+ *
+ * After receiving a response we:
+ *   1. Parse the JSON tolerantly (strip ```json fences, locate first '{' …
+ *      last '}' if necessary).
+ *   2. Validate the YAML against the existing `validateWorkflowYaml` so
+ *      callers get the same error surface as the manual editor.
+ *   3. Cap warnings to 10, trim the rationale to ≤500 chars.
+ *
+ * Throttle: max 3 translations per ceremony per 60s window. The throttle is
+ * in-process; restart resets it.
+ */
+
+import { validateWorkflowYaml } from './workflow-parser.js';
+
+// ---------------------------------------------------------------------------
+// Public types
+// ---------------------------------------------------------------------------
+
+export type TranslatorTriggerKind =
+  | 'on_issue_entry'
+  | 'on_schedule'
+  | 'on_event'
+  | 'manual';
+
+export interface TranslatorAvailableAgent {
+  name: string;
+  role: string;
+}
+
+export interface TranslatorInput {
+  narrativeMarkdown: string;
+  ceremonyName: string;
+  projectId: string;
+  /** Optional context to bias the translation. */
+  availableAgents?: TranslatorAvailableAgent[];
+}
+
+export interface TranslatorResult {
+  yamlContent: string;
+  triggerKind: TranslatorTriggerKind;
+  triggerConfig: Record<string, unknown>;
+  warnings: string[];
+  rationale: string;
+}
+
+// ---------------------------------------------------------------------------
+// Errors
+// ---------------------------------------------------------------------------
+
+export class TranslatorError extends Error {
+  /** True when the caller can productively retry (LLM unreachable, parse glitch). */
+  retryable: boolean;
+  constructor(message: string, retryable = true) {
+    super(message);
+    this.name = 'TranslatorError';
+    this.retryable = retryable;
+  }
+}
+
+export class TranslatorThrottledError extends TranslatorError {
+  status = 429;
+  constructor(message = 'translator throttled') {
+    super(message, false);
+    this.name = 'TranslatorThrottledError';
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Throttle (in-memory, per ceremony)
+// ---------------------------------------------------------------------------
+
+/** Window length: 60s. */
+const THROTTLE_WINDOW_MS = 60_000;
+/** Max translations per ceremony per window. */
+const THROTTLE_MAX = 3;
+
+interface ThrottleEntry {
+  /** Sorted ascending — oldest first. */
+  timestamps: number[];
+}
+
+const translateAttempts = new Map<string, ThrottleEntry>();
+
+/** Test-only: reset throttle state between unit runs. */
+export function _resetTranslatorThrottleForTests(): void {
+  translateAttempts.clear();
+}
+
+function consumeThrottleSlot(ceremonyKey: string): void {
+  const now = Date.now();
+  const entry = translateAttempts.get(ceremonyKey) ?? { timestamps: [] };
+  // Drop expired timestamps (outside the window).
+  while (entry.timestamps.length && now - entry.timestamps[0] > THROTTLE_WINDOW_MS) {
+    entry.timestamps.shift();
+  }
+  if (entry.timestamps.length >= THROTTLE_MAX) {
+    const oldest = entry.timestamps[0];
+    const waitSec = Math.max(1, Math.ceil((THROTTLE_WINDOW_MS - (now - oldest)) / 1000));
+    throw new TranslatorThrottledError(
+      `translator throttled — try again in ${waitSec}s (max ${THROTTLE_MAX} per ${THROTTLE_WINDOW_MS / 1000}s)`,
+    );
+  }
+  entry.timestamps.push(now);
+  translateAttempts.set(ceremonyKey, entry);
+}
+
+// ---------------------------------------------------------------------------
+// Prompt assembly
+// ---------------------------------------------------------------------------
+
+const VALID_TRIGGER_KINDS: ReadonlySet<TranslatorTriggerKind> = new Set([
+  'on_issue_entry',
+  'on_schedule',
+  'on_event',
+  'manual',
+]);
+
+function renderAvailableAgents(agents: TranslatorAvailableAgent[] | undefined): string {
+  if (!agents || agents.length === 0) {
+    return '(no specific agents — use "@role" mentions only)';
+  }
+  return agents.map((a) => `- ${a.name} (${a.role})`).join('\n');
+}
+
+function buildPrompt(input: TranslatorInput): string {
+  const availableAgents = renderAvailableAgents(input.availableAgents);
+  return [
+    'You are a workflow translator for an agent-driven kanban board. Given a narrative ceremony described in markdown, produce an executable ceremony definition in our YAML schema.',
+    '',
+    'Available agents on this project (use only these names; do not invent):',
+    availableAgents,
+    '',
+    'Our YAML schema supports these step types:',
+    "  - agent_run: { agent: <name|template>, prompt: <string>, timeout?: <duration> }",
+    "  - approve: { approvers: [<agentName|@role>], request_changes_policy: 'first'|'majority'|'all', quorum?: {n,of}, timeout?, timeoutAction?: 'auto_approve'|'auto_reject'|'escalate'|'notify' }",
+    "  - fan_out: { split_by: 'agents'|'labels'|'count', agents?: [...], count?: N, merge_strategy: 'all'|'any'|'first', steps: [...] }",
+    "  - handoff: { to: <agentName>, message?: <string> }",
+    "  - route: { agent: <name|template>, prompt?: <string> }",
+    '',
+    'Trigger taxonomy:',
+    "  - on_issue_entry: triggerConfig = { scope: 'project'|'board'|'task', columnSlug?, labelIds? }",
+    '  - on_schedule:    triggerConfig = { cronExpr, timezone? }',
+    "  - on_event:       triggerConfig = { eventType: 'review.requested'|'deliverable.created'|'comment.posted'|'session.completed'|'agent.hired' }",
+    '  - manual:         triggerConfig = {}',
+    '',
+    `Ceremony name: ${input.ceremonyName}`,
+    '',
+    'The narrative ceremony (markdown):',
+    '"""',
+    input.narrativeMarkdown,
+    '"""',
+    '',
+    'Respond ONLY with a JSON object (no prose, no markdown fence) matching:',
+    '{',
+    '  "yamlContent": string,                  // valid YAML matching our schema',
+    '  "triggerKind": "on_issue_entry"|"on_schedule"|"on_event"|"manual",',
+    '  "triggerConfig": object,',
+    '  "warnings": string[],                   // empty array if none',
+    '  "rationale": string                     // ≤3 sentences explaining choices',
+    '}',
+    '',
+    'Constraints:',
+    '- Use only agent names from the provided list. If the narrative names someone not on the list, add a warning and substitute "@role" or omit.',
+    "- Default to 'manual' triggerKind if you cannot infer one from the markdown.",
+    '- Keep the workflow as small as possible — prefer 2-4 steps over 8.',
+    '- For each step, write a clear, action-oriented prompt — not a description.',
+  ].join('\n');
+}
+
+// ---------------------------------------------------------------------------
+// LLM invocation — mirrors services/inbox.ts callFormulator()
+// ---------------------------------------------------------------------------
+
+async function callTranslator(prompt: string): Promise<string> {
+  const token = process.env.GITHUB_TOKEN ?? process.env.SQUADBOARD_GITHUB_TOKEN;
+  const { SquadClient } = await import('@bradygaster/squad-sdk/client');
+  const client = new SquadClient({
+    ...(token ? { githubToken: token } : { useLoggedInUser: true }),
+    cwd: process.cwd(),
+  });
+  await client.connect();
+  try {
+    const session = await client.createSession({
+      systemMessage: {
+        mode: 'replace',
+        content:
+          'You are a precise JSON-only assistant. Return only the requested JSON object — no markdown fences, no prose.',
+      },
+      workingDirectory: process.cwd(),
+      onPermissionRequest: () => ({ kind: 'approved' }),
+    });
+    const result = await client.sendAndWait(session, { prompt });
+    return extractText(result);
+  } finally {
+    await client.disconnect().catch(() => {});
+  }
+}
+
+function extractText(result: unknown): string {
+  if (typeof result === 'string') return result;
+  if (result && typeof result === 'object') {
+    const r = result as Record<string, unknown>;
+    if (r['data'] && typeof r['data'] === 'object') {
+      const data = r['data'] as Record<string, unknown>;
+      if (typeof data['content'] === 'string') return data['content'];
+    }
+    if (typeof r['content'] === 'string') return r['content'];
+    if (typeof r['text'] === 'string') return r['text'];
+    if (typeof r['message'] === 'string') return r['message'];
+    if (r['message'] && typeof (r['message'] as Record<string, unknown>)['content'] === 'string') {
+      return (r['message'] as Record<string, unknown>)['content'] as string;
+    }
+  }
+  return JSON.stringify(result ?? '');
+}
+
+// ---------------------------------------------------------------------------
+// Tolerant JSON extraction
+// ---------------------------------------------------------------------------
+
+function extractJsonObject(raw: string): unknown {
+  const trimmed = raw.trim();
+  try {
+    return JSON.parse(trimmed);
+  } catch {
+    // Strip ```json … ``` fences (LLM ignored the no-fence instruction).
+    const fenceMatch = trimmed.match(/```(?:json|yaml)?\s*([\s\S]*?)```/i);
+    if (fenceMatch && fenceMatch[1]) {
+      try {
+        return JSON.parse(fenceMatch[1].trim());
+      } catch {
+        /* fall through */
+      }
+    }
+    // Locate first { … last } and try that slice.
+    const first = trimmed.indexOf('{');
+    const last = trimmed.lastIndexOf('}');
+    if (first !== -1 && last > first) {
+      try {
+        return JSON.parse(trimmed.slice(first, last + 1));
+      } catch {
+        /* fall through */
+      }
+    }
+    throw new TranslatorError(
+      `LLM output was not valid JSON: ${trimmed.slice(0, 200)}`,
+      true,
+    );
+  }
+}
+
+function normalisePayload(parsed: unknown): TranslatorResult {
+  if (!parsed || typeof parsed !== 'object') {
+    throw new TranslatorError('LLM payload was not a JSON object', true);
+  }
+  const p = parsed as Record<string, unknown>;
+
+  const yamlContent = typeof p.yamlContent === 'string' ? p.yamlContent : '';
+  if (!yamlContent.trim()) {
+    throw new TranslatorError('LLM payload missing `yamlContent`', true);
+  }
+
+  let triggerKind: TranslatorTriggerKind = 'manual';
+  const warnings: string[] = [];
+  const rawWarnings = Array.isArray(p.warnings) ? p.warnings : [];
+  for (const w of rawWarnings) {
+    if (typeof w === 'string' && w.trim().length > 0) {
+      warnings.push(w.trim());
+      if (warnings.length >= 10) break;
+    }
+  }
+
+  if (typeof p.triggerKind === 'string' && VALID_TRIGGER_KINDS.has(p.triggerKind as TranslatorTriggerKind)) {
+    triggerKind = p.triggerKind as TranslatorTriggerKind;
+  } else {
+    warnings.unshift("couldn't infer triggerKind, defaulted to manual");
+  }
+
+  let triggerConfig: Record<string, unknown> = {};
+  if (p.triggerConfig && typeof p.triggerConfig === 'object' && !Array.isArray(p.triggerConfig)) {
+    triggerConfig = p.triggerConfig as Record<string, unknown>;
+  }
+
+  const rationale =
+    typeof p.rationale === 'string' && p.rationale.trim().length > 0
+      ? p.rationale.trim().slice(0, 500)
+      : '(no rationale provided)';
+
+  return { yamlContent, triggerKind, triggerConfig, warnings, rationale };
+}
+
+// ---------------------------------------------------------------------------
+// Public entry
+// ---------------------------------------------------------------------------
+
+/**
+ * Translate a narrative markdown ceremony into an executable ceremony YAML.
+ * Throws `TranslatorError` (with `.retryable`) on any failure.
+ */
+export async function translateNarrative(
+  input: TranslatorInput,
+): Promise<TranslatorResult> {
+  if (!input.narrativeMarkdown || !input.narrativeMarkdown.trim()) {
+    throw new TranslatorError('narrativeMarkdown is empty', false);
+  }
+  if (!input.ceremonyName || !input.ceremonyName.trim()) {
+    throw new TranslatorError('ceremonyName is required', false);
+  }
+
+  // Throttle key: project + ceremony name. The same narrative can be retried
+  // up to THROTTLE_MAX times per window.
+  const key = `${input.projectId}:${input.ceremonyName.trim().toLowerCase()}`;
+  consumeThrottleSlot(key);
+
+  const prompt = buildPrompt(input);
+
+  let raw: string;
+  try {
+    raw = await callTranslator(prompt);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    throw new TranslatorError(`translator LLM call failed: ${msg}`, true);
+  }
+
+  const parsed = extractJsonObject(raw);
+  const result = normalisePayload(parsed);
+
+  // Validate the YAML through the same parser the manual editor uses so the
+  // failure surface is identical.
+  const { valid, errors } = validateWorkflowYaml(result.yamlContent);
+  if (!valid) {
+    throw new TranslatorError(
+      `translated YAML failed validation: ${errors.join('; ')}`,
+      true,
+    );
+  }
+
+  return result;
+}

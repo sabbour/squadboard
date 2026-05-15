@@ -605,6 +605,19 @@ async function bootstrapSchema(): Promise<void> {
      WHERE kind = 'ceremony'
        AND created_at < (now() - interval '5 minutes');
 
+    -- Phase 11: Markdown ceremony auto-convert ------------------------------
+    -- status:     lifecycle gate for trigger eligibility
+    -- parent_narrative_id: self-FK back to the kind='narrative' source row
+    -- last_translation_error / _attempt_at: translator failure surface
+    ALTER TABLE workflows
+      ADD COLUMN IF NOT EXISTS status                       TEXT        NOT NULL DEFAULT 'active';
+    ALTER TABLE workflows
+      ADD COLUMN IF NOT EXISTS parent_narrative_id          UUID        REFERENCES workflows(id) ON DELETE SET NULL;
+    ALTER TABLE workflows
+      ADD COLUMN IF NOT EXISTS last_translation_error       TEXT;
+    ALTER TABLE workflows
+      ADD COLUMN IF NOT EXISTS last_translation_attempt_at  TIMESTAMPTZ;
+
     -- New table: ceremony_schedules (heartbeat sweep target for on_schedule).
     CREATE TABLE IF NOT EXISTS ceremony_schedules (
       id            UUID        PRIMARY KEY DEFAULT gen_random_uuid(),

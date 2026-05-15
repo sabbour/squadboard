@@ -276,6 +276,21 @@ export const workflows = pgTable('workflows', {
   triggerKind: text('trigger_kind').notNull().default('on_issue_entry'),
   triggerConfig: jsonb('trigger_config').notNull().default({}),
   kind: text('kind').notNull().default('ceremony'),
+  // Phase 11: lifecycle status — controls whether the scheduler / event
+  //   dispatcher will fire this ceremony.
+  //   'active'   : eligible for triggers
+  //   'draft'    : freshly translated, awaiting human review (review page)
+  //   'paused'   : temporarily disabled (kept for future UX; not auto-set)
+  //   'archived' : soft-deleted; hidden from default lists
+  status: text('status').notNull().default('active'),
+  // Phase 11: when this row is an executable translation of a narrative,
+  //   parentNarrativeId points back at the kind='narrative' source. NULL
+  //   when the ceremony was authored directly (not derived from prose).
+  parentNarrativeId: uuid('parent_narrative_id'),
+  // Phase 11: translation failure surface. Populated on a failed convert /
+  //   translate attempt; cleared when a retry succeeds.
+  lastTranslationError: text('last_translation_error'),
+  lastTranslationAttemptAt: timestamp('last_translation_attempt_at'),
   createdAt: timestamp('created_at').notNull().defaultNow(),
   updatedAt: timestamp('updated_at').notNull().defaultNow(),
 });

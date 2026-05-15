@@ -131,6 +131,15 @@ export async function spawnCeremonyRun(workflowId, opts = { trigger: 'manual' })
         console.warn(`[ceremony] spawn skipped — workflow ${workflowId} kind='narrative' (not executable)`);
         return null;
     }
+    // Phase 11: respect lifecycle status. Manual /run still works (caller passed
+    // through routes/ceremonies.ts which can override), but auto-fire trigger
+    // paths (scheduler / event dispatcher) MUST honour draft/paused/archived.
+    if (workflow.status !== 'active' &&
+        opts.trigger !== 'manual' &&
+        opts.trigger !== 'manual_force') {
+        console.warn(`[ceremony] spawn skipped — workflow ${workflowId} status='${workflow.status}' (not active, trigger=${opts.trigger})`);
+        return null;
+    }
     const versions = await db
         .select()
         .from(schema.workflowVersions)

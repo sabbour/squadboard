@@ -101,6 +101,7 @@ async function findMatchingCeremonies(
       and(
         eq(schema.workflows.projectId, projectId),
         eq(schema.workflows.triggerKind, 'on_event'),
+        eq(schema.workflows.status, 'active'),
         sql`${schema.workflows.triggerConfig}->>'eventType' = ${eventType}`,
       ),
     );
