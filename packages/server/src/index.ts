@@ -11,6 +11,7 @@ import squadRouter from './routes/squad.js';
 import agentsRouter from './routes/agents.js';
 import issuesRouter from './routes/issues.js';
 import commentsMentionRouter from './routes/comments-mention.js';
+import projectDeliverablesRouter, { issueDeliverablesRouter } from './routes/deliverables.js';
 import labelsRouter from './routes/labels.js';
 import { issueRunsRouter, projectRunsRouter } from './routes/runs.js';
 import routingRouter from './routes/routing.js';
@@ -62,6 +63,8 @@ async function main(): Promise<void> {
   app.use('/api/projects/:projectId/sessions', projectSessionsRouter);
   app.use('/api/projects/:projectId/issues', issuesRouter);
   app.use('/api/projects/:projectId/issues', commentsMentionRouter);
+  app.use('/api/projects/:projectId/issues', issueDeliverablesRouter);
+  app.use('/api/projects/:projectId/deliverables', projectDeliverablesRouter);
   app.use('/api/projects/:projectId/labels', labelsRouter);
   app.use('/api/projects/:projectId/issues/:issueId/runs', issueRunsRouter);
   app.use('/api/projects/:projectId/runs', projectRunsRouter);

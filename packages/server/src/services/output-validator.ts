@@ -151,4 +151,54 @@ export async function recordRunCompletion(
       updatedAt: new Date(),
     })
     .where(eq(issueRuns.id, issueRunId));
+
+  // --- Phase 9: auto-extract a deliverable from agent_run output ---
+  // Only for primary agent_runs; peer_review / route / split / specifier_run
+  // produce internal artefacts that don't belong on the deliverables tab.
+  try {
+    const { deliverables, issues, projects } = schema;
+    const [run] = await db
+      .select({ kind: issueRuns.kind, issueId: issueRuns.issueId })
+      .from(issueRuns)
+      .where(eq(issueRuns.id, issueRunId))
+      .limit(1);
+    if (run?.kind === 'agent_run') {
+      const { extractFromIssueRun } = await import('./deliverables.js');
+      const created = await extractFromIssueRun(issueRunId);
+      if (created) {
+        const [issue] = await db
+          .select({ projectId: issues.projectId })
+          .from(issues)
+          .where(eq(issues.id, run.issueId))
+          .limit(1);
+        if (issue?.projectId) {
+          // Lazy-import event bus + system-comment helper to avoid cycles.
+          const { eventBus } = await import('../realtime/event-bus.js');
+          const { appendSystemComment } = await import('./issues.js');
+          eventBus.emitDeliverableEvent('deliverable.created', issue.projectId, {
+            issueId: run.issueId,
+            deliverable: created,
+            source: 'auto-extract',
+          });
+          await appendSystemComment({
+            issueId: run.issueId,
+            eventKind: 'deliverable.submitted',
+            summary: `Deliverable auto-extracted from run output: ${created.title}`,
+            eventPayload: {
+              deliverableId: created.id,
+              kind: created.kind,
+              runId: issueRunId,
+              source: 'auto-extract',
+            },
+          }).catch((e) => console.warn('[deliverables] system-comment failed:', e));
+        }
+        // suppress unused-var warning for projects table in destructure
+        void projects;
+        void deliverables;
+      }
+    }
+  } catch (err) {
+    // Non-fatal: extraction failures must not break run completion.
+    console.warn(`[deliverables] auto-extract failed for run ${issueRunId}:`, err);
+  }
 }
