@@ -110,3 +110,17 @@ Demo 6 workflow engine: YAML parser (js-yaml), WorkflowDefinition (route/agent_r
 - **GitHubSync constructor drift**: `sync-hook.ts` was still calling the old 4-arg constructor `(projectId, token, owner, repo)` after `sync.ts` refactored it to `(projectId, client: GitHubClient)`. Fix: construct `GitHubClient` inline, pass to `GitHubSync`.
 - **TS2352 double-cast**: `(err as { status: number })` on an `Error`-narrowed value fails because `Error` and `{ status: number }` don't sufficiently overlap. Fix: go through `unknown` first: `(err as unknown as { status: number })`.
 - **Pre-existing TS2742**: All route files have `error TS2742` for inferred Router types — these are baseline failures from the pnpm symlink path issue and are explicitly excluded from fixes.
+
+### 2026-05-15 — Fix "7 hours ago" UTC timestamp bug
+
+## Learnings
+
+**Root cause**: Drizzle ORM's `mapFromDriverValue` for `timestamp()` (without `withTimezone: true`) appends `"+0000"` to the raw Postgres string before passing to `new Date()`. When Postgres session TZ is PDT (UTC-7) and the raw pg string is `"2026-05-15 05:22:15-07"`, Drizzle produces `new Date("2026-05-15 05:22:15-07+0000")` — a malformed date where JS ignores the `-07` and reads `05:22 UTC` instead of `12:22 UTC`. Result: every freshly-created item shows "7 hours ago" for PDT users.
+
+**Fix**: Add `{ withTimezone: true }` to every `timestamp()` column in `schema.ts`. With `withTimezone: true`, Drizzle's `mapFromDriverValue` passes the raw string directly to `new Date(value)`, which correctly parses the `-07` offset → 12:22 UTC. ✓
+
+**`AT TIME ZONE 'UTC'` migration trick**: For existing `TIMESTAMP WITHOUT TIME ZONE` columns holding UTC data, use `ALTER TABLE t ALTER COLUMN c TYPE TIMESTAMPTZ USING c AT TIME ZONE 'UTC'` to reinterpret the stored moments correctly. Not needed here since the bootstrap already created all columns as `TIMESTAMPTZ`.
+
+**Rule**: ALL new timestamp columns in `db/schema.ts` MUST use `timestamp({ withTimezone: true })`. Plain `timestamp()` is **never** correct — even if the DB column is `TIMESTAMPTZ`, Drizzle's `mapFromDriverValue` uses the schema declaration, not the actual Postgres OID, to decide whether to append `+0000`.
+
+**Bonus fix**: `GET /api/projects/:projectId/routing/log` was returning `decidedAt` in the JSON but the client's `RoutingLogEntry` expected `timestamp`. Fixed by mapping `{ ...r, timestamp: r.decidedAt }` in the route response. The Routing Log "Time" column was silently showing `—` for all entries.
