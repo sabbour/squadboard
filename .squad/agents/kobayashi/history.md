@@ -148,7 +148,23 @@ Decision filed: `.squad/decisions/inbox/kobayashi-sdk-state-wrapper.md`.
 
 SDK state wrapper (r1, commit 8fdbbaa9): `services/sdk-state.ts` with SquadState factory and 7 typed collection accessors (agents, routing, decisions, skills, team, templates, config). Synchronous fromStorage(storage, rootDir) factory (no re-validation; path already validated on DB write). Module-level cache per projectId with invalidateState() eviction. FSStorageProvider must receive rootDir for security confinement. Foundational shim for downstream Phase 5 work; all Phase 5 state reads depend on this wrapper. SDK quirk: collection constructors not exported; only instantiate via SquadState.
 
-### 2026-05-15T09:09:55-07:00 — Phase 5 fs-migration (p5-migrate-fs)
+### 2026-05-15T09:48:00-07:00 — Per-project Kanban column add/remove (dynamic-columns)
+
+**Batch A — `1a4c5d46`** (schema + bootstrap):  
+- Removed `columnStatusEnum` pgEnum from `schema.ts`; `issues.status` is now `TEXT`.  
+- Added `semantic TEXT NOT NULL DEFAULT 'custom'` and `is_default BOOLEAN NOT NULL DEFAULT false` to `columnMeta` table in schema.ts.  
+- Bootstrap DDL in `db/index.ts`: idempotent enum→text migration (`DO $$ IF EXISTS $$`), `ADD COLUMN IF NOT EXISTS` for both new fields, semantic backfill for the 5 seed columns, `is_default=true` backfill on `backlog` for projects with no default set.
+
+**Batch B — `d87c8f45`** (CRUD routes + validation + client hooks):  
+- `routes/column-meta.ts` rewritten: added `POST /columns`, `DELETE /columns/:columnId` (with `?reassignTo=` atomic issue migration), `PATCH /columns/reorder` (full order rewrite in transaction), extended `PATCH /columns/:columnId` with `semantic`/`isDefault` (isDefault=true atomically clears others).  
+- `services/issues.ts`: `ColumnStatus` widened to `string`, `assertColumnExists(projectId, columnId)` exported, `getDefaultColumnId(projectId)` private helper, `createIssue` defaults to `is_default=true` column, `moveIssue` validates column before write.  
+- `services/templates/project-template.ts`: `ColumnMetaBundle` extended with `semantic`/`isDefault`; export+import updated.  
+- `client/src/api/columns.ts`: `ColumnMeta` interface extended; `useCreateColumn`, `useDeleteColumn`, `useReorderColumns` added.
+
+TypeScript: server 2 pre-existing conjure-classifier errors only; client clean.  
+Smoke test: `POST /api/projects/<id>/columns` returned `{ ok: true, data: { columnId: "triage", semantic: "backlog", isDefault: false, ... } }`.  
+Decision filed: `.squad/decisions/inbox/kobayashi-columns-add-remove.md`.
+
 
 Migrated charter-compiler + agent-sync from raw `fs/promises` reads to SDK collections.
 
