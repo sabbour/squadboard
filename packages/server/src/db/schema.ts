@@ -882,3 +882,22 @@ export const issueAttachments = pgTable('issue_attachments', {
 
 export type IssueAttachment    = typeof issueAttachments.$inferSelect;
 export type NewIssueAttachment = typeof issueAttachments.$inferInsert;
+
+// ---------------------------------------------------------------------------
+// Phase 19: Templates & Portability
+// ---------------------------------------------------------------------------
+
+export const templates = pgTable('templates', {
+  id:          uuid('id').primaryKey().defaultRandom(),
+  kind:        text('kind').notNull(),        // 'workflow' | 'team' | 'project'
+  name:        text('name').notNull(),
+  description: text('description'),
+  payload:     jsonb('payload').notNull(),    // serialised bundle; shape depends on kind
+  // Optional: the project this template was saved from. NULL for built-ins.
+  projectId:   uuid('project_id'),
+  createdAt:   timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  updatedAt:   timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+});
+
+export type Template    = typeof templates.$inferSelect;
+export type NewTemplate = typeof templates.$inferInsert;

@@ -835,6 +835,22 @@ async function bootstrapSchema(): Promise<void> {
 
     CREATE INDEX IF NOT EXISTS issue_attachments_issue_idx
       ON issue_attachments (issue_id, created_at);
+
+    -- Phase 19: Templates & Portability
+    CREATE TABLE IF NOT EXISTS templates (
+      id          UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+      kind        TEXT        NOT NULL,
+      name        TEXT        NOT NULL,
+      description TEXT,
+      payload     JSONB       NOT NULL,
+      project_id  UUID        REFERENCES projects(id) ON DELETE SET NULL,
+      created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      CONSTRAINT templates_kind_chk CHECK (kind IN ('workflow', 'team', 'project'))
+    );
+
+    CREATE INDEX IF NOT EXISTS templates_kind_name_idx
+      ON templates (kind, name);
   `);
 
   await seedSystemReviewPolicyPresets();
