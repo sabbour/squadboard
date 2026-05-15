@@ -30,12 +30,6 @@ export default function KanbanColumn({
 }: KanbanColumnProps) {
   const accentColor = color ?? tokens.colorNeutralStroke1
 
-  const titleNode = (
-    <span style={{ fontSize: '13px', fontWeight: 600, color: tokens.colorNeutralForeground1 }}>
-      {label}
-    </span>
-  )
-
   return (
     <div
       style={{
@@ -52,57 +46,94 @@ export default function KanbanColumn({
       {/* Column header */}
       <div
         style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
           padding: '10px 12px',
           background: tokens.colorNeutralBackground3,
           borderBottom: `1px solid ${tokens.colorNeutralStroke1}`,
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '4px',
         }}
       >
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          {description ? (
-            <Tooltip content={description} relationship="description" positioning="below">
-              {titleNode}
-            </Tooltip>
-          ) : (
-            titleNode
-          )}
-          <span
-            style={{
-              fontSize: '11px',
-              color: tokens.colorNeutralForeground2,
-              background: tokens.colorNeutralBackground4,
-              border: `1px solid ${tokens.colorNeutralStroke1}`,
-              borderRadius: '10px',
-              padding: '0 6px',
-              lineHeight: '18px',
-            }}
-          >
-            {issues.length}
-          </span>
-        </div>
-        {/* FAB: create issue in this column */}
-        <button
-          onClick={() => onCreateIssue(columnId)}
-          title="Create issue"
+        <div
           style={{
-            background: 'none',
-            border: 'none',
-            color: tokens.colorNeutralForeground2,
-            fontSize: '18px',
-            lineHeight: 1,
-            padding: '0 2px',
-            borderRadius: '4px',
-            cursor: 'pointer',
             display: 'flex',
             alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: '8px',
           }}
-          onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.color = tokens.colorBrandBackground }}
-          onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.color = tokens.colorNeutralForeground2 }}
         >
-          +
-        </button>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0 }}>
+            <span
+              style={{
+                fontSize: '13px',
+                fontWeight: 600,
+                color: tokens.colorNeutralForeground1,
+                whiteSpace: 'nowrap',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+              }}
+              title={label}
+            >
+              {label}
+            </span>
+            <span
+              style={{
+                fontSize: '11px',
+                color: tokens.colorNeutralForeground2,
+                background: tokens.colorNeutralBackground4,
+                border: `1px solid ${tokens.colorNeutralStroke1}`,
+                borderRadius: '10px',
+                padding: '0 6px',
+                lineHeight: '18px',
+                flexShrink: 0,
+              }}
+            >
+              {issues.length}
+            </span>
+          </div>
+          {/* FAB: create issue in this column */}
+          <button
+            onClick={() => onCreateIssue(columnId)}
+            title="Create issue"
+            style={{
+              background: 'none',
+              border: 'none',
+              color: tokens.colorNeutralForeground2,
+              fontSize: '18px',
+              lineHeight: 1,
+              padding: '0 2px',
+              borderRadius: '4px',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              flexShrink: 0,
+            }}
+            onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.color = tokens.colorBrandBackground }}
+            onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.color = tokens.colorNeutralForeground2 }}
+          >
+            +
+          </button>
+        </div>
+
+        {description && (
+          <Tooltip content={description} relationship="description" positioning="below">
+            <span
+              style={{
+                fontSize: '11px',
+                color: tokens.colorNeutralForeground2,
+                lineHeight: 1.35,
+                display: '-webkit-box',
+                WebkitLineClamp: 2,
+                WebkitBoxOrient: 'vertical',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                cursor: 'help',
+              }}
+            >
+              {description}
+            </span>
+          </Tooltip>
+        )}
       </div>
 
       {/* Droppable card list */}
