@@ -13,6 +13,7 @@ import issuesRouter from './routes/issues.js';
 import commentsMentionRouter from './routes/comments-mention.js';
 import projectDeliverablesRouter, { issueDeliverablesRouter } from './routes/deliverables.js';
 import labelsRouter from './routes/labels.js';
+import columnMetaRouter from './routes/column-meta.js';
 import { issueRunsRouter, projectRunsRouter } from './routes/runs.js';
 import routingRouter from './routes/routing.js';
 import { workflowsRouter, issueWorkflowRouter, workflowRunsRouter, stepRunsRouter, workflowTemplatesRouter } from './routes/workflows.js';
@@ -30,6 +31,7 @@ import reviewPoliciesRouter from './routes/review-policies.js';
 import inboxRouter from './routes/inbox.js';
 import { consultRouter, projectConsultRouter } from './routes/consult.js';
 import { projectFlowRouter, issueFlowRouter } from './routes/flow.js';
+import activityRouter from './routes/activity.js';
 import { curatedSkillsRouter, projectSkillsRouter, agentSkillsRouter } from './routes/skills.js';
 import { projectToolsRouter, agentToolsRouter } from './routes/tools.js';
 import { projectMcpRouter, agentMcpRouter } from './routes/mcp.js';
@@ -68,6 +70,7 @@ async function main(): Promise<void> {
   app.use(express.json());
 
   app.use('/api/health', healthRouter);
+  app.use('/api/activity', activityRouter);
   app.use('/api/inbox', inboxRouter);
   app.use('/api/consult', consultRouter);
   app.use('/api/projects', projectsRouter);
@@ -80,6 +83,7 @@ async function main(): Promise<void> {
   app.use('/api/projects/:projectId/issues', issueDeliverablesRouter);
   app.use('/api/projects/:projectId/deliverables', projectDeliverablesRouter);
   app.use('/api/projects/:projectId/labels', labelsRouter);
+  app.use('/api/projects/:projectId/columns', columnMetaRouter);
   app.use('/api/projects/:projectId/issues/:issueId/runs', issueRunsRouter);
   app.use('/api/projects/:projectId/runs', projectRunsRouter);
   // Phase 12: flow visualisation aggregators

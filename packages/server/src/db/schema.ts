@@ -1,4 +1,4 @@
-import { pgTable, uuid, text, timestamp, integer, boolean, pgEnum, primaryKey, numeric, jsonb } from 'drizzle-orm/pg-core';
+import { pgTable, uuid, text, timestamp, integer, boolean, pgEnum, primaryKey, numeric, jsonb, uniqueIndex } from 'drizzle-orm/pg-core';
 
 export const agentStatusEnum = pgEnum('agent_status', ['active', 'disabled', 'retired']);
 
@@ -115,6 +115,35 @@ export type Comment = typeof comments.$inferSelect;
 export type NewComment = typeof comments.$inferInsert;
 export type Label = typeof labels.$inferSelect;
 export type NewLabel = typeof labels.$inferInsert;
+
+// ---------------------------------------------------------------------------
+// Column metadata overlay — Phase 8 vertical slice (2026-05-15)
+// Stores per-project display overrides for the 5 hard-coded column_status enum
+// values. Does NOT replace the enum; Phase 8 proper will do that later.
+// Color is stored as a 6-digit hex string (e.g. '#1f6feb').
+// ---------------------------------------------------------------------------
+export const columnMeta = pgTable(
+  'column_meta',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    projectId: uuid('project_id')
+      .notNull()
+      .references(() => projects.id, { onDelete: 'cascade' }),
+    columnId: text('column_id').notNull(), // 'backlog'|'todo'|'in_progress'|'in_review'|'done'
+    label: text('label').notNull(),
+    description: text('description'),
+    color: text('color').notNull(),        // '#rrggbb' hex
+    position: integer('position').notNull().default(0),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => ({
+    uqProjectColumn: uniqueIndex('column_meta_project_column_uq').on(t.projectId, t.columnId),
+  }),
+);
+
+export type ColumnMeta = typeof columnMeta.$inferSelect;
+export type NewColumnMeta = typeof columnMeta.$inferInsert;
 
 // ---------------------------------------------------------------------------
 // Engine data layer — Demo 4 / Demo 5

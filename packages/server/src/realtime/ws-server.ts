@@ -43,6 +43,8 @@ interface ClientState {
 const rooms = new Map<string, Set<ClientState>>();
 // ws → client state (fast lookup on message/close)
 const clients = new Map<WebSocket, ClientState>();
+// Clients subscribed to every event regardless of project (the /now page).
+const globalClients = new Set<ClientState>();
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -87,6 +89,16 @@ function unsubscribeFromProject(state: ClientState, projectId: string): void {
   leavePresence(projectId, state.userId);
 }
 
+function subscribeGlobalClient(state: ClientState): void {
+  globalClients.add(state);
+  state.subscribedProjects.add('__global__');
+}
+
+function unsubscribeGlobalClient(state: ClientState): void {
+  globalClients.delete(state);
+  state.subscribedProjects.delete('__global__');
+}
+
 function handleMessage(state: ClientState, raw: string): void {
   let msg: ClientMessage;
   try {
@@ -102,12 +114,23 @@ function handleMessage(state: ClientState, raw: string): void {
   switch (type) {
     case 'subscribe':
       if (!projectId) { send(state.ws, 'error', { message: 'subscribe requires projectId' }); return; }
+      // Phase 19: '__global__' is the magic room that receives every bus event.
+      if (projectId === '__global__') {
+        subscribeGlobalClient(state);
+        send(state.ws, 'subscribed', { projectId: '__global__', userId: state.userId });
+        return;
+      }
       subscribeToProject(state, projectId);
       send(state.ws, 'subscribed', { projectId, userId: state.userId });
       break;
 
     case 'unsubscribe':
       if (!projectId) { send(state.ws, 'error', { message: 'unsubscribe requires projectId' }); return; }
+      if (projectId === '__global__') {
+        unsubscribeGlobalClient(state);
+        send(state.ws, 'unsubscribed', { projectId: '__global__' });
+        return;
+      }
       unsubscribeFromProject(state, projectId);
       send(state.ws, 'unsubscribed', { projectId });
       break;
@@ -127,21 +150,28 @@ function handleMessage(state: ClientState, raw: string): void {
 
 function handleClose(state: ClientState): void {
   clients.delete(state.ws);
+  globalClients.delete(state); // clean up global subscription if any
   const projects = Array.from(state.subscribedProjects);
   for (const projectId of projects) {
+    if (projectId === '__global__') continue;
     const room = rooms.get(projectId);
     if (room) {
       room.delete(state);
       if (room.size === 0) rooms.delete(projectId);
     }
   }
-  removeUser(state.userId, projects);
+  removeUser(state.userId, projects.filter((p) => p !== '__global__'));
 }
 
 // ─── Bus listener — fan-out to WS clients ─────────────────────────────────────
 
 function onBusEvent(event: BusEvent): void {
   broadcast(event.projectId, event.type, event.payload);
+  // Phase 19: fan-out to global subscribers (/now view).
+  // Deliver every bus event to clients that requested '__global__' scope.
+  for (const client of globalClients) {
+    send(client.ws, event.type, event.payload);
+  }
 }
 
 // ─── Init ─────────────────────────────────────────────────────────────────────

@@ -17,6 +17,7 @@ import Skills from './pages/Skills.tsx'
 import Tools from './pages/Tools.tsx'
 import McpServers from './pages/McpServers.tsx'
 import Consult from './pages/Consult.tsx'
+import Now from './pages/Now.tsx'
 
 export default function App() {
   return (
@@ -24,6 +25,8 @@ export default function App() {
       <Route element={<Layout />}>
         <Route index element={<ProjectPicker />} />
         <Route path="inbox" element={<Inbox />} />
+        {/* Phase 19: global /now view — live activity across all projects */}
+        <Route path="now" element={<Now />} />
         {/* Phase 17: cross-project Ask / Consult */}
         <Route path="consult" element={<Navigate to="/consult/new" replace />} />
         <Route path="consult/new" element={<Consult />} />

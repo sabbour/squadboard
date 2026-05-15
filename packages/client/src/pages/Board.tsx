@@ -11,7 +11,10 @@ import CreateIssueModal from '../components/board/CreateIssueModal.tsx'
 import PresenceBar from '../components/board/PresenceBar.tsx'
 import ConflictToast from '../components/board/ConflictToast.tsx'
 import CaptureFab from '../components/inbox/CaptureFab.tsx'
+import ColumnSettingsPanel from '../components/board/ColumnSettingsPanel.tsx'
 import { useRealtimeBoard } from '../realtime/useRealtimeBoard.ts'
+import { Settings24Regular } from '@fluentui/react-icons'
+import { Subtitle1, Caption1, Body1, tokens } from '@fluentui/react-components'
 
 export default function Board() {
   const { id } = useParams<{ id: string }>()
@@ -101,9 +104,16 @@ export default function Board() {
   // Create issue modal
   const [createColumn, setCreateColumn] = useState<ColumnId | null>(null)
 
+  // Column settings panel
+  const [columnSettingsOpen, setColumnSettingsOpen] = useState(false)
+
   // ── Loading / error states ────────────────────────────────────────────
   if (projectLoading) {
-    return <div style={{ padding: '32px', color: 'var(--text-muted)' }}>Loading project…</div>
+    return (
+      <div style={{ padding: '32px' }}>
+        <Body1 style={{ color: tokens.colorNeutralForeground3 }}>Loading project…</Body1>
+      </div>
+    )
   }
 
   if (projectError || !project) {
@@ -128,12 +138,19 @@ export default function Board() {
         }}
       >
         <div>
-          <h1 style={{ fontSize: '18px', fontWeight: 600, color: 'var(--text)' }}>
+          <Subtitle1 as="h1" style={{ display: 'block', color: tokens.colorNeutralForeground1 }}>
             {project.name}
-          </h1>
-          <p style={{ fontSize: '12px', color: 'var(--text-muted)', fontFamily: 'monospace', marginTop: '2px' }}>
+          </Subtitle1>
+          <Caption1
+            style={{
+              display: 'block',
+              color: tokens.colorNeutralForeground3,
+              fontFamily: tokens.fontFamilyMonospace,
+              marginTop: tokens.spacingVerticalXXS,
+            }}
+          >
             {project.squadPath}
-          </p>
+          </Caption1>
         </div>
         {/* Live presence avatars + connection dot */}
         <PresenceBar
@@ -143,6 +160,27 @@ export default function Board() {
             (allIssues ?? []).map((i) => [i.id, i.title])
           )}
         />
+        {/* Customize columns gear button */}
+        <button
+          onClick={() => setColumnSettingsOpen(true)}
+          title="Customize columns"
+          aria-label="Customize columns"
+          style={{
+            marginLeft: 'auto',
+            background: 'none',
+            border: 'none',
+            cursor: 'pointer',
+            color: tokens.colorNeutralForeground2,
+            display: 'flex',
+            alignItems: 'center',
+            padding: '6px',
+            borderRadius: '6px',
+          }}
+          onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.color = tokens.colorNeutralForeground1 }}
+          onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.color = tokens.colorNeutralForeground2 }}
+        >
+          <Settings24Regular />
+        </button>
       </div>
 
       {/* Filter bar */}
@@ -157,7 +195,9 @@ export default function Board() {
       {/* Board body */}
       <div style={{ flex: 1, overflow: 'auto', padding: '16px 24px' }}>
         {issuesLoading ? (
-          <div style={{ color: 'var(--text-muted)', padding: '16px' }}>Loading issues…</div>
+          <div style={{ padding: '16px' }}>
+            <Caption1 style={{ color: tokens.colorNeutralForeground3 }}>Loading issues…</Caption1>
+          </div>
         ) : (
           <KanbanBoard
             projectId={projectId}
@@ -210,6 +250,14 @@ export default function Board() {
 
       {/* Phase 14: per-project quick-capture FAB */}
       <CaptureFab projectId={projectId} />
+
+      {/* Column settings drawer */}
+      {columnSettingsOpen && (
+        <ColumnSettingsPanel
+          projectId={projectId}
+          onClose={() => setColumnSettingsOpen(false)}
+        />
+      )}
     </div>
   )
 }

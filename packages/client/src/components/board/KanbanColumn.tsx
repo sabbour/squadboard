@@ -1,11 +1,13 @@
 import { Droppable } from '@hello-pangea/dnd'
-import { tokens } from '@fluentui/react-components'
+import { tokens, Tooltip } from '@fluentui/react-components'
 import { type Issue, type ColumnId } from '../../api/issues.ts'
 import IssueCard from './IssueCard.tsx'
 
 interface KanbanColumnProps {
   columnId: ColumnId
   label: string
+  description?: string | null
+  color?: string
   issues: Issue[]
   projectId: string
   selectedIds: Set<string>
@@ -17,6 +19,8 @@ interface KanbanColumnProps {
 export default function KanbanColumn({
   columnId,
   label,
+  description,
+  color,
   issues,
   projectId,
   selectedIds,
@@ -24,6 +28,14 @@ export default function KanbanColumn({
   onOpenCard,
   onCreateIssue,
 }: KanbanColumnProps) {
+  const accentColor = color ?? tokens.colorNeutralStroke1
+
+  const titleNode = (
+    <span style={{ fontSize: '13px', fontWeight: 600, color: tokens.colorNeutralForeground1 }}>
+      {label}
+    </span>
+  )
+
   return (
     <div
       style={{
@@ -34,6 +46,7 @@ export default function KanbanColumn({
         background: tokens.colorNeutralBackground2,
         borderRadius: '8px',
         overflow: 'hidden',
+        borderLeft: `4px solid ${accentColor}`,
       }}
     >
       {/* Column header */}
@@ -48,7 +61,13 @@ export default function KanbanColumn({
         }}
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <span style={{ fontSize: '13px', fontWeight: 600, color: tokens.colorNeutralForeground1 }}>{label}</span>
+          {description ? (
+            <Tooltip content={description} relationship="description" positioning="below">
+              {titleNode}
+            </Tooltip>
+          ) : (
+            titleNode
+          )}
           <span
             style={{
               fontSize: '11px',

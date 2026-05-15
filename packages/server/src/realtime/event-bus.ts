@@ -161,6 +161,18 @@ class EventBus extends EventEmitter {
     const event: BusEvent = { type, projectId: `consult:${consultSessionId}`, payload };
     this.emit('event', event);
   }
+  /**
+   * Phase 19 (Now view): Subscribe to ALL events across ALL projects.
+   * The handler receives every BusEvent emitted on the in-process bus,
+   * regardless of projectId. Used by the WS server to fan out to clients
+   * that hold a `__global__` subscription (the /now page).
+   *
+   * Returns an unsubscribe function for clean teardown.
+   */
+  subscribeGlobal(handler: (event: BusEvent) => void): () => void {
+    this.on('event', handler);
+    return () => this.off('event', handler);
+  }
 }
 
 export const eventBus = new EventBus();

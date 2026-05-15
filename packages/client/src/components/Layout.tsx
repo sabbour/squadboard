@@ -28,6 +28,7 @@ import {
   PlugConnected24Regular,
   ChatHelp24Regular,
   ChatHelp20Regular,
+  Eye24Regular,
 } from '@fluentui/react-icons'
 import type { OnNavItemSelectData } from '@fluentui/react-components'
 import CaptureModal from './inbox/CaptureModal.tsx'
@@ -162,6 +163,7 @@ export default function Layout() {
 
   function getSelectedValue(): string {
     if (location.pathname === '/' || location.pathname === '') return 'projects'
+    if (location.pathname.startsWith('/now')) return 'now'
     if (id) {
       // Match longest segment first so 'consult' isn't shadowed by 'flow' etc.
       const matches = PROJECT_NAV_ITEMS
@@ -180,6 +182,8 @@ export default function Layout() {
     const value = data.value as string
     if (value === 'projects') {
       void navigate('/')
+    } else if (value === 'now') {
+      void navigate('/now')
     } else if (value === 'consult' && !id) {
       // Cross-project Consult — when no project is selected.
       void navigate('/consult/new')
@@ -206,6 +210,10 @@ export default function Layout() {
         <NavDrawerBody>
           <NavItem icon={<Home24Regular />} value="projects">
             Projects
+          </NavItem>
+          {/* Phase 19: Now — cross-project live view */}
+          <NavItem icon={<Eye24Regular />} value="now">
+            Now
           </NavItem>
           <NavItem icon={<ChatHelp24Regular />} value="consult">
             Consult

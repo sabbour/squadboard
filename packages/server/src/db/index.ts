@@ -804,6 +804,23 @@ async function bootstrapSchema(): Promise<void> {
       ON consult_proposals (session_id, created_at);
     CREATE INDEX IF NOT EXISTS consult_proposals_status_idx
       ON consult_proposals (status);
+
+    -- Phase 8 vertical slice: column metadata overlay (2026-05-15)
+    -- Stores per-project display overrides for the 5 hard-coded columns.
+    CREATE TABLE IF NOT EXISTS column_meta (
+      id          UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+      project_id  UUID        NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+      column_id   TEXT        NOT NULL,
+      label       TEXT        NOT NULL,
+      description TEXT,
+      color       TEXT        NOT NULL,
+      position    INTEGER     NOT NULL DEFAULT 0,
+      created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+
+    CREATE UNIQUE INDEX IF NOT EXISTS column_meta_project_column_uq
+      ON column_meta (project_id, column_id);
   `);
 
   await seedSystemReviewPolicyPresets();
