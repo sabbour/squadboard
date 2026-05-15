@@ -51,6 +51,14 @@ export type DeliverableEventType =
   | 'deliverable.reviewed'
   | 'deliverable.superseded';
 
+/**
+ * Phase 15: parallel SDK fan-out spawn telemetry. Emitted once per
+ * spawnFanOutChildren() invocation so downstream UI (Phase 12 flow viz,
+ * future ops dashboards) can render parallel-spawn fan-outs distinctly
+ * from serial fan-outs.
+ */
+export type FanOutEventType = 'fan_out.parallel_spawn';
+
 export type BusEventType =
   | IssueEventType
   | RunEventType
@@ -58,7 +66,8 @@ export type BusEventType =
   | PresenceEventType
   | SessionEventType
   | CommentEventType
-  | DeliverableEventType;
+  | DeliverableEventType
+  | FanOutEventType;
 
 export interface BusEvent {
   type: BusEventType;
@@ -107,6 +116,17 @@ class EventBus extends EventEmitter {
 
   /** Emit a deliverable-lifecycle event scoped to a project. */
   emitDeliverableEvent(type: DeliverableEventType, projectId: string, payload: unknown): void {
+    const event: BusEvent = { type, projectId, payload };
+    this.emit('event', event);
+  }
+
+  /**
+   * Phase 15: parallel SDK fan-out spawn telemetry. The payload shape is
+   * documented in sdk/fan-out-adapter.ts (FanOutSpawnTelemetry).
+   * `projectId` may be 'global' when no project context is in scope, but
+   * normally the engine forwards the parent workflow_run's project.
+   */
+  emitFanOutEvent(type: FanOutEventType, projectId: string, payload: unknown): void {
     const event: BusEvent = { type, projectId, payload };
     this.emit('event', event);
   }

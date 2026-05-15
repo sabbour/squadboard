@@ -28,7 +28,7 @@ import {
   recordApproval,
 } from './peer-reviewer.js';
 import type { RequestChangesPolicy } from './peer-reviewer.js';
-import { materializeFanOut, checkFanOutCompletion } from './fan-out.js';
+import { materializeAndSpawnFanOut, checkFanOutCompletion } from './fan-out.js';
 import { appendSystemComment } from '../services/issues.js';
 
 // ---------------------------------------------------------------------------
@@ -628,13 +628,14 @@ async function handleFanOutStep(
     }
 
     try {
-      const childIds = await materializeFanOut(
-        wfRun.id,
-        stepRun.id,
-        stepDef,
-        issue,
-        db,
-      );
+      const { childWorkflowRunIds: childIds, spawnResults, parallelSpawnSkippedReason } =
+        await materializeAndSpawnFanOut(
+          wfRun.id,
+          stepRun.id,
+          stepDef,
+          issue,
+          db,
+        );
 
       // Mark parent stepRun as waiting_children (transaction already set 'splitting',
       // but post-COMMIT we advance to 'waiting_children')
@@ -652,10 +653,24 @@ async function handleFanOutStep(
         .set({ status: 'running', updatedAt: new Date() })
         .where(eq(workflowRuns.id, wfRun.id));
 
+      const mode = stepDef.mode ?? 'serial';
       console.log(
         `[workflow-runner] fan_out step ${stepRun.stepIndex} spawned ${childIds.length} children ` +
-        `for workflow_run ${wfRun.id}`,
+        `for workflow_run ${wfRun.id} (mode=${mode})`,
       );
+      if (mode === 'parallel' && spawnResults) {
+        const ok = spawnResults.filter((r) => r.status === 'success').length;
+        const fail = spawnResults.filter((r) => r.status === 'failed').length;
+        console.log(
+          `[workflow-runner] parallel spawn: ${ok} succeeded, ${fail} failed ` +
+          `(parent_step=${stepRun.id})`,
+        );
+      } else if (mode === 'parallel' && parallelSpawnSkippedReason) {
+        console.warn(
+          `[workflow-runner] parallel spawn skipped — ${parallelSpawnSkippedReason}; ` +
+          `dispatcher will pick up children serially`,
+        );
+      }
     } catch (err: unknown) {
       console.error(`[workflow-runner] fan_out materialization failed:`, err);
       await db

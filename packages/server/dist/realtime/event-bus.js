@@ -42,6 +42,16 @@ class EventBus extends EventEmitter {
         const event = { type, projectId, payload };
         this.emit('event', event);
     }
+    /**
+     * Phase 15: parallel SDK fan-out spawn telemetry. The payload shape is
+     * documented in sdk/fan-out-adapter.ts (FanOutSpawnTelemetry).
+     * `projectId` may be 'global' when no project context is in scope, but
+     * normally the engine forwards the parent workflow_run's project.
+     */
+    emitFanOutEvent(type, projectId, payload) {
+        const event = { type, projectId, payload };
+        this.emit('event', event);
+    }
 }
 export const eventBus = new EventBus();
 // Increase limit for large deployments with many WS subscribers

@@ -16,6 +16,7 @@
  */
 import { sql } from 'drizzle-orm';
 import { getPool } from '../db/index.js';
+import { spawnFanOutChildren, } from '../sdk/fan-out-adapter.js';
 // ---------------------------------------------------------------------------
 // resolveTargets — resolve split_by to concrete SplitTarget[]
 // ---------------------------------------------------------------------------
@@ -194,6 +195,149 @@ export async function materializeFanOut(parentWorkflowRunId, parentStepRunId, fa
     finally {
         client.release();
     }
+}
+export async function materializeAndSpawnFanOut(parentWorkflowRunId, parentStepRunId, fanOutStep, issue, db) {
+    const childWorkflowRunIds = await materializeFanOut(parentWorkflowRunId, parentStepRunId, fanOutStep, issue, db);
+    // Phase 15: serial mode = byte-identical pre-Phase-15 behaviour.
+    const mode = fanOutStep.mode ?? 'serial';
+    if (mode !== 'parallel') {
+        return { childWorkflowRunIds };
+    }
+    if (childWorkflowRunIds.length === 0) {
+        return {
+            childWorkflowRunIds,
+            parallelSpawnSkippedReason: 'no children materialised',
+        };
+    }
+    // Build FanOutChild[] from the freshly-created child workflow_runs.
+    // Done outside the materialisation transaction (already committed) so
+    // these reads see the just-inserted rows.
+    let children;
+    try {
+        children = await loadFanOutChildren(childWorkflowRunIds, issue.projectId, db);
+    }
+    catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        console.error('[fan-out] parallel spawn skipped — failed to load child context:', msg);
+        return {
+            childWorkflowRunIds,
+            parallelSpawnSkippedReason: `loadFanOutChildren failed: ${msg}`,
+        };
+    }
+    if (children.length === 0) {
+        return {
+            childWorkflowRunIds,
+            parallelSpawnSkippedReason: 'no spawnable agent_run children',
+        };
+    }
+    // Fire-and-await the parallel spawn. spawnFanOutChildren never throws
+    // (per its contract) — but defend anyway so a future refactor can't take
+    // down the workflow-runner.
+    let spawnResults = [];
+    try {
+        spawnResults = await spawnFanOutChildren({
+            parentStepRunId,
+            parentWorkflowRunId,
+            projectId: issue.projectId,
+            children,
+        });
+    }
+    catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        console.error('[fan-out] parallel spawn helper crashed — falling back to dispatcher:', msg);
+        return {
+            childWorkflowRunIds,
+            parallelSpawnSkippedReason: `spawnFanOutChildren threw: ${msg}`,
+        };
+    }
+    return { childWorkflowRunIds, spawnResults };
+}
+/**
+ * Load the per-child context needed to spawn a FanOutChild — joins the
+ * child workflow_run, its first agent_run step_run, the resolved agent,
+ * and the issue/project for charter + workspace + project default model.
+ *
+ * Children whose first step is NOT an agent_run (or has no resolved agent)
+ * are skipped — the dispatcher will pick them up the normal way.
+ */
+async function loadFanOutChildren(childWorkflowRunIds, projectId, db) {
+    if (childWorkflowRunIds.length === 0)
+        return [];
+    // Get the project's default model + path (squad path) once.
+    const projectRows = await db.execute(sql `
+    SELECT default_model, path FROM projects WHERE id = ${projectId} LIMIT 1
+  `);
+    const project = projectRows.rows[0];
+    const projectDefaultModel = project?.default_model ?? null;
+    const projectSquadPath = project?.path ?? '';
+    // Pull the first step_run for each child (step_index = 0). For agent_run
+    // steps, the materialiser pre-creates an issue_run so we have a path to
+    // the workspace and resolved_agent_id.
+    // Build a parameterised list for the IN(...) clause via drizzle's sql.
+    const idLiterals = childWorkflowRunIds
+        .map((id) => sql `${id}`)
+        .reduce((acc, lit, i) => (i === 0 ? lit : sql `${acc}, ${lit}`));
+    const rows = await db.execute(sql `
+    SELECT
+      sr.id                AS step_run_id,
+      sr.workflow_run_id   AS workflow_run_id,
+      sr.step_type         AS step_type,
+      sr.resolved_agent_id AS resolved_agent_id,
+      sr.issue_run_id      AS issue_run_id,
+      sr.step_config       AS step_config,
+      a.id                 AS agent_id,
+      a.name               AS agent_name,
+      a.charter_path       AS charter_path,
+      a.model              AS agent_model,
+      i.id                 AS issue_id,
+      i.title              AS issue_title,
+      i.body               AS issue_body
+    FROM step_runs sr
+    JOIN workflow_runs wr ON wr.id = sr.workflow_run_id
+    JOIN issues i         ON i.id = wr.issue_id
+    LEFT JOIN agents a    ON a.id = sr.resolved_agent_id
+    WHERE sr.workflow_run_id IN (${idLiterals})
+      AND sr.step_index = 0
+    ORDER BY sr.created_at
+  `);
+    const out = [];
+    for (const r of rows.rows) {
+        // Only spawn for agent_run children with a resolved agent + charter.
+        if (r.step_type !== 'agent_run' || !r.agent_id || !r.charter_path) {
+            continue;
+        }
+        // Resolve workspace path from issue_runs.workspace_path if the
+        // materialiser pre-created the issue_run. Otherwise fall back to the
+        // project squad path; the SDK will adopt that as cwd.
+        let workspacePath = projectSquadPath;
+        if (r.issue_run_id) {
+            const wsRows = await db.execute(sql `
+        SELECT workspace_path FROM issue_runs WHERE id = ${r.issue_run_id} LIMIT 1
+      `);
+            const ws = wsRows.rows[0];
+            if (ws?.workspace_path)
+                workspacePath = ws.workspace_path;
+        }
+        const promptOverride = r.step_config && typeof r.step_config.prompt === 'string'
+            ? r.step_config.prompt
+            : null;
+        const task = promptOverride
+            ? promptOverride
+            : `# ${r.issue_title}\n\n${r.issue_body ?? ''}`;
+        out.push({
+            workflowRunId: r.workflow_run_id,
+            stepRunId: r.step_run_id,
+            agentName: r.agent_name ?? '',
+            agentId: r.agent_id,
+            charterPath: r.charter_path,
+            agentModel: r.agent_model,
+            projectDefaultModel,
+            workspacePath,
+            squadPath: projectSquadPath,
+            task,
+        });
+    }
+    return out;
 }
 // ---------------------------------------------------------------------------
 // checkFanOutCompletion — merge/join gate

@@ -202,6 +202,9 @@ export const stepRuns = pgTable('step_runs', {
   output: text('output'),                        // step output; fan_out merges children outputs here
   stepConfig: jsonb('step_config'),              // inline step config for fan_out child steps (WorkflowStep)
   resolvedAgentId: text('resolved_agent_id'),    // pre-resolved agent UUID for agent_run in fan_out children
+  // Phase 15: stamped by spawnFanOutChildren() when a fan_out runs in parallel mode
+  sessionId: text('session_id'),                 // opaque SDK session id (when spawned via SDK spawnParallel)
+  startedAt: timestamp('started_at'),            // when spawn flipped this step_run to 'running'
   createdAt: timestamp('created_at').notNull().defaultNow(),
   updatedAt: timestamp('updated_at').notNull().defaultNow(),
 });

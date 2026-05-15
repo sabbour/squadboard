@@ -339,6 +339,12 @@ async function bootstrapSchema(): Promise<void> {
       ADD COLUMN IF NOT EXISTS step_config       JSONB,
       ADD COLUMN IF NOT EXISTS resolved_agent_id TEXT;
 
+    -- Phase 15: parallel SDK fan-out spawn — opaque SDK session id is stamped
+    -- onto the child's first step_run when spawned via spawnParallel().
+    ALTER TABLE step_runs
+      ADD COLUMN IF NOT EXISTS session_id        TEXT,
+      ADD COLUMN IF NOT EXISTS started_at        TIMESTAMPTZ;
+
     -- issue_links: parent→child issue relationships (fan_out and handoff)
     CREATE TABLE IF NOT EXISTS issue_links (
       id               UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
