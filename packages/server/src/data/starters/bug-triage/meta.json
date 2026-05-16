@@ -9,7 +9,7 @@
   ],
   "agentCount": 4,
   "routingRuleCount": 5,
-  "ceremonyCount": 1,
+  "ceremonyCount": 2,
   "defaultModel": null,
   "teamName": "Bug Triage Squad",
   "warnings": [],
@@ -26,7 +26,8 @@
     "issues.json",
     "package.json",
     "squad.config.ts",
-    "tsconfig.json"
+    "tsconfig.json",
+    "triage-review.workflow.yaml"
   ],
   "htmlUrl": "https://github.com/bradygaster/Squad-IRL/tree/main/bug-triage",
   "bundledAt": "2026-05-15T07:48:07.667Z"

@@ -9,7 +9,7 @@
   ],
   "agentCount": 4,
   "routingRuleCount": 5,
-  "ceremonyCount": 1,
+  "ceremonyCount": 2,
   "defaultModel": null,
   "teamName": "Content Creation Squad",
   "warnings": [],
@@ -24,7 +24,8 @@
     "index.ts",
     "package.json",
     "squad.config.ts",
-    "tsconfig.json"
+    "tsconfig.json",
+    "editorial-review.workflow.yaml"
   ],
   "htmlUrl": "https://github.com/bradygaster/Squad-IRL/tree/main/content-creation",
   "bundledAt": "2026-05-15T07:48:07.931Z"

@@ -17,6 +17,8 @@ import { eq, desc } from 'drizzle-orm';
 import { getDb, getPool, schema } from '../../db/index.js';
 import { computeCharterHash } from '../charter-compiler.js';
 import { writeTemplateMirror } from './template-storage.js';
+import { exportCeremonyAsYaml } from '../ceremony-yaml-export.js';
+import { importCeremonyFromYaml } from '../ceremony-yaml-import.js';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -170,10 +172,19 @@ export async function exportProject(projectId: string): Promise<ProjectPayload> 
       .where(eq(schema.workflowVersions.workflowId, c.id))
       .orderBy(desc(schema.workflowVersions.version));
     const active = versions.find((v) => v.isActive) ?? versions[0];
+
+    // CER-9: emit canonical CER-3 YAML; fall back to stored yamlContent on error
+    let yamlContent: string | null = null;
+    try {
+      yamlContent = await exportCeremonyAsYaml(c.id);
+    } catch {
+      yamlContent = active?.yamlContent ?? null;
+    }
+
     return {
       name: c.name, slug: c.slug, description: c.description ?? null,
       triggerKind: c.triggerKind, triggerConfig: c.triggerConfig, kind: c.kind,
-      yamlContent: active?.yamlContent ?? null,
+      yamlContent,
     };
   }));
 
@@ -264,6 +275,10 @@ export async function importProject(
   const agentsDir = path.join(newSquadPath, 'agents');
   await fs.mkdir(agentsDir, { recursive: true });
 
+  // Hoisted so they're accessible after the transaction block
+  let projectId!: string;
+  const canonicalCeremonies: CeremonyBundle[] = [];
+
   try {
     await client.query('BEGIN');
 
@@ -273,7 +288,7 @@ export async function importProject(
       VALUES ($1, $2, $3)
       RETURNING id
     `, [newProjectName, newSquadPath, payload.meta.defaultModel ?? null]);
-    const projectId = pRes.rows[0].id;
+    projectId = pRes.rows[0].id;
 
     // Skills.
     const skillIdByKey: Record<string, string> = {};
@@ -372,33 +387,50 @@ export async function importProject(
       }
     }
 
-    // Ceremonies.
+    // Ceremonies — split canonical (CER-3) from legacy.
+    // Canonical YAML bundles (apiVersion: squad.io/v1) are imported via
+    // importCeremonyFromYaml AFTER the transaction so they run with a
+    // clean ORM connection against the already-committed project row.
+    // Legacy bundles (raw yamlContent without the apiVersion header) are
+    // inserted inline within the transaction for atomicity.
     for (const c of payload.ceremonies) {
-      if (!c.yamlContent) continue; // skip ceremonies without content
-      const baseSlug = c.slug ?? c.name.toLowerCase().replace(/[^a-z0-9]+/g, '-');
-      const slug = `${baseSlug}-${Date.now()}`;
+      if (!c.yamlContent) continue;
+      if (c.yamlContent.includes('apiVersion: squad.io/v1')) {
+        canonicalCeremonies.push(c);
+      } else {
+        // Legacy path — insert within transaction
+        const baseSlug = c.slug ?? c.name.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+        const slug = `${baseSlug}-${Date.now()}`;
 
-      const wRes = await client.query<{ id: string }>(`
-        INSERT INTO workflows (project_id, name, slug, description, trigger_kind, trigger_config, kind)
-        VALUES ($1, $2, $3, $4, $5, $6, $7)
-        RETURNING id
-      `, [projectId, c.name, slug, c.description, c.triggerKind, JSON.stringify(c.triggerConfig ?? {}), c.kind]);
-      const ceremonyId = wRes.rows[0].id;
+        const wRes = await client.query<{ id: string }>(`
+          INSERT INTO workflows (project_id, name, slug, description, trigger_kind, trigger_config, kind)
+          VALUES ($1, $2, $3, $4, $5, $6, $7)
+          RETURNING id
+        `, [projectId, c.name, slug, c.description, c.triggerKind, JSON.stringify(c.triggerConfig ?? {}), c.kind]);
+        const ceremonyId = wRes.rows[0].id;
 
-      await client.query(`
-        INSERT INTO workflow_versions (workflow_id, version, yaml_content, is_active)
-        VALUES ($1, 1, $2, TRUE)
-      `, [ceremonyId, c.yamlContent]);
+        await client.query(`
+          INSERT INTO workflow_versions (workflow_id, version, yaml_content, is_active)
+          VALUES ($1, 1, $2, TRUE)
+        `, [ceremonyId, c.yamlContent]);
+      }
     }
 
     await client.query('COMMIT');
-    return projectId;
   } catch (err) {
     await client.query('ROLLBACK');
     throw err;
   } finally {
     client.release();
   }
+
+  // Import canonical CER-3 ceremonies after commit (ORM-based, needs project to exist).
+  // These run outside the transaction — a failure here doesn't roll back the project.
+  for (const c of canonicalCeremonies) {
+    await importCeremonyFromYaml(c.yamlContent!, projectId);
+  }
+
+  return projectId;
 }
 
 // ---------------------------------------------------------------------------
