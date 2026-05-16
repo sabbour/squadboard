@@ -111,3 +111,100 @@ Ahmed confirmed: PGlite (commit `ca257838`) is now permanent. Local-first single
 
 Queued in Wave 14 backlog: Migrator to unlock foo's 166 stranded cards from legacy embedded-PG cluster → PGlite cluster. No rollback planned.
 
+
+---
+
+## Wave 14 — Legacy data migrator (q1-followup-data-migration) COMPLETED
+
+**Date:** 2026-05-15T22:14:50.847-07:00
+**Task:** Build one-time legacy embedded-postgres → PGlite migrator
+
+### Approach Selected: Option (c) — cached pnpm binaries
+
+The workspace's pnpm virtual store still holds `embedded-postgres@18.3.0-beta.17` and `@embedded-postgres/linux-arm64@18.3.0-beta.17` even though the package was removed from `packages/server/package.json`. Discovery algorithm: read `PG_VERSION` from legacy data dir → scan `node_modules/.pnpm/` for `@embedded-postgres+{platform}-{arch}@{pgMajor}.`* → resolve the `native/bin/` directory. Zero re-installs, zero network.
+
+`pg_ctl start -D legacyDataDir -o "-p <randomPort>" -w` brings the cluster up. `pg` client (already in deps) connects and reads all tables. PGlite pool adapter (already in deps) writes all rows. `pg_ctl stop` cleans up. Whole round-trip is self-contained.
+
+### Deliverables shipped
+
+| File | Purpose |
+|------|---------|
+| `packages/server/src/scripts/migrate-from-legacy-pg.ts` | Core migrator (~360 lines) |
+| `packages/server/src/scripts/verify-migration.ts` | Post-migration row count checker |
+| `packages/server/src/cli/migrate.ts` | CLI surface (`squadboard migrate [flags]`) |
+| `packages/server/src/index.ts` | Auto-run integration (before `startPglite()`) |
+| `bin/squad-migrate` | Shell shim |
+
+### Edge cases hit and fixed
+
+1. **FK ordering bug**: `workflow_runs.workflow_version_id` has a live FK constraint in PGlite's DDL even though Drizzle schema doesn't declare `.references()` on it. Fix: moved `workflow_versions` before `workflow_runs` in `TABLE_ORDER`. Verified by running the actual migration.
+
+2. **Path resolution**: `resolve(fileURL, '../../../../../..')` walked one level too far (6 `..` instead of 5). The file is at `packages/server/src/scripts/`, so 5 `..` levels reach the workspace root.
+
+3. **Pre-existing PGlite data**: `ON CONFLICT DO NOTHING` on INSERT handles the case where PGlite's `bootstrapSchema()` already seeded review policy presets. Verify script treats `actual >= expected` as passing (extras are from post-migration server activity, not data loss).
+
+### Migration results (dev run)
+
+```
+225 issues + 3 projects + 58 issue_runs (652 total rows across 39 tables)
+Marker written at ~/.squadboard/data/.migrated-to-pglite-v1
+```
+
+### Invariants to watch for in future migrators
+
+- **Always derive FK order empirically**: Drizzle schema `.references()` declarations don't always match live DDL (bootstrapSchema may add FKs not in the schema file). Test with actual `--force` run, not just dry-run.
+- **pnpm store binary discovery is workspace-layout-dependent**: if the workspace root changes (monorepo restructure), the `resolve(thisFile, '../../../../..')` path must be updated.
+- **Binary version must match PG_VERSION exactly** (major version): PG17 binary cannot start a PG18 cluster. Read `PG_VERSION` file first.
+- **pg_ctl log must not go to /tmp**: wrote to `~/.squadboard/data/migrate-pg_ctl.log` instead.
+- **Auto-run must be non-fatal**: migration failure in `index.ts` auto-run is caught and logged; server continues. Users can retry with `squadboard migrate`.
+
+---
+
+## Wave 15 — Stream I (Reliability): verify + backup + restore
+
+**Date:** 2026-05-15T22:42:29.855-07:00  
+**Tasks:** w15-migration-verify, i1 (backup), i2 (restore)
+
+### Deliverable 1: W14 Migration Verify (`squadboard migrate --verify`)
+
+W14 migration verified **clean** on initial run — all 39 tables had `actual >= expected` counts. Migration marker upgraded to include a `dest_counts` block with live PGlite counts at verify time, making future verifications self-contained.
+
+**Key learning — two-PGlite problem**: opening a second PGlite WASM instance against the same nodefs data directory while the server is running causes inconsistent reads. All CLI tools that need live counts now detect the running server via `GET /api/health` and fall back to `GET /api/system/db-counts` HTTP endpoint. Direct PGlite boot only when server is confirmed stopped.
+
+**Learnings:**
+- PGlite singleton in `db/pglite.ts` uses module-level state — second process has no visibility into it
+- All CLI standalone entry points must use the ESM `fileURLToPath(import.meta.url) === argv1` guard to avoid double-running when imported as a module
+- Hard process termination bypasses SIGTERM handler — PGlite does not checkpoint and the next startup sees partial WAL state. Production discipline: only stop via SIGINT/SIGTERM, which triggers the registered handler in the server.
+
+### Deliverable 2: Periodic DB Backup (`squadboard backup`)
+
+**Format:** PGlite native `dumpDataDir('gzip')` — produces a `.tar.gz`. Chosen over raw filesystem tar because PGlite checkpoints before tarring (consistent snapshot even under live queries). ~5 MB per cluster.
+
+**Files shipped:**
+- `packages/server/src/scripts/backup.ts` — `runBackup()`, `pruneBackups()`
+- `packages/server/src/cli/backup.ts` — CLI surface; HTTP-first (server-aware)
+- `packages/server/src/routes/system.ts` — `POST /api/system/backup`, `GET /api/system/backups`, `GET /api/system/db-counts`
+- `packages/server/src/daemon/index.ts` — `maybeRunBackup()` tied to daemon tick
+- `packages/server/src/daemon/guards.ts` — `BackupConfig` added to `SquadboardConfig`
+- `packages/server/package.json` — scripts: `migrate:verify`, `backup`, `restore`
+
+**Defaults:** retainCount=7, intervalMs=24h. Both overridable via `~/.squadboard/config.json { "backup": { ... } }`.
+
+### Deliverable 3: Restore Flow (`squadboard restore <backup-file>`)
+
+**Safety order (invariants):**
+1. Validate backup file format
+2. Reject if daemon PID live (unless `--force`)
+3. Move pglite dir to pglite.pre-restore-{ts} (rollback preserved)
+4. `new PGlite({ dataDir, loadDataDir: blob })` — PGlite native tarball restore
+5. Verify row counts via `createPoolAdapter()` directly (no `initDb()` singleton dependency)
+6. On any failure: auto-rollback pre-restore back to pglite
+
+**Restore UI:** Deferred to Keyser / W16. TODO left in decision file.
+
+### Invariants Added
+
+- **Never open two PGlite instances on the same data dir**: use HTTP API when server is running.
+- **CLI standalone guard is mandatory**: every script with both an exported function AND a standalone `main()` must gate `main()` with `fileURLToPath(import.meta.url) === argv1`.
+- **Restore verification must not use initDb()**: `initDb()` reads the module-level PGlite singleton. In a subprocess that called `PGlite.create()` directly, use `createPoolAdapter(instance)` instead.
+- **Graceful shutdown discipline**: hard process kills bypass the SIGTERM handler — PGlite will not checkpoint cleanly. Always stop via registered signal handlers. Consider adding postmaster.pid presence check on startup as a WAL-replay warning.

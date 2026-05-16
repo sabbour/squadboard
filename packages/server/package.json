@@ -11,6 +11,9 @@
     "test": "vitest",
     "migrate": "tsx src/cli/migrate.ts",
     "migrate:dry": "tsx src/cli/migrate.ts --dry-run",
+    "migrate:verify": "tsx src/cli/migrate.ts --verify",
+    "backup": "tsx src/cli/backup.ts",
+    "restore": "tsx src/cli/restore.ts",
     "db:generate": "drizzle-kit generate",
     "db:push": "drizzle-kit push",
     "db:studio": "drizzle-kit studio"

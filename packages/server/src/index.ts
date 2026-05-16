@@ -37,6 +37,7 @@ import { projectToolsRouter, agentToolsRouter } from './routes/tools.js';
 import { projectMcpRouter, agentMcpRouter } from './routes/mcp.js';
 import { diagnosticsRouter, projectDiagnosticsRouter } from './routes/diagnostics.js';
 import heartbeatRouter from './routes/heartbeat.js';
+import systemRouter from './routes/system.js';
 // Wave 10 B3: side-effect import — subscribes the in-memory ring buffer to
 // `eventBus.onHeartbeat` BEFORE heartbeat.start() schedules sweeps so the
 // first sweep tick is already captured.
@@ -66,6 +67,8 @@ import projectPortabilityRouter from './routes/project-portability.js';
 import conjureRouter from './routes/conjure.js';
 // Wave 10 Stream A1: auto-register the running squadboard repo as a project
 import { registerSelfAtBoot } from './services/self-register.js';
+// Q6=B: standalone coordinator daemon — auto-start when guards allow
+import { maybeAutoStartDaemon } from './daemon/auto-start.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -78,6 +81,27 @@ const CLIENT_DIST = join(__dirname, '..', '..', 'client', 'dist');
 async function main(): Promise<void> {
   const startMs = Date.now();
   console.log('[squadboard] starting…');
+
+  // ── Wave 14: one-time legacy-PG → PGlite migration ─────────────────────
+  // Runs BEFORE startPglite() so the migrator controls the PGlite boot.
+  // Gated by:
+  //   - DATABASE_URL set            → skip (hosted mode)
+  //   - SQUADBOARD_AUTO_MIGRATE=false → skip (opt-out)
+  //   - marker file present         → skip (already done)
+  //   - legacy cluster absent       → skip (fresh install)
+  if (process.env['SQUADBOARD_AUTO_MIGRATE'] !== 'false' && !process.env['DATABASE_URL']) {
+    try {
+      const { runMigration } = await import('./scripts/migrate-from-legacy-pg.js');
+      const result = await runMigration({ force: false, dryRun: false, yes: false });
+      if (result.skipped && result.reason && !result.reason.includes('No legacy cluster')) {
+        console.log(`[migrate] ${result.reason}`);
+      }
+    } catch (err) {
+      // Migration failure must not crash the server — log and continue.
+      // Users can run `squadboard migrate` manually to retry.
+      console.error('[migrate] ⚠️  Auto-migration failed (server will continue without legacy data):', err);
+    }
+  }
 
   const connectionString = await startPglite();
   await initDb(connectionString);
@@ -111,10 +135,15 @@ async function main(): Promise<void> {
   // Demo 15: register GitHub sync event-bus hooks
   initGitHubSyncHooks();
 
+  // Q6=B: auto-start coordinator daemon if no live daemon exists and guards allow.
+  // Non-blocking — forks a detached child; server startup continues immediately.
+  maybeAutoStartDaemon();
+
   const app = express();
   app.use(express.json());
 
   app.use('/api/health', healthRouter);
+  app.use('/api/system', systemRouter);
   app.use('/api/activity', activityRouter);
   app.use('/api/inbox', inboxRouter);
   app.use('/api/consult', consultRouter);
