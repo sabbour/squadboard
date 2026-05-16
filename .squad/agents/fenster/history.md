@@ -130,3 +130,5 @@
 **Commit:** `4d68d06e`
 
 **Status:** DESIGN COMPLETE — ready for Keyser implementation.
+
+- **2026-05-15 Wave 11B — F1 (Templates nav) — IN-FLIGHT:** Re-dispatched (was pending from Wave 11A timeout). Building templates navigation surface to expose `.squad/templates/casting-reference.md` and per-role charter templates.

@@ -1,199 +1,180 @@
-# Keyser — History Archive
+### 2026-05-15 — FormulatePanel + handleFormulate pattern (feat/issues-formulate)
 
-Archived entries from earlier development. See `history.md` for recent work.
+**FormulatePanel composition pattern:**
+- Import `FormulatePanel` from `../formulate/FormulatePanel.tsx`
+- Call `useFormulateXxx(projectId)` hook at the top of the component
+- Hold `modelUsed: FormulateModelInfo | null` and `formulateError: string | null` in local state
+- `handleFormulate(draft)` calls `formulate.mutate(draft, { onSuccess, onError })` — populate form fields on success, set error string on failure, never crash the dialog
+- Place `<FormulatePanel ... compact />` at the TOP of the `<form>` body, before all other fields; use `compact` prop in dialogs ≤520px wide
+
+**Label name→ID mapping:**
+When the LLM returns `suggestedLabels: string[]` (names), map to IDs using:
+```ts
+const matched = suggestedLabels.flatMap((name) => {
+  const found = labels?.find((l) => l.name.toLowerCase() === name.toLowerCase())
+  return found ? [found.id] : []
+})
+```
+Silently drop names that don't match any existing label.
+
+**Express route ordering trap:**
+`POST /formulate` MUST be registered BEFORE the parameterized `GET /:id` and `PATCH /:id` routes. Express matches in declaration order — registering it after `/:id` causes Express to capture "formulate" as an ID value.
+
+**`{ ok, error }` envelope for formulate routes:**
+Formulate routes use `{ ok: true, data: T }` / `{ ok: false, error }` envelopes (matching `apiFetch<Envelope<T>>`), not the bare `{ error }` shape used by `handleError()` in the rest of the routes file.
+
+### 2026-05-15 — New Consult layout rebalance (style/consult-layout)
+
+**CSS grid for compact config knobs:**
+When a form has ≥4 small fields and one hero field, group the small ones in a `display: grid; gridTemplateColumns: '1fr 1fr'` block and render the hero below with `marginTop: tokens.spacingVerticalL`. This keeps the visual hierarchy: knobs at top, focal input front and center.
+
+**Sidebar button full-width trap:**
+A `flexDirection: 'column'` parent without `alignItems` defaults to `alignItems: 'stretch'`, making all children full-width. Fix: add `alignItems: 'flex-start'` to the parent container so buttons size to their content.
+
+**PageHeader consistency:**
+Every in-project pane should open with `<PageHeader>` from `components/layout/PageHeader.tsx`. Avoids divergent `<Title2>` + `<Body1>` bespoke headers with inconsistent spacing. The pane wraps as: `<div flexColumn height:100%> + <PageHeader /> + <scrollable content>`.
+
+**Submit button disabled logic:**
+"Disabled until draft OR agent selected (in agent mode)" = `disabled={isPending || (!draft.trim() && !(mode==='agent' && agentId))}`. This lets users start a session without a first message if they've picked an agent, but requires a draft for model-mode where there's no agent context to bootstrap.
+
+## Recent team activity
+
+New decisions merged to `.squad/decisions.md`:
+- Demo 9 open question #2: `request_changes_policy` default is `'first'` (Hockney)
+- Demo 12 open question #6: Optimistic concurrency for concurrent issue edits (Verbal)
+- Demo 15 open question #8: GitHub issue mirroring OFF by default, opt-in per project (Hockney)
+
+See `.squad/decisions.md` for full details.
+
+Multi-agent fanout session completed 2026-05-15T12:35:00Z:
+- 5 agents shipped (2 keyser rounds, mcmanus, hockney, verbal)
+- 5 commits landed (42c120a0, d74c9622, d7cc2ada, 4d9fb813, base a97e2bce)
+- 2 agents in flight (fenster, kobayashi)
+
+Session log: `.squad/log/2026-05-15T12:35:00Z-squad-fanout.md`
+
+## Recent team activity
+
+**2026-05-15 Round 2 shipped:** Hockney (attachments backend), McManus (multi-modal frontend), Verbal (Consult chat fix), Fenster (typography sweep), Kobayashi (Ceremony Conjure UX), Keyser (layout rebalance). See `.squad/decisions.md` for Fluent2 canon, image bytea architecture, create-page pattern, react-markdown rendering.
+
+## Learnings
+
+### 2026-05-15 — Diagnostics + Heartbeat scaffolding (Phase 3)
+
+**Defensive 404 handling in useQuery:**
+Use the `retry` callback to short-circuit retries when `error.message.startsWith('API 404')`. This lets the UI immediately render an empty-state ("service not available yet") without waiting for the default retry backoff — critical when a backend service hasn't deployed yet.
+
+**Error boundary per-row pattern:**
+Wrap each `<CheckCard>` in a `class CheckCardErrorBoundary extends React.Component` rather than a single page-level boundary. This means one malformed server response row won't blank the entire list. The class approach is required because `getDerivedStateFromError` has no function-component equivalent in React 18.
+
+**Fluent icon naming (24px):**
+The `@fluentui/react-icons` package uses the pattern `{Name}24Regular` (size before variant), e.g. `Heart24Regular`, `HeartPulse24Regular`. The shorthand `Heart24Regular` and `HeartPulse24Regular` both exist at 24px. Generic `Pulse24Regular` does NOT exist — use `HeartPulse24Regular` instead.
+
+**Top-level system routes:**
+Diagnostics and Heartbeat are system-scoped, not project-scoped. Route them top-level (`/diagnostics`, `/heartbeat`) with an additional project-scoped alias (`/projects/:id/diagnostics`) that mirrors the server API path. Do NOT nest them under Settings — Settings is configurational, Diagnostics is operational.
+
+**SYSTEM nav section header:**
+Added `<NavSectionHeader>SYSTEM</NavSectionHeader>` above the global nav items (Diagnostics, Heartbeat), rendered before project-specific groups. This is consistent with the `WORK / SQUAD / OPERATIONS` group convention for project nav.
+
+**Cache-bust mutation pattern:**
+`useRunDiagnostics` appends `?bust=${Date.now()}` to the query string to force the server to bypass any result caching, then calls `queryClient.setQueryData` with the result to update the cache optimistically without a refetch round-trip.
+
+**2026-05-15T15:21:46Z — Coordination snag: Parallel commit swept Hockney's work**
+
+When both Keyser and Hockney committed diagnostics work in parallel (Phase 3, commit 13c34dca), Keyser's staging accidentally swept Hockney's server files into the same commit. Functional code verified OK, but the audit trail is murky — one commit SHA contains both agents' changes. This happened because explicit `git add -- <path>` per-file was not used; Keyser's broader staging glob (likely `git add packages/` or similar) swept uncommitted server work. **Action for future parallel sessions:** Always use `git add -- <path1> <path2> ...` (bracket notation, one file per add) for intentional changes. Never use `git add .` or `git add <directory>/`. Always run `git status` before committing to verify ONLY your changes are staged. This prevents accidental file sweeps and keeps audit trails clean.
+
+
+## 2026-05-15 Phase 19 client surfaces (commit 8eb337dd)
+
+**5 surfaces shipped in one wave:**
+
+1. `api/templates.ts` (NEW) — 13 React Query hooks for full portability contract.
+2. `pages/Templates.tsx` — Extended with 4-tab TabList (Ceremonies / Workflows / Teams / Projects), URL search-param state (`?tab=`), TemplateGrid with Apply/Delete, DragImportZone with payload.kind validation.
+3. `pages/Agents.tsx` — Export team / Import team / Save as template buttons in agents-tab header.
+4. `pages/Settings.tsx` — New "Portability" sidebar section with Export / Import / Save as template rows.
+5. `pages/ProjectPicker.tsx` — "Create from template" CTA (DocumentCopy icon) beside "Add Project", opens CreateFromTemplateModal.
+6. `pages/CeremonyEditor.tsx` — "Save as template" (Dialog) + "Export YAML" (triggerTextDownload) buttons in ceremony header.
+
+**TypeScript:** `npx tsc --noEmit` passes clean — zero errors, no `any`.
+
+**Coordination note for Hockney:** `useImportWorkflow` calls `POST /api/projects/:id/ceremonies/import` which is NOT in the Phase 19 contract. The hook degrades gracefully (will 404 until Hockney ships the endpoint). Also `useSaveWorkflowAsTemplate` calls `/api/projects/:id/ceremonies/:ceremonyId/save-as-template` — Hockney should confirm this route.
+
+### Lesson (reinforced)
+**Explicit `git add -- <path>` per file; never let parallel agents' files leak into my commits.**
+Always run `git status --short -- packages/client/` first. Stage each file individually. NEVER use `git add .` or `git add packages/` or any directory pattern. This is critical when Hockney, Kobayashi and others have uncommitted server changes in the working tree simultaneously.
+
+## Phase 19 – Wave 2 (Hockney r5 contract alignment) — commit 2363ece6
+
+**Trigger:** Hockney updated 11 portability endpoints to `{ ok, data }` envelope; 2 project endpoints (`/import`, `/instantiate-template/:id`) now require `squadPath` in request body.
+
+**Changes:**
+- `api/templates.ts`: Added `ApiEnvelope<T>` + `unwrapEnvelope<T>()`; updated all hooks to unwrap; added `squadPath` param to `useImportProject` + `useInstantiateProjectTemplate`; return types simplified (no longer nested `.project`).
+- `pages/Settings.tsx`: Replaced direct-import flow with `ImportProjectDialog` collecting `squadPath` + file picker; fixed `result.name` reference.
+- `pages/ProjectPicker.tsx`: Added `squadPath` state + input to `CreateFromTemplateModal`; fixed `result.id` navigation reference.
+- `pages/Templates.tsx`:
+  - Replaced `ApplyNameDialog` with `ApplyTemplateDialog` that conditionally shows `squadPath` field for project kind.
+  - `handleApply` now accepts `(tpl, name?, squadPath?)` and passes `squadPath` to `instantiateProject`.
+  - Fixed `result.id` navigation reference (was `result.project.id`).
+  - Rewrote `DragImportZone`: project file drops now park the payload and display an inline `squadPath` prompt before calling `importProject.mutateAsync`; kind-validation factored into `validateKind()`.
+  - Removed stale `useCallback` import.
+
+**TypeScript:** Passed 0 errors before commit.
+
+**Lesson reinforced:** Explicit per-file `git add -- <path>` only; never `git add .`.
 
 ---
 
-# Keyser — History
+## Wave 5 Update (2026-05-15T10:18:00Z)
 
-## Core Context
+**Run:** keyser-3 (PARTIAL)  
+**Model:** claude-sonnet-4.6  
+**Task:** Column UI Batch A (dynamic list) + Batch B (add/remove UX)
 
-- **Project:** A web design project (v4 iteration) for the Squad product site
-- **Role:** Frontend Dev
-- **Joined:** 2026-05-14T08:12:50.171Z
+**Outcome:**
+- **Batch A — COMPLETE:**
+  - Built dynamic column list component
+  - Commit: `c6dfcd6c`
+  - Renders available columns per project, supports add/remove UX
+  - Decision: `.squad/decisions/inbox/keyser-phase19-client.md` (TabList URL state contract)
+  
+- **Batch B — TIMED OUT:**
+  - No commits yet
+  - Retry scheduled as keyser-5 (in flight — not logged in this round)
 
-## Learnings
-
-- **2026-05-14 dev-script fix:** Root `package.json` `dev` script previously only started the Express server (`@sabbour/squadboard-server`). Fixed by adding a second `--filter` for `@sabbour/squadboard-client` so pnpm starts both in parallel natively — no `concurrently` or shell `&` needed. Vite dev server runs on port 5173; its proxy config (`/api` → `http://localhost:3000`) was already correct. README already pointed users to `localhost:5173` so no docs change was needed.
-
-- **2026-05-14 Demo 1 frontend shell:** Vite 6 + React 19 + TypeScript. Tailwind v4. TanStack Query for server state. React Router v7. Pages: ProjectPicker (/, shows project cards, squad discovery modal), Board (/projects/:id/board, placeholder for Demo 2). Dark mode by default, GitHub-ish aesthetic. API client proxies to localhost:3000 via VITE_API_URL env or Vite dev server proxy. Custom components only — no component library. Fenster does visual passes.
-
-- **2026-05-14 Project Pivot:** Web design project expanded to **Squadboard** — local-first kanban + workflow board for Squad agents. Team augmented from 4 to 10 members. New teammates: Hockney (Backend), Kobayashi (SDK), Kujan (QA), Redfoot (DevRel), plus Ralph (Coordinator) and Scribe (Logger). Verbal re-roled to Real-time/WebSocket Dev. Squadboard PRD adopted as source of truth; ready for Demo 1 work.
-
-- **2026-05-14 Demo 2 kanban board:** @hello-pangea/dnd for drag-drop with optimistic updates. Five columns. IssueCard, KanbanColumn, CardDetail slide-over, BulkActionBar, FilterBar, CreateIssueModal, CommentList. Multi-select with bulk actions. Fenster's dark design system tokens applied.
-
-- **2026-05-14 Demo 3 agents UI:** AgentGrid (two sections: active/disabled), AgentCard (initials avatar, model badge, status dot), AgentDetailPanel slide-over (Overview + Charter tabs, enable/disable toggle), HireAgentModal (kebab name validation, model selector). Updated Layout to enable Agents nav.
-
-- **2026-05-14 Demo 4 run UI:** RunButton (agent selector dropdown + start run), RunStatusBadge (5 states with pulse animation), RunOutputPanel (SSE EventSource, terminal-style, auto-scroll), RunHistory (Runs tab in CardDetail), CostDisplay. Updated IssueCard footer + CardDetail tabs.
-
-- **2026-05-14 dev script optimization (backlog batch 1):** Root `pnpm dev` script fixed to run server+client concurrently. Changed from single `--filter @sabbour/squadboard-server dev` to dual `--filter @sabbour/squadboard-server --filter @sabbour/squadboard-client run dev`. No extra dependencies; pnpm's native multi-filter parallelization works cross-platform. Express on :3000, Vite on :5173, proxy already configured. Merged to main.
-
-## 2026-05-14 — Bigger logo + Add Project response unwrapping fix
-
-**Tasks completed:**
-- **Logo height:** Increased `squadboardLogo` img height in `Layout.tsx` from `24px` → `32px` so it fills the sidebar header more naturally.
-- **squad.ts `useDiscoverSquad`:** Fixed `queryFn` to unwrap the `{ ok, data }` envelope returned by `GET /api/squad/discover`. Was typed as `SquadDirectory[]` directly; now fetches `{ ok: boolean; data: SquadDirectory[] }` and returns `.data`.
-- **squad.ts `useRegisterSquad`:** Fixed `mutationFn` to (1) unwrap `{ ok, data }` envelope from `POST /api/squad/register`, and (2) map `projectName` → `name` in the request body (backend schema uses `name`, not `projectName`). Response mapping: `r.data.name` → `projectName` in the returned `RegisterSquadResult`.
-- **projects.ts / server routes/projects.ts:** Verified no wrapping mismatch — project routes return plain JSON (no `{ ok, data }` envelope), so hooks are correct as-is.
-- **ProjectPicker.tsx `DiscoveryModal`:** Added discover scan error display (`isDiscoverError` + `discoverError.message`) below the Scan button. Guarded the "no dirs found" and dir-list renders with `!isDiscoverError`. `registerError` display was already present.
-- **Commit:** `bd527b2` on main
+**Status:** PARTIAL COMPLETE — Batch A landed. Batch B retrying as keyser-5.
 
 
-**Tasks completed:**
-- **Light theme:** Replaced dark GitHub-style `:root` CSS vars with clean light palette (`--bg: #f6f8fa`, `--surface: #ffffff`, etc.). Updated hardcoded `rgba(56, 139, 253, 0.1)` active-nav colors in Layout.tsx to match new accent.
-- **Logo:** Copied `assets/squadboard.svg` and `assets/squadboard-horizontal.svg` to `packages/client/src/assets/`. Replaced emoji+wordmark in sidebar with `<img src={squadboardLogo} />` using horizontal SVG (black strokes look correct on light bg, no filter needed).
-- **API base URL:** Changed `BASE` in `client.ts` from `'http://localhost:3000'` to `''` so all API calls use relative URLs via the Vite proxy. Fixed WS client to derive host from `window.location` instead of hardcoded port 3000. Added `ws: true` to Vite proxy config.
-- **vite-env.d.ts:** Added to fix pre-existing `import.meta.env` TS errors (missing `vite/client` types) and declare `*.svg` module type needed by the logo import.
-- **Commit:** `82f7a69` on main
+---
 
-## 2026-05-14 — Remove project UI + Expanded Add Project modal
+## 2026-05-15 — keyser-3 timeout / keyser-4 Batch B completion
 
-**Tasks completed:**
-- **useDeleteProject:** Added to `api/projects.ts` — calls `DELETE /api/projects/:id`, invalidates `['projects']` on success.
-- **ProjectCard.tsx remove button:** Converted outer `<button>` to `<div position:relative>` wrapper. Added a hover-reveal `✕ Remove` button (absolute top-right) that calls `window.confirm` then `useDeleteProject().mutate(id)`. Hover border-color accent on the card card still works via React state instead of inline mouse handlers.
-- **api/squad.ts new hooks:** Added `useInitSquad` (POST /api/squad/init) and `useCreateSquad` (POST /api/squad/create), both unwrap `{ ok, data }` envelope, typed against Hockney's documented response shapes.
-- **DiscoveryModal redesign:** Replaced single-section modal with tabbed UI (Discover / Connect existing / Create new). Tab bar uses bottom-border active indicator, accent color. Discover tab = existing scan+register flow. Connect tab: path + optional name, 409 → friendly message "use Discover instead", 422 → "directory not found". Create tab: parent + project name, live preview of `{parent}/{name}/.squad/` path.
-- **Commit:** `5060eb7` on main
+**keyser-3** timed out partway through the columns feature task. Batch A landed cleanly as commit `c6dfcd6c` ("feat(board): dynamic column list — KanbanBoard consumes useColumnMeta") before the timeout.
 
-## 2026-05-14 — Fluent UI Icons + Phase 2 atomic upgrades
+**keyser-4** picked up from where keyser-3 left off and shipped Batch B as commit `e4d87359` ("feat(board): add/remove/reorder columns in ColumnSettingsPanel + CaptureModal dropdown"):
 
-**Tasks completed:**
-- Installed `@fluentui/react-icons` via pnpm into `@sabbour/squadboard-client`.
-- Replaced all emoji usage across 12 source files with named Fluent icon components.
-- Committed to main: `feat(client): Fluent UI icons + Phase 2 atomic component upgrades`.
+- `ColumnSettingsPanel.tsx`: DnD reorder, add column inline form, delete with confirm + reassign, make-default star, semantic badge + select, 480px drawer, updated reset confirm text.
+- `CaptureModal.tsx`: replaced hardcoded COLUMNS with `useColumnMeta(projectId)` + static fallback for empty projectId.
 
-## 2026-05-14 — Remove hardcoded dark hex colors (board light theme fix)
+TypeScript (`npx tsc --noEmit`) was clean before commit.
 
-**What was found:**
-- **12 board components** had hardcoded GitHub-dark palette values in inline `style=` props:
-  - `KanbanColumn.tsx`: `#161b22` (column bg), `#0d1117` (header bg), `#21262d` + `#30363d` (badge, borders)
-  - `IssueCard.tsx`: `#21262d` (card bg), `#30363d` (border), `#e6edf3` + `#8b949e` (text)
-  - `FilterBar.tsx`: `#0d1117` (input bg), `#30363d` (border), `#8b949e` (icon/text)
-  - `CardDetail.tsx`: `#161b22` (panel bg), all dark hex throughout
-  - `BulkActionBar.tsx`: `#21262d` (float bar bg), `#0d1117` (button bg), `#30363d` (dividers)
-  - `AddComment.tsx`, `CommentList.tsx`: `#0d1117` (textarea/comment bg), `#30363d` (borders)
-  - `CreateIssueModal.tsx`: `#161b22` (modal bg), `#0d1117` (inputs)
-  - `WorkflowBadge.tsx`, `RoutingBadge.tsx`: `#161b22` + `#30363d` in hover tooltips
-  - `ConflictToast.tsx`: `#1c2128` (toast bg)
-  - `PresenceBar.tsx`: wrong CSS variable fallbacks (`#0d1117`, `#161b22`, `#30363d`)
-- `globals.css` was already light — not the culprit
-- `ProjectPicker.tsx` had missing Fluent UI component imports (`Dialog*`, `Title3`, `Body1`, `tokens`) left from a prior session
+## 2026-05-15 — UI bundle: 5 fixes in one wave
 
-**Fix pattern:**
-- Added `import { tokens } from '@fluentui/react-components'` to each board component file
-- Replaced dark hex values with Fluent tokens:
-  - `#161b22` → `tokens.colorNeutralBackground2`
-  - `#0d1117` (darkest bg) → `tokens.colorNeutralBackground1` (inputs/cards) or `tokens.colorNeutralBackground3` (headers)
-  - `#21262d` → `tokens.colorNeutralBackground3` (badges/indicators) or `tokens.colorNeutralBackground1` (cards)
-  - `#30363d` → `tokens.colorNeutralStroke1`
-  - `#e6edf3`, `#c9d1d9` → `tokens.colorNeutralForeground1`
-  - `#8b949e` → `tokens.colorNeutralForeground2`
-  - `#388bfd` (hover/focus) → `tokens.colorBrandBackground`
-  - `#1c2128` (toast) → `tokens.colorNeutralBackground2`
-- Semantic/status colors kept as-is: `#238636` (green submit), `#f85149` (error red), `#e36209` (warning orange)
-- Label badge arbitrary hex colors untouched (user-supplied data, permanent exception)
-- PresenceBar CSS var fallbacks updated to match globals.css light values (`#f6f8fa`, `#ffffff`, `#d0d7de`)
-- Commit: `e0d54d7c` on main
+Five small UI fixes Ahmed batched together. Per-file commits, TS clean.
 
+| Fix | File(s) | Commit |
+|-----|---------|--------|
+| 1. Fluent2 spacing on CeremonyList | `pages/CeremonyList.tsx` | `8b3f7197` |
+| 2. Widen Consult form (880→1200) | `pages/Consult.tsx` | `16414e90` |
+| 3+5. Project switcher Menu + System anchored bottom | `components/Layout.tsx` | `d72fd8a7` |
+| 4. PresenceBar alignment + WS stale-timer fix | `pages/Board.tsx`, `realtime/ws-client.ts` | `5673d57b` |
 
-- Sidebar nav (24px): `Home24Regular`, `Grid24Regular`, `ClipboardTaskListLtr24Regular`, `Bot24Regular`, `ArrowSync24Regular`, `Money24Regular`, `Settings24Regular`
-- Review actions/badges: `CheckmarkCircle20Regular`, `ArrowSync20Regular`, `Chat20Regular`, `DismissCircle20Regular`, `Clock20Regular`
-- Toolbar/inline: `Search20Regular`, `Play20Regular`, `Warning20Regular`, `ClipboardPaste20Regular`, `Checkmark20Regular`, `Folder20Regular`
-- Settings nav: `TextDescription20Regular`, `PlugConnected20Regular`, `Money20Regular`, `Settings20Regular`
-- ProjectCard: `ClipboardTaskListLtr20Regular`
+### Patterns worth remembering
 
-**What worked well:**
-- Icon naming is consistent: `{Name}{Size}{Style}` — TypeScript autocomplete catches wrong names immediately.
-- Fluent icons are inline SVGs — they inherit CSS `color`, so no extra prop needed to colorize.
-- For icon-in-array patterns (NAV_ITEMS, SECTIONS), changing `icon: string` → `icon: React.ReactNode` is the right approach.
+**Fluent2 page padding canon (per Fenster's typography canon):** every
+list/data surface needs `tokens.spacingHorizontalXXL` + `tokens.spacingVerticalL`
+on the scroll container so content breathes against the sidebar. Empty
+states use `spacingHorizontalXXL` + `spacingVerticalXXL`. Never use a single
+axis token (`padding: tokens.spacingVerticalXXL`) for both axes — that's
+semantically wrong even when the px value happens to be the same.
 
-**Gotchas:**
-- `ClipboardTaskList` is actually `ClipboardTaskListLtr` — the TS error message helpfully offers the correct name.
-- SVG `<text>` elements (WorkflowStepFlow) cannot host React components — replaced emojis with plain unicode symbols (⇄ ▶ ✓) instead.
-- Fluent icon components don't accept `className` for direct sizing — use inline `style={{ width, height }}` or wrap in `<span>` with font-size.
-- `PlugConnected20Regular` is the correct name for 🔌 (MCP / plugins).
-
-
-## 2026-05-14: Phase 3 — Structural Fluent UI Components
-
-**Commit:** `02843107`
-**Files changed:** 21 (593 insertions, 612 deletions)
-
-### Components migrated
-
-| Component | Old pattern | Fluent replacement |
-|---|---|---|
-| `Layout.tsx` sidebar | Custom `<aside>` + `<NavLink>` | `NavDrawer` + `NavDrawerBody` + `NavDrawerFooter` + `NavItem` + `NavSectionHeader` |
-| `HireAgentModal.tsx` | Custom fixed-position backdrop + div | `Dialog` + `DialogSurface` + `DialogBody` + `DialogContent` + `DialogActions` + `Field` + `Input` + `Select` |
-| `AttachWorkflowModal.tsx` | Custom fixed-position backdrop | `Dialog` + `DialogSurface` + `DialogBody` + `DialogContent` + `DialogActions` |
-| `TemplatePicker.tsx` | Custom fixed-position modal | `Dialog` + `DialogSurface` + `DialogBody` + `DialogContent` + `DialogActions` |
-| `ProjectPicker.tsx` (DiscoveryModal) | Custom fixed-position modal | `Dialog` + `DialogSurface` + `DialogBody` + `DialogContent` + `DialogActions` |
-| `RoutingLogTable.tsx` | `<table>/<thead>/<tbody>/<tr>/<th>/<td>` | `Table` + `TableHeader` + `TableHeaderCell` + `TableBody` + `TableRow` + `TableCell` + `TableCellLayout` |
-| `AgentLeaderboard.tsx` | `<table>/<thead>/<tbody>/<tr>/<th>/<td>` | `Table` + `TableHeader` + `TableHeaderCell` + `TableBody` + `TableRow` + `TableCell` + `TableCellLayout` |
-| `WorkflowList.tsx` table | `<table>/<tr>/<th>/<td>` + raw `<button>` | `Table` + `TableRow` + `TableCell` + `Button` (outline/primary) |
-| `CostDashboard.tsx` (2 tables) | `<table>/<thead>/<tbody>/<tr>/<th>/<td>` | `Table` + `TableHeader` + `TableHeaderCell` + `TableBody` + `TableRow` + `TableCell` |
-| `ProjectCard.tsx` | `<div>/<button>` container | `Card` + `CardHeader` + `Caption1` + `Text` + `Button` (transparent icon) |
-| Typography (Agents, Workflows, Costs, ProjectPicker) | `<h1>/<h2>/<p>` with inline style | `Title2`, `Subtitle1`, `Body1`, `Caption1` |
-
-### Notes
-- `board/` files untouched (Keyser-7 working there concurrently)
-- `FilterBar.tsx` skipped per instructions
-- NavDrawer uses `useLocation` + `useNavigate` from react-router for controlled active state
-- Dialog modals use `open={true}` pattern since parents control visibility via conditional rendering
-- `makeStyles` pseudo-selector `'&:hover'` not used on Card (Griffel type strictness) — Card has built-in hover behavior
-- Build clean: 0 TypeScript errors, bundle 1,019 kB gzip 294 kB
-
-## 2026-05-14 — Crash fix: Agents + Workflows pages + CSS migration regressions
-
-### Root causes found
-
-**Agents.tsx crash** — JSX syntax error: the "Hire Agent" `<button>` was missing its closing `>` after the last prop (`onMouseLeave`). React/TSC couldn't parse the children (`<span>+</span>` and text) as valid JSX, causing `TS2657: JSX expressions must have one parent element` and several cascading parse errors. The build failed, so the production bundle was not generated → page crashed.
-
-**Workflows.tsx crash** — Same root cause: the build failed entirely due to the Agents.tsx syntax error (and the CSS migration regressions below), so WorkflowList and the page never reached the browser in a valid state.
-
-**ReviewPanel.tsx regressions (from CSS var migration):**
-1. `span` content line was corrupted — the `{POLICY_LABELS[reviewGroup.policy.kind] ` fragment was eaten and `> ?? reviewGroup.policy.kind}` was left as literal text, producing invalid JSX at line 106.
-2. `button` style object was missing the closing `}}` (deleted during the color replace), causing parse errors at line 240+.
-
-**Settings.tsx regression** — `display: 'flex'` was deleted from the spend card div during the color migration, leaving `alignItems`/`justifyContent`/`flexWrap` properties with no effect (layout broken).
-
-### Fixes applied
-- `Agents.tsx`: Added the missing `>` to close the button's JSX opening tag.
-- `ReviewPanel.tsx`: Restored `{POLICY_LABELS[…] ?? …}` JSX expression; restored `}}` closing the style object.
-- `Settings.tsx`: Re-added `display: 'flex'` to the spend card container.
-- Build verified: `tsc -b && vite build` passes clean, 0 TS errors.
-
-Commit: `46b7ce6a`
-
-## [2026-05-14] Dark Mode Color Sweep — Phase 2 (Continuation)
-
-Completed the comprehensive dark mode color sweep across all remaining files.
-
-### Files Updated
-- `packages/client/src/styles/globals.css` — removed dark defaults from `body`
-- `packages/client/src/pages/Settings.tsx` — all dark hex → CSS vars; budget card; progress bar; save button states
-- `packages/client/src/pages/Agents.tsx` — input styles; tabs; test routing panel; routing stats/log section labels
-- `packages/client/src/pages/WorkflowEditor.tsx` — header; YAML editor; syntax highlight fallback colors (HTML inline style strings updated to light equivalents)
-- `packages/client/src/components/agents/AgentDetailPanel.tsx` — panel bg; borders; close button hover; text colors
-- `packages/client/src/components/agents/CharterEditor.tsx` — textarea bg; save button text color
-- `packages/client/src/components/costs/CostDashboard.tsx` — MTD card; table wrappers; BudgetBar; progress tracks
-- `packages/client/src/components/costs/CostDisplay.tsx` — inline cost/token text colors
-- `packages/client/src/components/reviews/ReviewPanel.tsx` — all event card colors; button states; suggestion list; timestamp
-- `packages/client/src/components/routing/RoutingLogTable.tsx` — table border; th styles; cell colors (uses Fluent Table)
-- `packages/client/src/components/routing/RoutingStatsPanel.tsx` — TierBar track; legend text; StatCard sub text
-- `packages/client/src/components/runs/RunButton.tsx` — dropdown trigger/popup; cancel button; agent list item text
-- `packages/client/src/components/runs/RunHistory.tsx` — run row button bg/border; duration/chevron text
-- `packages/client/src/components/settings/McpConfigPanel.tsx` — copy button; accordion header/content; config pre; tool items; project footer
-- `packages/client/src/components/workflows/WorkflowList.tsx` — toolbar border; empty state; table cell colors
-- `packages/client/src/components/workflows/WorkflowStepFlow.tsx` — SVG arrows (stroke/fill); inactive box fill; label text fill
-
-### Intentional Exceptions (Kept Dark)
-- `RunOutputPanel.tsx` — terminal UX (dark bg with green text)
-- `Avatar.tsx`, `AgentCard.tsx`, `AgentDetailPanel.tsx` — `color: '#0d1117'` on avatar initials (dark text on vivid background)
-- `LabelBadge.tsx`, `StatusBadge.tsx`, `RunStatusBadge.tsx`, `ReviewDecisionBadge.tsx` — semantic badge/label colors
-- `AgentCard.tsx` status dot — `#3fb950`/`#8b949e` (active/inactive semantic indicator)
-
-### Build Verification
-Build passed cleanly: `tsc -b && vite build` — 2827 modules, no TypeScript errors.
-
-## Learnings
+**Sidebar bottom-anchor pattern:** Fluent's `NavDrawerBody` is already
