@@ -15,6 +15,17 @@ export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> 
         `First 200 chars: ${body.slice(0, 200)}`
       )
     }
+    // Extract the `error` string from { error: "..." } response bodies so
+    // callers see a clean message rather than the raw JSON envelope.
+    try {
+      const parsed = JSON.parse(body) as Record<string, unknown>
+      if (typeof parsed.error === 'string') {
+        throw new Error(parsed.error)
+      }
+    } catch (e) {
+      if (e instanceof SyntaxError) { /* fall through to raw body throw */ }
+      else throw e
+    }
     throw new Error(`API ${res.status}: ${body}`)
   }
   // 204 No Content (and other empty-body responses, e.g. some DELETE endpoints)

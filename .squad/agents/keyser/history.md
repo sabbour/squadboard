@@ -206,3 +206,36 @@ Three polish items from Ahmed's bug-bash intake landed in one pass:
 
 **Files changed:** `Layout.tsx`, `CeremonyEditor.tsx`, `CardDetail.tsx`
 **Build:** ✓ green — `tsc -b && vite build` in 6.71s, zero errors.
+
+## Wave 19 — W19 Triple: O7 Formulate bug + Conjure deeplink + End-wave button (build green)
+
+**Date:** 2026-05-15T22:42:29.855-07:00
+
+Three items from Ahmed's intake batched into one pass:
+
+**O7 — Formulate ceremony grammar bug:**
+- Root cause: `buildProseAuthorPrompt` used `- agent_run: { ... }` shorthand which LLMs parse as a YAML mapping key, not as `type: agent_run`. `validateWorkflowYaml` rejected the output because `type:` was missing from every step.
+- Fix 1: Rewrote the prompt step schema section to show explicit `type:` indented YAML + a concrete two-step example (`Daily Standup`).
+- Fix 2: `apiFetch` (client.ts) now parses `{ error: "..." }` JSON bodies and throws with the inner string, so users see a clean error instead of `API 502: {"error":"..."}`.
+- Removed narrative path: `'narrative'` filtered from both kind dropdowns in CeremonyEditor via `deprecated: true` on `CEREMONY_KIND_OPTIONS`; `handleConvert`, `convertToast`, `convertCeremony`, `useConvertCeremony` all deleted. Backend routes kept (shared SDK infra). Existing `kind='narrative'` ceremonies remain read-only in the UI.
+
+**conjure-workitem-deeplink — Conjure deep-link from CardDetail:**
+- Added `…` overflow menu to the CardDetail panel header (`Menu`/`MenuTrigger`/`MenuPopover`/`MenuList`/`MenuItem`, Fluent2).
+- "Investigate in Conjure" item navigates to `/projects/${projectId}/consult/new?prefill=issue:${issue.id}` using the existing Phase 17 prefill mechanism (no Consult.tsx changes needed).
+- Prefill maps: title + body → Conjure input, labels + runs → context block, git PR → reference. Non-fatal fallback (blank session) on fetch failure is already in Consult.tsx.
+
+**Q9 — Manual End-wave button (CeremonyList.tsx):**
+- "End wave" button added to CeremonyList page header toolbar (left of "New ceremony"), with `Flag20Regular` icon.
+- Confirmation `Dialog`: explains Scribe close-out, primary "End wave" + Cancel.
+- `POST /api/projects/:projectId/ceremonies/invoke` endpoint added to ceremonies route; delegates to `invokeBuiltInCeremony('scribe-close-out', ctx)`.
+- Toast: "Running Scribe close-out…" → "Wave closed ✓ (commit abc1234)" on success, error message on failure. Auto-dismisses in 8s.
+- Button disabled + spinner while running.
+
+**Key learnings:**
+- LLM prompt YAML schema shorthand (`- stepType: { ... }`) is fatally ambiguous — always provide a verbatim YAML block with the actual keys the validator expects.
+- When removing a mutation hook from a component, also check: the import, the `const x = useHook()` declaration, all useCallback closures that reference it, all state variables it drives (toast/result state), and all JSX that renders that state.
+- `apiFetch` error unwrapping: parse the body as JSON first; if `body.error` is a string, throw that — users never need to see the raw `{"error":"..."}` envelope.
+- Fluent2 `Menu`/`MenuTrigger` wraps a raw `<button>` cleanly; no need for `<Button appearance="...">` as the trigger when matching an existing icon-button pattern.
+
+**Files changed:** `services/ceremony-translator.ts`, `api/client.ts`, `pages/CeremonyEditor.tsx`, `components/board/CardDetail.tsx`, `pages/CeremonyList.tsx`, `routes/ceremonies.ts`
+**Build:** ✓ green — client `tsc -b && vite build` ✓; server `tsc` ✓

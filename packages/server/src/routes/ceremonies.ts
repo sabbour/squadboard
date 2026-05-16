@@ -45,6 +45,7 @@ import {
   refineProse,
   TranslatorError,
   TranslatorThrottledError,
+  invokeBuiltInCeremony,
   type TranslatorAvailableAgent,
 } from '../services/ceremony-translator.js';
 import { getBuiltinTemplates } from '../workflows/templates/index.js';
@@ -604,6 +605,50 @@ async function loadAvailableAgents(projectId: string): Promise<TranslatorAvailab
     .where(eq(schema.agents.projectId, projectId));
   return rows.map((a) => ({ name: a.name, role: a.role }));
 }
+
+/**
+ * POST /api/projects/:projectId/ceremonies/invoke
+ *
+ * Body: { ceremonySlug: string, context?: object }
+ *
+ * Invokes a built-in ceremony (e.g. 'scribe-close-out') for the given project.
+ * Used by the manual "End wave" button (q9) when the daemon is not running.
+ *
+ * Returns: { ok: true, result: <ceremony result object> }
+ */
+ceremoniesRouter.post('/invoke', async (req: Request, res: Response) => {
+  try {
+    const { projectId } = req.params as Record<string, string>;
+    const { ceremonySlug, context } = (req.body ?? {}) as {
+      ceremonySlug?: string;
+      context?: Record<string, unknown>;
+    };
+
+    if (typeof ceremonySlug !== 'string' || !ceremonySlug.trim()) {
+      res.status(400).json({ error: '`ceremonySlug` is required' });
+      return;
+    }
+
+    let result: Record<string, unknown>;
+    try {
+      result = await invokeBuiltInCeremony(ceremonySlug.trim(), {
+        projectId,
+        ...(context ?? {}),
+        extra: context,
+      });
+    } catch (err) {
+      if (err instanceof TranslatorError) {
+        res.status(err.retryable ? 502 : 400).json({ error: err.message });
+        return;
+      }
+      throw err;
+    }
+
+    res.json({ ok: true, result });
+  } catch (err) {
+    handleError(res, err);
+  }
+});
 
 /**
  * POST /api/projects/:projectId/ceremonies/generate-from-prose
