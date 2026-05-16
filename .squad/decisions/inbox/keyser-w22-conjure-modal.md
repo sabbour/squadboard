@@ -110,3 +110,40 @@ Three waves of agents (W10–W21) misdiagnosed Conjure as a label problem on the
 4. **Verbal-w22 coordination needed**: When Verbal-w22 ships `candidates` array from `/api/conjure/classify`, the modal will automatically use it (the `if (d.candidates && d.candidates.length > 0)` branch).
 5. **Auto-select after 5s**: Spec section 3 says "if user doesn't pick within 5s and confidence ≥ 0.5, auto-select top candidate but keep chip bar visible." Not implemented in v1 — follow-up task.
 6. **Keyboard a11y for chips**: Arrow key navigation on candidate chips is not yet implemented. Open question from spec section 7. Filed as follow-up.
+
+---
+
+## Ahmed Directive (2026-05-16): No Unicode Emoji in Rendered UI
+
+**Rule (retroactive):** ALWAYS use `@fluentui/react-icons` components. NEVER unicode emoji in any rendered UI string or JSX.
+
+### W22 fixes applied
+
+| Location | Violation | Fix |
+|----------|-----------|-----|
+| `ConjureModal.tsx` (new) | `⚡` heuristic indicator | `<Flash20Regular />` |
+| `ConjureModal.tsx` (new) | `✓ Issue created` toast | `<Checkmark20Regular />` + plain text |
+| `ConjureModal.tsx` (new) | `✓ Inbox item captured` toast | `<Checkmark20Regular />` + plain text |
+| `ConjureModal.tsx` (new) | `×` dismiss in toast | `<Dismiss20Regular />` |
+| `ProjectPicker.tsx` (`DiscoveryModal`) | `✨ Suggest setup` tab label | `<Sparkle20Regular />` + `"Suggest setup"` |
+| `Inbox.tsx` (W22-modified) | `📁 {projectName(...)}` | `<Folder16Regular />` |
+
+**ConjureModal confirmed: zero unicode emoji.** (`grep` verified clean.)
+
+### W23 follow-up — remaining emoji violations (>8, deferred)
+
+| File | Line | Violation |
+|------|------|-----------|
+| `pages/Now.tsx` | 388 | `🔴`, `🟡`, `🟢` health labels |
+| `pages/Now.tsx` | 476–478 | `🤖`, `📋`, `⚙️` activity feed icons |
+| `pages/Agents.tsx` | 117 | `🧪 Test Routing` button |
+| `pages/Diagnostics.tsx` | 112 | `💡` remediation icon |
+| `pages/McpServers.tsx` | 281 | `🔒` secret indicator |
+| `pages/ProjectFlow.tsx` | 270 | `📎` attachment label |
+| `components/agents/HireTeamModal.tsx` | 51–66 | All role labels (`🏗️`, `🔧`, `🧪`, etc.) |
+| `components/flow/StepNode.tsx` | 27–31 | Step type icons (`🧭`, `⚙️`, `✅`, `🌿`, `🤝`) |
+| `components/flow/CeremonyStepNode.tsx` | 24–27 | Same step type icons |
+| `components/sessions/AgentActivityFeed.tsx` | 242–388 | `💸`, `⚠`, `🎛`, `💬` pill icons |
+| `components/runs/GitActions.tsx` | 185–294 | `✓`, `✗`, `💬` action feedback |
+| `components/settings/SystemBackupSection.tsx` | 246 | `⚠️` warning |
+| `pages/Inbox.tsx` | (other instances) | `✓`, `✗` pattern chars |
