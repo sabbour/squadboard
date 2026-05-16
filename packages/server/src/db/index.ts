@@ -1043,6 +1043,19 @@ async function bootstrapSchema(): Promise<void> {
       ADD COLUMN IF NOT EXISTS created_by    TEXT NOT NULL DEFAULT 'user';
   `);
 
+  // Wave 17 — Stream G Phase 2A: git/PR state cached on issue_runs for fast card badges.
+  await _pool.query(`
+    ALTER TABLE issue_runs
+      ADD COLUMN IF NOT EXISTS git_branch              TEXT,
+      ADD COLUMN IF NOT EXISTS git_branch_url          TEXT,
+      ADD COLUMN IF NOT EXISTS pr_number               INTEGER,
+      ADD COLUMN IF NOT EXISTS pr_url                  TEXT,
+      ADD COLUMN IF NOT EXISTS pr_state                TEXT,
+      ADD COLUMN IF NOT EXISTS ci_state                TEXT,
+      ADD COLUMN IF NOT EXISTS ci_url                  TEXT,
+      ADD COLUMN IF NOT EXISTS git_cache_refreshed_at  TIMESTAMPTZ;
+  `);
+
   await seedSystemReviewPolicyPresets();
 
   console.log('[db] schema bootstrapped');

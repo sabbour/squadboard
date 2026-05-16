@@ -21,6 +21,16 @@ function sanitizeBranchName(name: string): string {
   return name;
 }
 
+/**
+ * Sanitize a comment body for shell safety.
+ * We pipe via stdin (--body-file -) so the body never reaches the shell
+ * argument list. This guard is an extra layer against control characters.
+ */
+function sanitizeCommentBody(body: string): string {
+  // Strip null bytes and ANSI escape sequences
+  return body.replace(/\x00/g, '').replace(/\x1b\[[0-9;]*m/g, '').trim();
+}
+
 // ---------------------------------------------------------------------------
 // Two routers:
 //   issueRunsRouter  — mounted at /api/projects/:projectId/issues/:issueId/runs
@@ -301,6 +311,12 @@ projectRunsRouter.post('/:runId/git/push', async (req: Request, res: Response) =
     // Fan-out via WebSocket
     eventBus.emitGitEvent('git.push.complete', projectId, { runId, branch, branchUrl, pushOutput });
 
+    // Persist git fields on the run record for card badge caching
+    await db
+      .update(schema.issueRuns)
+      .set({ gitBranch: branch, gitBranchUrl: branchUrl, updatedAt: new Date() })
+      .where(eq(schema.issueRuns.id, runId));
+
     res.json({ branch, branchUrl, pushOutput });
   } catch (err) {
     handleError(res, err);
@@ -410,6 +426,17 @@ projectRunsRouter.post('/:runId/git/pr', async (req: Request, res: Response) => 
 
     eventBus.emitGitEvent('git.pr.created', projectId, { runId, branch, prUrl, prNumber });
 
+    // Persist PR fields on the run record for card badge caching
+    await db
+      .update(schema.issueRuns)
+      .set({
+        prNumber: prNumber ?? null,
+        prUrl,
+        prState: 'open',
+        updatedAt: new Date(),
+      })
+      .where(eq(schema.issueRuns.id, runId));
+
     res.json({ prUrl, prNumber });
   } catch (err) {
     handleError(res, err);
@@ -443,6 +470,211 @@ function buildPrBody(ctx: { agentName: string; runId: string; branch: string }):
 <!-- Handoff context if a follow-up ceremony picks up -->
 `;
 }
+
+// ---------------------------------------------------------------------------
+// POST /:runId/git/comment — Comment on the linked GitHub issue (G2.3)
+// ---------------------------------------------------------------------------
+// Request body: { issueNumber: number, body: string }
+// Response 200: { commentUrl: string, issueNumber: number }
+// Response 4xx/5xx: { error }
+// ---------------------------------------------------------------------------
+projectRunsRouter.post('/:runId/git/comment', async (req: Request, res: Response) => {
+  const { runId, projectId } = req.params as Record<string, string>;
+  const db = getDb();
+
+  try {
+    const [run] = await db
+      .select()
+      .from(schema.issueRuns)
+      .where(eq(schema.issueRuns.id, runId))
+      .limit(1);
+
+    if (!run) {
+      res.status(404).json({ error: 'Run not found' });
+      return;
+    }
+
+    const { issueNumber, body } = req.body as { issueNumber?: unknown; body?: unknown };
+
+    if (typeof issueNumber !== 'number' || !Number.isInteger(issueNumber) || issueNumber < 1) {
+      res.status(400).json({ error: '`issueNumber` must be a positive integer.' });
+      return;
+    }
+    if (typeof body !== 'string' || !body.trim()) {
+      res.status(400).json({ error: '`body` must be a non-empty string.' });
+      return;
+    }
+
+    const safeBody = sanitizeCommentBody(body);
+
+    // Use --body-file - and pipe via stdin to keep the body out of argv
+    let ghOutput: string;
+    try {
+      const { stdout } = await execFileAsync(
+        'gh',
+        ['issue', 'comment', String(issueNumber), '--body-file', '-'],
+        {
+          timeout: GIT_TIMEOUT_MS,
+          input: safeBody,
+          // cwd: workspace path if available (for repo context), else undefined (gh falls back to env)
+          ...(run.workspacePath ? { cwd: run.workspacePath } : {}),
+        } as Parameters<typeof execFileAsync>[2] & { input?: string },
+      );
+      ghOutput = String(stdout).trim();
+    } catch (e: unknown) {
+      const stderr = (e as { stderr?: string }).stderr ?? '';
+      const msg = e instanceof Error ? e.message : String(e);
+      res.status(500).json({ error: 'gh issue comment failed', detail: (stderr || msg).trim() });
+      return;
+    }
+
+    // gh issue comment --body-file - outputs the comment URL on stdout
+    const commentUrl = ghOutput.split('\n').filter(Boolean).pop() ?? '';
+
+    eventBus.emitGitEvent('git.comment.posted', projectId, { runId, commentUrl, issueNumber });
+
+    res.json({ commentUrl, issueNumber });
+  } catch (err) {
+    handleError(res, err);
+  }
+});
+
+// ---------------------------------------------------------------------------
+// POST /:runId/git/pr/merge — Merge the PR for this run (G2.5)
+// ---------------------------------------------------------------------------
+// Request body: { method?: 'merge' | 'squash' | 'rebase' }  — default 'squash'
+// Response 200: { prUrl, sha, method }
+// Response 409: { error, checks } — CI is failing or PR not ready
+// Response 4xx/5xx: { error }
+// ---------------------------------------------------------------------------
+projectRunsRouter.post('/:runId/git/pr/merge', async (req: Request, res: Response) => {
+  const { runId, projectId } = req.params as Record<string, string>;
+  const db = getDb();
+
+  try {
+    const [run] = await db
+      .select()
+      .from(schema.issueRuns)
+      .where(eq(schema.issueRuns.id, runId))
+      .limit(1);
+
+    if (!run) {
+      res.status(404).json({ error: 'Run not found' });
+      return;
+    }
+
+    if (!run.workspacePath) {
+      res.status(422).json({ error: 'Run has no workspace path.' });
+      return;
+    }
+
+    try {
+      assertSafeWorkspacePath(run.workspacePath);
+    } catch (e) {
+      res.status(403).json({ error: String(e) });
+      return;
+    }
+
+    // Discover PR number: prefer cached value on the run, else query gh
+    let prNum: number | null = run.prNumber ?? null;
+    let prUrl: string = run.prUrl ?? '';
+
+    if (!prNum) {
+      // Derive from current branch via gh pr view
+      try {
+        const { stdout } = await execFileAsync(
+          'gh', ['pr', 'view', '--json', 'number,url,state'],
+          { cwd: run.workspacePath, timeout: GIT_TIMEOUT_MS },
+        );
+        const view = JSON.parse(stdout.trim()) as { number: number; url: string; state: string };
+        prNum = view.number;
+        prUrl = view.url;
+        // Cache the discovered PR number
+        await db
+          .update(schema.issueRuns)
+          .set({ prNumber: prNum, prUrl, prState: view.state.toLowerCase(), updatedAt: new Date() })
+          .where(eq(schema.issueRuns.id, runId));
+      } catch (e: unknown) {
+        const stderr = (e as { stderr?: string }).stderr ?? '';
+        const msg = e instanceof Error ? e.message : String(e);
+        res.status(422).json({ error: 'Could not determine PR number — has a PR been created for this run?', detail: (stderr || msg).trim() });
+        return;
+      }
+    }
+
+    if (!prNum) {
+      res.status(422).json({ error: 'No PR number found for this run.' });
+      return;
+    }
+
+    // Validate: check required CI checks before merging
+    try {
+      await execFileAsync(
+        'gh', ['pr', 'checks', String(prNum), '--required'],
+        { cwd: run.workspacePath, timeout: GIT_TIMEOUT_MS },
+      );
+    } catch (e: unknown) {
+      const stderr = (e as { stderr?: string }).stderr ?? '';
+      const stdout = (e as { stdout?: string }).stdout ?? '';
+
+      // Update cached CI state to 'failing'
+      await db
+        .update(schema.issueRuns)
+        .set({ ciState: 'failing', gitCacheRefreshedAt: new Date(), updatedAt: new Date() })
+        .where(eq(schema.issueRuns.id, runId));
+
+      res.status(409).json({
+        error: 'Required CI checks are failing or still running — cannot merge.',
+        checks: (stderr || stdout).trim(),
+      });
+      return;
+    }
+
+    // Update CI state to passing
+    await db
+      .update(schema.issueRuns)
+      .set({ ciState: 'passing', gitCacheRefreshedAt: new Date(), updatedAt: new Date() })
+      .where(eq(schema.issueRuns.id, runId));
+
+    // Determine merge method (default: squash)
+    const rawMethod = req.body?.method;
+    const mergeMethod: 'merge' | 'squash' | 'rebase' =
+      rawMethod === 'merge' || rawMethod === 'rebase' ? rawMethod : 'squash';
+
+    const mergeFlag = `--${mergeMethod}`;
+
+    let ghMergeOutput: string;
+    try {
+      const { stdout, stderr } = await execFileAsync(
+        'gh', ['pr', 'merge', String(prNum), mergeFlag, '--delete-branch'],
+        { cwd: run.workspacePath, timeout: GIT_TIMEOUT_MS },
+      );
+      ghMergeOutput = (stdout + stderr).trim();
+    } catch (e: unknown) {
+      const stderr = (e as { stderr?: string }).stderr ?? '';
+      const msg = e instanceof Error ? e.message : String(e);
+      // Surface gh's error verbatim (branch protection, auth, etc.)
+      res.status(500).json({ error: 'gh pr merge failed', detail: (stderr || msg).trim() });
+      return;
+    }
+
+    // Extract merge SHA from gh output if available (gh outputs it in some modes)
+    const shaMatch = ghMergeOutput.match(/([0-9a-f]{40})/i);
+    const sha = shaMatch ? shaMatch[1] : '';
+
+    // Update run record: mark PR as merged
+    await db
+      .update(schema.issueRuns)
+      .set({ prState: 'merged', updatedAt: new Date() })
+      .where(eq(schema.issueRuns.id, runId));
+
+    eventBus.emitGitEvent('git.pr.merged', projectId, { runId, prUrl, sha, method: mergeMethod });
+
+    res.json({ prUrl, sha, method: mergeMethod });
+  } catch (err) {
+    handleError(res, err);
+  }
+});
 
 // GET /:runId/stream  — SSE output stream (1 s DB poll for Demo 4)
 projectRunsRouter.get('/:runId/stream', async (req: Request, res: Response) => {

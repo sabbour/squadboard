@@ -36,6 +36,20 @@ export interface Issue {
   attachedWorkflowId?: string
   /** Display name of the attached workflow. */
   attachedWorkflowName?: string
+  /** Stream G Phase 2A: cached GitHub data from the most recent worktree run. */
+  github?: {
+    branch?: string
+    branchUrl?: string
+    pr?: {
+      number: number
+      state: 'open' | 'draft' | 'merged' | 'closed'
+      url: string
+    }
+    ci?: {
+      state: 'passing' | 'failing' | 'running' | 'unknown'
+      url?: string
+    }
+  } | null
 }
 
 export interface CreateIssueInput {

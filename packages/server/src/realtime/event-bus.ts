@@ -112,12 +112,16 @@ export type FlowEventType =
  * Stream G — GitHub integration: git push + PR lifecycle events.
  * Scoped to a project room so the run drawer button updates without page refresh.
  *
- * git.push.complete — branch pushed to origin; payload includes branch + URL
- * git.pr.created    — PR opened via gh; payload includes PR URL + number
+ * git.push.complete  — branch pushed to origin; payload includes branch + URL
+ * git.pr.created     — PR opened via gh; payload includes PR URL + number
+ * git.comment.posted — comment posted on a linked GH issue (G2.3)
+ * git.pr.merged      — PR merged via gh pr merge (G2.5)
  */
 export type GitEventType =
   | 'git.push.complete'
-  | 'git.pr.created';
+  | 'git.pr.created'
+  | 'git.comment.posted'
+  | 'git.pr.merged';
 
 export type BusEventType =
   | IssueEventType

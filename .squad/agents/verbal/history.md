@@ -126,3 +126,37 @@ Manual override button (q9) will be built on top as Wave 15 follow-up.
 **WS as fast path, DB as truth:** The `git.push.complete` and `git.pr.created` WS events exist purely to snap the button state before the next React query refetch. If the socket drops, the button will still catch up on next render via normal query invalidation (future: add `invalidateQueries` in mutation `onSuccess`). The events carry no state that isn't also derivable from the DB — exactly "WS is a hint, not a delivery guarantee."
 
 **gh CLI output format:** `gh pr create` emits progress to stderr and the final PR URL (https://github.com/…/pull/N) as the last stdout line. Extracting `prNumber` via `/\/pull\/(\d+)$/` from that last line is reliable even if gh adds new output lines above it.
+
+---
+
+## 2026-05-15T22:42:29.855-07:00 — Wave 17 — Stream G Phase 2A (Comment + Merge PR + Card Badges)
+
+**Task:** Stream G Phase 2A — G2.3 (comment on linked GH issue), G2.5 (merge PR), G2.6 (card GitHub badges).
+
+**Files changed:**
+- `packages/server/src/db/schema.ts` — 8 new git-cache columns on `issueRuns` (`gitBranch`, `gitBranchUrl`, `prNumber`, `prUrl`, `prState`, `ciState`, `ciUrl`, `gitCacheRefreshedAt`).
+- `packages/server/src/db/index.ts` — Wave 17 migration block: `ALTER TABLE issue_runs ADD COLUMN IF NOT EXISTS …` for all 8 columns.
+- `packages/server/src/realtime/event-bus.ts` — added `git.comment.posted`, `git.pr.merged` to `GitEventType`.
+- `packages/server/src/routes/runs.ts` — `sanitizeCommentBody()` helper; push endpoint now persists `gitBranch`/`gitBranchUrl`; PR endpoint persists `prNumber`/`prUrl`/`prState='open'`; new `POST /:runId/git/comment` (G2.3); new `POST /:runId/git/pr/merge` (G2.5) with CI gate via `gh pr checks --required`.
+- `packages/server/src/services/issues.ts` — `listIssues` now batch-fetches git data via `DISTINCT ON (issue_id)` SQL for the most recent worktree run per issue; `GitHubBlock` interface; fire-and-forget `refreshCiState()` for 5-min TTL.
+- `packages/client/src/realtime/ws-client.ts` — `git.comment.posted` + `git.pr.merged` in `WsEventMap`.
+- `packages/client/src/api/git.ts` — `CommentResult`, `MergeResult`, `MergeMethod`; `useCommentOnIssue`, `useMergePr` hooks.
+- `packages/client/src/api/issues.ts` — `Issue.github` optional block (branch, pr, ci).
+- `packages/client/src/components/runs/GitActions.tsx` — Comment modal (G2.3) + Merge PR split-button with squash/merge/rebase picker (G2.5) + WS fast-path for all 4 git events.
+- `packages/client/src/components/board/IssueCard.tsx` — `GitHubBadges` component renders branch 🌿 / PR 🔀 / CI ✅ badges below labels (G2.6).
+
+**Decision records:**
+- `.squad/decisions/inbox/verbal-stream-g-phase2a.md` — endpoint shapes, WS payloads, badge data shape, cache strategy, open questions for Chunk B.
+
+**Learnings this wave:**
+
+**stdin body-file pattern for gh CLI:** Use `--body-file -` + pipe via `input` option on `execFileAsync`. This keeps arbitrary comment text completely out of argv — no shell injection surface regardless of what users type (backticks, semicolons, `$(...)`, null bytes). The `sanitizeCommentBody()` guard strips null bytes and ANSI codes as an extra layer, but the stdin pipe is the real protection.
+
+**DISTINCT ON for "latest row per group":** `DISTINCT ON (issue_id) ... ORDER BY issue_id, created_at DESC` in raw Postgres SQL is the cleanest way to get the most recent worktree run per issue in a single query. Drizzle doesn't have a direct equivalent without a lateral subquery, so raw SQL is the right tool here.
+
+**Fire-and-forget CI refresh pattern:** Instead of a complex background job queue, `refreshCiState()` is a plain async function called with `void` (no await). On the next `listIssues` call (within the 5-minute TTL window), the updated `ciState` will be present. This is "eventual consistency for CI" — acceptable because CI state changes slowly relative to how often users look at the board.
+
+**Split-button pattern without Fluent2 MenuButton dependency:** Implemented as two adjacent `<button>` elements inside a shared `div` with a shared border — primary action on the left, `▾` dropdown trigger on the right. Avoids adding a Fluent2 compound component to a file that deliberately uses plain CSS-in-JS for the run drawer footer (keeps bundle delta minimal).
+
+**TypeScript narrowing with union state machines:** The `mergeState.phase === 'done' && !prMerged` pattern was contradictory because `prMerged` was derived from the same discriminant — TypeScript correctly narrowed the conjunction to `never`. Pattern: use the discriminant directly in JSX conditions; don't cache discriminant results in intermediate booleans that are then negated.
+

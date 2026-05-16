@@ -208,6 +208,15 @@ export const issueRuns = pgTable('issue_runs', {
   routingTier: integer('routing_tier'),        // 1 | 2 | 3 — which tier resolved this run
   routingScore: numeric('routing_score', { precision: 5, scale: 4 }), // Tier-2 keyword score
   routingReasoning: text('routing_reasoning'), // Tier-3 LLM reasoning or Tier-2 score breakdown
+  // Stream G Phase 2A: git/PR state cached on the run (fast path for card badges)
+  gitBranch: text('git_branch'),               // pushed branch name (e.g. squad/verbal/my-feature)
+  gitBranchUrl: text('git_branch_url'),        // GitHub tree URL for the branch
+  prNumber: integer('pr_number'),              // PR number from gh pr create / gh pr view
+  prUrl: text('pr_url'),                       // GitHub PR HTML URL
+  prState: text('pr_state'),                   // 'open'|'draft'|'merged'|'closed'
+  ciState: text('ci_state'),                   // 'passing'|'failing'|'running'|'unknown'
+  ciUrl: text('ci_url'),                       // URL to latest CI check run
+  gitCacheRefreshedAt: timestamp('git_cache_refreshed_at', { withTimezone: true }), // for 5-min CI TTL
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 });

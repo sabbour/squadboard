@@ -61,6 +61,8 @@ export interface WsEventMap {
   // Stream G: GitHub integration — git push + PR lifecycle
   'git.push.complete': { runId: string; branch: string; branchUrl: string; pushOutput: string }
   'git.pr.created':    { runId: string; branch: string; prUrl: string; prNumber?: number }
+  'git.comment.posted': { runId: string; commentUrl: string; issueNumber: number }
+  'git.pr.merged':     { runId: string; prUrl: string; sha: string; method: 'merge' | 'squash' | 'rebase' }
   // Connection control (sent by server)
   connected: { serverId: string }
   error: { message: string }

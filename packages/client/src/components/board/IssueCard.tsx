@@ -21,6 +21,102 @@ interface IssueCardProps {
   onOpen: (issue: Issue) => void
 }
 
+// ── GitHub badge helpers ─────────────────────────────────────────────────────
+
+type PrState = 'open' | 'draft' | 'merged' | 'closed'
+type CiState = 'passing' | 'failing' | 'running' | 'unknown'
+
+function prStateColor(state: PrState): string {
+  switch (state) {
+    case 'open':   return '#3fb950'   // green
+    case 'draft':  return '#8b949e'   // muted
+    case 'merged': return '#a371f7'   // purple
+    case 'closed': return '#f85149'   // red
+    default:       return '#8b949e'
+  }
+}
+
+function ciStateIcon(state: CiState): string {
+  switch (state) {
+    case 'passing': return '✅'
+    case 'failing': return '⚠️'
+    case 'running': return '⏳'
+    default:        return '⚪'
+  }
+}
+
+function truncateBranch(branch: string, max = 20): string {
+  return branch.length > max ? branch.slice(0, max) + '…' : branch
+}
+
+interface GitHubBadgesProps {
+  github: Issue['github']
+}
+
+function GitHubBadges({ github }: GitHubBadgesProps) {
+  if (!github) return null
+  const { branch, branchUrl, pr, ci } = github
+  if (!branch && !pr) return null
+
+  return (
+    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', marginTop: '6px' }}>
+      {branch && (
+        <a
+          href={branchUrl ?? '#'}
+          target="_blank"
+          rel="noopener noreferrer"
+          title={branch}
+          onClick={(e) => e.stopPropagation()}
+          style={badgeLinkStyle}
+        >
+          🌿 {truncateBranch(branch)}
+        </a>
+      )}
+      {pr && (
+        <a
+          href={pr.url}
+          target="_blank"
+          rel="noopener noreferrer"
+          onClick={(e) => e.stopPropagation()}
+          style={{ ...badgeLinkStyle, color: prStateColor(pr.state) }}
+        >
+          🔀 PR #{pr.number} · {pr.state}
+        </a>
+      )}
+      {ci && (
+        <a
+          href={ci.url ?? '#'}
+          target="_blank"
+          rel="noopener noreferrer"
+          onClick={(e) => e.stopPropagation()}
+          style={badgeLinkStyle}
+        >
+          {ciStateIcon(ci.state)} CI {ci.state}
+        </a>
+      )}
+    </div>
+  )
+}
+
+const badgeLinkStyle: React.CSSProperties = {
+  display: 'inline-flex',
+  alignItems: 'center',
+  gap: '2px',
+  fontSize: '10px',
+  color: '#8b949e',
+  background: 'rgba(139,148,158,0.1)',
+  border: '1px solid rgba(139,148,158,0.25)',
+  borderRadius: '10px',
+  padding: '1px 7px',
+  textDecoration: 'none',
+  whiteSpace: 'nowrap' as const,
+  maxWidth: '200px',
+  overflow: 'hidden',
+  textOverflow: 'ellipsis',
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+
 export default function IssueCard({ issue, index, projectId, isSelected, onSelect, onOpen }: IssueCardProps) {
   const [hovered, setHovered] = useState(false)
   const { data: runs } = useIssueRuns(projectId, issue.id)
@@ -93,6 +189,9 @@ export default function IssueCard({ issue, index, projectId, isSelected, onSelec
                 ))}
               </div>
             )}
+
+            {/* GitHub badges (G2.6) */}
+            <GitHubBadges github={issue.github} />
 
             {/* Footer: assignee + comment count + run */}
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '6px' }}>
