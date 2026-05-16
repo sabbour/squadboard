@@ -205,3 +205,46 @@ Brady's screenshot revealed three bugs in the heartbeat surface:
 3. WS connection fails on dev (Vite proxy not forwarding ws:// upgrades)
 
 Verbal owns all three. Routing deferred to W27; W26 closes with these noted for immediate next-wave priority.
+
+---
+
+## W27 Lessons — Heartbeat Console Triad Fix
+
+**Date:** 2026-05-16T03:38:30-07:00
+**Wave:** 27
+**Commit:** (fix(heartbeat,ws): W27 triad — phantom error rows + duplicate keys + WS proxy)
+
+### Three bugs, one surface, one commit
+
+#### Bug 1: Phantom "unknown error" rows in "Sweeps acted on"
+
+**Root cause:** `startHeartbeatHistory()` subscribed to ALL heartbeat events via `eventBus.onHeartbeat()`. `sweep.tick` has schema `{sweepName, status, agentsActivated, durationMs}` but the handler read `payload.sweepId` (undefined) and inferred `outcome = 'error'` (else branch). Result: every tick produced a phantom row alongside the real completed row.
+
+**Fix:** Early-return guard in the `onHeartbeat` callback: skip any event type other than `heartbeat.sweep.completed` / `heartbeat.sweep.error`. `sweep.tick` stays WS-only.
+
+**File:** `packages/server/src/services/heartbeat.ts`
+
+#### Bug 2: React duplicate-key warnings
+
+**Root cause:** Same as Bug 1 — the phantom entries consumed seq values, creating paired entries that caused React reconciliation collisions in the 20-item window render.
+
+**Fix:** Resolved automatically by Bug 1 fix. No separate change needed.
+
+#### Bug 3: WebSocket fails to connect (ws://localhost:5173/api/ws)
+
+**Root cause:** Vite proxy had `ws: true` on the broad `/api` entry with `http://` target. First-match routing caused WebSocket upgrade requests to `/api/ws` to be handled by the HTTP catch-all, which doesn't perform the WS handshake.
+
+**Fix:** Extracted proxy rules to `src/proxy-config.ts`. Added `/api/ws` entry with `ws://localhost:3000` target BEFORE `/api`. Removed `ws: true` from `/api`.
+
+**Files:** `packages/client/vite.config.ts`, `packages/client/src/proxy-config.ts` (new)
+
+### Key patterns
+
+1. **`sweep.tick` is WS-only** — never persists to ring buffers or REST. Use `heartbeat.sweep.completed`/`heartbeat.sweep.error` for persistence.
+2. **Vite WS proxy:** dedicated `/api/ws` entry must come before the HTTP `/api` catch-all; use `ws://` target for clarity.
+3. **Singleton service test reset pattern:** store the `onHeartbeat()` unsubscribe fn in a module-level variable; `_reset*()` calls it before clearing `subscribed`, preventing listener stacking across test cases.
+
+### W27 Stats
+- 12 new tests (7 server + 5 client)
+- 472 total tests passing (464 server + 8 client)
+- `pnpm -r build` green

@@ -106,11 +106,20 @@ export function getHeartbeatSnapshot(): HeartbeatSnapshot {
 // ---------------------------------------------------------------------------
 
 let subscribed = false;
+let _unsubscribe: (() => void) | null = null;
 
 export function startHeartbeatHistory(): void {
   if (subscribed) return;
   subscribed = true;
-  eventBus.onHeartbeat((evt) => {
+  _unsubscribe = eventBus.onHeartbeat((evt) => {
+    // W27 Bug 1: Only persist heartbeat.sweep.completed / heartbeat.sweep.error.
+    // sweep.tick is a transient WS-only event for the SweepTimeline animation;
+    // it uses a different schema (sweepName/status) and must NOT enter the ring
+    // buffer. Letting it through caused phantom "unknown error" rows because the
+    // client reads sweepId (undefined) and outcome falls through to 'error'.
+    if (evt.type !== 'heartbeat.sweep.completed' && evt.type !== 'heartbeat.sweep.error') {
+      return;
+    }
     try {
       const payload = evt.payload as {
         sweepId:    string;
@@ -141,3 +150,22 @@ export function startHeartbeatHistory(): void {
 // Auto-start on module import. Cheap (one event-bus subscription) and
 // guarantees we don't miss sweeps if a caller forgets to call this.
 startHeartbeatHistory();
+
+// ---------------------------------------------------------------------------
+// Test escape hatch — do NOT call outside of vitest.
+// Resets the ring buffer + seq counter + subscribed flag so unit tests can
+// start from a clean slate without re-requiring the whole module.
+// ---------------------------------------------------------------------------
+
+/** @internal vitest only — resets module-level ring-buffer state. */
+export function _resetHeartbeatServiceState(): void {
+  ring.length = 0;
+  nextSeq = 1;
+  // Detach the current listener so the next startHeartbeatHistory() call
+  // registers a fresh one (prevents accumulating duplicate listeners in tests).
+  if (_unsubscribe) {
+    _unsubscribe();
+    _unsubscribe = null;
+  }
+  subscribed = false;
+}
