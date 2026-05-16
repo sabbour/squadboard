@@ -102,3 +102,27 @@ Guard both branches — `!res.ok` AND the happy-path JSON parse — against non-
 
 Note: q9-end-wave-button reframed from primary to manual-override. After q7 (autonomous daemon) ships, q9 becomes the UI for forcing an immediate ceremony, ignoring the schedule. Lower priority than q7.
 
+---
+
+## Wave 15 — UI Bug Batch (commit 5f9fab1e)
+
+**Date:** 2026-05-15T22:42:29.855-07:00
+
+Three bugs landed in one commit cluster:
+
+**Bug 1 — Use-template pre-fill (CeremonyEditor.tsx):**
+- Templates.tsx passed `?template=<slug>` on navigate but CeremonyEditor never read it — form always blank.
+- Fix: added `useSearchParams` + `useCeremonyTemplates()` call. `useEffect` on `[templateSlug, builtinTemplates]` pre-fills name / description / steps, auto-expands manual form. Invalid slug shows warning banner ("Template not found — starting with blank form."). Valid slug shows info banner ("Pre-filled from template.").
+
+**Bug 2 — Conjure nav (Layout.tsx) — ROOT CAUSE FOUND:**
+- Feature was fully functional at `/consult/new` since W10. Root cause: Wave 10 B2 relabeled every UI surface "Consult" when the product name was "Conjure." The nav item said "Consult", the button said "Consult" — no user looking for "Conjure" would find it. Regressed silently through W10, W11, W14 because no test covered nav label text.
+- Fix: renamed `NavItem` label and top-bar `Button` text from "Consult" → "Conjure". Routes, keyboard shortcuts, and page component unchanged.
+
+**Bug 3 — Scope dropdown help text (CeremonyEditor.tsx TriggerConfigForm):**
+- Bare `<label>scope` replaced with `<Label>` + `<Dropdown>` + reactive `<Caption1>` help text per scope value + `<MessageBar intent="info">` for board/task scopes explaining narrowed-firing behaviour.
+- Closes `h5-scope-clarify` and `w15-ceremony-scope-options-ux`.
+
+**Key learnings:**
+- `useSearchParams` from react-router is the correct hook for reading URL query params in Vite/react-router v7 (not `new URLSearchParams(window.location.search)`).
+- Nav label regressions are invisible to router-level tests — the `value` prop (used for routing) was "consult" throughout; only the display text was wrong. Consider adding a smoke test that verifies visible nav label text matches product names.
+- `useCeremonyTemplates()` is safe to call on both new and edit routes — React Query caches it and the pre-fill effect is guarded by `templateSlug` being null on edit routes.
