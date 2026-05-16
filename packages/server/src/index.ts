@@ -79,6 +79,7 @@ import {
   formatUncaughtException,
   gracefulTeardown,
 } from './process-handlers.js';
+import { authMiddleware, csrfMiddleware } from './middleware/index.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -197,6 +198,12 @@ async function main(): Promise<void> {
 
   const app = express();
   app.use(express.json());
+
+  // ── W30: Security middleware — auth before CSRF (order matters) ──────────
+  // authMiddleware: no-op when SQUADBOARD_AUTH_TOKEN unset (local dogfood).
+  // csrfMiddleware: no-op when SQUADBOARD_DISABLE_CSRF=1 (local escape hatch).
+  app.use(authMiddleware);
+  app.use(csrfMiddleware);
 
   app.use('/api/health', healthRouter);
   app.use('/api/system', systemRouter);
