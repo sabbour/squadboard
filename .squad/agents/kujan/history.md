@@ -119,3 +119,4 @@ Wrote end-to-end regression suite (`packages/e2e/tests/10-cast-team.spec.ts`, 7.
 **Execution:** 4 passed in 9.9s using 1 worker.
 
 **Fixture helper:** Added `createProjectViaApi()` to `packages/e2e/tests/fixtures.ts` — direct API call to `POST /api/squad/create` returns `projectId`. The existing `createProject()` UI-based helper is unreliable in WSL/headless Chromium (Fluent v9 controlled inputs don't respond to Playwright `fill()` in headless mode). Tests 07–09 already adopted API pattern; test 10 standardizes on it. Created button selector also fixed from `getByRole('button', { name: 'Create' })` to `getByRole('button', { name: 'Create new' })` to disambiguate post-Templates feature.
+- W28: JIS client — useRunStream hook + LiveRunViewer component (T7,T8), Watch button on running cards (T9), reconnect with event replay + 3-strike WS failure counter + tests (T10,T12) (aa909f30, fff70477)

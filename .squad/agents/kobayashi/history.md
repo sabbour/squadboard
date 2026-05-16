@@ -235,3 +235,5 @@ Kobayashi delivered F4 — migrate 6 bundles to squadapp.json (commit 4806a4ff).
 ### Notes
 
 Part of the three-agent L/F pattern in W24. All three (Hockney/Kobayashi/McManus) completed work before session eviction, and coordinator handled the orphan-commit pass uniformly.
+This was part of the three-agent L/F pattern in W24. All three (Hockney/Kobayashi/McManus) completed work before session eviction, and coordinator handled the orphan-commit pass uniformly.
+- W28: Ceremonies research — ceremonies.md vs runtime relationship analysis; verdict: keep spec as aspirational reference, canonicalize .squad/ceremonies/*.workflow.yaml, Conjure remains primary authoring, SDK readCeremonies() for seeding (58852130)

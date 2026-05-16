@@ -248,3 +248,4 @@ Verbal owns all three. Routing deferred to W27; W26 closes with these noted for 
 - 12 new tests (7 server + 5 client)
 - 472 total tests passing (464 server + 8 client)
 - `pnpm -r build` green
+- W28: JIS foundation (T1,T5,T6) — issue_run_events schema + bigserial, active session registry, events query endpoint (f62e1bd6); JIS stream (T2,T3,T4) — RunningIssueSessionImpl + bridge event emission (start/turn/metric/finish or error) + steer endpoint validation (a92f6d39)

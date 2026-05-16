@@ -248,3 +248,35 @@ Moved RunButton outside `onClick={onOpen}` wrapper to fix event bubbling. Uninte
 RoutingLogTable crashed on `entries.map` when server returned non-array (e.g., `{ error: "..." }`). Also crashed on `entry.score.toFixed(2)` when score was a string. Fixes: (a) guard with `!Array.isArray(entries) || entries.length === 0`, (b) type-check score before `.toFixed()`, (c) wrap entire routing section with ErrorBoundary. Pattern: defensive rendering for tables + ErrorBoundary escape hatch prevents app-wide crashes from malformed API responses.
 
 **Pattern:** Assume server data can be malformed. Type-check before calling methods. Use ErrorBoundary for data-intensive sections.
+## W24 Close-Out
+
+**Date:** 2026-05-16  
+**Status:** Completed
+
+### Summary
+
+Keyser delivered W24 UX feature set: Conjure↔Consult re-swap + collapsible left navigation. Multiple commits (6cd1ae15, 55b4383f, 0f6315f9). Self-committed with proper co-author attribution. Build verified green before commit.
+
+### Lineage
+
+- **Todo 1:** w24-ux-conjure-consult-swap (Commit: 6cd1ae15)
+  - Top-bar button: Conjure wand → Consult (ChatHelp icon)
+  - Left-nav Consult entry removed
+  - Route `/consult/new` still exists via top-bar button
+
+- **Todo 2:** w24-ux-collapsible-nav (Commit: 6cd1ae15)
+  - Collapse/expand toggle for left sidebar
+  - Icons-only when collapsed (56–64px width)
+  - Persists to localStorage (`squadboard.nav.collapsed`)
+  - Smooth CSS transition (200ms ease)
+  - Tooltips on icons when collapsed
+  - Section headers hidden when collapsed
+
+### Build Status
+
+✓ Green (tsc + vite, 7.05s, zero type errors)
+
+### Pattern
+
+No orphan-completion. Keyser self-committed with proper workflow.
+- W28: CER-1 + CER-8 — origin badges (templateId → sourceYamlPath → parentNarrativeId → user-created), audit endpoint, orphan/dead detection, CeremonyAudit diagnostics page (0604f914)

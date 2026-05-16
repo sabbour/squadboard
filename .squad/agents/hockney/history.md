@@ -247,3 +247,24 @@ The SDK client auto-replays `Mcp-Session-Id`; curl doesn't. Error messages for m
 **Tests:** 3 conjure hint cases + 5 PATCH project cases = 8 new tests. All 464 tests green.  
 **Commit:** filed as W27 quad commit on main.  
 **Decision file:** `.squad/decisions/inbox/hockney-w27-server-quad.md`
+Current focus: W21–W23. For earlier context, search `.squad/decisions.md` by wave number.
+
+## W24 Close-Out
+
+**Date:** 2026-05-16  
+**Status:** Completed
+
+### Summary
+
+Hockney delivered L2 Electron scaffold (commit 2f2bc1b0). Work was completed on disk, but agent session cleared before commit. Coordinator executed orphan-commit pass with proper co-author attribution.
+
+### Lineage
+
+- **Todo:** l2-electron-scaffold
+- **Commit:** 2f2bc1b0
+- **Pattern:** Orphan completion (silent success / agent runtime eviction)
+
+### Next Wave
+
+Hockney-close-w24 dispatched in parallel to run build + main FF + smoke tests before W25 starts.
+- W28: Cost critical fixes (Haiku 4-5× underbilled, +8 models, consult premiums, cached tokens schema, drift alarm, migration safety with rollback + dry-run + snapshots) (b954fe18, 00ef812d, a35226ab)

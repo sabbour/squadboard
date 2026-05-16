@@ -3861,6 +3861,87 @@ If a new sweep is added to `index.ts`, also add it to `ALL_SWEEPS` in
 - **W22 code comment** about Conjure top-bar removed.
 
 ### NOT changed
+# 2026-05-16T02:38:00Z: User directive — Top-bar button is CONSULT, not Conjure
+
+**By:** Ahmed (via Copilot)  
+**Status:** Accepted / Implemented in W24
+
+### What
+
+The top-right toolbar button (currently `Conjure` wand) should be **Consult** (quick "open new consult" entry). Conjure stays on the Board big (+) FAB only. Remove the `Consult` link from the left navigation.
+
+### Why
+
+Consult was previously moved out of the top bar to make room for Conjure (W22). User feedback: Consult was a primary action and now feels buried in the left nav. Conjure is conceptually the "+" intake — the (+) FAB is the right home for it; the top bar should expose the rarer-but-deliberate "I want to talk to an agent" Consult action.
+
+### Design Decisions
+
+- **ConjureModal** (`packages/client/src/components/conjure/ConjureModal.tsx`) stays exactly as built in W22. Do not delete. Do not change semantics.
+- **Board.tsx FAB** stays Conjure (big "+").
+- **Keyboard shortcuts:** `c` / `?` / `Ctrl+K` continue to open ConjureModal. Do not rebind.
+- **Left-nav `consult` entry** is removed; route `/consult/new` still exists. Top-bar Consult button is new entry point — navigates to `/consult/new` (scoped to current project if `id` is set, global otherwise).
+- **Icon:** `ChatHelp20Regular` (matches what was in left nav).
+- **Inbox button** stays where it is.
+
+### Note
+
+This is the 2nd Conjure entry-point correction in 3 waves (W22 added top-bar wand, W24 reverts it). Before changing any Conjure/Consult entry point, re-read canonical Conjure spec at `.squad/decisions-archive.md` lines 1666–1960 AND check most recent user directive in `.squad/decisions/inbox/`.
+
+---
+
+# 2026-05-16T02:38:00Z: User directive — Left navigation must collapse
+
+**By:** Ahmed (via Copilot)  
+**Status:** Accepted / Implemented in W24
+
+### What
+
+Add collapse/expand toggle to left sidebar. Icons-only when collapsed; full labels when expanded. State persists to `localStorage`. Smooth width transition. Tooltips on icons when collapsed.
+
+### Why
+
+Screen real-estate; especially helpful on smaller laptops.
+
+### Design Decisions
+
+- **Toggle button:** `ChevronDoubleLeft/Right20Regular` at top of sidebar.
+- **localStorage key:** `squadboard.nav.collapsed` (boolean).
+- **Collapsed width:** 56–64px (icon + padding). **Expanded width:** existing ~240px.
+- **CSS transition:** width 200ms ease.
+- **Tooltip:** `NavItem` elements wrap in `<Tooltip positioning="after" hideDelay={0}>` when collapsed.
+- **Rendering:** NavItem children are `null` when collapsed (icon-only). `NavSectionHeader` elements hidden. Logo image hidden (horizontal image overflows 56px).
+- **Approach:** Hybrid CSS-width + conditional Tooltip JSX. NavDrawer component tree stays singular; only label text and Tooltip wrapping are conditional.
+
+### Caveats
+
+- **Section headers** (WORK, SQUAD, OPERATIONS, SYSTEM) absent in collapsed state — no grouping visual. Expected for icon-only mode.
+- **Logo** hidden when collapsed. No compact logo variant exists — could be added in future wave.
+
+---
+
+# 2026-05-16T02:38:00Z: Keyser W24 — ConjureModal + Consult + Collapsible Nav Close-Out
+
+**Author:** Keyser  
+**Date:** 2026-05-16  
+**Branch:** keyser/w17-settings-backup-github  
+**Status:** Delivered / Green Build
+
+### W24 UX Corrections — Item A — Conjure→Consult Top-Bar Swap
+
+**Tag:** w24-ux-conjure-consult-swap  
+**Commit:** 6cd1ae15
+
+#### Changes
+
+- **Top-bar button:** `Wand20Regular` / "Conjure" (opens ConjureModal) replaced with `ChatHelp20Regular` / "Consult" (navigates to `/projects/:id/consult/new` when in a project, `/consult/new` globally).
+- **Left nav:** `<NavItem value="consult">Consult</NavItem>` removed. Route `/consult/new` still exists and reachable via top-bar button or deep link.
+- **`handleNavItemSelect`:** `value === 'consult'` case removed (no longer reachable from sidebar).
+- **`getSelectedValue()`:** `/consult` pathname detection retained — if user navigates directly to `/consult/*`, sidebar won't highlight non-existent item (returns `'consult'` but no NavItem has that value, so nothing lights up; harmless).
+- **Imports removed:** `ChatHelp24Regular` (was left-nav icon), `Wand20Regular` (was top-bar).
+- **Import added:** `ChatHelp20Regular` (20px, matches Mail20Regular sibling in top-bar).
+- **W22 code comment** about Conjure top-bar removed.
+
+#### NOT Changed
 
 - `ConjureModal.tsx` — untouched.
 - `ConjureContext.tsx` — untouched.
@@ -3886,6 +3967,12 @@ If a new sweep is added to `index.ts`, also add it to `ALL_SWEEPS` in
 **Commit:** 6cd1ae15 (bundled with Item A — both in Layout.tsx)
 
 ### What changed
+### W24 UX Corrections — Item B — Collapsible Left Navigation
+
+**Tag:** w24-ux-collapsible-nav  
+**Commit:** 6cd1ae15 (bundled with Item A — both in Layout.tsx)
+
+#### Changes
 
 - **State:** `navCollapsed: boolean` initialized from `localStorage.getItem('squadboard.nav.collapsed') === 'true'`.
 - **Persistence:** `toggleNav()` writes `localStorage.setItem('squadboard.nav.collapsed', String(next))` on every toggle.
@@ -3983,4 +4070,61 @@ After Verbal's WIP (uncommitted; includes `pickup-todos.ts` new sweep + 3 new la
 **Why:** The heartbeat surface is the team's operational dashboard. These bugs flood the console, break React reconciliation, and make the timeline silent. Three bugs in one screenshot, all in code shipped in W25-W26.
 
 **Routing:** Verbal owns (SweepTimeline + sweep.tick + heartbeat events are her surface). Slot to W27 per Brady's tag — close W26 first, then dispatch.
+
+  - `NavSectionHeader` elements hidden when collapsed (WORK, SQUAD, OPERATIONS, SYSTEM).
+  - Logo image hidden when collapsed (horizontal image overflows 56px).
+- **Approach:** Hybrid CSS-width + conditional Tooltip JSX (not full conditional render). NavDrawer component tree stays singular; only label text and Tooltip wrapping are conditional.
+
+### Build Status
+
+✓ `pnpm -C packages/client build` → green (tsc + vite, 7.05s, zero type errors)
+
+---
+
+## Wave 28
+
+### W28: Jump Into Session (JIS) Foundation + Client + Streaming
+- **Decision/Finding:** Implemented end-to-end JIS (Jump Into Session) live run observability: server-side event schema + registry (T1, T5, T6), session lifecycle events in bridge (T2-T4), client-side useRunStream hook + LiveRunViewer component (T7-T8), Watch button on running cards + reconnect with event replay + tests (T9-T10, T12).
+- **Source:** Verbal (verbal-w28-jis-foundation, verbal-w28-jis-stream-impl), Kujan (kujan-w28-jis-client, kujan-w28-jis-final)
+- **Commit(s):** f62e1bd6, a92f6d39, aa909f30, fff70477 (T1-T10, T12 batches)
+
+### W28: J3 SSE Streaming + WS Fallback
+- **Decision/Finding:** Shipped SSE alternative transport for consult streaming with 3s WS→SSE fallback timeout, 100-event resume buffer, 15s heartbeats, and full backward compatibility. Client transport tracking via ref + state exports for UI status indicators.
+- **Source:** Jude (jude-w28-j3-streaming)
+- **Commit(s):** fe14d8dc
+
+### W28: J5 CoordinatorContext Injection with 8K Budget Cap
+- **Decision/Finding:** Integrated CoordinatorContext into consult send-path with 8K token budget applied only to variable sections (identity squad.agent.md not counted). Truncation order: orchestration-log → decisions → view. ContextPanel displays progress + per-section tokens + redaction count. DirectResponseHandler imported from `@bradygaster/squad-sdk/coordinator` subpath (not barrel). Privacy redaction applied to KEY=value, xox*, ghp_, github_pat_, Bearer patterns.
+- **Source:** Jude (jude-w28-j5-context)
+- **Commit(s):** 07790f6d
+
+### W28: Cost Fixes — Haiku Rates Critical Correction + 8 Missing Models + Consult Premiums
+- **Decision/Finding:** COST-1 shipped: Claude Haiku 4.5 input 0.25→1.00 USD/M, output 1.25→5.00 USD/M (4-5x underbilled). COST-2 added GPT-5.5, GPT-5.4-mini, 4 Gemini variants, Claude Opus 4.7 variants, Raptor mini, Goldeneye. Fixed GPT-4.1 (5x too high), GPT-5-mini variants (under-priced). COST-4: premiumRequests end-to-end tracking in consult sessions verified with multiplier logic (Opus 10×, Sonnet 1×, Haiku 0.25×, included models 0×).
+- **Source:** Hockney (hockney-w28-cost-fixes)
+- **Commit(s):** b954fe18
+
+### W28: Cost Research — Top 3 Gaps + W29 Phasing
+- **Decision/Finding:** Research identified Claude Haiku critical underbilling (4-5×), missing cached token pricing (GitHub charges 10% of input), missing high-volume models. Phased W28 quick wins (rates + schema foundation) vs W29 medium-term (cached token computation + UI).
+- **Source:** Hockney (hockney-w28-cost-research)
+- **Commit(s):** 58852130 (research, not code)
+
+### W28: Cost Residual — Cached Input Tokens Schema + CI Drift Alarm
+- **Decision/Finding:** COST-3 added cachedInputTokens column to issue_runs, live_sessions, consult_sessions with 10% rate calculation. COST-5b added snapshot test suite (gated behind env flag) to catch rate-table drift vs GitHub docs.
+- **Source:** Hockney (hockney-w28-cost-residual)
+- **Commit(s):** 00ef812d
+
+### W28: I9 Migration Safety — Rollback Hooks + Dry-Run + Snapshots + Skip Flag
+- **Decision/Finding:** Implemented comprehensive SQL migrations system: dry-run mode (MIGRATIONS_DRY_RUN=1), rollback hooks (.rollback.sql files + CLI), schema snapshots pre-migration (.squad/db-snapshots/), bootstrap DDL skip flag (SKIP_BOOTSTRAP_DDL=1), migration integrity log (_migration_log table with checksum). All migrations idempotent with rollback support.
+- **Source:** Hockney (hockney-w28-i9-migration-safety)
+- **Commit(s):** a35226ab
+
+### W28: CER-1 + CER-8 — Ceremony Origin Provenance Badges + Audit Endpoint + Diagnostics
+- **Decision/Finding:** CER-1: Ceremony origin derived without schema migration (hierarchy: templateId → sourceYamlPath → parentNarrativeId → user-created). OriginBadge added to CeremonyList + CeremonyEditor. CER-8: New audit endpoint (GET /api/projects/:projectId/ceremonies/audit) returns orphan/dead ceremony detection + byOrigin/byTrigger/byStatus stats. New CeremonyAudit.tsx diagnostics page with "Audit" button in toolbar.
+- **Source:** Keyser (keyser-w28-ceremonies-batch1)
+- **Commit(s):** 0604f914
+
+### W28: Ceremonies Research — ceremonies.md vs Runtime Relationship Analysis
+- **Decision/Finding:** Research found two separate ceremony layers with NO bidirectional sync: ceremonies.md (spec handbook) never auto-instantiated at runtime. Top 3 misalignments: built-in not seeded, no condition detection, visual editor allows branching vs linear spec. Verdict: keep ceremonies.md as aspirational reference; canonicalize as .squad/ceremonies/*.workflow.yaml; LLM Conjure remains primary authoring surface; SDK provides readCeremonies() for seeding.
+- **Source:** Kobayashi (kobayashi-w28-ceremonies-md-research)
+- **Commit(s):** 58852130 (research, not code)
 
