@@ -18,7 +18,7 @@
  */
 
 import { useState, useEffect, useMemo, useCallback } from 'react'
-import { useParams, useNavigate, Navigate } from 'react-router'
+import { useParams, useNavigate, Navigate, useSearchParams } from 'react-router'
 import {
   useCeremony,
   useCreateCeremony,
@@ -31,6 +31,7 @@ import {
   useCeremonySchedules,
   useCreateSchedule,
   useDeleteSchedule,
+  useCeremonyTemplates,
   type TriggerKind,
   type CeremonyKind,
 } from '../api/ceremonies.ts'
@@ -166,8 +167,13 @@ export default function CeremonyEditor() {
   const { id: projectId, ceremonyId } = useParams<{ id: string; ceremonyId?: string }>()
   const isNew = !ceremonyId || ceremonyId === 'new'
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
 
   if (!projectId) return <Navigate to="/" replace />
+
+  // Bug W15-1: read ?template=<slug> and pre-fill form from built-in ceremony template.
+  const templateSlug = isNew ? searchParams.get('template') : null
+  const { data: builtinTemplates } = useCeremonyTemplates()
 
   const { data: detail, isLoading } = useCeremony(projectId, isNew ? '' : ceremonyId!)
   const createCeremony = useCreateCeremony(projectId)
@@ -193,6 +199,9 @@ export default function CeremonyEditor() {
   const [formulateModelUsed, setFormulateModelUsed] = useState<{ model: string; via: string } | null>(null)
   // Controls progressive reveal of the manual-build structured form in create mode.
   const [showManualForm, setShowManualForm] = useState(false)
+
+  // Bug W15-1: template pre-fill state.
+  const [templateNotFound, setTemplateNotFound] = useState(false)
 
   const [saveErr, setSaveErr] = useState<string | null>(null)
   const [saveOk, setSaveOk] = useState(false)
@@ -233,6 +242,30 @@ export default function CeremonyEditor() {
     const filename = `${name.replace(/[^a-z0-9]+/gi, '-').toLowerCase() || 'ceremony'}.yaml`
     triggerTextDownload(yaml, filename, 'text/yaml')
   }
+
+  // Bug W15-1: pre-fill form from built-in ceremony template when ?template=<slug> is present.
+  useEffect(() => {
+    if (!templateSlug || !builtinTemplates) return
+    const tpl = builtinTemplates.find((t) => t.slug === templateSlug)
+    if (!tpl) {
+      setTemplateNotFound(true)
+      return
+    }
+    setTemplateNotFound(false)
+    setName(tpl.name)
+    if (tpl.description) setDescription(tpl.description)
+    if (tpl.yamlContent) {
+      try {
+        const parsed = parseSteps(tpl.yamlContent)
+        setSteps(parsed.steps)
+        setHeaderExtras(parsed.header.extras)
+      } catch {
+        // Bad YAML in template — skip steps pre-fill, form remains partially filled.
+      }
+    }
+    // Auto-expand the manual form so pre-filled fields are visible.
+    setShowManualForm(true)
+  }, [templateSlug, builtinTemplates])
 
   // Hydrate from server.
   useEffect(() => {
@@ -549,6 +582,23 @@ export default function CeremonyEditor() {
             gap: tokens.spacingVerticalXL,
           }}
         >
+          {/* Bug W15-1: template-not-found banner */}
+          {templateNotFound && (
+            <MessageBar intent="warning">
+              <MessageBarBody>
+                Template not found — starting with a blank form.
+              </MessageBarBody>
+            </MessageBar>
+          )}
+          {/* Template pre-filled notice */}
+          {templateSlug && !templateNotFound && builtinTemplates && (
+            <MessageBar intent="info">
+              <MessageBarBody>
+                Pre-filled from template. Review the fields below and save when ready.
+              </MessageBarBody>
+            </MessageBar>
+          )}
+
           {/* Hero: Formulate */}
           <Card style={{ background: tokens.colorNeutralBackground2 }}>
             <div
@@ -1410,13 +1460,19 @@ function TriggerConfigForm({
   const set = (k: string, v: unknown) => onChange({ ...triggerConfig, [k]: v })
 
   if (triggerKind === 'on_issue_entry') {
+    const currentScope = (triggerConfig.scope as string) ?? 'project'
+    const SCOPE_HELP: Record<string, string> = {
+      project: 'Trigger fires for ANY board in the project that matches column_slug + labels.',
+      board: 'Trigger fires only for the specified board.',
+      task: 'Trigger fires only for a specific issue/card.',
+    }
     return (
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-        <label style={{ fontSize: 12 }}>
-          scope
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+          <Label weight="semibold">Scope</Label>
           <Dropdown
-            value={(triggerConfig.scope as string) ?? 'project'}
-            selectedOptions={[(triggerConfig.scope as string) ?? 'project']}
+            value={currentScope}
+            selectedOptions={[currentScope]}
             onOptionSelect={(_, d) => set('scope', d.optionValue)}
             disabled={disabled}
           >
@@ -1424,7 +1480,19 @@ function TriggerConfigForm({
             <Option value="board">board</Option>
             <Option value="task">task</Option>
           </Dropdown>
-        </label>
+          <Caption1 style={{ color: tokens.colorNeutralForeground3 }}>
+            {SCOPE_HELP[currentScope] ?? ''}
+          </Caption1>
+          {(currentScope === 'board' || currentScope === 'task') && (
+            <MessageBar intent="info" style={{ marginTop: 4 }}>
+              <MessageBarBody>
+                {currentScope === 'board'
+                  ? 'Scope set to board — this trigger will only fire for the specified board; existing matches in other boards will stop firing.'
+                  : 'Scope set to task — this trigger will only fire for a specific issue/card; existing matches in other tasks will stop firing.'}
+              </MessageBarBody>
+            </MessageBar>
+          )}
+        </div>
         <label style={{ fontSize: 12 }}>
           column slug (optional)
           <Input

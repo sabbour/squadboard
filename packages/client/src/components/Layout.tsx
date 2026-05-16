@@ -301,7 +301,7 @@ export default function Layout() {
             Now
           </NavItem>
           <NavItem icon={<ChatHelp24Regular />} value="consult">
-            Consult
+            Conjure
           </NavItem>
 
           {id && (
@@ -388,15 +388,15 @@ export default function Layout() {
               Inbox
             </Button>
             {/* Wave 10 B2: blue "+ Capture" button removed. Conjure is now the
-                single intake surface — Consult takes raw input and the Inbox
-                uses the Conjure classifier. */}
+                single intake surface. W15: renamed nav + button label from
+                "Consult" to "Conjure" so the entry point is visible to users. */}
             <Button
               appearance="primary"
               icon={<ChatHelp20Regular />}
               onClick={() => navigate(id ? `/projects/${id}/consult/new` : '/consult/new')}
-              title="Consult / Conjure (press c or ?)"
+              title="Conjure (press c or ?)"
             >
-              Consult
+              Conjure
             </Button>
           </div>
         </div>
