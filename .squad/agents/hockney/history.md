@@ -92,3 +92,27 @@ echo "T1=$T1  T2=$T2"
 **Context:** Cast-Team modal crash root cause. When routes are `import`ed but missing an `app.use()` mount, Express silently falls through to SPA fallback (`res.sendFile('index.html')`). Client calls `JSON.parse('<!doctype...')` → "Unexpected token '<'" with zero context.
 
 **Learning:** Router mounting discipline — grep `index.ts` for unmatched imports after adding any new router file. Add route-mount audit to squad DoD. The SPA catch-all is a feature trap; unimplemented routes should ideally throw 404 or register a default 404 handler instead of silently serving HTML.
+
+### Wave 12 — N7/N5/N1/N2 (2026-05-15)
+
+**N7 — Junk project cleanup:** Deleted 41 test projects via DELETE /api/projects/:id, all returned 204. Remaining: 3 canonical projects (foo, Content Creation Workflow, Social Media Content Manager).
+
+**N5 — Test MCP Connection fix:** Root cause: `McpConfigPanel.tsx` constructed `healthUrl` as `${window.location.hostname}:3000/mcp/health` (absolute URL). In Vite dev mode (port 5173 → 3000 cross-origin), browsers block the fetch because no CORS headers are set. Fix: changed to relative URL `/mcp/health` + added `/mcp` to the Vite proxy in `vite.config.ts`. The proxy forwards to localhost:3000 in dev; in prod the relative URL resolves same-origin. **Learning:** Never hardcode port in client-side absolute URLs — always use relative paths + proxy config so dev/prod behave identically.
+
+**N1 — Kanban done-capture:** The `capture` MCP tool now detects a `done:` prefix (e.g. `capture("done: Fixed login bug (sha=abc)")`) and close-matches the best open card in the project using token overlap (stop-word filtered, ≥2 token threshold). Matched card is updated to `status='done'`. If no match: a standalone done card is created rather than silently failing. Also added `bin/squad-card-done` helper script. **Learning:** The Conjure classifier path shouldn't be invoked for close-out semantics — detect structural prefixes BEFORE LLM classification for determinism and speed.
+
+**N2 — Double-pickup prevention:** Added 4 columns to `inbox_items`: `idempotency_key TEXT UNIQUE`, `created_by TEXT DEFAULT 'user'`, `claimed_by TEXT`, `claim_expires_at TIMESTAMPTZ`. Idempotency dedup runs before Conjure classify; `POST /api/inbox/:id/claim` implements 5-min TTL lease with atomic conditional UPDATE (same worker can extend, different worker gets 409). **Learning:** Claim/lease MUST be a single SQL UPDATE...WHERE...RETURNING pattern — never a SELECT+UPDATE pair, which has a TOCTOU race. The 409 response should always return the current claim owner so the losing worker can log/retry intelligently.
+
+## Wave 12 — Cast-Team Follow-On + Dogfood Loop (2026-05-15)
+
+**Team deployment:** Hockney-2, Keyser-2, Fenster-2
+
+**This agent's contributions:**
+- **N1: Kanban Auto-Update (MILESTONE):** First end-to-end dogfood done-capture loop. Implemented `done:` prefix detection in MCP capture, token-based issue matching (≥2 token score), and `bin/squad-card-done` idempotent CLI helper. Files: `packages/server/src/db/index.ts`, `packages/server/src/db/schema.ts`, `packages/server/src/mcp/server.ts`, `packages/server/src/routes/inbox.ts`, `packages/client/src/components/settings/McpConfigPanel.tsx`, `packages/client/vite.config.ts`, `bin/squad-card-done`.
+- **N2: Double-Pickup Prevention:** Idempotency keys (UNIQUE constraint) + claim/lease mechanism on inbox items (5-min TTL, atomic UPDATE) to prevent race conditions across dispatcher, MCP, and concurrent workers. Same DB migration files.
+- **N5: MCP Test Connection Fix:** Relative healthUrl + vite proxy for local development testing.
+- **N7: Junk Projects Cleanup:** Deleted 41 unused projects to reduce noise in local universes.
+
+**Status:** 4/4 done. Source: d2c06218. No regressions.
+
+**Follow-ups for Hockney:** Add `GET /api/activity/stats?window=today` (for "Done today" tile), add daily cost bucket (N3 dashboard), add `/projects/:id/agents/:agentId` detail route (N4 flow nav), add `/runs/:runId` run-detail route (N4 flow nav).

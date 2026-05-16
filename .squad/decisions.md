@@ -1,6 +1,441 @@
 # Squad Decisions
 
 ## Active Decisions
+# 2026-05-16T02:15:42.724940Z: Wave 12 Close-out — Kanban Auto-Update, Double-Pickup Prevention, Now Dashboard, Clickable Flow, MCP Test Fix, Review Policy UX
+
+**Date:** 2026-05-15  
+**Wave:** 12  
+**Agents:** Hockney-2, Keyser-2, Fenster-2  
+**Status:** All tasks done; commit d2c06218 includes all source code.
+
+## Summary
+
+First end-to-end dogfood done-capture loop test (N1: Kanban Auto-Update). Teams completed:
+
+- **N1 (Hockney):** Kanban auto-update — `done:` prefix detection in MCP capture + token-based matching to close existing cards. Includes `bin/squad-card-done` CLI helper for idempotent card closure. Milestone: first time dogfood done-capture workflow worked end-to-end.
+- **N2 (Hockney):** Double-pickup prevention — idempotency keys + claim/lease mechanism on inbox items to prevent race conditions across dispatcher, MCP, and concurrent workers.
+- **N3 (Keyser):** Now page — global aggregated dashboard with 6 stat tiles, live panels, activity feed, and per-project mini-rollup grid. Client-side fan-out via useQueries.
+- **N4 (Keyser):** Clickable flow nodes — Agent/Step/Ceremony nodes are now navigable to detail routes with keyboard+aria support.
+- **N5 (Hockney):** MCP test connection fix — relative healthUrl + vite proxy for local MCP testing.
+- **N6 (Fenster):** Review Policy UX overhaul — plain-English labels, two-group settings, live preview strip, Learn more links. New `docs/review-policy.md`.
+- **N7 (Hockney):** Junk projects cleanup — 41 deleted.
+
+## Decisions from Inbox
+
+# N1: Kanban Auto-Update — Done-Capture Hook
+
+**Author:** Hockney (Backend / Workflow Engine Dev)  
+**Date:** 2026-05-15  
+**Wave:** 12  
+
+---
+
+## Problem
+
+Cards are captured on intake via the MCP `capture` tool but never moved to "done". The `.github/agents/squad.agent.md` Wave 10 dogfood addendum specifies calling `capture` again with a `done: …` prefix after work completes, but the `handleCapture` handler had no logic for this prefix — it treated the `done:` prompt as a normal new issue.
+
+---
+
+## Root Cause
+
+`handleCapture` in `packages/server/src/mcp/server.ts` did not inspect the prompt for a `done:` prefix. Every capture call went through Conjure classification and created a new inbox item, never updating an existing card.
+
+---
+
+## Design
+
+### Flow A — `done:` prefix in MCP capture
+
+```
+Coordinator calls:
+  capture(prompt="done: Fixed the login redirect (sha=abc123)", projectId="...")
+
+Server:
+  1. Detect DONE_PREFIX = /^done:\s*/i
+  2. Extract descriptor = "Fixed the login redirect (sha=abc123)"
+  3. Tokenise: ["fixed", "login", "redirect", "abc123"] (stop-words removed)
+  4. Query issues WHERE project_id=$projectId AND archived=0 AND (title ILIKE '%fixed%' OR title ILIKE '%login%' OR ...)
+  5. Score candidates: count overlapping tokens
+  6. If best score ≥ 2 (or ≥ 1 for single-token queries): update status='done'
+  7. If no match: create a standalone done card so work is still visible
+```
+
+### Matching strategy
+
+- **Token extraction**: lower-case, strip punctuation, filter `len ≥ 3`, remove 30+ common stop-words plus git-specific terms (`sha=`, `fixes`, `resolves`, `implements`).
+- **False-positive guard**: require `bestScore ≥ 2` tokens to match (for descriptors with `> 1` token); single-token descriptors need `≥ 1` match.
+- **Fallback**: create a standalone `status='done'` card so the work is never lost.
+
+### Flow B — `bin/squad-card-done` CLI helper
+
+Any Copilot CLI session (or CI script) can close a card without MCP wiring:
+
+```bash
+SQUADBOARD_PROJECT_ID=7a9cc07a-... \
+  bin/squad-card-done "Fix the login redirect" "$(git rev-parse --short HEAD)"
+```
+
+The script:
+1. Detects the project (auto-detect or env var)
+2. Constructs `done: <title> (sha=<sha>)` descriptor
+3. Generates a deterministic `idempotencyKey` from `done-<project-prefix>-<md5-of-descriptor>` (so re-runs are idempotent)
+4. Calls `POST /mcp` with the `capture` tool (or falls back to REST if MCP session fails)
+
+---
+
+## Files Changed
+
+| File | Change |
+|---|---|
+| `packages/server/src/mcp/server.ts` | Added `done:` prefix detection + `handleCaptureClose()` function; added `idempotencyKey`/`createdBy` params |
+| `packages/server/src/db/index.ts` | Migration: added `idempotency_key`, `created_by`, `claimed_by`, `claim_expires_at` to `inbox_items` |
+| `packages/server/src/db/schema.ts` | Drizzle schema updated for new columns |
+| `bin/squad-card-done` | New helper script |
+
+---
+
+## Invariants
+
+1. A `done:` capture NEVER creates a card in `backlog`/`todo`/`in_progress` — it always sets `status='done'`.
+2. A `done:` capture with a duplicate `idempotencyKey` returns `{ action: 'dedup' }` without touching the DB.
+3. If the token-match score is below threshold, a standalone done card is created rather than silently discarding the call.
+4. The best-match update is scoped to `project_id` — cross-project false matches are impossible.
+
+---
+
+## Evidence
+
+Live curl test (done after DB migration applied on server restart):
+
+```bash
+# Create a test card first
+curl -s -X POST http://localhost:3000/api/projects/<pid>/issues \
+  -H "Content-Type: application/json" \
+  -d '{"title":"Fix the login redirect bug","body":"","status":"in_progress"}'
+
+# Close it via done: capture
+curl -s http://localhost:3000/mcp \
+  -X POST \
+  -H "Content-Type: application/json" \
+  -H "Accept: application/json, text/event-stream" \
+  -H "x-project-id: <pid>" \
+  -d '{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"capture","arguments":{"prompt":"done: Fixed the login redirect bug (sha=abc1234)","projectId":"<pid>"}}}'
+# → { "action": "issue_closed", "matchedIssue": { "id": "...", "title": "Fix the login redirect bug", "previousStatus": "in_progress" } }
+```
+
+
+---
+
+# N2: Double-Pickup Prevention
+
+**Author:** Hockney (Backend / Workflow Engine Dev)  
+**Date:** 2026-05-15  
+**Wave:** 12  
+
+---
+
+## Problem
+
+Three actors can independently pick up the same inbox card:
+1. The Squadboard dispatcher (engine sweeps)  
+2. A Copilot CLI session calling `capture` via MCP  
+3. Multiple concurrent Squadboard agent workers
+
+Without a dedup mechanism, each actor can create a duplicate card or race on the same work.
+
+---
+
+## Design
+
+### Chosen Subset (Minimal Viable)
+
+Per the task: pick the **minimal viable subset** that prevents the bug in practice. Implemented: **(1) idempotency keys + (3) claim/lease**.
+
+Source tagging (`created_by`) is included as a zero-cost column for observability.
+
+---
+
+### (1) Idempotency Keys on `capture`
+
+**Schema:** `inbox_items.idempotency_key TEXT UNIQUE`
+
+**Invariant:** Two calls with the same `idempotencyKey` return `{ action: 'dedup', inboxItemId: '...' }` from the first call's row — no duplicate row, no duplicate issue.
+
+**How to use:**
+```json
+{ "name": "capture", "arguments": { "prompt": "...", "idempotencyKey": "session-abc-123" } }
+```
+
+The key should be:
+- **Per-session + per-prompt**: e.g. `<sessionId>-<sha256(prompt)[:8]>`
+- **Deterministic**: so a retry of the same logical operation produces the same key
+- **Scoped**: the uniqueness constraint is global, so keys must incorporate enough entropy to avoid cross-session collisions
+
+---
+
+### (3) Claim / Lease on Inbox Items
+
+**Schema:**
+```sql
+inbox_items.claimed_by        TEXT        -- opaque worker/session ID
+inbox_items.claim_expires_at  TIMESTAMPTZ -- NULL or past = unclaimed/expired
+```
+
+**Claim endpoint:**
+```
+POST /api/inbox/:id/claim
+Body: { "claimedBy": "<worker-id>" }
+```
+
+**Atomic claim logic** (single UPDATE):
+```sql
+UPDATE inbox_items
+   SET claimed_by = $claimedBy,
+       claim_expires_at = NOW() + INTERVAL '5 minutes',
+       updated_at = NOW()
+ WHERE id = $id
+   AND (
+     claimed_by IS NULL                        -- unclaimed
+     OR claim_expires_at < NOW()               -- lease expired
+     OR claimed_by = $claimedBy               -- same worker extending
+   )
+RETURNING id, claimed_by, claim_expires_at;
+```
+
+- Returns `200 { ok: true, claimed_by, claim_expires_at }` on success  
+- Returns `409 { error: 'already_claimed', claimed_by, claim_expires_at }` if another worker holds the lease  
+- TTL: **5 minutes**. Workers must heartbeat every ≤4 minutes by re-calling `POST /api/inbox/:id/claim` to extend the lease.
+
+---
+
+### (2) Source Tagging
+
+**Schema:** `inbox_items.created_by TEXT NOT NULL DEFAULT 'user'`
+
+**Enum values:** `'user' | 'copilot-cli' | 'squadboard-server' | 'webhook'`
+
+Used in `capture` MCP tool via the optional `createdBy` parameter. No enforcement — observability only.
+
+---
+
+## Migration
+
+```sql
+-- Wave 12 N2
+ALTER TABLE inbox_items
+  ADD COLUMN IF NOT EXISTS idempotency_key   TEXT        UNIQUE,
+  ADD COLUMN IF NOT EXISTS created_by        TEXT        NOT NULL DEFAULT 'user',
+  ADD COLUMN IF NOT EXISTS claimed_by        TEXT,
+  ADD COLUMN IF NOT EXISTS claim_expires_at  TIMESTAMPTZ;
+
+CREATE INDEX IF NOT EXISTS inbox_items_idempotency_idx
+  ON inbox_items (idempotency_key)
+  WHERE idempotency_key IS NOT NULL;
+
+CREATE INDEX IF NOT EXISTS inbox_items_claim_idx
+  ON inbox_items (claimed_by, claim_expires_at)
+  WHERE claimed_by IS NOT NULL;
+```
+
+Applied in `packages/server/src/db/index.ts` — runs idempotently on every server boot.
+
+---
+
+## Files Changed
+
+| File | Change |
+|---|---|
+| `packages/server/src/db/index.ts` | Migration block for 4 new columns + 2 indexes |
+| `packages/server/src/db/schema.ts` | Drizzle schema: `idempotencyKey`, `createdBy`, `claimedBy`, `claimExpiresAt` |
+| `packages/server/src/mcp/server.ts` | `capture` tool: `idempotencyKey`/`createdBy` params; dedup check before Conjure |
+| `packages/server/src/routes/inbox.ts` | `POST /api/inbox/:id/claim` endpoint |
+
+---
+
+## Invariants
+
+1. Two concurrent `capture` calls with the same `idempotencyKey` MUST produce exactly one inbox row and at most one issue.
+2. A `claim` call MUST be atomic — race between two workers: exactly one wins (HTTP 200), the other loses (HTTP 409).
+3. A claim lease MUST expire after 5 minutes if not extended — stale claims never block permanently.
+4. A worker that loses the claim MAY retry after the lease expires.
+
+---
+
+## Evidence — curl proof of idempotency
+
+```bash
+KEY="test-idem-$(date +%s)"
+# Two concurrent claims with the same key:
+R1=$(curl -s -X POST http://localhost:3000/mcp \
+  -H "Content-Type: application/json" -H "Accept: application/json, text/event-stream" \
+  -H "x-project-id: 7a9cc07a-d463-4f8c-864a-c733342aa8a8" \
+  -d "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/call\",\"params\":{\"name\":\"capture\",\"arguments\":{\"prompt\":\"[IDEM-TEST] Fix double-pickup race\",\"projectId\":\"7a9cc07a-d463-4f8c-864a-c733342aa8a8\",\"idempotencyKey\":\"$KEY\"}}}")
+R2=$(curl -s -X POST http://localhost:3000/mcp ... same ...)
+
+# R1: { "action": "issue_created", "issue": { "id": "xxx" } }
+# R2: { "action": "dedup", "idempotencyKey": "...", "inboxItemId": "yyy" }
+# → Same card_id, no duplicate issue.
+```
+
+
+---
+
+# Keyser decisions — Wave 12 N3 + N4
+
+**Date:** 2026-05-15T18:47:05-07:00
+**Requested by:** Ahmed (Brady)
+
+---
+
+## N3: Now page global aggregated dashboard
+
+**Decision:** Client-side fan-out via `useQueries` (TanStack Query) instead of a new server endpoint.
+The per-project cost queries (one per project, stale 60s) are cheap enough for ≤20 projects.
+If project count grows beyond ~30, Hockney should add `GET /api/activity/aggregate` to replace the fan-out.
+
+**Follow-ups for Hockney:**
+1. `GET /api/activity/stats?window=today` — "Done today" tile currently shows `—` placeholder.
+2. Daily cost bucket in `/costs` endpoint — Cost tile shows MTD, not daily, because the existing endpoint only exposes `mtd` and `allTime` buckets. Labelled as "Cost MTD" in the UI to be honest about the scope.
+3. Agent detail route — `/projects/:id/agents/:agentId` does not exist in App.tsx (agents page is list-only). Agent node click will 404 until Hockney adds the route.
+
+**Layout (top to bottom):**
+1. Stat tiles row — 6-up auto-fill grid: In-flight, Queued, Done today (placeholder), Active projects, Cost MTD, Health badge
+2. Scope toolbar (tabs / dropdown)
+3. Two-column row: [live panels column | recent activity feed column (340px fixed)]
+   - Live panels: Live sessions, Issue runs, Workflow runs (stacked)
+   - Recent activity: last 15 events sorted newest-first, each row links to source entity
+4. Per-project mini-rollup grid — one card per active project, shows agent count, queue depth, last-activity timestamp
+
+---
+
+## N4: Flow clickable nodes
+
+| Node type | File(s) | Click target route | Implementation |
+|---|---|---|---|
+| Agent instance node | `AgentFlowGraph.tsx` | `/projects/{projectId}/agents/{agentId}` | SVG `<g>` onClick + useNavigate; `role="button"`, `tabIndex={0}`, `onKeyDown` for Enter/Space |
+| Step/Run node | `StepNode.tsx` + `IssueFlowDag.tsx` | `/projects/{projectId}/board?focus={issueId}` | ReactFlow `onNodeClick` on IssueFlowDag; `projectId` + `issueId` embedded in node.data; StepNode shows `cursor:pointer` + hover elevation when projectId present |
+| Ceremony step node | `CeremonyStepNode.tsx` | `/projects/{projectId}/ceremonies/{ceremonyId}` | div `onClick` + `onKeyDown`; only fires when `projectId` + `ceremonyId` are in data; VisualCanvas (editor) omits these fields so selection is unaffected |
+
+**Note on `/runs/:runId`:** There is no run-detail route in App.tsx. Best available navigation for step nodes is the board issue view (`?focus={issueId}`). Real run-detail is a Hockney follow-up.
+
+
+---
+
+# N6 — Review Policy UX Overhaul
+
+**Date:** 2026-05-15T18:47:05-07:00  
+**Author:** Fenster  
+**Status:** Shipped (pending Wave 12 Scribe commit)
+
+---
+
+## Problem
+
+Ahmed's verdict: *"I don't understand the review policy settings page."*
+
+The old page had:
+- A cryptic "Currently effective" card with no explanation of what "effective" means vs "project default"
+- A flat preset dropdown labeled simply "Preset" — no context about what presets are
+- A hidden "Customise" toggle that revealed an unlabeled 2-column grid of jargon fields
+- Labels like "Block policy", "Quorum (n of total)", "On timeout", "Fallback reviewer (role)" — all internal API vocabulary
+- No hints, descriptions, or example outcomes for any field
+- A raw footnote: "Resolution chain: workflow step override → board default → project default → system default." — incomprehensible to non-power-users
+- ⚠ warnings displayed as an emoji + text with no escalation affordance
+- No learn-more link or documentation reference
+
+---
+
+## Changes made
+
+### `packages/client/src/components/settings/ReviewPolicySection.tsx`
+
+1. Replaced unlabeled card headers with `Body1Strong` + descriptive sub-text via new `CardHeading` subcomponent
+2. Renamed "Currently effective" → **"Active policy"** (user-facing language)
+3. Added **"Learn more"** link (`docs/review-policy.md`) in the card header action slot
+4. Replaced raw emoji warning with Fluent2 `MessageBar intent="warning"` 
+5. Replaced raw error `<div>` with `MessageBar intent="error"`
+6. Added **"Policy preview" strip** — shows while editing, renders `describePolicy(previewResolved)` in plain English
+7. Replaced raw text footnote with a sentence using `tokens.colorNeutralForeground3`, including a second "Learn more" link
+8. Used `tokens.spacingVerticalL` and `tokens.spacingHorizontalS` for consistent layout spacing
+
+### `packages/client/src/components/reviews/ReviewPolicyPicker.tsx`
+
+1. Added Fluent2 `Field` wrapper with `hint` prop to **every control**
+2. Grouped advanced settings into two labeled sub-sections with `SubGroupDivider`:
+   - **Approval rules** — who reviews, quorum, exclude-author, block policy
+   - **Timing & escalation** — review deadline, deadline action, fallback reviewer
+3. Renamed labels to user language:
+   - "Preset" → "Policy preset" + hint
+   - "Approvers (role names, comma-separated)" → "Who can approve" + hint
+   - "Quorum (n of total)" → "Approvals needed (quorum)" + hint
+   - "Block policy" → "When someone requests changes" + hint
+   - "Timeout" → "Review deadline" + hint
+   - "On timeout" → "When the deadline passes" + hint
+   - "Fallback reviewer (role)" → "Escalate to (role)" + hint
+4. Added **contextual sub-hint** below "When someone requests changes" and "When the deadline passes" selects — shows the selected option's description inline
+5. Preset option "Custom (override below)" → "Custom — fine-tune below"
+6. Customise toggle label "▸ Customise" → "▸ Customise individual settings"
+7. Added "Need help? Read the policy reference." link at bottom of advanced panel
+
+### `docs/review-policy.md`
+
+New stub doc explaining all 7 policy fields, resolution order with examples, preset concept.
+
+---
+
+## New page structure (outline)
+
+```
+[Card: Active policy]
+  Body1Strong: "Active policy"
+  Caption: "What runs right now on every approve step..." [Learn more →]
+  → ReviewPolicyHeader (shield + policy description + "Why this policy?" popover)
+  → MessageBar [if warnings]
+
+[Card: Project default]
+  Body1Strong: "Project default"
+  Caption: "Applied to every approve step that doesn't set its own policy..."
+  → [Field: Policy preset] hint: "Choose a named bundle..."
+    <select: Use system default / Built-in presets / Project presets / Custom>
+  → [▸ Customise individual settings] toggle
+    → [Advanced panel]
+        ── APPROVAL RULES ──────────────────────
+        [Field: Who can approve] hint: "Role names, comma-separated..."
+        [Field: Approvals needed (quorum)] hint: "Require N out of assigned..."
+        [Field: Exclude author] hint: "When on, the PR author cannot approve..."
+        [Field: When someone requests changes] hint + contextual sub-hint
+        ── TIMING & ESCALATION ─────────────────
+        [Field: Review deadline] hint: "ISO-8601 duration: 24h, 2d, 1w..."
+        [Field: When the deadline passes] hint + contextual sub-hint
+        [Field: Escalate to (role)] hint: "..." [only when 'escalate' selected]
+        Caption: "Need help? Read the policy reference."
+  → [Preview strip — dashed] "With these settings: ..." [only while dirty]
+  → [Save] [Discard changes] [Saved. / error message]
+
+[Footer caption]
+  "Resolution order: ... Learn more about policy resolution."
+```
+
+---
+
+## Scope NOT touched
+
+- Policy schema and API — no changes
+- Backend behavior — no changes  
+- `PolicyExplainer.tsx` — existing popover retained as-is
+- `ReviewPolicyHeader.tsx` — retained as-is
+- MCP section of Settings.tsx — not touched (Hockney's territory)
+
+---
+
+## Recommendations (not implemented, needs Ahmed's nod)
+
+- `request_changes_policy: 'all'` label ("all must approve") is confusing — it's a block policy, not an approval policy. Consider renaming to "Require unanimous approval."
+- Consider exposing "Save as project preset" from the picker so users can snapshot a custom config.
+
+
+---
+
 
 # 2026-05-15T17:52:56Z: User directive — Cap each local universe at 10 characters
 **By:** Ahmed Sabbour (via Copilot)

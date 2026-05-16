@@ -67,3 +67,29 @@ Guard both branches — `!res.ok` AND the happy-path JSON parse — against non-
   - **M3 (HireTeamModal checkbox label-toggle bug):** Fluent `<Field>` wraps all 16 `<Checkbox>` siblings and emits single `htmlFor` pointing at first child (Lead). Every label click routed to Lead only. Fixed: replaced `<Field>` with `<fieldset>` + `<legend>` (semantically correct for checkbox groups) + explicit `id={`role-${r.id}`}` on every `<Checkbox>` for belt-and-suspenders label binding + added DEV-only invariant to throw if any two roles share the same id.
   - **Commit:** c7dde255 (both M2+M3 in one commit)
   - **Locked by:** Kujan M4 e2e regression suite (4 sub-tests green in 9.9s)
+
+## 2026-05-15 — Wave 12 N3+N4 (Now global dashboard + flow clickable nodes)
+
+**`react-router` not `react-router-dom`:** The client package does not install `react-router-dom` as a separate peer — it ships `react-router` v7 which re-exports everything. Always import from `'react-router'`. Any `from 'react-router-dom'` will typecheck-fail with "Cannot find module".
+
+**`useQueries` fan-out pattern for cross-project aggregation:** When there's no server-side aggregate endpoint, `useQueries` from TanStack Query lets you fan out per-project queries in parallel. Each result has its own `isLoading`/`data` — reduce over `results` to aggregate. Set `staleTime: 60_000` and `retry: false` (don't hammer the server if one project's endpoint is down). If project count grows to 30+, push for a dedicated aggregate endpoint instead.
+
+**ReactFlow `onNodeClick` preferred over node-level `onClick`:** For IssueFlowDag navigation, attaching `onNodeClick` at the ReactFlow canvas level (reading `node.data.projectId`, `node.data.issueId`) is cleaner than adding `useNavigate` to every node component. Node components stay pure/dumb; navigation logic lives in the parent.
+
+**SVG `<g>` accessibility:** For clickable SVG groups, add `role="button"`, `tabIndex={0}`, `aria-label`, and `onKeyDown` (Enter/Space). Mouse-enter/leave on a child `<rect>` with `setAttribute('opacity', ...)` is the simplest hover effect in SVG without pulling in CSS-in-JS SVG helpers.
+
+**CeremonyStepNode in editor context:** The VisualCanvas (ceremony editor) does NOT pass `projectId`/`ceremonyId` in node data, so the onClick guard (`Boolean(projectId && ceremonyId)`) keeps editor selection behavior intact. When the component is used in read-only contexts with those fields, navigation activates automatically.
+
+**`PageLoading` for full-page loading states:** Now uses the canonical `PageLoading` component (with `header` prop) instead of inline spinners, consistent with CeremonyList canonical pattern.
+
+## Wave 12 — Cast-Team Follow-On + Dogfood Loop (2026-05-15)
+
+**Team deployment:** Hockney-2, Keyser-2, Fenster-2
+
+**This agent's contributions:**
+- **N3: Now Page — Global Dashboard:** 6-stat-tile row (In-flight, Queued, Done today, Active projects, Cost MTD, Health) + live panels (sessions, issue runs, workflow runs) + 15-event activity feed + per-project mini-rollup grid. Client-side fan-out via `useQueries` TanStack Query. Files: `packages/client/src/pages/Now.tsx`, `packages/client/src/pages/ProjectFlow.tsx`, `packages/client/src/components/flow/AgentFlowGraph.tsx`, `packages/client/src/components/flow/IssueFlowDag.tsx`, `packages/client/src/components/flow/StepNode.tsx`, `packages/client/src/components/flow/nodes/CeremonyStepNode.tsx`.
+- **N4: Clickable Flow Nodes:** Agent/Step/Ceremony nodes now navigable to `/projects/{projectId}/agents/{agentId}`, `/projects/{projectId}/board?focus={issueId}`, `/projects/{projectId}/ceremonies/{ceremonyId}` with keyboard+aria support (Enter, Space, tabIndex, role="button").
+
+**Status:** 2/2 done. Build green (6.94s).
+
+**Follow-ups:** Hockney to add agent detail route, run-detail route, and daily activity stats endpoint (as noted above).

@@ -132,3 +132,52 @@
 **Status:** DESIGN COMPLETE — ready for Keyser implementation.
 
 - **2026-05-15 Wave 11B — F1 (Templates nav) — IN-FLIGHT:** Re-dispatched (was pending from Wave 11A timeout). Building templates navigation surface to expose `.squad/templates/casting-reference.md` and per-role charter templates.
+
+---
+
+## 2026-05-15 — N6: Review Policy UX Overhaul
+
+**Task:** Make the Review Policy settings page understandable.
+
+**Files changed:**
+- `packages/client/src/components/settings/ReviewPolicySection.tsx`
+- `packages/client/src/components/reviews/ReviewPolicyPicker.tsx`
+- `docs/review-policy.md` (new)
+- `.squad/decisions/inbox/fenster-n6-review-policy-ux.md` (new)
+
+**Key UX changes:**
+- "Currently effective" → "Active policy" with clear sub-description
+- Added "Learn more →" link pointing to `docs/review-policy.md`
+- Warnings now use Fluent2 `MessageBar intent="warning"` instead of raw emoji
+- Errors use `MessageBar intent="error"`
+- Added live "Policy preview" dashed strip while editing (shows `describePolicy()` output)
+- Footer hint uses `tokens.colorNeutralForeground3` + second learn-more link
+- All picker controls wrapped in Fluent2 `Field` with `hint` text
+- Advanced section grouped into two sub-groups: "Approval rules" + "Timing & escalation"
+- All labels renamed from API jargon to user language
+- Contextual sub-hints for select options (shown inline under the dropdown)
+- "Need help? Read the policy reference." at bottom of advanced panel
+
+**Learnings:**
+- `Caption1 as="div"` is NOT supported — Fluent2 text components only accept inline element types. Use `as="p"` or `as="span"`, or use `style={{ display: 'block' }}` to force block layout.
+- `Body1Strong as="div"` also not supported — use `as="p"` or omit `as` and wrap in a block parent.
+- `Field` component from `@fluentui/react-components` v9 is available and works well — `hint` prop accepts a string and renders under the label.
+- JSX attribute strings (`hint="..."`) cannot contain unescaped ASCII double quotes — use smart quotes, or switch to JSX expression `hint={...}`.
+- Build failures in `AgentFlowGraph.tsx`/`IssueFlowDag.tsx`/`CeremonyStepNode.tsx` are pre-existing (missing `react-router-dom`), NOT caused by N6 work.
+
+**TypeScript:** Clean on all changed files (0 errors in `ReviewPolicySection.tsx`, `ReviewPolicyPicker.tsx`).
+
+**Decision doc:** `.squad/decisions/inbox/fenster-n6-review-policy-ux.md`
+
+**Status:** COMPLETE — no commit (Wave 12 Scribe will commit at close-out).
+
+## Wave 12 — Cast-Team Follow-On + Dogfood Loop (2026-05-15)
+
+**Team deployment:** Hockney-2, Keyser-2, Fenster-2
+
+**This agent's contributions:**
+- **N6: Review Policy UX Clarify:** Plain-English labels, two-group settings (Approval rules + Timing & escalation), live policy preview strip (dashed, shows human-readable policy on edit), Learn more links to new `docs/review-policy.md`. Files: `packages/client/src/components/settings/ReviewPolicySection.tsx`, `packages/client/src/components/reviews/ReviewPolicyPicker.tsx`, `docs/review-policy.md`.
+
+**Status:** 1/1 done. Typecheck clean.
+
+**Follow-ups:** Ahmed to nod on preset-save UI and "unanimous approval" label rename consideration.
