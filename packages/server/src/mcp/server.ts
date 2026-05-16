@@ -26,7 +26,7 @@ import { join } from 'node:path';
 import { createHash } from 'node:crypto';
 import { getDb } from '../db/index.js';
 import { issues, issueRuns, agents, issueLabels, projects, inboxItems } from '../db/schema.js';
-import { eq, and, ilike, or } from 'drizzle-orm';
+import { eq, and, ilike, or, sql, asc } from 'drizzle-orm';
 import { handleSlashCommand } from './slash-handler.js';
 import { classifyAndDraft, type ConjureIntent } from '../services/conjure-classifier.js';
 import * as inboxService from '../services/inbox.js';
@@ -637,10 +637,22 @@ async function handleRunAgent(args: ToolArgs): Promise<unknown> {
 
   let resolvedAgentId = agentId;
   if (!resolvedAgentId) {
+    // Pick the least-loaded active agent (fewest pending+running issue_runs) to
+    // distribute work evenly instead of always picking the first by DB order.
     const [agent] = await db
       .select({ id: agents.id })
       .from(agents)
       .where(and(eq(agents.projectId, issue.projectId), eq(agents.status, 'active')))
+      .orderBy(
+        asc(
+          sql<number>`(
+            SELECT COUNT(*) FROM issue_runs ir
+            WHERE ir.agent_id = ${agents.id}
+              AND ir.status IN ('pending', 'running')
+          )`,
+        ),
+        asc(agents.name),  // tie-break deterministically
+      )
       .limit(1);
 
     if (!agent) {

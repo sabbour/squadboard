@@ -55,6 +55,7 @@ const ALL_SWEEPS = [
   { id: 'stale-presence',       label: 'Presence'        },
   { id: 'idle-live-sessions',   label: 'Live Sessions'   },
   { id: 'github-sync-overdue',  label: 'GitHub Sync'     },
+  { id: 'pickup-todos',         label: 'Todo Dispatch'   },
 ] as const
 
 const COMPACT_SWEEPS: ReadonlySet<string> = new Set([

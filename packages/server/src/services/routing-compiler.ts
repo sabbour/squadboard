@@ -170,8 +170,10 @@ export function matchRule(
 
     case 'keyword': {
       const haystack = `${issue.title} ${issue.body ?? ''}`.toLowerCase()
-      // Match if any significant word from the pattern appears in the haystack
-      const words = pattern.split(/[\s,/]+/).filter((w) => w.length > 3)
+      // Match if any significant word from the pattern appears in the haystack.
+      // Minimum word length is 5 to avoid false-positive matches on short, generic
+      // tokens like "type" (4) or "icon" (4) that appear in almost any issue title.
+      const words = pattern.split(/[\s,/]+/).filter((w) => w.length > 4)
       if (words.length === 0) {
         return haystack.includes(pattern)
       }

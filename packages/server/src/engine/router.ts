@@ -13,7 +13,7 @@
  */
 
 import { readFile } from 'node:fs/promises';
-import { eq, and, desc, count, avg, sql } from 'drizzle-orm';
+import { eq, and, asc, desc, count, avg, sql } from 'drizzle-orm';
 import { getDb, schema } from '../db/index.js';
 import { parseRoutingFile, matchRule } from '../services/routing-compiler.js';
 import { executeAgentRun } from '../sdk/bridge.js';
@@ -269,7 +269,8 @@ export async function resolveRouteTier2(
   const activeAgents = await db
     .select()
     .from(agents)
-    .where(and(eq(agents.projectId, projectId), eq(agents.status, 'active')));
+    .where(and(eq(agents.projectId, projectId), eq(agents.status, 'active')))
+    .orderBy(asc(agents.name));
 
   if (activeAgents.length === 0) return null;
 
@@ -371,19 +372,16 @@ export async function resolveRouteTier3(
   const activeAgents = await db
     .select()
     .from(agents)
-    .where(and(eq(agents.projectId, projectId), eq(agents.status, 'active')));
+    .where(and(eq(agents.projectId, projectId), eq(agents.status, 'active')))
+    .orderBy(asc(agents.name));  // deterministic ordering prevents first-alphabetical bias
 
   if (activeAgents.length === 0) return null;
 
-  // If no real issue, fall back immediately to first agent (test/simulation path)
+  // If no real issue, this is a test/simulation path — return null so callers
+  // receive the "all tiers exhausted / human triage" result rather than an
+  // arbitrary agent assignment.
   if (!issueId) {
-    const first = activeAgents[0];
-    return {
-      agentId: first.id,
-      agentName: first.name,
-      reasoning: 'tier3-stub: no issueId provided, returning first active agent',
-      specifierRunId: '',
-    };
+    return null;
   }
 
   // Build the routing prompt
@@ -433,7 +431,8 @@ export async function resolveRouteTier3(
   });
 
   if (!result.success) {
-    // Tier-3 failure — fall back to first active agent
+    // Tier-3 failure — mark specifier_run failed and return null so resolveRouteFull
+    // logs "all tiers exhausted / human triage" rather than assigning an arbitrary agent.
     await db
       .update(issueRuns)
       .set({
@@ -443,13 +442,8 @@ export async function resolveRouteTier3(
       })
       .where(eq(issueRuns.id, specifierRun.id));
 
-    const first = activeAgents[0];
-    return {
-      agentId: first.id,
-      agentName: first.name,
-      reasoning: `tier3-fallback: specifier_run failed (${result.errorMessage ?? 'unknown'})`,
-      specifierRunId: specifierRun.id,
-    };
+    console.warn(`[router] tier3 specifier_run failed for issue — routing to human triage (${result.errorMessage ?? 'unknown'})`);
+    return null;
   }
 
   // Invariant 4: output schema validation — parse { assignee, reasoning }
@@ -470,27 +464,30 @@ export async function resolveRouteTier3(
     assignee = parsed.assignee.trim();
     reasoning = typeof parsed.reasoning === 'string' ? parsed.reasoning : '';
   } catch (validationErr) {
-    // Invariant 4: schema violation → failure_reason recorded, fall back to triage
+    // Invariant 4: schema violation → failure_reason recorded, route to human triage
     const failureReason = `output_schema_violation: ${validationErr instanceof Error ? validationErr.message : String(validationErr)}`;
     await db
       .update(issueRuns)
       .set({ status: 'failed', errorMessage: failureReason, updatedAt: new Date() })
       .where(eq(issueRuns.id, specifierRun.id));
 
-    // Fall back to first active agent rather than leaving card stuck
-    const first = activeAgents[0];
-    return {
-      agentId: first.id,
-      agentName: first.name,
-      reasoning: failureReason,
-      specifierRunId: specifierRun.id,
-    };
+    console.warn(`[router] tier3 output schema violation — routing to human triage: ${failureReason}`);
+    return null;
   }
 
-  // Resolve agent by name
+  // Resolve agent by name; if name not found, return null (human triage) rather
+  // than silently routing to an arbitrary first agent.
   const resolvedAgent = activeAgents.find(
     (a) => a.name.toLowerCase() === assignee!.toLowerCase(),
-  ) ?? activeAgents[0];
+  );
+  if (!resolvedAgent) {
+    await db
+      .update(issueRuns)
+      .set({ status: 'failed', errorMessage: `agent '${assignee}' not found in project`, updatedAt: new Date() })
+      .where(eq(issueRuns.id, specifierRun.id));
+    console.warn(`[router] tier3 resolved agent '${assignee}' not found — routing to human triage`);
+    return null;
+  }
 
   await db
     .update(issueRuns)

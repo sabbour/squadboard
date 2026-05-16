@@ -6,6 +6,7 @@
     "stuck-issue-runs":     { "intervalMs": 30000, "enabled": true  },
     "stale-presence":       { "intervalMs": 30000, "enabled": true  },
     "idle-live-sessions":   { "intervalMs": 60000, "enabled": true  },
-    "github-sync-overdue":  { "intervalMs": 60000, "enabled": true  }
+    "github-sync-overdue":  { "intervalMs": 60000, "enabled": true  },
+    "pickup-todos":         { "intervalMs": 10000, "enabled": true  }
   }
 }

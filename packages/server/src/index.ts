@@ -53,6 +53,7 @@ import { stalePresenceSweep } from './engine/sweeps/stale-presence.js';
 import { readyWorkflowStepsSweep } from './engine/sweeps/ready-workflow-steps.js';
 import { githubSyncOverdueSweep } from './engine/sweeps/github-sync-overdue.js';
 import { ceremoniesDueSweep } from './engine/sweeps/ceremonies-due.js';
+import { pickupTodosSweep } from './engine/sweeps/pickup-todos.js';
 // Phase 10: side-effect import — registers the on_event ceremony listener
 // against the in-process event bus.
 import './services/ceremony-dispatcher.js';
@@ -171,6 +172,7 @@ async function main(): Promise<void> {
     readyWorkflowStepsSweep,
     githubSyncOverdueSweep,
     ceremoniesDueSweep,
+    pickupTodosSweep,
   ]);
   heartbeat.register(stuckIssueRunsSweep);      // 30 s — reclaim expired/orphaned runs
   heartbeat.register(idleLiveSessionsSweep);    // 60 s — mark inactive sessions idle
@@ -178,6 +180,7 @@ async function main(): Promise<void> {
   heartbeat.register(readyWorkflowStepsSweep);  //  5 s — advance workflow steps + stepper
   heartbeat.register(githubSyncOverdueSweep);   // 60 s — catch-up GitHub pulls
   heartbeat.register(ceremoniesDueSweep);       //  5 s — fire due ceremony schedules
+  heartbeat.register(pickupTodosSweep);         // 10 s — dispatch unattended To Do items (W26)
   heartbeat.start();
 
   // Demo 15: register GitHub sync event-bus hooks

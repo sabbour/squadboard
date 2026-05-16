@@ -119,3 +119,43 @@ Heartbeat is now visibly alive — operators can see liveness at a glance.
 **Commit:** 2fc72086
 
 See `.squad/decisions.md` for full details.
+
+---
+
+## W26 Lessons — Auto-assign Routing Fix + To Do Pickup Sweep
+
+**Date:** 2026-05-16
+**Wave:** 26
+
+### Two-bug P0: "add card → run" loop broken
+
+#### Bug A: Auto-assign to Fenster
+
+**Root cause**: `matchRule` keyword filter was `w.length > 3`, allowing 4-char words like `"type"` and `"icon"` to match. Fenster's routing pattern `"Visual design, UX flows, color/type/icon system, empty states"` contained both, so any issue mentioning TypeScript types or icons routed to Fenster.
+
+**Fix**: Changed filter to `w.length > 4` (min 5 chars). Also:
+- `resolveRouteTier3` fallbacks now return `null` (human triage) instead of `activeAgents[0]` (arbitrary first agent).
+- All agent queries in `router.ts` now include `ORDER BY name ASC` for determinism.
+- MCP `handleRunAgent` without `agentId` uses least-loaded agent (subquery counting pending+running runs) instead of undefined `LIMIT 1` order.
+
+#### Bug B: Heartbeat doesn't pick up To Do items
+
+**Root cause**: No sweep scanned `issues` with `status='todo'` and no active `issue_run`. `claimAndRun()` only claims existing pending runs — it doesn't create them.
+
+**Fix**: New `pickup-todos` sweep (10 s cadence) scans uncovered To Do items and creates pending `issue_run` rows using Tier-2 keyword scoring, falling back to least-loaded agent when no match.
+
+### New sweep infrastructure map addition
+
+| Sweep ID | intervalMs | Purpose |
+|---|---|---|
+| `pickup-todos` | 10000 | Dispatch unattended To Do items |
+
+### Canonical assignment rule going forward
+
+New items start **unassigned** unless a label or strong keyword rule matches on creation. The `pickup-todos` sweep auto-dispatches To Do items within 10 s using Tier-2 scoring or least-loaded fallback. Tier-3 LLM failures now fall through to human triage (no silent first-agent assignment).
+
+### Test coverage
+
+10 new vitest cases: 7 for Bug A (matchRule word-length, label/catchall unaffected) + 3 for Bug B (Tier-2 dispatch, idempotency, least-loaded fallback). 434 total tests passing.
+
+**Decision file:** `.squad/decisions/inbox/verbal-w26-autoassign-and-heartbeat-pickup.md`
