@@ -2,7 +2,72 @@
 
 ## Active Decisions
 
-# 2026-05-15T19:46:00-07:00: Q4 delivery — Squadboard coordinator extension framework
+### 2026-05-16T04:40:00-07:00 — 3 open questions from mini-coordinator design (W28 → W29 unblock)
+**By:** Keaton (via Brady)
+**What:** Q1: coordinator preamble location (built-in/in-repo/hybrid); Q2: model hardcoded/configurable; Q3: CLI integration (independent/converging/layered)
+**Why:** Three decisions block W29 implementation; Keaton has recommendations; Brady confirms or overrides
+**Source:** `inbox/copilot-question-2026-05-16T0440-mini-coordinator-open-qs.md`
+
+### 2026-05-16T04:20:00-07:00 — W27 mini-coordinator architecture design complete
+**By:** Keaton (Lead Architect)
+**What:** 177 squad.agent.md behaviors mapped; 60% state-machine, ~14% LLM-driven; tier-2 keyword scoring is migration target; SDK has untapped primitives
+**Why:** Seed material for w28-mini-coordinator-design-doc; shapes W29 implementation
+**Source:** `inbox/keaton-w28-design-2026-05-16T0420.md`
+
+### 2026-05-16T04:20:00-07:00 — Architectural directive: analyze squad.agent.md v0.9.4 + SDK comparison
+**By:** Brady (via Copilot)
+**What:** Map coordinator behavior to LLM-driven vs state-machine vs hybrid; compare squadboard impl with Squad SDK v0.9.4; output is mini-coordinator-architecture.md
+**Why:** Brady pulling W28 mini-coordinator migration forward; analysis feeds W29 impl
+**Source:** `inbox/copilot-directive-2026-05-16T0420-squad-agent-md-analysis.md`
+
+### 2026-05-16T04:17:00-07:00 — H3 Ceremony Editor: smarter connection mechanism
+**By:** Keyser (frontend)
+**What:** Auto-connect on palette drop, edge delete (disconnect + reorder), drag-to-reconnect, SmartCeremonyEdge tooltip
+**Why:** W27 batch-2 H3; improves ceremony DAG editing UX without reinventing React Flow
+**Source:** `inbox/keyser-w27-h3-20260516T111701.md`
+
+### 2026-05-16T04:12:00-07:00 — K6 Loading Pattern: RTL + E2E coverage complete
+**By:** Kujan (test infrastructure)
+**What:** PageLoading, SectionLoading, InlineLoading, ActionLoading all have a11y (role/aria-live/aria-busy/aria-label); 150ms anti-flash delay; Playwright covers ceremonies + costs pages
+**Why:** W27 batch-2 K6 acceptance criterion; proves canonical pattern lands on all surfaces
+**Source:** `inbox/kujan-w27-k6-2026-05-16T0412.md`
+
+### 2026-05-16T04:11:00-07:00 — W27 Hotfix: charter parser allowlist + backtick strip + pickup-todos circuit breaker + bridge boundary validation
+**By:** Hockney (backend)
+**What:** Parser Bug A (key allowlist for model extraction); Bug B (stripInlineMd for backticks); Bug C (circuit breaker: 3 failures in 30 min per (issue,agent) → skip); Bug E (bridge validates model format)
+**Why:** Brady's critical: infinite failure loop in pickup-todos sweep fixed; prevents future parser regressions
+**Source:** `inbox/hockney-w27-hotfix-20260516T041100.md`
+
+### 2026-05-16T04:11:00-07:00 — Design Decision: Jump Into Running Session (W28 research)
+**By:** Design team / Keaton
+**What:** Stream issue_run execution as event bus + WebSocket + optional steering injection; minimal schema (one new table), reuses existing patterns
+**Why:** Enables operators to watch expensive runs and inject guidance; W28 scope 12 todos (~8-10 hrs)
+**Source:** `inbox/design-w28-jump-into-session-2026-05-16T110829.md`
+
+### 2026-05-16T04:10:42-07:00 — Architectural directive: mini coordinator-agent replaces charter parser
+**By:** Brady (via Copilot Q&A)
+**What:** Charter parser is wrong abstraction; coordinator-agent dispatch unifies with upstream Squad; Unblocks Q6 Option B; shapes W28 design, W29 impl
+**Why:** 3 waves of parser hardening (sentinels, key allowlist, backticks) still buggy; clean exit from rathole
+**Source:** `inbox/copilot-directive-2026-05-16T0410-mini-coordinator-architecture-pivot.md`
+
+### 2026-05-16T04:00:00-07:00 — W27 Server Quad: 4 bug fixes (Conjure hint, curl session, pg trace, PATCH fields)
+**By:** Hockney (backend)
+**What:** Conjure hint hard-override; curl error messages expanded; pg pool ECONNRESET swallowed; PATCH /projects/:id accepts name + description
+**Why:** W27 batch-1; shipped pre-hotfix
+**Source:** `inbox/hockney-w27-server-quad.md`
+
+### 2026-05-16T03:54:58-07:00 — User directive: backlog grooming, slot 18 items W28-W36
+**By:** Brady (via Copilot)
+**What:** 18 items across 6 themes: ceremonies cleanup (W28), code-quality audits (W29), SDK/Squadboard parity (W30), docs overhaul (W31), bundles split (W34), deployment (W36)
+**Why:** Brady shaping post-W27 roadmap; no dispatch, live in SQL todos with planned_wave
+**Source:** `inbox/copilot-directive-2026-05-16T0354-grooming-w28-w36.md`
+
+### 2026-05-16T03:38:30-07:00 — W27 Heartbeat Triad: phantom error rows + duplicate React keys + WS proxy
+**By:** Verbal (backend)
+**What:** Bug 1 (sweep.tick phantom ring buffer entries removed); Bug 2 (duplicate React keys fixed by eliminating phantoms); Bug 3 (dedicated /api/ws proxy path before /api catch-all)
+**Why:** W27 batch-1; shipped pre-hotfix; prevents transient event contamination of persistent history
+**Source:** `inbox/verbal-w27-heartbeat-triad.md`
+
 # Decision: Squadboard Coordinator Extension Framework
 
 **Date:** 2026-05-15  
