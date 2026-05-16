@@ -133,3 +133,22 @@ Heartbeat refactor (r2, commit ea091186): 6-sweep registry with 30s/5s intervals
 - **2026-05-15 Wave 8 — Casting trim + non-tech charter templates:** Trimmed 3 universes (Mad Men, Succession, Silicon Valley) from `.squad/templates/casting-reference.md` (20→17), updated squad.agent.md count line (was already inconsistent at 15, now aligned to 17). Drafted 7 per-role charter templates in `.squad/templates/non-tech-charters/` (PM, Designer, Founder, Sales, Marketing, Customer Success, Research) plus a README index. Each template is distinct in tagline, "What I Own", "How I Work", "Boundaries", and "Voice" — not mad-libs swaps. Templates use literal `{Name}` placeholder for casting to fill on use. Commits: `10f659bf` (trim), `db12a997` (charters). Per-file `git add --` discipline held; no other agents' scratch files swept in. Decision in inbox: `mcmanus-non-tech-charters-and-trim.md`.
 
 - **2026-05-15 Wave 11A — L1 (Electron architecture decision) — SILENT-SUCCESS:** Delivered comprehensive architecture rationale: Option B (server as supervised child process). Main process is thin supervisor (≈200 LOC) handling spawn, health-poll, restart, window mgmt, auto-update, IPC bridge, graceful shutdown. Preserves crash isolation (server panic ≠ app death), headless parity (no Electron imports in server), and dev-prod consistency (packages/server unaware it runs under Electron). Documented 5 downstream items (L2-L8) with open questions for implementers. Merged from inbox to decisions.md this session.
+
+---
+
+## Wave 13 Learnings — Q3 extension framework PR on plate
+
+**Added by:** Scribe (Wave 13 close-out)  
+**Date:** 2026-05-15T19:39:32-07:00
+
+### Q3 upstream PR dependency
+
+Redfoot delivered the generic "extension fragments" mechanism in Q4. Now it needs to be upstreamed to `bradygaster/squad-duck` as part of Q3 work:
+- Add extension-discovery to Squad coordinator preamble
+- Scan `~/.squad/extensions/coordinator/*.md` at session start
+- Treat each as additional behavior fragments appended to the preamble
+- Project-local overrides user-global
+- Fragments survive Squad upgrades
+
+This is a cross-repo effort. PR should be authored and submitted by you (or coordinated with upstream maintainer if they take the draft). Q4's postinstall approach is a stopgap; Q3 PR is the canonical long-term design.
+

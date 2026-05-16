@@ -116,3 +116,89 @@ echo "T1=$T1  T2=$T2"
 **Status:** 4/4 done. Source: d2c06218. No regressions.
 
 **Follow-ups for Hockney:** Add `GET /api/activity/stats?window=today` (for "Done today" tile), add daily cost bucket (N3 dashboard), add `/projects/:id/agents/:agentId` detail route (N4 flow nav), add `/runs/:runId` run-detail route (N4 flow nav).
+
+---
+
+## Bulk-Import Refactor (2026-05-15)
+
+### Files Changed
+
+| File | Change |
+|------|--------|
+| `packages/server/src/db/schema.ts` | Added `completedAt` (TIMESTAMPTZ), `createdBy` (TEXT DEFAULT 'user') to `issues` table |
+| `packages/server/src/db/index.ts` | Wave-13 idempotent migration: `ALTER TABLE issues ADD COLUMN IF NOT EXISTS completed_at, created_by` |
+| `packages/server/src/services/issues.ts` | Rewrote `createIssue()` with unified signature (see below) |
+| `packages/server/src/services/bulk-import-issues.ts` | **NEW** — `bulkImportIssues()` service |
+| `packages/server/src/cli/bulk-import.ts` | **NEW** — CLI real logic |
+| `packages/server/src/mcp/server.ts` | `handleCreateIssue` now delegates to `createIssueService()` from services/issues.ts |
+| `packages/server/src/routes/issues.ts` | POST handler delegates to `createIssue()`, column validation moved to route layer |
+| `packages/server/src/services/inbox.ts` | Updated call-site to new signature |
+| `packages/server/src/sdk/consult-stream.ts` | Updated two call-sites to new signature |
+| `packages/server/src/__tests__/issues-service.test.ts` | **NEW** — 4 smoke tests (vitest) |
+| `packages/server/package.json` | Added `test` script + vitest devDependency |
+| `bin/squad-bulk-import` | **NEW** — shell shim |
+
+### `createIssue()` Signature
+
+```ts
+createIssue(input: {
+  projectId: string;
+  title: string;
+  body?: string;
+  status?: 'backlog' | 'todo' | 'in_progress' | 'in_review' | 'done';
+  position?: number;
+  archived?: boolean;
+  completedAt?: Date | null;
+  assigneeId?: string | null;
+  labels?: string[];
+  idempotencyKey?: string;
+  createdBy?: string;
+}): Promise<{ created: boolean; id: string; issue?: Issue; idempotencyKey?: string }>
+```
+
+Return value changed from the raw issue row to an envelope. All callers updated.
+
+### Inertness Invariant Location
+
+`packages/server/src/services/bulk-import-issues.ts` — `bulkImportIssues()`, before any `createIssue()` call:
+```ts
+if (status !== 'backlog' && status !== 'done') {
+  // BulkImportInvariantError — returns error item, does NOT abort batch
+}
+```
+Also enforced at the TypeScript type level via `InertStatus = 'backlog' | 'done'`.
+
+### Bulk Port Results
+
+131 issues ported to project `7a9cc07a-d463-4f8c-864a-c733342aa8a8` (foo):
+- created=131, skipped=0, errors=0
+- Board: 35 → 166 issues
+- All ported cards: assigneeId=null, status∈{backlog,done}, createdBy='bulk-import'
+
+### What N9 (MCP Adapter) Needs To Do
+
+In `packages/server/src/mcp/server.ts`:
+1. Import `bulkImportIssues` from `../services/bulk-import-issues.js`.
+2. Add `squadboard_bulk_import_cards` tool definition to the `TOOLS` array with the input schema.
+3. Add a case in the tool-call switch/if dispatcher.
+4. Parse MCP args into `BulkImportItem[]` and call `bulkImportIssues()`.
+
+The handler is N9-ready — no service changes needed for N9.
+
+---
+
+## Wave 13 Learnings — Bulk-import + inertness invariant
+
+**Added by:** Scribe (Wave 13 close-out)  
+**Date:** 2026-05-15T19:39:32-07:00
+
+### Bulk-port outcome
+
+Successfully ported 131 historical items (48 done, 83 pending) from external todo list into project `foo`. All cards landed with inert status (backlog/done only), no assignee, no labels — the invariant held edge-to-edge.
+
+**Going forward:** The inertness invariant (status ∈ {backlog, done}) is now a charter contract for all bulk-import handlers. Enforce at both the TypeScript type level AND runtime to catch contract violations early.
+
+### Charter update reminder
+
+Your charter section says: "Embedded Postgres for local installs (~50MB binary)". This becomes stale post-Q1 when PGlite migration lands (Ahmed's directive). Flag: update charter `## How I Work` after PGlite ships so new agents don't assume embedded-postgres setup.
+
