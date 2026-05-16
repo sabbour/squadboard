@@ -160,3 +160,10 @@ Manual override button (q9) will be built on top as Wave 15 follow-up.
 
 **TypeScript narrowing with union state machines:** The `mergeState.phase === 'done' && !prMerged` pattern was contradictory because `prMerged` was derived from the same discriminant — TypeScript correctly narrowed the conjunction to `never`. Pattern: use the discriminant directly in JSX conditions; don't cache discriminant results in intermediate booleans that are then negated.
 
+
+## Team Update — undefined
+
+Run: w17
+
+- **keyser**: Settings batch (Backup/Restore UI + GitHub Integration Settings)
+- **redfoot**: 4 docs (README + ceremonies concept + features audit + MCP install)

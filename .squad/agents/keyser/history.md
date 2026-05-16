@@ -165,3 +165,10 @@ Two deliverables batched into one commit:
 - `gh auth status` writes to stderr, not stdout — must capture both stdout+stderr from execFileAsync. execFileAsync throws with `{ stdout, stderr }` on non-zero exit, so catch and read from the error object too.
 - `MarkGithub16Regular` does not exist in `@fluentui/react-icons` — use `Branch20Regular` as the closest semantic match for GitHub/git.
 - Pre-existing tsc errors in parallel agents' WIP files (Verbal's `runs.ts`, `GitActions.tsx`) will surface on `pnpm build` — isolate with `tsc --noEmit` and grep for your own file paths to confirm zero new errors.
+
+## Team Update — undefined
+
+Run: w17
+
+- **verbal**: Stream G phase 2A (G2.3 comment + G2.5 merge PR with CI gate + G2.6 card badges)
+- **redfoot**: 4 docs (README + ceremonies concept + features audit + MCP install)

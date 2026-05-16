@@ -971,3 +971,492 @@ The SDK may be used as the single convergence point for:
 3. Manual "End Wave" button (q9, Wave 15+) — SDK call on demand
 
 No follow-up action required for W15 close-out. Upstream spec improvements (e.g., targetBytes guarantee for archive gate) are recorded as future work in this audit.
+
+
+# Decision: Built-in Project Templates (Bundle Format)
+
+**Author:** Hockney  
+**Wave:** 16 (autopilot)  
+**Date:** 2026-05-15T22:42:29.855-07:00  
+**Status:** Shipped
+
+---
+
+## Bundles Shipped
+
+Six built-in project bundles now live at `bundles/{slug}/squad-bundle.json`:
+
+| Bundle ID | Icon | Description |
+|-----------|------|-------------|
+| `default-software-project` | 🚀 | Balanced starter for software teams (pre-existing, McManus W15). 5-col kanban, 4 agents, 3 ceremonies. |
+| `library-or-sdk-project` | 📦 | npm/PyPI library pipeline: triage → api-design → impl → docs → release. Semver + changelog skills. API RFC, implementation review, and version-bump ceremonies. |
+| `bug-bash-project` | 🐛 | Time-boxed backlog cleaner: triage → verified → in-fix → verified-fixed. Triage lead + 3 fixers. Bug-fix loop and batch-close ceremonies. Repro-steps skill. |
+| `research-spike` | 🔬 | Exploration project: questions → investigating → findings → closed. Researcher + reviewer. Spike close-out and finding-summary ceremonies. Literature-review skill. |
+| `content-writing-project` | ✍️ | Non-technical content pipeline: pitches → outlines → drafting → review → published. Editor, 2 writers, reviewer. Outline-review, draft-review, publish ceremonies. Tone-check skill. |
+| `ops-runbook-project` | 🚨 | Incident response: alerts → triaging → mitigating → resolved → postmortem. On-call + escalation leads. Incident-open and postmortem ceremonies. Timeline-builder skill. |
+
+---
+
+## squad-irl Source Check
+
+**Result: Not found.** Searched the repo root and parent directories — no `squad-irl/` directory or submodule exists in this tree. Content was curated from first principles based on the agent cast, existing ceremony vocabulary, and Ahmed's stated intent ("variety of project types").
+
+---
+
+## Ceremony Slug Coordination (McManus W16)
+
+McManus's ceremony-nomenclature decision file (`mcmanus-workflow-vs-ceremony-nomenclature.md`) had not been written at the time of this wave. Provisional slugs used per the briefing's fallback list:
+
+| Slug used | Purpose in bundle |
+|-----------|-------------------|
+| `simple-review` | Code review gate, content review gate, finding review |
+| `bug-fix` | Bug fix loop, incident open |
+| `rfc` | API RFC |
+| `spike` | Version bump + release notes, spike close-out, publish gate |
+
+When McManus lands canonical slugs, bundle ceremony `id` fields should be updated to match if they diverge.
+
+---
+
+## Registration Mechanism
+
+**Lazy scan at first request.** The scanner lives in:
+
+```
+packages/server/src/services/builtin-bundles.ts
+```
+
+- `getBuiltinBundles()` — scans `bundles/*/squad-bundle.json` at the workspace root on first call; caches in-process for the lifetime of the server. Returns `BuiltinBundleEntry[]` (summary fields only).
+- `getBuiltinBundle(bundleId)` — returns the full parsed `SquadboardBundle` for a given id.
+- `getBuiltinBundleDir(bundleId)` — returns the bundle directory path for `bundleDir` passthrough to `applyBundle()`.
+
+**Route surface** (added to `packages/server/src/routes/templates.ts`):
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/api/templates/builtin-projects` | Lists all valid built-in bundles |
+| `POST` | `/api/templates/builtin-projects/:bundleId/apply` | Applies a bundle → creates new project via `applyBundle()` |
+
+Both routes are declared **before** `GET /:id` in the router to avoid Express swallowing "builtin-projects" as an id param.
+
+---
+
+## New Project UI Status
+
+**Shipped in this wave.** `CreateFromTemplateModal` in `packages/client/src/pages/ProjectPicker.tsx` now shows two sections:
+
+1. **Built-in** — sourced from `GET /api/templates/builtin-projects`, rendered with icon + name + description. Calls `POST /api/templates/builtin-projects/:bundleId/apply`.
+2. **My templates** — user-saved project templates from `GET /api/templates?kind=project` (existing flow, unchanged).
+
+The name + squadPath fields appear once the user selects any template (built-in or saved), reducing visual clutter before selection.
+
+New hooks in `packages/client/src/api/templates.ts`:
+- `useBuiltinProjectTemplates()` — React Query, staleTime 60 s.
+- `useApplyBuiltinProjectTemplate()` — mutation.
+
+---
+
+## Bundle Validation Policy
+
+- **Boot**: no eager scan — bundles are lazy-loaded on first API request. This avoids any startup cost or crash risk.
+- **Diagnostics** (`GET /api/diagnostics`): `checkBuiltinBundles()` is added to the check array. It resets the cache on every diagnostics run (so edits to bundle files are visible without a server restart), re-scans, and reports:
+  - `ok` if all bundles are valid
+  - `warn` if some bundles have validation errors (valid ones still served)
+  - `fail` if the `bundles/` directory is unreadable entirely
+- **Server startup**: invalid bundles are logged as warnings to stderr but never throw. The server continues serving the valid subset.
+- **Schema version forward-compat**: bundles with `schemaVersion > 1` emit a `console.warn` but are not rejected.
+
+
+# Decision: Squad Git Branch Convention
+
+**Date:** 2026-05-15T22:42:29.855-07:00
+**Author:** Verbal (Real-time / WebSocket Dev)
+**Wave:** 16
+**Status:** Accepted
+**Relates to:** Stream G Phase 1 (G1.3)
+
+---
+
+## Branch Naming Convention
+
+### Agent runs
+
+```
+squad/{agent-name-lowercased}/{slug-from-issue-title}
+```
+
+Examples:
+- `squad/keyser/use-template-prefill-fix`
+- `squad/verbal/push-branch-ui`
+- `squad/hockney/worktree-strategy-cleanup`
+
+### Ceremony runs (spanning multiple agents or driven by a ceremony slug)
+
+```
+squad/ceremony/{ceremony-slug}-{run-id-suffix}
+```
+
+Examples:
+- `squad/ceremony/scribe-close-out-w15`
+- `squad/ceremony/wave16-agent-fanout-a3b9`
+
+### Slug derivation rules
+
+1. Lowercase
+2. Replace any run of non-alphanumeric characters with a single `-`
+3. Strip leading and trailing `-`
+4. Agent name truncated to 30 characters
+5. Issue title truncated to 50 characters
+6. Result: no shell metacharacters; safe to use in `git worktree add -b <branch>`
+
+---
+
+## Implementation
+
+The convention is implemented in `packages/server/src/engine/workspace.ts`:
+
+```typescript
+export function deriveSquadBranchName(agentName: string, issueTitle: string): string
+```
+
+Called from `stepper.ts` when `workspaceStrategy === 'worktree'`, passing `agent.name` and `issue.title`. Falls back to `squad/run-{issueRunId}` when metadata is unavailable.
+
+---
+
+## Relationship to existing `squadboard/run-{id}` branches
+
+Old worktrees created before Wave 16 used the `squadboard/run-{uuid}` pattern. Cleanup via `git branch -d` in `cleanupWorkspace` now reads the branch from the worktree HEAD instead of reconstructing it, so legacy branches are handled correctly.
+
+---
+
+## Protected branches
+
+The push endpoint (`POST /api/runs/:runId/git/push`) refuses to push to `main`, `master`, `develop`, or `trunk`.
+
+
+# Decision: Stream G Phase 1 — GitHub Integration Backend + UI
+
+**Date:** 2026-05-15T22:42:29.855-07:00
+**Author:** Verbal (Real-time / WebSocket Dev)
+**Wave:** 16
+**Status:** Accepted
+**Relates to:** Stream G (GitHub integration) — Phase 1
+
+---
+
+## What shipped in Wave 16
+
+### G1.3 — Branch naming convention
+
+Convention: `squad/{agent-name-lowercased}/{slug-from-issue-title}`
+Ceremony variant: `squad/ceremony/{ceremony-slug}-{run-id-suffix}`
+
+Implementation in `packages/server/src/engine/workspace.ts`:
+- `deriveSquadBranchName(agentName, issueTitle)` — exported pure function
+- `assertSafeWorkspacePath(path)` — validates workspace is under `~/.squadboard/` or OS tmpdir
+- `resolveWorkspace` extended with optional `opts.agentName + opts.issueTitle` to apply convention on worktree creation
+- `stepper.ts` now passes `agent.name` and `issue.title` through
+
+See `verbal-git-branch-convention.md` for full convention spec.
+
+### G1.4 — Default PR template
+
+File: `.github/PULL_REQUEST_TEMPLATE.md`
+
+Sections:
+- **Summary** — one paragraph description
+- **Squad Context** — Agent, Ceremony/Run, Issue link
+- **Test Plan** — verification steps
+- **Risk** — checkbox tiers (No risk / Low / Medium / High)
+- **Notes for the next agent** — handoff context
+
+Pre-fill source map (applied by `buildPrBody()` in `routes/runs.ts`):
+| Template field | Source |
+|---|---|
+| Agent | `agents.name` via `agentId` on the run |
+| Ceremony / Run | `ad-hoc (run {runId[0..8]})` for direct runs; ceremony slug TBD in G3 |
+| Branch | current HEAD branch of the worktree |
+| Issue | left as placeholder — user fills in modal |
+
+### G2.1 — Push branch (backend + UI)
+
+**Endpoint:** `POST /api/projects/:projectId/runs/:runId/git/push`
+
+Request: no body required.
+
+Response 200:
+```json
+{
+  "branch": "squad/verbal/push-branch-ui",
+  "branchUrl": "https://github.com/owner/repo/tree/squad/verbal/push-branch-ui",
+  "pushOutput": "Branch 'squad/verbal/push-branch-ui' set up to track remote branch…"
+}
+```
+
+Response errors: 404 (run not found), 422 (not a worktree run / protected branch / unsafe path), 403 (path outside allowed roots), 500 (git push failed with detail).
+
+Safety guards:
+- `assertSafeWorkspacePath` — workspace must be under `~/.squadboard/` or OS tmpdir
+- `PROTECTED_BRANCHES = {'main','master','develop','trunk'}` — hard-blocked
+- `sanitizeBranchName` — rejects anything outside `[a-zA-Z0-9/_.-]`
+- `timeout: 30_000 ms` on all `execFile` calls
+- On failure, git stderr is surfaced verbatim to the client (not swallowed)
+
+**WS event emitted:** `git.push.complete`
+```json
+{
+  "type": "git.push.complete",
+  "projectId": "...",
+  "payload": {
+    "runId": "...",
+    "branch": "squad/verbal/push-branch-ui",
+    "branchUrl": "https://github.com/...",
+    "pushOutput": "..."
+  }
+}
+```
+
+**UI:** `GitActions.tsx` added to the RunOutputPanel footer (worktree runs only).
+Button states: `↑ Push branch` → `Pushing…` → `✓ Pushed · {branch link}` (or `✗ Push failed`).
+
+### G2.2 — Create PR (backend + UI)
+
+**Endpoint:** `POST /api/projects/:projectId/runs/:runId/git/pr`
+
+Request body (all optional):
+```json
+{
+  "title": "optional override title",
+  "body": "optional override body",
+  "draft": false
+}
+```
+
+Response 200:
+```json
+{
+  "prUrl": "https://github.com/owner/repo/pull/42",
+  "prNumber": 42
+}
+```
+
+Response errors: same 4xx/5xx pattern as push endpoint.
+
+Implementation: shells out to `gh pr create --title ... --body ...`. Requires `gh auth status` to be working (same assumption as the daemon's git-push helpers from W14).
+
+**WS event emitted:** `git.pr.created`
+```json
+{
+  "type": "git.pr.created",
+  "projectId": "...",
+  "payload": {
+    "runId": "...",
+    "branch": "squad/verbal/push-branch-ui",
+    "prUrl": "https://github.com/owner/repo/pull/42",
+    "prNumber": 42
+  }
+}
+```
+
+**UI:** After push succeeds, a `⎇ Create PR` button appears. Clicking opens a modal (560px wide) with editable Title + Body (pre-filled from `buildPrBody()`). Submit calls the endpoint; result shows `✓ PR #42` with link.
+
+---
+
+## Files changed
+
+| File | Change |
+|---|---|
+| `packages/server/src/engine/workspace.ts` | `deriveSquadBranchName`, `assertSafeWorkspacePath`, opts on `resolveWorkspace`, robust branch cleanup |
+| `packages/server/src/engine/stepper.ts` | Pass `agent.name + issue.title` to `resolveWorkspace` |
+| `packages/server/src/realtime/event-bus.ts` | `GitEventType`, `emitGitEvent` |
+| `packages/server/src/routes/runs.ts` | `POST /:runId/git/push`, `POST /:runId/git/pr`, `buildPrBody` |
+| `packages/client/src/realtime/ws-client.ts` | `git.push.complete` + `git.pr.created` in `WsEventMap` |
+| `packages/client/src/api/git.ts` | `usePushBranch`, `useCreatePr` mutation hooks |
+| `packages/client/src/components/runs/GitActions.tsx` | Push button + PR modal component |
+| `packages/client/src/components/runs/RunOutputPanel.tsx` | Imports and renders `<GitActions>` in footer |
+| `.github/PULL_REQUEST_TEMPLATE.md` | Default PR template |
+
+---
+
+## Phase 2 queue (W17+)
+
+- **G3 — MCP tool wrappers:** `github_push_branch`, `github_open_pr` MCP tools wrapping these endpoints so the dogfood CLI can drive the same flow.
+- **G4 — Copilot watch:** Watch for @copilot-authored draft PRs linked to board cards; move card to `in_review` on PR open.
+- **G6 — Webhook expansion:** Add handlers for `push`, `pull_request`, `workflow_run`, `check_run` events; trigger ceremony runs via YAML `triggers:` schema.
+- **PR template ceremony pre-fill:** When a run is spawned from a ceremony workflow, include the ceremony slug + run ID in the pre-filled body (requires ceremony context on the run row).
+
+
+# Decision: Stream G Phase 2A — Comment + Merge PR + Card Badges
+
+**Date:** 2026-05-15T22:42:29.855-07:00  
+**Author:** Verbal (Real-time / WebSocket Dev)  
+**Wave:** 17  
+**Status:** Accepted  
+**Relates to:** Stream G (GitHub integration) — Phase 2, Chunk A  
+
+---
+
+## Deliverables shipped
+
+### G2.3 — Comment on linked GitHub issue
+
+**Endpoint:** `POST /api/projects/:projectId/runs/:runId/git/comment`
+
+Request body:
+```json
+{ "issueNumber": 42, "body": "Run completed. Output: …" }
+```
+
+Response 200:
+```json
+{ "commentUrl": "https://github.com/owner/repo/issues/42#issuecomment-…", "issueNumber": 42 }
+```
+
+Response errors: 400 (missing/invalid body or issueNumber), 500 (gh CLI failure with verbatim detail).
+
+**Safety:**
+- Body sanitized with `sanitizeCommentBody()` — strips null bytes and ANSI escape sequences.
+- Body passed to `gh` via **stdin** (`--body-file -`), not as a shell argument. This is the correct pattern for arbitrary user content and prevents shell injection regardless of content.
+- 30 s timeout (`GIT_TIMEOUT_MS`).
+- `issueNumber` validated as positive integer before use.
+
+**WS event:** `git.comment.posted`
+```json
+{
+  "type": "git.comment.posted",
+  "projectId": "…",
+  "payload": { "runId": "…", "commentUrl": "https://…#issuecomment-…", "issueNumber": 42 }
+}
+```
+
+**UI:** "💬 Comment on issue" button in Run Drawer footer when `linkedIssueNumber` is set. Opens a modal pre-filled with `lastSummary` (the run's last output summary). Issues their `githubIssueNumber` is resolved by the parent that renders `<GitActions>`.
+
+---
+
+### G2.5 — Merge PR
+
+**Endpoint:** `POST /api/projects/:projectId/runs/:runId/git/pr/merge`
+
+Request body:
+```json
+{ "method": "squash" }   // "merge" | "squash" | "rebase" — default "squash"
+```
+
+**Default merge method: `squash`.** Rationale: squash keeps `main` history linear, makes reverts clean (one commit per feature), and is the GitHub default for Squad-style micro-PRs. Users can override via the menu.
+
+Response 200:
+```json
+{ "prUrl": "https://github.com/…/pull/42", "sha": "abc123…", "method": "squash" }
+```
+
+Response 409:
+```json
+{ "error": "Required CI checks are failing or still running — cannot merge.", "checks": "…verbatim gh output…" }
+```
+
+Response errors: 404 (run not found), 403 (unsafe workspace), 422 (no PR found / no workspace), 500 (gh pr merge failed with verbatim detail).
+
+**PR number discovery** (ordered):
+1. `issueRuns.prNumber` — cached by the `git/pr` create endpoint.
+2. `gh pr view --json number,url,state` on the worktree branch — resolved and cached on the run record.
+
+**CI gate:**  
+`gh pr checks <number> --required` is called before merge. If it exits non-zero (checks failing or still pending), return 409 with the check output verbatim. This respects branch protection rules natively — `gh pr merge` will also fail naturally if branch protection blocks it.
+
+**WS event:** `git.pr.merged`
+```json
+{
+  "type": "git.pr.merged",
+  "projectId": "…",
+  "payload": { "runId": "…", "prUrl": "https://…/pull/42", "sha": "abc123…", "method": "squash" }
+}
+```
+
+**UI:** After PR is created (`prState.phase === 'done'`), a split-button appears: primary action "⤴ Merge PR" (squash), dropdown reveals "Create a merge commit" and "Rebase and merge". Shows "Merging (squash)…" → "✓ Merged" with PR link.
+
+**Post-merge card automation:** `git.pr.merged` is emitted. Moving the linked card to a "done" column based on `column_meta.is_done: true` is deferred — coordinate with Hockney's column model in W18. The WS event carries all necessary data for Hockney to pick up in a follow-up PR.
+
+---
+
+### G2.6 — Card GitHub Badges
+
+**Data shape per card** (added to `GET /api/projects/:id/issues` response):
+
+```json
+{
+  "github": {
+    "branch": "squad/verbal/use-template",
+    "branchUrl": "https://github.com/…/tree/squad/verbal/use-template",
+    "pr": { "number": 42, "state": "open", "url": "https://github.com/…/pull/42" },
+    "ci": { "state": "passing", "url": "https://…" }
+  }
+}
+```
+
+`github` is `null` when no worktree run with git data exists for the issue.
+
+**Data source:** `issue_runs` table — most recent worktree run per issue with `git_branch IS NOT NULL`. Uses `DISTINCT ON (issue_id)` raw SQL (more efficient than a lateral join for this pattern).
+
+**PR state values:** `open` | `draft` | `merged` | `closed`  
+**CI state values:** `passing` | `failing` | `running` | `unknown`
+
+**Schema additions to `issue_runs`:**
+| Column | Type | Purpose |
+|---|---|---|
+| `git_branch` | TEXT | pushed branch name |
+| `git_branch_url` | TEXT | GitHub tree URL |
+| `pr_number` | INTEGER | cached from `gh pr create` or `gh pr view` |
+| `pr_url` | TEXT | GitHub PR HTML URL |
+| `pr_state` | TEXT | `open`/`draft`/`merged`/`closed` |
+| `ci_state` | TEXT | `passing`/`failing`/`running`/`unknown` |
+| `ci_url` | TEXT | URL to CI check run |
+| `git_cache_refreshed_at` | TIMESTAMPTZ | last time CI was refreshed from gh |
+
+**Cache invalidation strategy:**
+- `git.push.complete` → `gitBranch` + `gitBranchUrl` written to run by push endpoint.
+- `git.pr.created` → `prNumber` + `prUrl` + `prState='open'` written to run by PR endpoint.
+- `git.pr.merged` → `prState='merged'` written to run by merge endpoint.
+- **5-minute soft TTL for CI:** `listIssues` checks `git_cache_refreshed_at` per run; if age > 5 min and PR is open, spawns a fire-and-forget `refreshCiState()` task that calls `gh pr checks --json name,state,conclusion` and updates `ciState` + `gitCacheRefreshedAt`. Next `listIssues` call picks up the refreshed value.
+
+**UI badges** (in `IssueCard.tsx`):
+- Branch badge: `🌿 squad/verbal/use-template` (truncated at 20 chars, full name on hover) — links to GitHub tree URL.
+- PR badge: `🔀 PR #42 · open|draft|merged|closed` — color per state (green/muted/purple/red matching Fluent2 color semantics).
+- CI badge: `✅ CI passing` / `⚠️ CI failing` / `⏳ CI running` / `⚪ CI unknown` — links to CI URL.
+- All badges are links opening GitHub URL in new tab. Click on badge does not propagate to card-open handler.
+
+---
+
+## Files changed
+
+| File | Change |
+|---|---|
+| `packages/server/src/db/schema.ts` | Added 8 git-cache columns to `issueRuns` table definition |
+| `packages/server/src/db/index.ts` | Wave 17 migration block: `ALTER TABLE issue_runs ADD COLUMN IF NOT EXISTS git_branch …` (8 columns) |
+| `packages/server/src/realtime/event-bus.ts` | Added `git.comment.posted`, `git.pr.merged` to `GitEventType` |
+| `packages/server/src/routes/runs.ts` | (1) `sanitizeCommentBody()` helper; (2) push endpoint now persists `gitBranch`/`gitBranchUrl`; (3) PR endpoint now persists `prNumber`/`prUrl`/`prState`; (4) `POST /:runId/git/comment` (G2.3); (5) `POST /:runId/git/pr/merge` (G2.5) |
+| `packages/server/src/services/issues.ts` | `listIssues` now batch-fetches git data from most-recent worktree run per issue; `GitHubBlock` interface exported; `refreshCiState()` fire-and-forget background refresh |
+| `packages/client/src/realtime/ws-client.ts` | Added `git.comment.posted`, `git.pr.merged` to `WsEventMap` |
+| `packages/client/src/api/git.ts` | Added `CommentResult`, `MergeResult`, `MergeMethod` types; `useCommentOnIssue`, `useMergePr` hooks |
+| `packages/client/src/api/issues.ts` | `Issue.github` optional block added |
+| `packages/client/src/components/runs/GitActions.tsx` | Comment modal (G2.3) + Merge PR split-button with method picker (G2.5) + WS fast-path for all 4 git events |
+| `packages/client/src/components/board/IssueCard.tsx` | `GitHubBadges` component + rendering below labels (G2.6) |
+
+---
+
+## Open questions for Chunk B (W18+)
+
+### G4 — Copilot watch
+- What is the webhook shape for `@copilot` PR authorship? The `pull_request.opened` event has `user.login = 'github-copilot[bot]'` — is that stable?
+- Should card move to `in_review` on PR *open* or on PR *ready for review* (draft → ready event)?
+- Auth model: does the GitHub App installation need `pull_request:write`?
+
+### G6.1/G6.2 — Webhook expansion
+- The `gh` CLI webhook forwarding (`gh webhook forward`) is only available with GitHub Apps, not PAT auth. Do we plan to switch auth type in W18?
+- The `triggers:` YAML schema for ceremony workflows — should it live on `workflow_versions.steps_json` or as a separate `trigger_rules` table? Hockney needs to decide.
+- Rate limit: `check_run` events can be very high-frequency. Should we debounce before emitting `git.ci.updated` on the WS channel?
+
+### G2.5 post-merge card automation
+- Coordinate with Hockney: `column_meta.is_done` flag needed for automatic card move on `git.pr.merged`. The WS event already carries `runId` so Hockney can look up the issue and move it. Emit the WS event in W17; add the server-side card move in W18 once Hockney confirms the column model.
+
+### CI URL
+- `gh pr checks --json name,state,conclusion` does not return the per-check URL in all GH API versions. May need `--json name,state,conclusion,link` (newer API). Field is stored as nullable `ciUrl` — safe to omit if unavailable.
