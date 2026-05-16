@@ -31,7 +31,7 @@ import {
   tokens,
   makeStyles,
 } from '@fluentui/react-components'
-import { Wand20Regular, Dismiss20Regular } from '@fluentui/react-icons'
+import { Wand20Regular, Dismiss20Regular, Flash20Regular, Checkmark20Regular } from '@fluentui/react-icons'
 import { apiFetch } from '../../api/client.ts'
 import { useCreateIssue } from '../../api/issues.ts'
 import { useCreateInboxItem } from '../../api/inbox.ts'
@@ -176,7 +176,7 @@ export default function ConjureModal({
   const [draft, setDraft] = useState<Record<string, unknown> | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
-  const [toastMsg, setToastMsg] = useState<string | null>(null)
+  const [toastMsg, setToastMsg] = useState<{ text: string; variant: 'success' | 'info' } | null>(null)
   const [heuristicUsed, setHeuristicUsed] = useState(false)
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const draftKeyRef = useRef<string | null>(null)
@@ -317,7 +317,7 @@ export default function ConjureModal({
       const body = (issueDraft?.body as string | undefined) || prose
       await createIssue.mutateAsync({ title, body })
       await queryClient.invalidateQueries({ queryKey: ['issues', projectId] })
-      showToast(`✓ Issue created`)
+      showToast('Issue created', 3000, undefined, 'success')
       onClose()
     } else if (intent === 'inbox-item') {
       await createInboxItemFromProse()
@@ -339,7 +339,7 @@ export default function ConjureModal({
       suggestedProjectId: projectId ?? null,
     })
     await queryClient.invalidateQueries({ queryKey: ['inbox'] })
-    showToast(`✓ Inbox item captured`)
+    showToast('Inbox item captured', 3000, undefined, 'success')
     onClose()
   }
 
@@ -361,7 +361,7 @@ export default function ConjureModal({
         draftKeyRef.current = null
         pendingNavRef.current = null
       }
-    })
+    }, 'info')
 
     // Navigate after a 150ms yield so the toast renders first.
     setTimeout(() => {
@@ -390,8 +390,8 @@ export default function ConjureModal({
 
   // ── Toast ─────────────────────────────────────────────────────────────────
 
-  function showToast(msg: string, durationMs = 3000, onUndo?: () => void) {
-    setToastMsg(msg)
+  function showToast(msg: string, durationMs = 3000, onUndo?: () => void, variant: 'success' | 'info' = 'success') {
+    setToastMsg({ text: msg, variant })
     if (toastTimerRef.current) clearTimeout(toastTimerRef.current)
     toastTimerRef.current = setTimeout(() => {
       setToastMsg(null)
@@ -473,8 +473,8 @@ export default function ConjureModal({
               />
 
               {heuristicUsed && candidates.length > 0 && (
-                <p className={styles.heuristic}>
-                  ⚡ Detected instantly — no server round-trip needed.
+                <p className={styles.heuristic} style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                  <Flash20Regular style={{ fontSize: '14px' }} /> Detected instantly — no server round-trip needed.
                 </p>
               )}
 
@@ -535,7 +535,8 @@ export default function ConjureModal({
       {/* Success / navigation toast */}
       {toastMsg && createPortal(
         <ConjureToast
-          message={toastMsg}
+          message={toastMsg.text}
+          variant={toastMsg.variant}
           onUndo={handleUndo}
           onDismiss={() => setToastMsg(null)}
         />,
@@ -591,13 +592,17 @@ function CandidateChip({
 
 function ConjureToast({
   message,
+  variant = 'success',
   onUndo,
   onDismiss,
 }: {
   message: string
+  variant?: 'success' | 'info'
   onUndo?: () => void
   onDismiss: () => void
 }) {
+  const accentColor = variant === 'success' ? tokens.colorPaletteGreenForeground1 : tokens.colorBrandBackground
+  const Icon = variant === 'success' ? Checkmark20Regular : Wand20Regular
   return (
     <div
       role="status"
@@ -612,7 +617,7 @@ function ConjureToast({
         gap: '10px',
         background: tokens.colorNeutralBackground2,
         border: `1px solid ${tokens.colorNeutralStroke1}`,
-        borderLeft: `4px solid ${tokens.colorBrandBackground}`,
+        borderLeft: `4px solid ${accentColor}`,
         borderRadius: '8px',
         padding: '10px 14px',
         maxWidth: '340px',
@@ -620,6 +625,7 @@ function ConjureToast({
         animation: 'sq-conjure-toast-in 0.2s ease-out',
       }}
     >
+      <Icon style={{ flexShrink: 0, color: accentColor }} />
       <span style={{ flex: 1, fontSize: '13px', color: tokens.colorNeutralForeground1 }}>
         {message}
       </span>
@@ -648,13 +654,13 @@ function ConjureToast({
           background: 'none',
           border: 'none',
           color: tokens.colorNeutralForeground3,
-          fontSize: '16px',
+          display: 'flex',
+          alignItems: 'center',
           cursor: 'pointer',
-          lineHeight: 1,
           padding: '0 2px',
         }}
       >
-        ×
+        <Dismiss20Regular style={{ width: '16px', height: '16px' }} />
       </button>
       <style>{`
         @keyframes sq-conjure-toast-in {

@@ -19,7 +19,7 @@ import {
   Spinner,
   tokens,
 } from '@fluentui/react-components'
-import { Folder20Regular, DocumentCopy20Regular, ArrowSync20Regular, Beaker20Regular } from '@fluentui/react-icons'
+import { Folder20Regular, DocumentCopy20Regular, ArrowSync20Regular, Beaker20Regular, Sparkle20Regular } from '@fluentui/react-icons'
 import { useProjects, useSuggestProjectSetup } from '../api/projects.ts'
 import type { ProjectSuggestion } from '../api/projects.ts'
 import { useDiscoverSquad, useRegisterSquad, useInitSquad, useCreateSquad } from '../api/squad.ts'
@@ -360,7 +360,7 @@ function DiscoveryModal({
 }) {
   type ModalTab = 'discover' | 'connect' | 'create' | 'suggest'
   const [activeTab, setActiveTab] = useState<ModalTab>('discover')
-  const tabLabels: Record<ModalTab, string> = { discover: 'Discover', connect: 'Connect existing', create: 'Create new', suggest: '✨ Suggest setup' }
+  const tabLabels: Record<ModalTab, string> = { discover: 'Discover', connect: 'Connect existing', create: 'Create new', suggest: 'Suggest setup' }
 
   // Wave 10 C2: form state lifted up so the dialog can render a single
   // right-aligned DialogActions row whose primary button changes by tab.
@@ -483,6 +483,9 @@ function DiscoveryModal({
                       marginBottom: '-1px',
                     }}
                   >
+                    {tab === 'suggest' && (
+                      <Sparkle20Regular style={{ width: '14px', height: '14px', marginRight: '4px', verticalAlign: 'middle' }} />
+                    )}
                     {tabLabels[tab]}
                   </button>
                 )

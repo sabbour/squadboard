@@ -13,7 +13,7 @@
 import { useMemo } from 'react'
 import { useNavigate } from 'react-router'
 import { Body1, Body1Strong, Button, Caption1, tokens } from '@fluentui/react-components'
-import { Wand20Regular, Delete16Regular, ArrowRight16Regular } from '@fluentui/react-icons'
+import { Wand20Regular, Delete16Regular, ArrowRight16Regular, Folder16Regular } from '@fluentui/react-icons'
 import {
   useDiscardInboxItem,
   useInboxItems,
@@ -178,7 +178,7 @@ export default function Inbox() {
                         {truncate(item.originalDraft, 200)}
                       </Caption1>
                       <div style={{ display: 'flex', gap: tokens.spacingHorizontalM, fontSize: '11px', color: tokens.colorNeutralForeground3 }}>
-                        <span>📁 {projectName(item.suggestedProjectId)}</span>
+                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '3px' }}><Folder16Regular />{projectName(item.suggestedProjectId)}</span>
                         {item.suggestedColumn && <span>↳ {item.suggestedColumn}</span>}
                         {item.confidence && <span>· {item.confidence} confidence</span>}
                         <span>· {safeAbsoluteTime(item.createdAt)}</span>
