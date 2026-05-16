@@ -1,0 +1,38 @@
+name: Weekly AKS Triage
+steps:
+  - type: agent_run
+    label: Collect new issues since last triage
+    agent: aks-pm
+    prompt: |
+      Review all issues currently in the Backlog column that have not yet been triaged (no severity label assigned).
+      For each issue:
+      1. Classify type: bug, feature, chore, or azure-issue.
+      2. Assign a severity label: P0 (critical/service-down), P1 (major regression), P2 (significant impact), P3 (minor/cosmetic).
+      3. Assign the most specific AKS area label: aks-control-plane, aks-node-pool, aks-addon, or aks-networking.
+      4. Move the issue to the Triage column.
+      5. Assign it to the appropriate team member based on routing rules.
+      Output a triage summary: total issues processed, breakdown by type and severity.
+    timeout: 45m
+
+  - type: agent_run
+    label: Route high-severity issues
+    agent: aks-pm
+    prompt: |
+      Review all P0 and P1 issues now in Triage.
+      For each:
+      1. Assign to aks-platform-engineer or aks-quality-engineer based on whether it requires a code fix or a repro/test first.
+      2. Move P0 issues directly to In Progress — they do not wait for the weekly cycle.
+      3. Write a one-line "why this matters" note as an issue comment.
+      Output: list of P0/P1 issues routed, their assignees, and next action.
+    timeout: 20m
+
+  - type: agent_run
+    label: Confirm reproductions for bugs in Triage
+    agent: aks-quality-engineer
+    prompt: |
+      For every issue in Triage labelled `bug`, attempt to confirm or deny reproducibility:
+      - If steps are missing, add `needs-repro` label and post a comment requesting repro steps.
+      - If you can reproduce it, add `confirmed` label and document the exact repro environment (k8s version, region, OS SKU).
+      - If not reproducible, add `cannot-repro` and comment with what you tried.
+      Output: confirmed bugs (with repro details), needs-repro requests, cannot-repro findings.
+    timeout: 30m

@@ -1,0 +1,17 @@
+{
+  "name": "AKS Feature Kanban",
+  "description": "Track AKS feature work from customer signal through design, implementation, review, validation, and ship.",
+  "icon": "☸️",
+  "settings": {
+    "defaultLabels": [
+      "bug",
+      "feature",
+      "chore",
+      "azure-issue",
+      "aks-control-plane",
+      "aks-node-pool",
+      "aks-addon",
+      "aks-networking"
+    ]
+  }
+}

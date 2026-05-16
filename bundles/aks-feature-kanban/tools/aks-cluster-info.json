@@ -1,0 +1,30 @@
+{
+  "key": "aks-cluster-info",
+  "name": "AKS Cluster Info",
+  "description": "Wraps `az aks show` and `kubectl get nodes` to surface current cluster state (node count, k8s version, addon profiles, pool status) as structured JSON for agents. Use before and after any cluster-mutating operation to verify expected state.",
+  "category": "azure",
+  "inputSchema": {
+    "type": "object",
+    "required": ["resourceGroup", "clusterName"],
+    "properties": {
+      "resourceGroup": {
+        "type": "string",
+        "description": "Azure resource group containing the AKS cluster."
+      },
+      "clusterName": {
+        "type": "string",
+        "description": "Name of the AKS cluster."
+      },
+      "subscription": {
+        "type": "string",
+        "description": "Azure subscription ID or display name. Defaults to the active `az` CLI subscription if omitted."
+      },
+      "includeNodeDetails": {
+        "type": "boolean",
+        "description": "If true, runs `kubectl get nodes -o json` after `az aks show` and merges node-level detail (status, version, labels, taints) into the response.",
+        "default": false
+      }
+    },
+    "additionalProperties": false
+  }
+}

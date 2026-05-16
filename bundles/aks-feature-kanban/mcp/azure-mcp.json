@@ -1,0 +1,10 @@
+{
+  "name": "azure-mcp",
+  "displayName": "Azure MCP",
+  "command": "npx",
+  "args": ["-y", "@azure/mcp@latest"],
+  "env": {
+    "AZURE_SUBSCRIPTION_ID": "${AZURE_SUBSCRIPTION_ID}",
+    "AZURE_TENANT_ID": "${AZURE_TENANT_ID}"
+  }
+}

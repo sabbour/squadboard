@@ -1,0 +1,255 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://squadboard.dev/schemas/squadapp/v1/squadapp.json",
+  "title": "SquadApp Manifest",
+  "description": "squadapp.json — the root manifest for a Squadboard Squad App package.",
+  "type": "object",
+  "required": ["schemaVersion", "appId", "version", "name", "description"],
+  "additionalProperties": true,
+
+  "properties": {
+
+    "schemaVersion": {
+      "type": "integer",
+      "const": 1,
+      "description": "Format version. Bumped only on breaking manifest changes."
+    },
+
+    "appId": {
+      "type": "string",
+      "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$",
+      "minLength": 3,
+      "maxLength": 64,
+      "description": "Machine-readable, globally unique, kebab-case identifier."
+    },
+
+    "version": {
+      "type": "string",
+      "pattern": "^(0|[1-9]\\d*)\\.(0|[1-9]\\d*)\\.(0|[1-9]\\d*)(?:-((?:0|[1-9]\\d*|\\d*[a-zA-Z-][0-9a-zA-Z-]*)(?:\\.(?:0|[1-9]\\d*|\\d*[a-zA-Z-][0-9a-zA-Z-]*))*))?(?:\\+([0-9a-zA-Z-]+(?:\\.[0-9a-zA-Z-]+)*))?$",
+      "description": "SemVer content version, author-controlled."
+    },
+
+    "name": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "description": "Human-readable display name shown in the install dialog."
+    },
+
+    "description": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 512,
+      "description": "Short description shown in the install dialog and marketplace listing."
+    },
+
+    "author": {
+      "type": "string",
+      "maxLength": 128
+    },
+
+    "license": {
+      "type": "string",
+      "maxLength": 64,
+      "description": "SPDX license identifier (e.g. MIT, Apache-2.0) or 'proprietary'."
+    },
+
+    "homepage": {
+      "type": "string",
+      "format": "uri"
+    },
+
+    "tags": {
+      "type": "array",
+      "items": { "type": "string", "maxLength": 32 },
+      "maxItems": 20,
+      "uniqueItems": true
+    },
+
+    "requires": {
+      "type": "object",
+      "properties": {
+        "squadboard": {
+          "type": "string",
+          "description": "semver range that the installed Squadboard version must satisfy."
+        }
+      },
+      "additionalProperties": false
+    },
+
+    "project": {
+      "type": "object",
+      "properties": {
+        "name":        { "type": "string" },
+        "description": { "type": "string" },
+        "icon":        { "type": "string" },
+        "settings":    { "type": "object" }
+      },
+      "required": ["name"],
+      "additionalProperties": false
+    },
+
+    "kanban": {
+      "type": "object",
+      "required": ["columns", "defaultColumn"],
+      "properties": {
+        "columns": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "required": ["slug", "label", "order"],
+            "properties": {
+              "slug":      { "type": "string", "pattern": "^[a-z0-9-]+$" },
+              "label":     { "type": "string" },
+              "order":     { "type": "integer", "minimum": 0 },
+              "wip_limit": { "type": "integer", "minimum": 1 }
+            },
+            "additionalProperties": false
+          }
+        },
+        "defaultColumn": { "type": "string" }
+      },
+      "additionalProperties": false
+    },
+
+    "team": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["name", "role"],
+        "properties": {
+          "name":        { "type": "string" },
+          "role":        { "type": "string" },
+          "persistent":  { "type": "boolean", "default": true },
+          "charter":     { "type": "string" },
+          "charterPath": { "type": "string" }
+        },
+        "additionalProperties": false
+      }
+    },
+
+    "ceremonies": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "name", "scope", "trigger"],
+        "properties": {
+          "id":           { "type": "string", "pattern": "^[a-z0-9-]+$" },
+          "name":         { "type": "string" },
+          "scope":        { "type": "string", "enum": ["project", "board", "task"] },
+          "trigger": {
+            "type": "object",
+            "required": ["kind"],
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": ["on_issue_entry", "on_schedule", "on_event", "manual", "github"]
+              },
+              "config": { "type": "object" },
+              "event":   { "type": "string" },
+              "action":  { "type": "string" },
+              "filters": { "type": "object" }
+            }
+          },
+          "workflowYaml": { "type": "string" },
+          "workflowPath": { "type": "string" }
+        },
+        "additionalProperties": false
+      }
+    },
+
+    "workflows": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "name"],
+        "properties": {
+          "id":           { "type": "string", "pattern": "^[a-z0-9-]+$" },
+          "name":         { "type": "string" },
+          "description":  { "type": "string" },
+          "workflowYaml": { "type": "string" },
+          "workflowPath": { "type": "string" }
+        },
+        "additionalProperties": false
+      }
+    },
+
+    "skills": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["key", "name"],
+        "properties": {
+          "key":            { "type": "string", "pattern": "^[a-z0-9-]+$" },
+          "name":           { "type": "string" },
+          "description":    { "type": "string" },
+          "category":       { "type": "string" },
+          "promptAddendum": { "type": "string" },
+          "curatedKey":     { "type": "string" }
+        },
+        "additionalProperties": false
+      }
+    },
+
+    "tools": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["key", "name", "description"],
+        "properties": {
+          "key":         { "type": "string", "pattern": "^[a-z0-9-]+$" },
+          "name":        { "type": "string" },
+          "description": { "type": "string" },
+          "category":    { "type": "string" },
+          "inputSchema": { "type": "object" }
+        },
+        "additionalProperties": false
+      }
+    },
+
+    "mcpServers": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["name"],
+        "properties": {
+          "name":        { "type": "string" },
+          "displayName": { "type": "string" },
+          "command":     { "type": "string" },
+          "args":        { "type": "array", "items": { "type": "string" } },
+          "env":         { "type": "object" }
+        },
+        "additionalProperties": false
+      }
+    },
+
+    "routing": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "label":  { "type": "string" },
+          "column": { "type": "string" },
+          "agent":  { "type": "string" }
+        },
+        "additionalProperties": false
+      }
+    },
+
+    "seedIssues": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["title"],
+        "properties": {
+          "title":  { "type": "string" },
+          "body":   { "type": "string" },
+          "labels": { "type": "array", "items": { "type": "string" } },
+          "column": { "type": "string" }
+        },
+        "additionalProperties": false
+      }
+    }
+  }
+}
