@@ -13,7 +13,7 @@
 import { useMemo } from 'react'
 import { useNavigate } from 'react-router'
 import { Body1, Body1Strong, Button, Caption1, tokens } from '@fluentui/react-components'
-import { ChatHelpRegular, Delete16Regular, ArrowRight16Regular } from '@fluentui/react-icons'
+import { Wand20Regular, Delete16Regular, ArrowRight16Regular } from '@fluentui/react-icons'
 import {
   useDiscardInboxItem,
   useInboxItems,
@@ -23,6 +23,7 @@ import {
 import { useProjects } from '../api/projects.ts'
 import PageHeader from '../components/layout/PageHeader.tsx'
 import { safeAbsoluteTime } from '../utils/dates.ts'
+import { useConjure } from '../context/ConjureContext.tsx'
 
 const STATUS_GROUPS: { status: InboxStatus; label: string; tone: string }[] = [
   { status: 'captured', label: 'Captured', tone: '#6e7681' },
@@ -37,6 +38,7 @@ function truncate(s: string, n: number): string {
 
 export default function Inbox() {
   const navigate = useNavigate()
+  const { openConjure } = useConjure()
   const { data: items = [], isLoading } = useInboxItems()
   const { data: projects = [] } = useProjects()
 
@@ -186,11 +188,12 @@ export default function Inbox() {
                       <InboxRowActions
                         item={item}
                         onOpen={() => {
-                          const prefill = encodeURIComponent(item.originalDraft)
-                          const dest = item.suggestedProjectId
-                            ? `/projects/${item.suggestedProjectId}/consult/new?prefill=text:${prefill}`
-                            : `/consult/new?prefill=text:${prefill}`
-                          void navigate(dest)
+                          // Wave 22: open ConjureModal with draft pre-filled instead of navigating to consult/new
+                          openConjure({
+                            initialProse: item.originalDraft,
+                            hint: 'issue',
+                            projectId: item.suggestedProjectId ?? null,
+                          })
                         }}
                       />
                     )}
@@ -230,7 +233,7 @@ function InboxRowActions({
       <Button
         appearance="subtle"
         size="small"
-        icon={<ChatHelpRegular />}
+        icon={<Wand20Regular />}
         onClick={onOpen}
       >
         Open in Conjure
