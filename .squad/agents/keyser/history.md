@@ -345,3 +345,41 @@ This is the **2nd correction in 3 waves** (W22 put Conjure in the top bar; W24 r
 **Why not full conditional render (approach 2):** Would duplicate all NavItem logic. The hybrid keeps a single NavDrawer component tree, with only label text + Tooltip rendering conditionally.
 
 **Caveat for testers:** Fluent NavItem with no children (collapsed state) renders icon-only. The selected highlight still works via `selectedValue` on NavDrawer. Section headers are absent in collapsed state — no grouping visual — acceptable for 56px icon-only mode.
+
+---
+
+## W25 — Collapsed Nav Regression Fix (commit f5d03f4f)
+
+**Date:** 2026-05-16  
+**Wave:** 25
+
+### Bug 1 — Toggle alignment when expanded
+
+The `navCollapseToggle` wrapper was always `justifyContent: 'center'`. Added `navCollapseToggleExpanded` with `justifyContent: 'flex-end'` + `paddingInlineEnd: tokens.spacingHorizontalS`, applied via `mergeClasses` when `!navCollapsed`. Toggle now right-aligns when expanded (push-away affordance) and stays centered when collapsed.
+
+### Bug 2 — NavItems not clickable in collapsed mode ⚠️ (CRITICAL LESSON)
+
+**Root cause:** `<NavItem icon={...} value="..." />` with no children renders no inner button/link DOM element. Fluent UI's `NavItem` uses its children as the click target. Without children, the component renders an orphaned icon with no interactive wrapper — clicks never reach `onNavItemSelect`.
+
+**The broken W24 pattern:**
+```tsx
+<Tooltip content="Projects" relationship="label" positioning="after" hideDelay={0}>
+  <NavItem icon={<Home24Regular />} value="projects" />
+</Tooltip>
+```
+`Tooltip relationship="label"` only wires up `aria-labelledby`. It does NOT add a click target. This pattern silently killed every collapsed nav click.
+
+**Fix — Option A (hidden span):** Always render children, hide text with CSS:
+```tsx
+<NavItem icon={<Home24Regular />} value="projects">
+  <span className={styles.navLabelHidden}>Projects</span>
+</NavItem>
+```
+`navLabelHidden: { display: 'none' }` in makeStyles. The span keeps the click target alive in the DOM; CSS suppresses the visible text. Selected state, tooltips, and keyboard nav all still work.
+
+### Learnings
+
+- **NEVER render Fluent `NavItem` without children in any clickable context.** Without children, the click target does not exist — clicks silently die. No runtime error, no console warning.
+- **`Tooltip relationship="label"` ≠ click target.** It only sets aria-labelledby. It does not wrap the child in a button.
+- **Option A (hidden span) is the right pattern for icon-only nav:** deterministic, keyboard-accessible, tooltip-compatible, minimal diff.
+
