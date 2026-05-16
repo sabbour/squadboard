@@ -3,7 +3,12 @@
  *
  * `closeOut()` is the library-ified version of the Scribe spawn template's
  * mechanical tasks 0-8 (defined in .github/agents/squad.agent.md under
- * "SPAWN MANIFEST"). It is the single convergence point for all three caller
+ * "SPAWN MANIFEST"). It is a VERBATIM mirror of that spec — not a
+ * reimagination. If the algorithm needs to change, squad.agent.md is updated
+ * FIRST, then this file is synced to match. This is the "one algorithm,
+ * multiple callers" principle.
+ *
+ * It is the single convergence point for all three caller
  * paths that need to trigger a Scribe close-out:
  *
  *   1. CLI coordinator (squad.agent.md prompt) — existing behaviour; will
@@ -77,11 +82,7 @@ export async function closeOut(opts = {}) {
     const writtenPaths = [];
     // --- Step 0 + 1: Measure + archive decisions.md by size ---
     try {
-        const archiveResult = await archiveDecisionsBySize(decisionsPath, {
-            softBytes: opts.archiveThresholdBytes?.soft,
-            hardBytes: opts.archiveThresholdBytes?.hard,
-            targetBytes: opts.archiveThresholdBytes?.target,
-        });
+        const archiveResult = await archiveDecisionsBySize(decisionsPath);
         result.decisionsSize = { before: archiveResult.before, after: archiveResult.after };
         result.decisionsArchived = archiveResult.fired;
         if (archiveResult.fired) {

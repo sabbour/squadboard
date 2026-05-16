@@ -3,7 +3,12 @@
  *
  * `closeOut()` is the library-ified version of the Scribe spawn template's
  * mechanical tasks 0-8 (defined in .github/agents/squad.agent.md under
- * "SPAWN MANIFEST"). It is the single convergence point for all three caller
+ * "SPAWN MANIFEST"). It is a VERBATIM mirror of that spec — not a
+ * reimagination. If the algorithm needs to change, squad.agent.md is updated
+ * FIRST, then this file is synced to match. This is the "one algorithm,
+ * multiple callers" principle.
+ *
+ * It is the single convergence point for all three caller
  * paths that need to trigger a Scribe close-out:
  *
  *   1. CLI coordinator (squad.agent.md prompt) — existing behaviour; will
@@ -55,15 +60,6 @@ export interface CloseOutOptions {
   spawnManifest?: SpawnManifest;
   /** Path to the repository root (defaults to `git rev-parse --show-toplevel`). */
   teamRoot?: string;
-  /** Override Scribe's decisions.md size gate thresholds. */
-  archiveThresholdBytes?: {
-    /** Trigger archiving at this size (default: 20KB). */
-    soft?: number;
-    /** Trigger aggressive archiving at this size (default: 51KB). */
-    hard?: number;
-    /** Target file size after archiving (default: 30KB). */
-    target?: number;
-  };
   /** Optional override for the Scribe git commit message. */
   commitMessage?: string;
   /**
@@ -151,11 +147,7 @@ export async function closeOut(opts: CloseOutOptions = {}): Promise<CloseOutResu
 
   // --- Step 0 + 1: Measure + archive decisions.md by size ---
   try {
-    const archiveResult = await archiveDecisionsBySize(decisionsPath, {
-      softBytes: opts.archiveThresholdBytes?.soft,
-      hardBytes: opts.archiveThresholdBytes?.hard,
-      targetBytes: opts.archiveThresholdBytes?.target,
-    });
+    const archiveResult = await archiveDecisionsBySize(decisionsPath);
     result.decisionsSize = { before: archiveResult.before, after: archiveResult.after };
     result.decisionsArchived = archiveResult.fired;
     if (archiveResult.fired) {

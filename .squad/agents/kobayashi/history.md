@@ -111,7 +111,7 @@ Three tiers (first match wins):
   6. `summarizeHistoryIfLarge(historyPath, thresholdBytes)` — soft compaction at 15KB
   7. `commitScribeFiles(paths, message, repoRoot)` — individual `git add -- <path>` per file, commit with -F
 
-  **Archive-gate bug fixed** — Old: archive entries older than 7d/30d. New: walk sections from OLDEST → NEWEST, move to archive until file ≤ `targetBytes` (default 30KB). This guarantees the file cannot stay oversized regardless of how recent the bulk of its content is. The old date-window approach left decisions.md at 74.7KB in Wave 13 (Scribe-4 bug).
+  **Archive-gate — course-corrected (same wave):** Initial implementation used a size-target walk (oldest→newest until ≤ 30KB). Ahmed course-corrected: SDK must mirror squad.agent.md task #1 EXACTLY — date-window only (>= 20KB → archive > 30d; >= 51KB → archive > 7d). No `targetBytes` parameter. The 74.7KB Wave 13 issue is a known follow-up against squad.agent.md, not a divergence to bake into the SDK. Rule established: squad.agent.md is updated FIRST, then the SDK syncs.
 
   **Ceremony registration** — `BUILT_IN_CEREMONIES` array in `ceremony-translator.ts`. First entry: `scribe-close-out`. Pattern: push to array + implement `invoke(ctx)` that dynamic-imports `@sabbour/squadboard-sdk`. Three trigger flags: `manual` (q9 button), `scheduled` (q7 daemon), `coordinator` (CLI spawn). Public API: `getBuiltInCeremony(id)`, `listBuiltInCeremonies()`, `invokeBuiltInCeremony(id, ctx)`.
 

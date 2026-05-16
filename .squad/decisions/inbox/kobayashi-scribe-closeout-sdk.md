@@ -13,9 +13,49 @@ Carved `squadboard.scribe.closeOut()` into a new library package and registered 
 a first-class ceremony in the server's ceremony registry. This is the convergence point
 that unblocks Verbal (q7 daemon) and Wave 15 (q9 End Wave button).
 
+**Course-corrected (same wave):** Initial implementation diverged from the spec by
+replacing the date-window archive gate with a size-target algorithm. Corrected —
+the SDK is now a verbatim mirror of squad.agent.md tasks 0-8. See "Mirror contract"
+section below.
+
 ---
 
-## SDK location decision: (a) New package `packages/squadboard-sdk/`
+## Mirror contract — SDK is a verbatim mirror of squad.agent.md tasks 0-8
+
+**Rule (established Wave 14, q8, 2026-05-15):**
+The SDK MUST NOT diverge from squad.agent.md. If the algorithm is wrong, the
+fix goes into squad.agent.md FIRST, then the SDK is synced. Never the other way.
+"One algorithm, multiple callers" — Scribe stays one agent with one spec.
+
+**Sync verification recipe:**
+1. Open `.github/agents/squad.agent.md`, search "SPAWN MANIFEST".
+2. For each task 0-8, locate the corresponding primitive in
+   `packages/squadboard-sdk/src/scribe/primitives.ts`.
+3. Confirm thresholds, logic, and paths match the spec exactly.
+4. Any divergence is a bug in the SDK file, not in squad.agent.md.
+
+**Current SDK ↔ spec mapping (as of 2026-05-15):**
+
+| squad.agent.md task | SDK primitive |
+|---|---|
+| 0 PRE-CHECK | `archiveDecisionsBySize` (measures size as first step) |
+| 1 DECISIONS ARCHIVE | `archiveDecisionsBySize` — 20480B→30d, 51200B→7d (date-window, verbatim) |
+| 2 DECISION INBOX | `mergeInbox` |
+| 3 ORCHESTRATION LOG | `writeOrchestrationLogs` |
+| 4 SESSION LOG | `writeSessionLog` |
+| 5 CROSS-AGENT | `crossAgentHistoryUpdates` |
+| 6 HISTORY SUMMARIZATION | `summarizeHistoryIfLarge` — 15360B threshold (verbatim) |
+| 7 GIT COMMIT | `commitScribeFiles` — individual `git add -- <path>`, -F flag (verbatim) |
+| 8 HEALTH REPORT | `CloseOutResult` fields (decisionsSize, inboxFilesMerged, etc.) |
+
+**Known follow-up against squad.agent.md (do NOT fix in SDK):**
+Wave 13 Scribe-4 left decisions.md at 74.7KB after task #1 ran. This is because
+the date-window approach cannot guarantee the file shrinks when all content is
+"recent." The correct fix is to update squad.agent.md task #1 to add a targetBytes
+guarantee (e.g., "archive oldest entries until file ≤ 30KB"), then sync the SDK.
+Filed as a follow-up against squad.agent.md for a future wave.
+
+---
 
 **Chose (a)** — separate package from `packages/squadboard/`.
 

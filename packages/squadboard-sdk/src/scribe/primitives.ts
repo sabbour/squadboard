@@ -6,18 +6,28 @@
  * Each primitive is a named export so future agents (Auditor, etc.) can compose
  * them independently without importing the full closeOut() orchestrator.
  *
- * Archive-gate fix (Wave 14, q8):
- *   The original task #1 in squad.agent.md archived to a DATE window (entries
- *   older than 7d / 30d) which left decisions.md at 74.7KB — still oversized
- *   because many recent entries already exceeded the soft/hard thresholds.
- *   archiveDecisionsBySize() now walks entries from OLDEST to NEWEST and moves
- *   them to decisions-archive.md until the file size is ≤ targetBytes. This
- *   guarantees the file is never left oversized regardless of how recent the
- *   bulk of its content is.
+ * ⚠️  MIRROR CONTRACT (Wave 14, q8 course-correction):
+ *   This file is a VERBATIM library-ification of squad.agent.md tasks 0-8 as of
+ *   2026-05-15. The SDK MUST NOT diverge from the source spec. If the algorithm
+ *   is wrong, the fix goes into squad.agent.md FIRST, then this file is synced.
+ *   "One algorithm, multiple callers" — Scribe stays one agent with one spec.
+ *
+ * SYNC VERIFICATION RECIPE:
+ *   1. Open .github/agents/squad.agent.md, search "SPAWN MANIFEST".
+ *   2. For each task 0-8, locate the corresponding primitive below.
+ *   3. Confirm thresholds, logic, and paths match the spec exactly.
+ *   4. Any divergence is a bug in this file, not in squad.agent.md.
+ *
+ * KNOWN FOLLOW-UP (do NOT fix here):
+ *   The Wave 13 Scribe-4 run left decisions.md at 74.7KB after running task #1.
+ *   This is because the date-window approach (archive entries older than 7d) does
+ *   not guarantee the file shrinks when all content is recent. The correct fix is
+ *   to update squad.agent.md task #1 (e.g., add a targetBytes guarantee), then
+ *   sync this primitive. Filed as a follow-up against squad.agent.md, not here.
  */
 
 import { readFile, writeFile, readdir, unlink, stat } from 'node:fs/promises';
-import { join, basename } from 'node:path';
+import { join } from 'node:path';
 import { execFile as _execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { existsSync } from 'node:fs';
@@ -81,95 +91,87 @@ export interface ArchiveResult {
 // ---------------------------------------------------------------------------
 // Primitive 1: archiveDecisionsBySize
 // ---------------------------------------------------------------------------
+// Mirrors squad.agent.md task #1 EXACTLY:
+//   "If decisions.md >= 20480 bytes, archive entries older than 30 days NOW.
+//    If >= 51200 bytes, archive entries older than 7 days."
 
 /**
- * Archive entries from decisions.md into decisions-archive.md until the file
- * is ≤ targetBytes.
+ * Archive dated H2 sections from decisions.md into decisions-archive.md
+ * based on the age thresholds in squad.agent.md task #1:
+ *   - size >= 20480 bytes (20KB) → archive entries older than 30 days
+ *   - size >= 51200 bytes (50KB) → archive entries older than 7 days
  *
- * Strategy: walk H2 sections (## …) from OLDEST to NEWEST. Move the oldest
- * sections first until the remaining file is within the target size. This
- * guarantees the file cannot stay oversized, even if all content is recent.
+ * Sections are matched by extracting an ISO 8601 date from the start of each
+ * H2 heading (e.g. "## 2026-05-15T19:46:00-07:00: Some title").
+ * Sections with no parseable date are never archived.
  *
- * The old date-window approach (archive entries older than 7d / 30d) was
- * replaced here because it left the file at 74.7KB (Scribe-4, Wave 13) —
- * the bulk of the content was "recent" but the file was already oversized.
- *
- * @param decisionsPath  Absolute path to decisions.md
- * @param opts
- *   softBytes  — lower threshold that triggers archiving (default 20480 = 20KB)
- *   hardBytes  — upper threshold that triggers more aggressive archiving (default 52224 = 51KB)
- *   targetBytes — target size after archiving (default 30720 = 30KB)
+ * ⚠️  Do NOT add a targetBytes parameter. The thresholds are part of the
+ *     algorithm defined in squad.agent.md. Override the spec there, not here.
  */
 export async function archiveDecisionsBySize(
   decisionsPath: string,
-  opts: {
-    softBytes?: number;
-    hardBytes?: number;
-    targetBytes?: number;
-  } = {},
 ): Promise<ArchiveResult> {
-  const softBytes = opts.softBytes ?? 20_480;   // 20 KB
-  const hardBytes = opts.hardBytes ?? 52_224;   // 51 KB
-  const targetBytes = opts.targetBytes ?? 30_720; // 30 KB
+  // squad.agent.md task #1 thresholds — immutable, mirror the spec.
+  const SOFT_BYTES = 20_480; // 20 KB → archive entries older than 30 days
+  const HARD_BYTES = 51_200; // 50 KB → archive entries older than 7 days
 
   const before = await fileSize(decisionsPath);
-  if (before < softBytes) {
+  if (before < SOFT_BYTES) {
     return { before, after: before, fired: false };
   }
 
   const content = await readUtf8(decisionsPath);
   if (!content.trim()) return { before, after: before, fired: false };
 
-  // Split on H2 section boundaries (## …). Keep the leading header (# Squad Decisions etc).
+  // Determine the age cutoff from the spec.
+  const now = Date.now();
+  const cutoffDays = before >= HARD_BYTES ? 7 : 30;
+  const cutoffMs = cutoffDays * 24 * 60 * 60 * 1000;
+  const cutoff = now - cutoffMs;
+
+  // Split on H2 section boundaries.
   const h2Regex = /^(?=## )/m;
   const parts = content.split(h2Regex);
-  // parts[0] is everything before the first H2 (file header / H1).
-  const header = parts[0];
-  const sections = parts.slice(1); // each starts with "## "
+  const header = parts[0]; // everything before first H2
+  const sections = parts.slice(1);
 
-  if (sections.length === 0) {
-    // No sections to archive.
-    return { before, after: before, fired: false };
-  }
-
-  const archivePath = join(decisionsPath.replace(/decisions\.md$/, ''), 'decisions-archive.md');
-  const existingArchive = await readUtf8(archivePath);
+  if (sections.length === 0) return { before, after: before, fired: false };
 
   const toArchive: string[] = [];
-  const toKeep: string[] = [...sections];
+  const toKeep: string[] = [];
 
-  // Walk from oldest (index 0) and move sections until we're at or below targetBytes.
-  // If we're at the hard threshold, be more aggressive.
-  const threshold = before >= hardBytes ? targetBytes : Math.max(targetBytes, softBytes - 1024);
+  // ISO 8601 date at the start of an H2 heading.
+  const datePattern = /^## (\d{4}-\d{2}-\d{2}[T ][^\s:]+)/;
 
-  while (toKeep.length > 0) {
-    const candidateContent = header + toKeep.join('');
-    const candidateSize = Buffer.byteLength(candidateContent, 'utf8');
-    if (candidateSize <= threshold) break;
-    // Archive the oldest remaining section.
-    const oldest = toKeep.shift()!;
-    toArchive.push(oldest);
+  for (const section of sections) {
+    const m = section.match(datePattern);
+    if (m) {
+      const ts = Date.parse(m[1]);
+      if (!isNaN(ts) && ts < cutoff) {
+        toArchive.push(section);
+        continue;
+      }
+    }
+    toKeep.push(section);
   }
 
-  if (toArchive.length === 0) {
-    return { before, after: before, fired: false };
-  }
+  if (toArchive.length === 0) return { before, after: before, fired: false };
 
-  // Write updated decisions.md.
+  const archivePath = join(decisionsPath.replace(/[^\\/]+$/, ''), 'decisions-archive.md');
+  const existingArchive = await readUtf8(archivePath);
+
+  // Reconstruct decisions.md (header + kept sections).
   const newContent = header + toKeep.join('');
   await writeFile(decisionsPath, newContent, 'utf8');
 
-  // Prepend archived sections to decisions-archive.md (newest archives at top).
+  // Prepend archived sections after the archive H1.
   const archiveHeader = existingArchive.startsWith('# ')
     ? existingArchive
     : `# Decisions Archive\n\n`;
-
-  // Insert toArchive entries after the archive H1 header.
-  const archiveHeadEnd = archiveHeader.indexOf('\n\n') + 2;
-  const archiveTop = archiveHeader.slice(0, archiveHeadEnd);
-  const archiveBody = archiveHeader.slice(archiveHeadEnd);
-  const newArchive = archiveTop + toArchive.join('') + archiveBody;
-  await writeFile(archivePath, newArchive, 'utf8');
+  const headEnd = archiveHeader.indexOf('\n\n') + 2;
+  const archiveTop = archiveHeader.slice(0, headEnd);
+  const archiveBody = archiveHeader.slice(headEnd);
+  await writeFile(archivePath, archiveTop + toArchive.join('') + archiveBody, 'utf8');
 
   const after = await fileSize(decisionsPath);
   return { before, after, fired: true };
@@ -178,10 +180,12 @@ export async function archiveDecisionsBySize(
 // ---------------------------------------------------------------------------
 // Primitive 2: mergeInbox
 // ---------------------------------------------------------------------------
+// Mirrors squad.agent.md task #2:
+//   "Merge .squad/decisions/inbox/ → decisions.md, delete inbox files. Deduplicate."
 
 /**
  * Read all .md files in inboxDir, append them to decisionsPath (deduplicating
- * by normalized heading), then delete the inbox files.
+ * by normalized H2 heading), then delete the inbox files.
  *
  * Returns the count of inbox files merged.
  */
@@ -200,7 +204,6 @@ export async function mergeInbox(
   if (files.length === 0) return 0;
 
   const existing = await readUtf8(decisionsPath);
-  // Normalize headings already in decisions.md for deduplication.
   const existingHeadings = new Set(
     [...existing.matchAll(/^## (.+)$/gm)].map(([, h]) => h.trim().toLowerCase()),
   );
@@ -208,11 +211,12 @@ export async function mergeInbox(
   const chunks: string[] = [];
   for (const f of files) {
     const content = await readUtf8(f);
-    if (!content.trim()) continue;
-    // Check for duplicate H2 heading.
+    if (!content.trim()) {
+      await unlink(f).catch(() => {});
+      continue;
+    }
     const firstHeading = content.match(/^## (.+)$/m);
     if (firstHeading && existingHeadings.has(firstHeading[1].trim().toLowerCase())) {
-      // Already present — skip but still delete the file.
       await unlink(f).catch(() => {});
       continue;
     }
@@ -232,10 +236,13 @@ export async function mergeInbox(
 // ---------------------------------------------------------------------------
 // Primitive 3: writeOrchestrationLogs
 // ---------------------------------------------------------------------------
+// Mirrors squad.agent.md task #3:
+//   "Write .squad/orchestration-log/{timestamp}-{agent}.md per agent.
+//    Use ISO 8601 UTC timestamp."
 
 /**
  * Write one orchestration-log file per agent in the spawn manifest.
- * Files land at logsDir/{datetime}-{agentName}.md.
+ * Files land at logsDir/{isoUtcTimestamp}-{agentName}.md.
  *
  * Returns the count of files written.
  */
@@ -244,7 +251,9 @@ export async function writeOrchestrationLogs(
   logsDir: string,
   datetime: string,
 ): Promise<number> {
-  const ts = datetime.replace(/[:.]/g, '-').replace(/[TZ]/g, (c) => (c === 'T' ? 'T' : 'Z'));
+  // squad.agent.md says "ISO 8601 UTC timestamp" — use the datetime as-is
+  // (callers should pass UTC ISO string, e.g. from new Date().toISOString()).
+  const ts = datetime.replace(/:/g, '-').replace(/\./g, '-');
   let count = 0;
   for (const agent of manifest.agents) {
     const filename = `${ts}-${agent.name}.md`;
@@ -273,10 +282,12 @@ export async function writeOrchestrationLogs(
 // ---------------------------------------------------------------------------
 // Primitive 4: writeSessionLog
 // ---------------------------------------------------------------------------
+// Mirrors squad.agent.md task #4:
+//   "Write .squad/log/{timestamp}-{topic}.md. Brief. Use ISO 8601 UTC timestamp."
 
 /**
  * Write a brief session-log file summarising the run.
- * File lands at logsDir/{datetime}-{topic}.md.
+ * File lands at logsDir/{isoUtcTimestamp}-{topic}.md.
  *
  * Returns the path written (or null on failure).
  */
@@ -285,7 +296,7 @@ export async function writeSessionLog(
   logsDir: string,
   datetime: string,
 ): Promise<string | null> {
-  const ts = datetime.replace(/[:.]/g, '-').replace(/[TZ]/g, (c) => (c === 'T' ? 'T' : 'Z'));
+  const ts = datetime.replace(/:/g, '-').replace(/\./g, '-');
   const topic = (manifest.topic ?? manifest.runId).toLowerCase().replace(/\s+/g, '-').slice(0, 40);
   const filename = `${ts}-${topic}.md`;
   const path = join(logsDir, filename);
@@ -317,10 +328,12 @@ export async function writeSessionLog(
 // ---------------------------------------------------------------------------
 // Primitive 5: crossAgentHistoryUpdates
 // ---------------------------------------------------------------------------
+// Mirrors squad.agent.md task #5:
+//   "Append team updates to affected agents' history.md."
 
 /**
  * Append a "team update" block to the history.md of each agent mentioned in
- * the spawn manifest (other than the agent whose history.md is being updated).
+ * the spawn manifest (peers — not the agent being updated).
  *
  * Returns the list of agent names whose history.md was updated.
  */
@@ -337,9 +350,7 @@ export async function crossAgentHistoryUpdates(
     const peers = manifest.agents.filter((a) => a.name !== target.name);
     if (peers.length === 0) continue;
 
-    const peerLines = peers
-      .map((p) => `- **${p.name}**: ${p.summary}`)
-      .join('\n');
+    const peerLines = peers.map((p) => `- **${p.name}**: ${p.summary}`).join('\n');
 
     const block = [
       '',
@@ -362,23 +373,26 @@ export async function crossAgentHistoryUpdates(
 // ---------------------------------------------------------------------------
 // Primitive 6: summarizeHistoryIfLarge
 // ---------------------------------------------------------------------------
+// Mirrors squad.agent.md task #6:
+//   "If any history.md >= 15360 bytes (15KB), summarize now."
 
 /**
- * If a history.md file exceeds thresholdBytes, compact the "## Learnings"
- * section by moving older entries to history-archive.md.
+ * If a history.md file is >= 15360 bytes (15KB), compact the "## Learnings"
+ * section by moving older lines to history-archive.md.
  *
- * This is a soft compaction: it preserves the most recent N lines of the
- * Learnings section and archives the rest. Uses a fixed window of 80 lines
- * as "recent enough to keep".
+ * Threshold: 15360 bytes — exactly as specified in squad.agent.md task #6.
+ * Compaction keeps the most recent 80 lines of the Learnings section.
  *
  * Returns true if compaction ran, false otherwise.
  */
 export async function summarizeHistoryIfLarge(
   historyPath: string,
-  thresholdBytes = 15_360, // 15 KB
 ): Promise<boolean> {
+  // squad.agent.md task #6 threshold — immutable mirror of spec.
+  const THRESHOLD_BYTES = 15_360; // 15 KB
+
   const size = await fileSize(historyPath);
-  if (size < thresholdBytes) return false;
+  if (size < THRESHOLD_BYTES) return false;
 
   const content = await readUtf8(historyPath);
   const learningsIdx = content.indexOf('\n## Learnings');
@@ -387,8 +401,7 @@ export async function summarizeHistoryIfLarge(
   const beforeLearnings = content.slice(0, learningsIdx + 1);
   const learningsAndRest = content.slice(learningsIdx + 1);
 
-  // Find where Learnings section ends (next H2 or end of file).
-  const nextH2 = learningsAndRest.indexOf('\n## ', 14); // skip past "## Learnings" header
+  const nextH2 = learningsAndRest.indexOf('\n## ', 14);
   const learningsBody =
     nextH2 === -1 ? learningsAndRest : learningsAndRest.slice(0, nextH2);
   const afterLearnings = nextH2 === -1 ? '' : learningsAndRest.slice(nextH2);
@@ -415,13 +428,19 @@ export async function summarizeHistoryIfLarge(
 // ---------------------------------------------------------------------------
 // Primitive 7: commitScribeFiles
 // ---------------------------------------------------------------------------
+// Mirrors squad.agent.md task #7:
+//   "Stage only the exact .squad/ files Scribe wrote in this session.
+//    Stage each file individually with `git add -- <path>`.
+//    Commit with -F (write msg to temp file). Skip if nothing staged.
+//    ⚠️ NEVER use `git add .squad/` or broad globs."
 
 /**
- * Stage each path individually with `git add -- <path>` and commit using a
- * temporary message file (to avoid shell-escaping bugs with `git commit -m`).
+ * Stage each allowed path individually with `git add -- <path>` and commit
+ * using a message file (avoids shell-escaping bugs with -m).
  *
- * Only stages paths that exist and sit within the given repoRoot.
- * NEVER stages with broad globs like `git add .squad/`.
+ * Allowed paths: decisions.md, decisions-archive.md, agents/{name}/history.md,
+ * agents/{name}/history-archive.md, log/*, orchestration-log/* — callers
+ * pass only paths within this set.
  *
  * Returns the commit SHA on success, null if nothing was staged or commit failed.
  */
@@ -433,26 +452,26 @@ export async function commitScribeFiles(
   const existing = allowedPaths.filter((p) => existsSync(p));
   if (existing.length === 0) return null;
 
-  // Stage each file individually.
+  // Stage each file individually — never `git add .squad/`.
   for (const p of existing) {
     try {
       await execFile('git', ['-C', repoRoot, 'add', '--', p]);
     } catch {
-      // continue — other files may still be stageable
+      // Non-fatal — continue staging other files.
     }
   }
 
   // Check if anything is actually staged.
-  let stagedOutput: string;
+  let staged: string;
   try {
     const { stdout } = await execFile('git', ['-C', repoRoot, 'diff', '--cached', '--name-only']);
-    stagedOutput = stdout.trim();
+    staged = stdout.trim();
   } catch {
     return null;
   }
-  if (!stagedOutput) return null;
+  if (!staged) return null;
 
-  // Write commit message to a file to avoid shell escaping issues.
+  // Write commit message to a file to avoid shell-escaping issues (-F flag).
   const msgPath = join(repoRoot, '.squad', '.scribe-commit-msg.tmp');
   await writeFile(msgPath, message, 'utf8');
 
@@ -466,3 +485,4 @@ export async function commitScribeFiles(
     await unlink(msgPath).catch(() => {});
   }
 }
+
