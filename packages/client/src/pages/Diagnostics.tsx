@@ -12,7 +12,7 @@ import {
   type SelectTabData,
   type SelectTabEvent,
 } from '@fluentui/react-components'
-import { ArrowSync24Regular, Checkmark24Regular, Warning24Regular, Dismiss24Regular } from '@fluentui/react-icons'
+import { ArrowSync24Regular, Checkmark24Regular, Warning24Regular, Dismiss24Regular, Lightbulb24Regular } from '@fluentui/react-icons'
 import { useDiagnostics, useRunDiagnostics, type DiagnosticCheck } from '../api/diagnostics.ts'
 import { useProject } from '../api/projects.ts'
 import PageHeader from '../components/layout/PageHeader.tsx'
@@ -109,7 +109,7 @@ function CheckCard({ check }: { check: DiagnosticCheck }) {
             display: 'block',
           }}
         >
-          💡 {check.remediation}
+          <Lightbulb24Regular style={{ verticalAlign: 'middle', marginRight: '4px' }} />{check.remediation}
         </Caption1>
       )}
     </div>

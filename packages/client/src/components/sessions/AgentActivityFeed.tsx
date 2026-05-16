@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useRef } from 'react'
+import { useEffect, useMemo, useRef, type ReactNode } from 'react'
 import { tokens } from '@fluentui/react-components'
+import { Money20Regular, Warning20Regular, Settings20Regular, Comment20Regular } from '@fluentui/react-icons'
 import type { LiveSessionEvent, LiveStreamEntry } from '../../api/sessions.ts'
 import type { Agent } from '../../api/agents.ts'
 import { ChatBubble } from '../ChatBubble.tsx'
@@ -239,7 +240,7 @@ function FeedRowView({
     const cost = pickNum(row.payload, 'cost') ?? 0
     return (
       <Pill
-        icon="💸"
+        icon={<Money20Regular />}
         label={`${inT} in / ${outT} out · $${cost.toFixed(4)}`}
         time={time}
         tone="neutral"
@@ -258,11 +259,11 @@ function FeedRowView({
 
   if (row.type === 'session.error') {
     const msg = pickStr(row.payload, 'message') ?? 'error'
-    return <Pill icon="⚠" label={msg} time={time} tone="danger" />
+    return <Pill icon={<Warning20Regular />} label={msg} time={time} tone="danger" />
   }
 
   if (row.type === 'session.steered') {
-    return <Pill icon="🎛" label={fmtSteered(row.payload, agentLookup)} time={time} tone="neutral" />
+    return <Pill icon={<Settings20Regular />} label={fmtSteered(row.payload, agentLookup)} time={time} tone="neutral" />
   }
 
   // Phase 5 — consult.request / consult.response / consult.error
@@ -280,7 +281,7 @@ function FeedRowView({
 
   if (row.type === 'consult.error') {
     const msg = pickStr(row.payload, 'message') ?? 'consult error'
-    return <Pill icon="💬⚠" label={msg} time={time} tone="danger" />
+    return <Pill icon={<Warning20Regular />} label={msg} time={time} tone="danger" />
   }
 
   return null
@@ -332,7 +333,7 @@ function Pill({
   time,
   tone,
 }: {
-  icon: string
+  icon: ReactNode
   label: string
   time: string
   tone: 'neutral' | 'success' | 'danger'
@@ -385,7 +386,7 @@ function ConsultRow({
   time: string
 }) {
   const isResponse = direction === 'response'
-  const icon = isResponse ? '💬↩' : '💬?'
+  const icon = <Comment20Regular />
   return (
     <div
       style={{

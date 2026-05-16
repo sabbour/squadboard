@@ -25,7 +25,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { tokens, Spinner } from '@fluentui/react-components'
-import { Beaker20Regular } from '@fluentui/react-icons'
+import { Beaker20Regular, Dismiss20Regular } from '@fluentui/react-icons'
 import { useProjects } from '../../api/projects.ts'
 import { useLabels } from '../../api/labels.ts'
 import {
@@ -355,7 +355,7 @@ export default function CaptureModal({
               cursor: 'pointer',
             }}
           >
-            ✕
+            <Dismiss20Regular />
           </button>
         </div>
 

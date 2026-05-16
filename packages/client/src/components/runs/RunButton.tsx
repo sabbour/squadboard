@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from 'react'
+import { Checkmark20Regular } from '@fluentui/react-icons'
 import { useActiveAgents } from '../../api/agents.ts'
 import { useStartRun, useCancelRun, useIssueRuns, type IssueRun } from '../../api/runs.ts'
 
@@ -112,7 +113,9 @@ export default function RunButton({ projectId, issueId, onRunStarted }: RunButto
   // Done flash state
   if (doneFlash) {
     return (
-      <span style={{ fontSize: '11px', color: '#3fb950', fontWeight: 500 }}>✓ Done</span>
+      <span style={{ fontSize: '11px', color: '#3fb950', fontWeight: 500 }}>
+        <Checkmark20Regular style={{ verticalAlign: 'middle', marginRight: '4px' }} />Done
+      </span>
     )
   }
 

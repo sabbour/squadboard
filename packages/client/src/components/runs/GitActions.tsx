@@ -11,6 +11,7 @@
  *   - git.pr.merged       → updates merged state
  */
 import { useEffect, useState } from 'react'
+import { Checkmark20Regular, Dismiss20Regular, Comment20Regular } from '@fluentui/react-icons'
 import { type IssueRun } from '../../api/runs.ts'
 import {
   usePushBranch, useCreatePr, useCommentOnIssue, useMergePr,
@@ -182,7 +183,7 @@ export default function GitActions({ projectId, run, linkedIssueNumber, lastSumm
 
       {pushState.phase === 'done' && (
         <span style={{ fontSize: '11px', color: '#3fb950', display: 'flex', alignItems: 'center', gap: '4px' }}>
-          ✓ Pushed
+          <Checkmark20Regular style={{ verticalAlign: 'middle', marginRight: '4px' }} />Pushed
           {pushState.result.branchUrl && (
             <>
               {' '}·{' '}
@@ -196,7 +197,7 @@ export default function GitActions({ projectId, run, linkedIssueNumber, lastSumm
 
       {pushState.phase === 'error' && (
         <span style={{ fontSize: '11px', color: '#f85149' }} title={pushState.message}>
-          ✗ Push failed — {pushState.message.slice(0, 60)}
+          <Dismiss20Regular style={{ verticalAlign: 'middle', marginRight: '4px' }} />Push failed — {pushState.message.slice(0, 60)}
         </span>
       )}
 
@@ -209,7 +210,7 @@ export default function GitActions({ projectId, run, linkedIssueNumber, lastSumm
 
       {prState.phase === 'done' && (
         <span style={{ fontSize: '11px', color: '#3fb950', display: 'flex', alignItems: 'center', gap: '4px' }}>
-          ✓ PR{' '}
+          <Checkmark20Regular style={{ verticalAlign: 'middle', marginRight: '4px' }} />PR{' '}
           <a href={prState.result.prUrl} target="_blank" rel="noopener noreferrer" style={{ color: '#58a6ff', textDecoration: 'none' }}>
             #{prState.result.prNumber ?? '—'}
           </a>
@@ -218,7 +219,7 @@ export default function GitActions({ projectId, run, linkedIssueNumber, lastSumm
 
       {prState.phase === 'error' && (
         <span style={{ fontSize: '11px', color: '#f85149' }} title={prState.message}>
-          ✗ PR failed — {prState.message.slice(0, 60)}
+          <Dismiss20Regular style={{ verticalAlign: 'middle', marginRight: '4px' }} />PR failed — {prState.message.slice(0, 60)}
         </span>
       )}
 
@@ -258,7 +259,7 @@ export default function GitActions({ projectId, run, linkedIssueNumber, lastSumm
 
       {mergeState.phase === 'done' && (
         <span style={{ fontSize: '11px', color: '#3fb950', display: 'flex', alignItems: 'center', gap: '4px' }}>
-          ✓ Merged{' '}
+          <Checkmark20Regular style={{ verticalAlign: 'middle', marginRight: '4px' }} />Merged{' '}
           <a href={mergeState.result.prUrl} target="_blank" rel="noopener noreferrer" style={{ color: '#58a6ff', textDecoration: 'none' }}>
             ({mergeState.result.method})
           </a>
@@ -267,20 +268,20 @@ export default function GitActions({ projectId, run, linkedIssueNumber, lastSumm
 
       {mergeState.phase === 'error' && (
         <span style={{ fontSize: '11px', color: '#f85149' }} title={mergeState.message}>
-          ✗ Merge failed — {mergeState.message.slice(0, 80)}
+          <Dismiss20Regular style={{ verticalAlign: 'middle', marginRight: '4px' }} />Merge failed — {mergeState.message.slice(0, 80)}
         </span>
       )}
 
       {/* ── Comment on issue button (visible when a GH issue is linked) ── */}
       {linkedIssueNumber && mergeState.phase !== 'done' && commentState.phase === 'idle' && (
         <button onClick={openCommentModal} style={btnStyle(false)}>
-          💬 Comment on issue
+          <Comment20Regular style={{ verticalAlign: 'middle', marginRight: '6px' }} />Comment on issue
         </button>
       )}
 
       {commentState.phase === 'done' && (
         <span style={{ fontSize: '11px', color: '#3fb950', display: 'flex', alignItems: 'center', gap: '4px' }}>
-          ✓ Commented{' '}
+          <Checkmark20Regular style={{ verticalAlign: 'middle', marginRight: '4px' }} />Commented{' '}
           {commentState.result.commentUrl && (
             <a href={commentState.result.commentUrl} target="_blank" rel="noopener noreferrer" style={{ color: '#58a6ff', textDecoration: 'none' }}>
               #{commentState.result.issueNumber}
@@ -291,7 +292,7 @@ export default function GitActions({ projectId, run, linkedIssueNumber, lastSumm
 
       {commentState.phase === 'error' && (
         <span style={{ fontSize: '11px', color: '#f85149' }} title={commentState.message}>
-          ✗ Comment failed — {commentState.message.slice(0, 60)}
+          <Dismiss20Regular style={{ verticalAlign: 'middle', marginRight: '4px' }} />Comment failed — {commentState.message.slice(0, 60)}
         </span>
       )}
 

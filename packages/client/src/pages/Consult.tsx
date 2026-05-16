@@ -36,6 +36,7 @@ import {
   Edit20Regular,
   Delete20Regular,
   ArrowUpload20Regular,
+  Warning20Regular,
 } from '@fluentui/react-icons'
 import {
   useConsultSessions,
@@ -1110,12 +1111,12 @@ function ProposalCard({ proposal, sessionId }: { proposal: ConsultProposal; sess
       )}
       {proposal.errorMessage && (
         <Caption1 style={{ color: tokens.colorPaletteRedForeground1 }}>
-          ⚠ {proposal.errorMessage}
+          <Warning20Regular style={{ verticalAlign: 'middle', marginRight: '4px' }} />{proposal.errorMessage}
         </Caption1>
       )}
       {proposal.result && proposal.status !== 'pending' && (
         <Caption1 style={{ color: tokens.colorPaletteGreenForeground1 }}>
-          ✓ {renderArtifactLink(proposal.result)}
+          <Checkmark20Regular style={{ verticalAlign: 'middle', marginRight: '4px' }} />{renderArtifactLink(proposal.result)}
         </Caption1>
       )}
       {error && (

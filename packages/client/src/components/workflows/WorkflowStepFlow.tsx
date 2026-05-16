@@ -7,7 +7,7 @@ export interface WorkflowStep {
 const STEP_ICONS: Record<string, string> = {
   route: '⇄',
   agent_run: '▶',
-  approve: '✓',
+  approve: '√',
 }
 
 const STEP_COLORS: Record<string, string> = {

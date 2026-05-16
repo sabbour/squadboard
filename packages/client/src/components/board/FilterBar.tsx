@@ -2,7 +2,7 @@ import { useState, useRef } from 'react'
 import { tokens } from '@fluentui/react-components'
 import { useLabels } from '../../api/labels.ts'
 import LabelBadge from '../LabelBadge.tsx'
-import { Search20Regular } from '@fluentui/react-icons'
+import { Search20Regular, Dismiss20Regular } from '@fluentui/react-icons'
 
 interface FilterBarProps {
   projectId: string
@@ -86,7 +86,7 @@ export default function FilterBar({
               padding: 0,
             }}
           >
-            ✕
+            <Dismiss20Regular />
           </button>
         )}
       </div>

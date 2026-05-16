@@ -12,6 +12,7 @@ import {
   TableCell,
   TableCellLayout,
 } from '@fluentui/react-components'
+import { Settings20Regular } from '@fluentui/react-icons'
 
 interface WorkflowListProps {
   projectId: string
@@ -84,7 +85,7 @@ export default function WorkflowList({ projectId }: WorkflowListProps) {
             alignItems: 'center',
           }}
         >
-          <span style={{ fontSize: '28px' }}>⚙</span>
+          <Settings20Regular style={{ width: 28, height: 28 }} />
           <span>No ceremonies yet.</span>
           <Button
             appearance="outline"

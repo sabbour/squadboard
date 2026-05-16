@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { Subtitle2, Caption1, tokens } from '@fluentui/react-components'
+import { Dismiss20Regular } from '@fluentui/react-icons'
 import { type Agent, useAgent, useUpdateAgent } from '../../api/agents.ts'
 import { safeRelativeTime } from '../../utils/dates.ts'
 import StatusBadge from './StatusBadge.tsx'
@@ -148,7 +149,7 @@ export default function AgentDetailPanel({ projectId, agent, onClose }: AgentDet
             onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.color = 'var(--text)' }}
             onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.color = 'var(--text-muted)' }}
           >
-            ✕
+            <Dismiss20Regular />
           </button>
         </div>
 

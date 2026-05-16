@@ -19,6 +19,7 @@ import {
   makeStyles,
   tokens,
 } from '@fluentui/react-components'
+import { Checkmark20Regular } from '@fluentui/react-icons'
 
 interface HireAgentModalProps {
   projectId: string
@@ -391,7 +392,7 @@ function ChipGroup({
                         cursor: 'pointer',
                       }}
                     >
-                      {on ? '✓ ' : ''}{c.label}
+                      {on && <Checkmark20Regular style={{ verticalAlign: 'middle', marginRight: '4px' }} />}{c.label}
                     </button>
                   )
                 })}

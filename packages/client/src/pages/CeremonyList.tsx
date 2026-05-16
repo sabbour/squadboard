@@ -115,7 +115,7 @@ export default function CeremonyList() {
       const sha = result?.result?.commitSha
       setEndWaveToast({
         kind: 'success',
-        msg: sha ? `Wave closed ✓ (commit ${sha.slice(0, 7)})` : 'Wave closed ✓',
+        msg: sha ? `Wave closed — commit ${sha.slice(0, 7)}` : 'Wave closed',
       })
     } catch (err) {
       setEndWaveToast({ kind: 'error', msg: err instanceof Error ? err.message : 'End wave failed' })

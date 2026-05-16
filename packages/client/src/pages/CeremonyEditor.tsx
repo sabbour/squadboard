@@ -80,6 +80,7 @@ import {
   Warning16Regular,
   BookmarkAddRegular,
   ArrowDownloadRegular,
+  Checkmark20Regular,
 } from '@fluentui/react-icons'
 import VisualCanvas from '../components/ceremony/VisualCanvas.tsx'
 import { ScopeBadge } from '../components/ceremony/CeremonyBadges.tsx'
@@ -562,7 +563,7 @@ export default function CeremonyEditor() {
               </Button>
               {saveTemplateDone && (
                 <Caption1 style={{ color: tokens.colorPaletteGreenForeground1 }}>
-                  ✓ Template saved
+                  <Checkmark20Regular style={{ verticalAlign: 'middle', marginRight: '4px' }} />Template saved
                 </Caption1>
               )}
             </>

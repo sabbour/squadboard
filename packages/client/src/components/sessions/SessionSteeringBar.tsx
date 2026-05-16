@@ -5,6 +5,8 @@ import {
   Stop20Regular,
   ArrowSwap20Regular,
   PersonAdd20Regular,
+  Warning20Regular,
+  Dismiss20Regular,
 } from '@fluentui/react-icons'
 import { useActiveAgents, type Agent } from '../../api/agents.ts'
 import {
@@ -135,7 +137,7 @@ export default function SessionSteeringBar({
         >
           <span>
             {steerError
-              ? `⚠ ${steerError}`
+              ? <><Warning20Regular style={{ verticalAlign: 'middle', marginRight: '4px' }} />{steerError}</>
               : interruptResult?.honoured
                 ? `⏹ Interrupt honoured${interruptResult.reason ? ` — ${interruptResult.reason}` : ''}`
                 : `⏹ Interrupt requested but not honoured${interruptResult?.reason ? ` — ${interruptResult.reason}` : ''}`}
@@ -155,7 +157,7 @@ export default function SessionSteeringBar({
               opacity: 0.7,
             }}
           >
-            ✕
+            <Dismiss20Regular />
           </button>
         </div>
       )}

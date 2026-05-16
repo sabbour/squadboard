@@ -1,5 +1,6 @@
 import { type ColumnId } from '../../api/issues.ts'
 import { tokens } from '@fluentui/react-components'
+import { Dismiss20Regular } from '@fluentui/react-icons'
 
 interface BulkActionBarProps {
   selectedCount: number
@@ -95,7 +96,7 @@ export default function BulkActionBar({ selectedCount, onMove, onArchive, onClea
         }}
         title="Clear selection"
       >
-        ✕
+        <Dismiss20Regular />
       </button>
     </div>
   )

@@ -1,12 +1,13 @@
 import { useState } from 'react'
 import { tokens } from '@fluentui/react-components'
+import { Flash20Regular } from '@fluentui/react-icons'
 
 export interface RoutingBadgeProps {
   ruleSummary: string // e.g., "Matched: label:bug → hockney"
 }
 
 /**
- * ⚡ Auto badge — shown on IssueCards that were assigned via deterministic routing.
+ * Auto badge — shown on IssueCards that were assigned via deterministic routing.
  * Displays a tooltip with the matched rule summary on hover.
  */
 export function RoutingBadge({ ruleSummary }: RoutingBadgeProps) {
@@ -35,7 +36,7 @@ export function RoutingBadge({ ruleSummary }: RoutingBadgeProps) {
           whiteSpace: 'nowrap',
         }}
       >
-        ⚡ Auto
+        <Flash20Regular style={{ verticalAlign: 'middle', marginRight: '2px' }} />Auto
       </span>
 
       {hovered && (

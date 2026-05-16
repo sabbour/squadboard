@@ -30,7 +30,7 @@ import {
   Textarea,
   tokens,
 } from '@fluentui/react-components'
-import { Add20Regular, ArrowUpload20Regular, PlugConnectedRegular } from '@fluentui/react-icons'
+import { Add20Regular, ArrowUpload20Regular, PlugConnectedRegular, LockClosed20Regular } from '@fluentui/react-icons'
 import { useProject } from '../api/projects.ts'
 import {
   useCreateMcpServer,
@@ -278,7 +278,7 @@ function McpRow({ server, testing, result, onEdit, onDelete, onTest }: {
                 background: tokens.colorNeutralBackground3, color: 'var(--text-muted)',
                 border: '1px solid var(--border)', fontFamily: 'ui-monospace,monospace',
               }}>
-                {h.name}: {h.hasSecret ? '🔒 ***' : '∅'}
+                {h.name}: {h.hasSecret ? <><LockClosed20Regular style={{ verticalAlign: 'middle' }} /> ***</> : '∅'}
               </span>
             ))}
           </div>

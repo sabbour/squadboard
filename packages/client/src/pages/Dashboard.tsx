@@ -14,6 +14,7 @@ import AgentLeaderboard from '../components/dashboard/AgentLeaderboard.tsx'
 import WorkflowHealth from '../components/dashboard/WorkflowHealth.tsx'
 import PageHeader from '../components/layout/PageHeader.tsx'
 import { Caption1, Body1, tokens } from '@fluentui/react-components'
+import { Checkmark20Regular } from '@fluentui/react-icons'
 
 // ---------------------------------------------------------------------------
 // Stat card
@@ -197,7 +198,9 @@ function ThroughputChart({ days }: { days: ThroughputDay[] }) {
           <div style={{ fontWeight: 600, marginBottom: '2px', color: 'var(--text)' }}>
             {tooltip.day.date}
           </div>
-          <div style={{ color: '#3fb950' }}>✔ Done: {tooltip.day.done}</div>
+          <div style={{ color: '#3fb950' }}>
+            <Checkmark20Regular style={{ verticalAlign: 'middle', marginRight: '2px' }} /> Done: {tooltip.day.done}
+          </div>
           <div style={{ color: '#388bfd' }}>＋ Created: {tooltip.day.created}</div>
         </div>
       )}

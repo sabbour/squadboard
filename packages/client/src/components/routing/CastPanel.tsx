@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useCastIssue, type CastIssueResult } from '../../api/roles.ts'
 import { RoutingTierBadge } from './RoutingTierBadge.tsx'
-import { Sparkle20Regular, Person20Regular } from '@fluentui/react-icons'
+import { Sparkle20Regular, Person20Regular, Checkmark20Regular, Dismiss20Regular } from '@fluentui/react-icons'
 
 interface CastPanelProps {
   projectId: string
@@ -208,7 +208,7 @@ export function CastPanel({ projectId, onUseAgent }: CastPanelProps) {
             >
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
                 <span style={{ color: result.agentName ? '#3fb950' : 'var(--text-muted)', fontWeight: 600 }}>
-                  {result.agentName ? '✓ Suggested:' : '✗ No suggestion'}
+                  {result.agentName ? <><Checkmark20Regular style={{ verticalAlign: 'middle', marginRight: '4px' }} />Suggested:</> : <><Dismiss20Regular style={{ verticalAlign: 'middle', marginRight: '4px' }} />No suggestion</>}
                 </span>
                 {result.agentName && (
                   <>

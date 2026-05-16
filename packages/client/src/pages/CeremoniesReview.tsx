@@ -33,6 +33,7 @@ import {
   Edit20Regular,
   Delete20Regular,
   ArrowSync20Regular,
+  Checkmark20Regular,
 } from '@fluentui/react-icons'
 import { useProject } from '../api/projects.ts'
 import {
@@ -146,7 +147,7 @@ function EmptyState({ projectId }: { projectId: string }) {
         gap: 12,
       }}
     >
-      <span style={{ fontSize: 32 }}>✓</span>
+      <Checkmark20Regular style={{ width: 32, height: 32 }} />
       <Body1>No ceremonies awaiting review.</Body1>
       <Caption1>
         When a narrative ceremony is translated, the draft will appear here for approval.

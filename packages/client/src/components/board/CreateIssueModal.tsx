@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { tokens } from '@fluentui/react-components'
+import { Dismiss20Regular } from '@fluentui/react-icons'
 import {
   useCreateIssue,
   useFormulateIssue,
@@ -118,7 +119,7 @@ export default function CreateIssueModal({ projectId, defaultColumn, onClose }: 
             onClick={onClose}
             style={{ background: 'none', border: 'none', color: tokens.colorNeutralForeground2, fontSize: '18px', cursor: 'pointer' }}
           >
-            ✕
+            <Dismiss20Regular />
           </button>
         </div>
 

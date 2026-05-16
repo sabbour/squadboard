@@ -16,12 +16,13 @@
  *     narrative        → appearance="outline" color="success"
  *
  *   Scope (from triggerConfig.scope; only meaningful for on_issue_entry)
- *     project          → 🌐 Project
- *     board            → 📋 Board
- *     task             → 🎯 Task
+ *     project          → Project
+ *     board            → Board
+ *     task             → Task
  */
 
 import { Badge } from '@fluentui/react-components'
+import { Clipboard20Regular, Target20Regular, Globe20Regular } from '@fluentui/react-icons'
 import type { TriggerKind, CeremonyKind } from '../../api/ceremonies.ts'
 
 export function TriggerBadge({ kind }: { kind: TriggerKind | undefined | null }) {
@@ -65,10 +66,10 @@ export function ScopeBadge({
   const scope = (triggerConfig?.scope as string | undefined) ?? 'project'
   switch (scope) {
     case 'board':
-      return <Badge appearance="outline" color="informative">📋 Board</Badge>
+      return <Badge appearance="outline" color="informative"><Clipboard20Regular style={{ verticalAlign: 'middle', marginRight: '3px' }} />Board</Badge>
     case 'task':
-      return <Badge appearance="outline" color="brand">🎯 Task</Badge>
+      return <Badge appearance="outline" color="brand"><Target20Regular style={{ verticalAlign: 'middle', marginRight: '3px' }} />Task</Badge>
     default:
-      return <Badge appearance="outline" color="subtle">🌐 Project</Badge>
+      return <Badge appearance="outline" color="subtle"><Globe20Regular style={{ verticalAlign: 'middle', marginRight: '3px' }} />Project</Badge>
   }
 }

@@ -119,7 +119,7 @@ function PermissionTable({ permissions }: { permissions: PermissionRow[] }) {
             </td>
             <td style={td}>
               {row.granted ? (
-                <StatusBadge ok label="✓ granted" />
+                <StatusBadge ok label="granted" />
               ) : (
                 <span
                   style={{
@@ -202,7 +202,7 @@ function TestButton({
             maxWidth: 220,
           }}
         >
-          {result.ok ? '✓ ' : '✗ '}
+          {result.ok ? <Checkmark16Regular style={{ verticalAlign: 'middle', marginRight: '4px' }} /> : <Dismiss16Regular style={{ verticalAlign: 'middle', marginRight: '4px' }} />}
           {result.ok ? result.message : result.error}
         </Caption1>
       )}

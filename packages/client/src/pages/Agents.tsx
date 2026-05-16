@@ -18,7 +18,7 @@ import { RoutingTierBadge } from '../components/routing/RoutingTierBadge.tsx'
 import { RoutingLogTable } from '../components/routing/RoutingLogTable.tsx'
 import { RoutingStatsPanel } from '../components/routing/RoutingStatsPanel.tsx'
 import { CastPanel } from '../components/routing/CastPanel.tsx'
-import { ArrowSync20Regular, Bot20Regular, ArrowSwap20Regular, People20Regular, BookmarkAdd20Regular } from '@fluentui/react-icons'
+import { ArrowSync20Regular, Bot20Regular, ArrowSwap20Regular, People20Regular, BookmarkAdd20Regular, Beaker20Regular, Checkmark20Regular, Dismiss20Regular } from '@fluentui/react-icons'
 import {
   Caption1,
   Body1,
@@ -114,7 +114,7 @@ function TestRoutingPanel({ projectId }: { projectId: string }) {
         }}
       >
         <span style={{ fontSize: '11px', color: tokens.colorNeutralForeground3 }}>{open ? '▾' : '▸'}</span>
-        🧪 Test Routing
+        <Beaker20Regular style={{ verticalAlign: 'middle', marginRight: '6px' }} />Test Routing
       </button>
 
       {open && (
@@ -183,7 +183,7 @@ function TestRoutingPanel({ projectId }: { projectId: string }) {
               {result.matched ? (
                 <>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <span style={{ color: '#3fb950', fontWeight: tokens.fontWeightSemibold }}>✓ Routed to: </span>
+                    <span style={{ color: '#3fb950', fontWeight: tokens.fontWeightSemibold }}><Checkmark20Regular style={{ verticalAlign: 'middle', marginRight: '4px' }} />Routed to: </span>
                     <span style={{ fontWeight: tokens.fontWeightSemibold }}>{result.agentName}</span>
                     {result.tier && <RoutingTierBadge tier={result.tier} showLabel />}
                   </div>
@@ -609,7 +609,7 @@ export default function Agents() {
         }}
           onClick={() => setImportFeedback(null)}
         >
-          {importFeedback} ✕
+          {importFeedback} <Dismiss20Regular style={{ verticalAlign: 'middle', marginLeft: '4px' }} />
         </div>
       )}
 
@@ -630,7 +630,7 @@ export default function Agents() {
         }}
           onClick={() => setSavedTemplatePath(null)}
         >
-          Saved to: {savedTemplatePath} ✕
+          Saved to: {savedTemplatePath} <Dismiss20Regular style={{ verticalAlign: 'middle', marginLeft: '4px' }} />
         </div>
       )}
 

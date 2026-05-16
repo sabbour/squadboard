@@ -1,3 +1,5 @@
+import { FolderOpen20Regular } from '@fluentui/react-icons'
+
 export default function EmptyBoard() {
   return (
     <div
@@ -15,13 +17,12 @@ export default function EmptyBoard() {
     >
       <div
         style={{
-          fontSize: '48px',
           lineHeight: 1,
           marginBottom: '8px',
           opacity: 0.5,
         }}
       >
-        🗂️
+        <FolderOpen20Regular style={{ width: 48, height: 48 }} />
       </div>
 
       <h2

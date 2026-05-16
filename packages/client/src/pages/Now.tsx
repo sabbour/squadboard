@@ -40,7 +40,7 @@ import {
   type SelectTabData,
   type SelectTabEvent,
 } from '@fluentui/react-components'
-import { Eye24Regular, Open16Regular } from '@fluentui/react-icons'
+import { Eye24Regular, Open16Regular, Bot20Regular, Clipboard20Regular, Settings20Regular } from '@fluentui/react-icons'
 import PageHeader from '../components/layout/PageHeader.tsx'
 import { PageLoading } from '../components/loading/index.tsx'
 import { useNowFeed, type NowLiveSession, type NowIssueRun, type NowWorkflowRun } from '../api/activity.ts'
@@ -385,7 +385,7 @@ function GlobalStatTiles({
   const hasReview = [...issueRuns, ...workflowRuns].some((i) =>
     (i as { status: string }).status === 'awaiting_review' || (i as { status: string }).status === 'awaiting_human_approve',
   )
-  const healthLabel = hasFailed ? '🔴 Degraded' : hasReview ? '🟡 Review needed' : '🟢 Healthy'
+  const healthLabel = hasFailed ? 'Degraded' : hasReview ? 'Review needed' : 'Healthy'
   const healthColor = hasFailed
     ? tokens.colorPaletteRedForeground1
     : hasReview
@@ -472,10 +472,12 @@ function buildActivityFeed(
     .slice(0, 15)
 }
 
-const KIND_ICON: Record<ActivityItem['kind'], string> = {
-  session: '🤖',
-  run: '📋',
-  workflow: '⚙️',
+function getKindIcon(kind: ActivityItem['kind']): React.ReactNode {
+  switch (kind) {
+    case 'session': return <Bot20Regular />
+    case 'run': return <Clipboard20Regular />
+    case 'workflow': return <Settings20Regular />
+  }
 }
 
 function RecentActivityFeed({
@@ -514,7 +516,7 @@ function RecentActivityFeed({
             onClick={() => void navigate(item.href)}
             onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); void navigate(item.href) } }}
           >
-            <span style={{ fontSize: '14px' }}>{KIND_ICON[item.kind]}</span>
+            <span style={{ fontSize: '14px', display: 'inline-flex', alignItems: 'center' }}>{getKindIcon(item.kind)}</span>
             <span
               style={{
                 flex: 1,

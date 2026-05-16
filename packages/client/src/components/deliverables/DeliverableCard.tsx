@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { tokens } from '@fluentui/react-components'
+import { Eye20Regular } from '@fluentui/react-icons'
 import { safeRelativeTime } from '../../utils/dates.ts'
 import {
   type Deliverable,
@@ -248,7 +249,7 @@ export default function DeliverableCard({ projectId, deliverable }: DeliverableC
                   opacity: requestPeerReview.isPending ? 0.6 : 1,
                 }}
               >
-                {showPicker ? 'Cancel' : '👀 Ask peer to review'}
+                {showPicker ? 'Cancel' : <><Eye20Regular style={{ verticalAlign: 'middle', marginRight: '6px' }} />Ask peer to review</>}
               </button>
               {pickerNote && (
                 <span style={{ fontSize: '11px', color: tokens.colorPaletteGreenForeground1 }}>

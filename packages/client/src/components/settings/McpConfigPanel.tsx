@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { Checkmark20Regular, Dismiss20Regular } from '@fluentui/react-icons'
 import { useProject } from '../../api/projects.ts'
 
 // Phase 18: tool descriptions are looked up here for display, but the
@@ -51,7 +52,7 @@ function CopyButton({ text }: { text: string }) {
         whiteSpace: 'nowrap',
       }}
     >
-      {copied ? '✓ Copied' : 'Copy'}
+      {copied ? <><Checkmark20Regular style={{ verticalAlign: 'middle', marginRight: '4px' }} />Copied</> : 'Copy'}
     </button>
   )
 }
@@ -273,7 +274,7 @@ export function McpConfigPanel({ projectId }: McpConfigPanelProps) {
               fontSize: '12px',
             }}
           >
-            ✓ Connected — {testState.toolCount} tools advertised, SDK v{testState.sdkVersion}, {testState.latencyMs} ms.
+            <Checkmark20Regular style={{ verticalAlign: 'middle', marginRight: '4px' }} />Connected — {testState.toolCount} tools advertised, SDK v{testState.sdkVersion}, {testState.latencyMs} ms.
           </div>
         )}
         {testState.kind === 'error' && (
@@ -288,7 +289,7 @@ export function McpConfigPanel({ projectId }: McpConfigPanelProps) {
               fontSize: '12px',
             }}
           >
-            <div>✗ {testState.message}</div>
+            <div><Dismiss20Regular style={{ verticalAlign: 'middle', marginRight: '4px' }} />{testState.message}</div>
             {testState.hint && (
               <div style={{ marginTop: '4px', color: 'var(--text-muted)', fontSize: '11px' }}>{testState.hint}</div>
             )}
@@ -306,7 +307,7 @@ export function McpConfigPanel({ projectId }: McpConfigPanelProps) {
               fontSize: '12px',
             }}
           >
-            ✗ Could not reach <code>/mcp/health</code>: {healthError}
+            <Dismiss20Regular style={{ verticalAlign: 'middle', marginRight: '4px' }} />Could not reach <code>/mcp/health</code>: {healthError}
           </div>
         )}
       </div>

@@ -42,7 +42,7 @@ import {
   type StepKind,
 } from '../../services/ceremony-graph.ts'
 import CeremonyStepNode, {
-  KIND_ICON,
+  getKindIcon,
   KIND_LABEL,
   KIND_ACCENT,
   type CeremonyStepNodeData,
@@ -266,7 +266,7 @@ function CanvasInner({ projectId, header, steps, onChange, disabled }: VisualCan
             appearance="subtle"
             disabled={disabled}
             onClick={() => appendStep(k)}
-            icon={<span style={{ fontSize: 14 }}>{KIND_ICON[k]}</span>}
+            icon={<span style={{ fontSize: 14, display: 'inline-flex', alignItems: 'center' }}>{getKindIcon(k)}</span>}
             style={{
               justifyContent: 'flex-start',
               border: `1px dashed ${KIND_ACCENT[k]}55`,
@@ -359,8 +359,8 @@ function CanvasInner({ projectId, header, steps, onChange, disabled }: VisualCan
         {selectedGraphNode ? (
           <>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <Subtitle1 style={{ fontSize: 13 }}>
-                {KIND_ICON[selectedGraphNode.step.kind]} {KIND_LABEL[selectedGraphNode.step.kind]}
+              <Subtitle1 style={{ fontSize: 13, display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                {getKindIcon(selectedGraphNode.step.kind)} {KIND_LABEL[selectedGraphNode.step.kind]}
               </Subtitle1>
               <Button
                 appearance="subtle"

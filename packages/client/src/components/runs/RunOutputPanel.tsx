@@ -6,7 +6,7 @@ import CostDisplay from './CostDisplay.tsx'
 import { RoutingTierBadge } from '../routing/RoutingTierBadge.tsx'
 import GitActions from './GitActions.tsx'
 import { wsClient } from '../../realtime/ws-client.ts'
-import { Search20Regular, Play20Regular } from '@fluentui/react-icons'
+import { Search20Regular, Play20Regular, Checkmark20Regular, Dismiss20Regular } from '@fluentui/react-icons'
 
 const BASE = import.meta.env.VITE_API_URL ?? 'http://localhost:3000'
 
@@ -149,7 +149,7 @@ export default function RunOutputPanel({ projectId, run, agent }: RunOutputPanel
         ))}
         {run.errorMessage && (
           <div style={{ color: '#f85149', marginTop: '8px', whiteSpace: 'pre-wrap' }}>
-            ✗ {run.errorMessage}
+            <Dismiss20Regular style={{ verticalAlign: 'middle', marginRight: '4px' }} />{run.errorMessage}
           </div>
         )}
         <div ref={bottomRef} />
@@ -170,7 +170,11 @@ export default function RunOutputPanel({ projectId, run, agent }: RunOutputPanel
           }}
         >
           <span style={{ fontSize: '12px', color: run.status === 'completed' ? '#3fb950' : '#f85149' }}>
-            {run.status === 'completed' ? '✓ Completed' : run.status === 'cancelled' ? '⊘ Cancelled' : '✗ Failed'}
+            {run.status === 'completed'
+              ? <><Checkmark20Regular style={{ verticalAlign: 'middle', marginRight: '4px' }} />Completed</>
+              : run.status === 'cancelled'
+              ? 'Cancelled'
+              : <><Dismiss20Regular style={{ verticalAlign: 'middle', marginRight: '4px' }} />Failed</>}
           </span>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             <GitActions projectId={projectId} run={run} />

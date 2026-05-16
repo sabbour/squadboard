@@ -21,7 +21,7 @@ import {
   Badge,
   Textarea,
 } from '@fluentui/react-components'
-import { MoreHorizontal20Regular, Lightbulb20Regular } from '@fluentui/react-icons'
+import { MoreHorizontal20Regular, Lightbulb20Regular, Dismiss20Regular, Settings20Regular } from '@fluentui/react-icons'
 import { type Issue, useUpdateDeliverable } from '../../api/issues.ts'
 import { useLabels } from '../../api/labels.ts'
 import { useIssueRuns } from '../../api/runs.ts'
@@ -192,7 +192,7 @@ export default function CardDetail({ projectId, issue, onClose, initialTab }: Ca
                 onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.color = tokens.colorNeutralForeground1 }}
                 onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.color = tokens.colorNeutralForeground2 }}
               >
-                ✕
+                <Dismiss20Regular />
               </button>
             </div>
           </div>
@@ -385,7 +385,7 @@ export default function CardDetail({ projectId, issue, onClose, initialTab }: Ca
                   >
                     <div>
                       <Body1Strong style={{ display: 'block', color: tokens.colorNeutralForeground1, margin: 0 }}>
-                        ⚙ {issue.attachedWorkflowName ?? 'Workflow'}
+                        <Settings20Regular style={{ verticalAlign: 'middle', marginRight: '4px' }} />{issue.attachedWorkflowName ?? 'Workflow'}
                       </Body1Strong>
                       {workflowRun && (
                         <Caption1 style={{ display: 'block', color: tokens.colorNeutralForeground2, margin: '2px 0 0' }}>
@@ -508,8 +508,8 @@ export default function CardDetail({ projectId, issue, onClose, initialTab }: Ca
                               <Option value="not-started">Not started</Option>
                               <Option value="in-progress">In progress</Option>
                               <Option value="ready-for-review">Ready for review</Option>
-                              <Option value="accepted">Accepted ✓</Option>
-                              <Option value="rejected">Rejected ✗</Option>
+                              <Option value="accepted">Accepted</Option>
+                              <Option value="rejected">Rejected</Option>
                             </Dropdown>
                           </Field>
                           <Field label="Link" hint="URL of the artifact when ready (PR, doc, deployment, …)">

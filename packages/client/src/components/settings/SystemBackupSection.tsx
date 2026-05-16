@@ -243,7 +243,7 @@ function RestoreDialog({
             {/* Warning block */}
             <MessageBar intent="warning">
               <MessageBarBody>
-                <MessageBarTitle>⚠️ Restoring will:</MessageBarTitle>
+                <MessageBarTitle><Warning20Regular style={{ verticalAlign: 'middle', marginRight: '4px' }} /> Restoring will:</MessageBarTitle>
                 <ul style={{ margin: '6px 0 0', paddingLeft: '18px', lineHeight: 1.6 }}>
                   <li>Stop the Squadboard daemon</li>
                   <li>Move your current data to <code style={{ fontFamily: tokens.fontFamilyMonospace }}>~/.squadboard/data/pglite.pre-restore-&#123;timestamp&#125;/</code></li>

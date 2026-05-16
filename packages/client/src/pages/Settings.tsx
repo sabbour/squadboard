@@ -50,6 +50,7 @@ import {
   DatabaseArrowRight20Regular,
   Branch20Regular,
   Eye20Regular,
+  Checkmark20Regular,
 } from '@fluentui/react-icons'
 import { PageLoading, SectionLoading } from '../components/loading/index.tsx'
 
@@ -236,7 +237,7 @@ function BudgetSection({ projectId }: { projectId: string }) {
               transition: 'all 0.15s',
             }}
           >
-            {saved ? '✓ Saved' : saving ? 'Saving…' : 'Save'}
+            {saved ? <><Checkmark20Regular style={{ verticalAlign: 'middle', marginRight: '4px' }} />Saved</> : saving ? 'Saving…' : 'Save'}
           </button>
         </div>
         {error && (
@@ -330,7 +331,9 @@ function DefaultModelSection({
         </Field>
       )}
       {saved && (
-        <p style={{ fontSize: '11px', color: '#3fb950', margin: 0 }}>✓ Saved</p>
+        <p style={{ fontSize: '11px', color: '#3fb950', margin: 0 }}>
+          <Checkmark20Regular style={{ verticalAlign: 'middle', marginRight: '4px' }} />Saved
+        </p>
       )}
       {error && (
         <p style={{ fontSize: '11px', color: '#f85149', margin: 0 }}>{error}</p>

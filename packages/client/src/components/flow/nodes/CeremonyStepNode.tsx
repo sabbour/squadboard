@@ -17,14 +17,23 @@ import type React from 'react'
 import { useNavigate } from 'react-router'
 import { Handle, Position, type NodeProps } from '@xyflow/react'
 import { tokens } from '@fluentui/react-components'
+import {
+  CompassNorthwest20Regular,
+  Settings20Regular,
+  CheckmarkCircle20Regular,
+  Branch20Regular,
+  Handshake20Regular,
+} from '@fluentui/react-icons'
 import type { CeremonyStep, StepKind } from '../../../services/ceremony-graph.ts'
 
-export const KIND_ICON: Record<StepKind, string> = {
-  route: '🧭',
-  agent_run: '⚙️',
-  approve: '✅',
-  fan_out: '🌿',
-  handoff: '🤝',
+export function getKindIcon(kind: StepKind): React.ReactNode {
+  switch (kind) {
+    case 'route':     return <CompassNorthwest20Regular />
+    case 'agent_run': return <Settings20Regular />
+    case 'approve':   return <CheckmarkCircle20Regular />
+    case 'fan_out':   return <Branch20Regular />
+    case 'handoff':   return <Handshake20Regular />
+  }
 }
 
 export const KIND_LABEL: Record<StepKind, string> = {
@@ -80,7 +89,7 @@ export default function CeremonyStepNode(props: NodeProps) {
   const data = props.data as CeremonyStepNodeData
   const step = data.step
   const accent = KIND_ACCENT[step.kind]
-  const icon = KIND_ICON[step.kind]
+  const icon = getKindIcon(step.kind)
   const kindLabel = KIND_LABEL[step.kind]
   const sel = props.selected ?? data.selected ?? false
   const child = data.isChild ?? false

@@ -1,12 +1,13 @@
 import { useState } from 'react'
 import { tokens } from '@fluentui/react-components'
+import { Settings20Regular } from '@fluentui/react-icons'
 
 interface WorkflowBadgeProps {
   workflowName: string
 }
 
 /**
- * ⚙ Workflow badge — shown on IssueCards that have a workflow attached.
+ * Workflow badge — shown on IssueCards that have a workflow attached.
  * Displays a tooltip with the workflow name on hover.
  */
 export function WorkflowBadge({ workflowName }: WorkflowBadgeProps) {
@@ -35,7 +36,7 @@ export function WorkflowBadge({ workflowName }: WorkflowBadgeProps) {
           whiteSpace: 'nowrap',
         }}
       >
-        ⚙ {workflowName}
+        <Settings20Regular style={{ verticalAlign: 'middle', marginRight: '3px' }} />{workflowName}
       </span>
 
       {hovered && (

@@ -20,6 +20,7 @@ import {
   Add20Regular,
   Send20Regular,
   Stop20Regular,
+  Warning20Regular,
 } from '@fluentui/react-icons'
 import {
   useLiveSessions,
@@ -429,7 +430,7 @@ function SessionView({
               padding: '8px 20px 0',
             }}
           >
-            ⚠ {session.errorMessage}
+            <Warning20Regular style={{ verticalAlign: 'middle', marginRight: '4px' }} />{session.errorMessage}
           </Body1>
         )}
         <SessionSteeringBar

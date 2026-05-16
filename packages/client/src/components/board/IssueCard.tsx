@@ -1,6 +1,14 @@
 import { Draggable } from '@hello-pangea/dnd'
-import { useState } from 'react'
+import { useState, type ReactNode } from 'react'
 import { Body1, tokens } from '@fluentui/react-components'
+import {
+  CheckmarkCircle20Regular,
+  Warning20Regular,
+  Branch20Regular,
+  Merge20Regular,
+  Box20Regular,
+  Comment20Regular,
+} from '@fluentui/react-icons'
 import { type Issue } from '../../api/issues.ts'
 import { useIssueRuns } from '../../api/runs.ts'
 import LabelBadge from '../LabelBadge.tsx'
@@ -36,12 +44,12 @@ function prStateColor(state: PrState): string {
   }
 }
 
-function ciStateIcon(state: CiState): string {
+function ciStateIcon(state: CiState): ReactNode {
   switch (state) {
-    case 'passing': return '✅'
-    case 'failing': return '⚠️'
-    case 'running': return '⏳'
-    default:        return '⚪'
+    case 'passing': return <CheckmarkCircle20Regular style={{ verticalAlign: 'middle' }} />
+    case 'failing': return <Warning20Regular style={{ verticalAlign: 'middle' }} />
+    case 'running': return null
+    default:        return null
   }
 }
 
@@ -69,7 +77,7 @@ function GitHubBadges({ github }: GitHubBadgesProps) {
           onClick={(e) => e.stopPropagation()}
           style={badgeLinkStyle}
         >
-          🌿 {truncateBranch(branch)}
+          <Branch20Regular style={{ verticalAlign: 'middle', marginRight: '3px' }} />{truncateBranch(branch)}
         </a>
       )}
       {pr && (
@@ -80,7 +88,7 @@ function GitHubBadges({ github }: GitHubBadgesProps) {
           onClick={(e) => e.stopPropagation()}
           style={{ ...badgeLinkStyle, color: prStateColor(pr.state) }}
         >
-          🔀 PR #{pr.number} · {pr.state}
+          <Merge20Regular style={{ verticalAlign: 'middle', marginRight: '3px' }} />PR #{pr.number} · {pr.state}
         </a>
       )}
       {ci && (
@@ -211,7 +219,7 @@ export default function IssueCard({ issue, index, projectId, isSelected, onSelec
                   padding: '1px 7px',
                   whiteSpace: 'nowrap' as const,
                 }}>
-                  📦 {issue.deliverableType} · {issue.deliverableStatus ?? 'not-started'}
+                  <Box20Regular style={{ verticalAlign: 'middle', marginRight: '3px' }} />{issue.deliverableType} · {issue.deliverableStatus ?? 'not-started'}
                 </span>
               </div>
             )}
@@ -250,7 +258,7 @@ export default function IssueCard({ issue, index, projectId, isSelected, onSelec
                       color: tokens.colorNeutralForeground2,
                     }}
                   >
-                    💬 {issue.commentCount}
+                    <Comment20Regular style={{ verticalAlign: 'middle', marginRight: '3px' }} />{issue.commentCount}
                   </span>
                 )}
                 <RunButton

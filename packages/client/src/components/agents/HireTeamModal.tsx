@@ -48,22 +48,22 @@ type Step = 'configure' | 'review' | 'done'
  * `.github/agents/squad.agent.md` (Standard role emoji mapping table).
  */
 const ROLE_OPTIONS: { id: CastingAgentRole; label: string; group: 'tech' | 'non-tech' }[] = [
-  { id: 'lead', label: '🏗️ Lead', group: 'tech' },
-  { id: 'developer', label: '🔧 Developer', group: 'tech' },
-  { id: 'tester', label: '🧪 Tester', group: 'tech' },
-  { id: 'reviewer', label: '👁️ Reviewer', group: 'tech' },
-  { id: 'devops', label: '⚙️ DevOps', group: 'tech' },
-  { id: 'security', label: '🔒 Security', group: 'tech' },
-  { id: 'designer', label: '⚛️ Designer (Frontend)', group: 'tech' },
-  { id: 'prompt-engineer', label: '🎭 Prompt Engineer', group: 'tech' },
-  { id: 'scribe', label: '📋 Scribe', group: 'tech' },
-  { id: 'pm', label: '🎯 PM', group: 'non-tech' },
-  { id: 'designer-nontech', label: '🎨 Designer (Brand/UX)', group: 'non-tech' },
-  { id: 'founder', label: '👔 Founder', group: 'non-tech' },
-  { id: 'sales', label: '💼 Sales', group: 'non-tech' },
-  { id: 'marketing', label: '📣 Marketing', group: 'non-tech' },
-  { id: 'customer-success', label: '🎧 Customer Success', group: 'non-tech' },
-  { id: 'research', label: '🔬 Research', group: 'non-tech' },
+  { id: 'lead', label: 'Lead', group: 'tech' },
+  { id: 'developer', label: 'Developer', group: 'tech' },
+  { id: 'tester', label: 'Tester', group: 'tech' },
+  { id: 'reviewer', label: 'Reviewer', group: 'tech' },
+  { id: 'devops', label: 'DevOps', group: 'tech' },
+  { id: 'security', label: 'Security', group: 'tech' },
+  { id: 'designer', label: 'Designer (Frontend)', group: 'tech' },
+  { id: 'prompt-engineer', label: 'Prompt Engineer', group: 'tech' },
+  { id: 'scribe', label: 'Scribe', group: 'tech' },
+  { id: 'pm', label: 'PM', group: 'non-tech' },
+  { id: 'designer-nontech', label: 'Designer (Brand/UX)', group: 'non-tech' },
+  { id: 'founder', label: 'Founder', group: 'non-tech' },
+  { id: 'sales', label: 'Sales', group: 'non-tech' },
+  { id: 'marketing', label: 'Marketing', group: 'non-tech' },
+  { id: 'customer-success', label: 'Customer Success', group: 'non-tech' },
+  { id: 'research', label: 'Research', group: 'non-tech' },
 ]
 
 if (import.meta.env.DEV) {

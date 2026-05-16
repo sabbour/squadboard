@@ -267,7 +267,7 @@ function IssueCard({
   const badge = issue.activeRunSummary
     ? { label: issue.activeRunSummary.status, color: RUN_STATUS_COLOR[issue.activeRunSummary.status] ?? '#7d8590' }
     : issue.lastDeliverable
-      ? { label: '📎', color: '#7d8590' }
+      ? { label: 'doc', color: '#7d8590' }
       : { label: 'idle', color: '#7d8590' }
 
   return (

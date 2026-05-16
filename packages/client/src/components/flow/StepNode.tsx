@@ -11,8 +11,17 @@
  * onNodeClick callback which reads projectId/issueId from node data.
  * The node div carries cursor:pointer + hover elevation to signal interactivity.
  */
+import type React from 'react'
 import { Handle, Position } from '@xyflow/react'
 import { tokens } from '@fluentui/react-components'
+import {
+  CompassNorthwest20Regular,
+  Settings20Regular,
+  CheckmarkCircle20Regular,
+  Branch20Regular,
+  Handshake20Regular,
+  Attach20Regular,
+} from '@fluentui/react-icons'
 import { type FlowStepRun } from '../../api/flow.ts'
 
 export interface StepNodeData extends Record<string, unknown> {
@@ -23,12 +32,15 @@ export interface StepNodeData extends Record<string, unknown> {
   issueId?: string
 }
 
-const KIND_ICON: Record<string, string> = {
-  route: '🧭',
-  agent_run: '⚙️',
-  approve: '✅',
-  fan_out: '🌿',
-  handoff: '🤝',
+function getKindIcon(kind: string): React.ReactNode {
+  switch (kind) {
+    case 'route':     return <CompassNorthwest20Regular />
+    case 'agent_run': return <Settings20Regular />
+    case 'approve':   return <CheckmarkCircle20Regular />
+    case 'fan_out':   return <Branch20Regular />
+    case 'handoff':   return <Handshake20Regular />
+    default:          return null
+  }
 }
 
 const KIND_LABEL: Record<string, string> = {
@@ -84,7 +96,7 @@ export function statusColors(status: string, kind: string): {
 export default function StepNode({ data }: { data: StepNodeData }) {
   const step = data.step
   const colors = statusColors(step.status, step.kind)
-  const icon = KIND_ICON[step.kind] ?? '•'
+  const icon = getKindIcon(step.kind)
   const kindLabel = KIND_LABEL[step.kind] ?? step.kind
   const isClickable = Boolean(data.projectId)
 
@@ -171,7 +183,7 @@ export default function StepNode({ data }: { data: StepNodeData }) {
         )}
         {step.deliverables.length > 0 && (
           <div style={{ fontSize: 10, color: tokens.colorNeutralForeground3 }}>
-            📎 {step.deliverables.length} deliverable{step.deliverables.length === 1 ? '' : 's'}
+            <Attach20Regular style={{ verticalAlign: 'middle', marginRight: '3px' }} />{step.deliverables.length} deliverable{step.deliverables.length === 1 ? '' : 's'}
           </div>
         )}
       </div>

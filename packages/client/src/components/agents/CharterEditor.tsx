@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { Checkmark20Regular } from '@fluentui/react-icons'
 import { useAgentCharter, useUpdateCharter } from '../../api/agents.ts'
 
 interface CharterEditorProps {
@@ -64,7 +65,9 @@ export default function CharterEditor({ projectId, agentId }: CharterEditorProps
       />
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '8px' }}>
         {updateCharter.isSuccess && !dirty && (
-          <span style={{ fontSize: '12px', color: '#3fb950' }}>✓ Saved</span>
+          <span style={{ fontSize: '12px', color: '#3fb950' }}>
+            <Checkmark20Regular style={{ verticalAlign: 'middle', marginRight: '4px' }} />Saved
+          </span>
         )}
         {updateCharter.isError && (
           <span style={{ fontSize: '12px', color: 'var(--danger)' }}>Save failed</span>
