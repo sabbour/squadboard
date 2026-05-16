@@ -268,6 +268,8 @@ const CONSULT_EVENT_TYPES = [
   'consult.usage',
   'consult.error',
   'consult.completed',
+  /** W28 J5: coordinator context snapshot for the UI panel. */
+  'consult.context',
 ] as const
 
 export interface ConsultStreamEntry {

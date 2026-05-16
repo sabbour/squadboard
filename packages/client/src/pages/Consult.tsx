@@ -60,6 +60,7 @@ import { useActiveAgents, useModels } from '../api/agents.ts'
 import { useProjects } from '../api/projects.ts'
 import PageHeader from '../components/layout/PageHeader.tsx'
 import { ChatBubble } from '../components/ChatBubble.tsx'
+import { ContextPanel } from '../components/consult/ContextPanel.tsx'
 
 const useStyles = makeStyles({
   root: {
@@ -917,6 +918,9 @@ function SessionView({ sessionId, projectId }: { sessionId: string; projectId: s
           </Caption1>
         </div>
       </div>
+
+      {/* W28 J5: collapsible "What context this agent has" panel */}
+      <ContextPanel sessionId={sessionId} />
 
       <div className={styles.composer}>
         {sendError && (

@@ -32,6 +32,8 @@ import { eventBus } from '../realtime/event-bus.js';
 import { resolveModel } from './model-defaults.js';
 import { estimateCost, estimatePremiumRequests } from './pricing.js';
 import * as consultService from '../services/consult.js';
+import { buildCoordinatorContext } from '../services/coordinator-context.js';
+import { tryDirectResponse } from './direct-response.js';
 import type {
   ConsultMode,
   ConsultProposalKind,
@@ -246,6 +248,58 @@ export async function sendConsultMessage(sessionId: string, userMessage: string)
     await consultService.renameConsultSession(sessionId, derived);
   }
 
+  // ── W28 J5: DirectResponseHandler short-circuit (BEFORE LLM) ─────────────
+  // Build coordinator context per-turn (refresh each turn per spec).
+  let workspacePath = process.cwd();
+  if (session.projectId) {
+    try {
+      const db = getDb();
+      const [proj] = await db
+        .select({ path: schema.projects.path })
+        .from(schema.projects)
+        .where(eq(schema.projects.id, session.projectId))
+        .limit(1);
+      if (proj?.path) workspacePath = proj.path;
+    } catch { /* use cwd */ }
+  }
+
+  const coordinatorCtx = await buildCoordinatorContext(sessionId, session.projectId, workspacePath);
+
+  // Emit context summary so the UI panel can render it.
+  eventBus.emitConsultEvent('consult.context', sessionId, {
+    sessionId,
+    sections: coordinatorCtx.sections.map((s) => ({
+      name: s.name,
+      tokens: s.tokens,
+      truncated: s.truncated,
+    })),
+    totalTokens: coordinatorCtx.totalTokens,
+    variableTokens: coordinatorCtx.variableTokens,
+    truncationLog: coordinatorCtx.truncationLog,
+    redactionCount: coordinatorCtx.redactionCount,
+  });
+
+  // Try DirectResponseHandler — short-circuit status/help/config/roster/greeting.
+  const directResult = await tryDirectResponse(userMessage, coordinatorCtx.sdkContext);
+  if (directResult) {
+    const msg = await consultService.addConsultMessage({
+      sessionId,
+      role: 'assistant',
+      content: directResult.response,
+    });
+    eventBus.emitConsultEvent('consult.message_complete', sessionId, {
+      sessionId,
+      messageId: msg.id,
+      content: directResult.response,
+      role: 'assistant',
+      // Caption surfaced in the UI to distinguish coordinator quick replies.
+      coordinatorQuickReply: true,
+      category: directResult.category,
+      confidence: directResult.confidence,
+    });
+    return;
+  }
+
   await runConsultTurn(sessionId, userMessage);
 }
 
@@ -362,6 +416,30 @@ async function openSdkConsult(session: ConsultSession): Promise<RunningConsult> 
       : null;
     systemPrompt = (charter ?? `You are ${session.agentName ?? 'an agent'} helping the user.`)
       + AGENT_CONSULT_PROMPT_SUFFIX;
+  }
+
+  // ── W28 J5: Prepend coordinator context to system prompt ─────────────────
+  // Model mode gets full coordinator context (skip charter per spec).
+  // Agent mode prepends the coordinator supplementary block below the charter.
+  try {
+    const coordinatorCtx = await buildCoordinatorContext(
+      session.id,
+      session.projectId,
+      workspacePath,
+    );
+    if (session.mode === 'model') {
+      // Full coordinator context (squad.agent.md identity + supplementary),
+      // replacing the generic thinking-partner prompt.
+      systemPrompt = coordinatorCtx.systemPrompt + '\n\n' + MODEL_THINKING_PARTNER_PROMPT;
+    } else {
+      // Agent mode: prepend meta preamble + supplementary block to existing charter/prompt.
+      const metaSection = coordinatorCtx.sections.find((s) => s.name === 'Squadboard Meta Preamble');
+      const metaPreamble = metaSection?.content ?? '';
+      systemPrompt = metaPreamble + '\n\n---\n\n' + systemPrompt + coordinatorCtx.supplementaryBlock;
+    }
+  } catch (err) {
+    console.warn('[consult-stream] coordinator context build failed:', err instanceof Error ? err.message : String(err));
+    // Continue with existing systemPrompt on error.
   }
 
   const token = process.env.GITHUB_TOKEN ?? process.env.SQUADBOARD_GITHUB_TOKEN;

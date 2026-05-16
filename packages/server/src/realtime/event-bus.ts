@@ -96,7 +96,9 @@ export type ConsultEventType =
   | 'consult.proposal_decided'
   | 'consult.usage'
   | 'consult.error'
-  | 'consult.completed';
+  | 'consult.completed'
+  /** W28 J5: coordinator context snapshot, emitted per turn for the UI panel. */
+  | 'consult.context';
 
 /**
  * Phase 12 reframe: Flow-page real-time events.

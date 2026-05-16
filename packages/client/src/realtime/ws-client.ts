@@ -51,13 +51,15 @@ export interface WsEventMap {
   'consult.user_message':      { sessionId: string; messageId: string; content: string }
   'consult.message_delta':     { sessionId: string; delta: string }
   'consult.reasoning_delta':   { sessionId: string; delta: string }
-  'consult.message_complete':  { sessionId: string; messageId: string; sdkMessageId?: string; content: string; reasoningContent?: string | null; role: 'assistant' | 'system' | 'tool' }
+  'consult.message_complete':  { sessionId: string; messageId: string; sdkMessageId?: string; content: string; reasoningContent?: string | null; role: 'assistant' | 'system' | 'tool'; coordinatorQuickReply?: boolean; category?: string; confidence?: string }
   'consult.tool_call':         { sessionId: string; toolName: string; args?: unknown; result?: unknown }
   'consult.proposal_created':  { sessionId: string; proposal: Record<string, unknown> }
   'consult.proposal_decided':  { sessionId: string; proposalId: string; status: 'accepted' | 'edited' | 'discarded' | 'pending'; artifact?: unknown }
   'consult.usage':             { sessionId: string; inputTokens: number; outputTokens: number; model?: string | null; cost: number }
   'consult.error':             { sessionId: string; message: string }
   'consult.completed':         { sessionId: string; reason: 'completed' | 'cancelled' | 'failed' }
+  /** W28 J5: coordinator context snapshot, emitted per turn for the UI panel. */
+  'consult.context':           { sessionId: string; sections: Array<{ name: string; tokens: number; truncated: boolean }>; totalTokens: number; variableTokens: number; truncationLog: string[]; redactionCount: number }
   // Stream G: GitHub integration — git push + PR lifecycle
   'git.push.complete': { runId: string; branch: string; branchUrl: string; pushOutput: string }
   'git.pr.created':    { runId: string; branch: string; prUrl: string; prNumber?: number }
