@@ -4128,3 +4128,89 @@ After Verbal's WIP (uncommitted; includes `pickup-todos.ts` new sweep + 3 new la
 - **Source:** Kobayashi (kobayashi-w28-ceremonies-md-research)
 - **Commit(s):** 58852130 (research, not code)
 
+
+---
+
+## Wave 30
+
+### W30: Dead-Code Cleanup — 5 Components Removed
+- **Decision/Finding:** Verified-orphan removal per W29 dead-code audit. Removed `packages/server/src/routes/dashboard.ts` (no consumers), `packages/client/src/components/EmptyBoard.tsx` (no consumers, replaced long ago), `packages/client/src/components/board/CommentComposer.tsx` (unused), legacy `packages/client/src/components/workflows/*` (replaced by ceremonies), and `scripts/pglite-spike.ts` (one-off spike, decision already shipped). Each verified via grep before deletion; all 1217 tests still green.
+- **Source:** Keaton (keaton-w30-deadcode)
+- **Commit(s):** df3d551b3, 4f042c3c6, 270b09c6a, 8baa874cf, 13ae9cb6b
+
+### W30: Reliability M3 — unhandledRejection + uncaughtException Handlers
+- **Decision/Finding:** Node 18+ kills the server process on unhandled promise rejections / uncaught exceptions with no graceful teardown and no PGlite CHECKPOINT — data loss risk on every stray async throw (heartbeat loop, event bus). Added pure-function helpers (`formatUnhandledRejection`, `formatUncaughtException`, `gracefulTeardown` with 5s timeout race) plus index.ts wiring before `server.listen()`. 17 tests for the pure helpers.
+- **Source:** Verbal (verbal-w30-unhandled-rejection)
+- **Commit(s):** 2f53f171f
+
+### W30: Reliability M2 — AbortController Timeout on dispatchBatchViaCoordinator
+- **Decision/Finding:** Batch dispatch had no timeout (vs. one-shot dispatch which already had 30s). A hung LLM call blocked the sweep tick indefinitely. Added 30s default AbortController timeout matching `callCoordinatorLlm` pattern; `opts.timeoutMs` override for testing; new `CoordinatorTimeoutError` class exported from `coordinator/index.ts` barrel.
+- **Source:** Hockney (hockney-w30-batch-timeout)
+- **Commit(s):** 844829354
+
+### W30: BUG-1 — resolveCoordinatorModelChain Wired into Dispatch Retry
+- **Decision/Finding:** Coordinator retry path was passing the failed model back into the next attempt instead of using the fallback chain. Wired `resolveCoordinatorModelChain` into the retry loop so a 503/timeout on Opus falls through to Sonnet → Haiku per env config.
+- **Source:** Coordinator (BUG-1 hotfix)
+- **Commit(s):** c4cb690ce
+
+### W30: Scribe Close-Out Flow via Squad-SDK + Squadboard — Research
+- **Decision/Finding:** Verbal mapped Scribe's close-out path across CLI, SDK, daemon, and UI surfaces. CLI works today (W29 proof). SDK `closeOut()` is production-ready. Daemon path: ceremony wired but invoker stub is no-op (Stream Q7). UI path: "End Wave" button not shipped (Stream Q9). Recommendation: ship q7 + q9 in W31 to achieve full reproducibility; CLI stays authoritative; SDK and UI become co-equal.
+- **Source:** Verbal (verbal-w30-scribe-flow), report at `.squad/reports/wave-30-sdk-scribe-flow.md`
+- **Commit(s):** 8740d84fd
+
+### W30: C-4 Prompt Injection Mitigation — Three-Vector Defense
+- **Decision/Finding:** Closes Wave 29 security review finding C-4. New `coordinator/sanitize.ts` `sanitizeUntrustedText()` strips control chars (except `\n`/`\t`), zero-width chars, bidi controls; caps at 8 KB; detects 6 injection-signature families (non-blocking, returns `flagged[]`). `coordinator/dispatch.ts` sanitizes `issue.body` and each charter before JSON.stringify and adds `_securityBoundary` marker for the LLM. `coordinator/preamble.ts` adds optional `COORDINATOR_PREAMBLE_SHA256` integrity check (default off — no behavior change for dogfood). 18 new tests.
+- **Source:** Keyser (keyser-w30-promptinj)
+- **Commit(s):** 8d4942b4c
+
+### W30: Squad CLI vs Squad-SDK + Squadboard Parity Report
+- **Decision/Finding:** 70% parity overall. SDK at 25% (closeOut + writeHealthReport exported; no team init, routing engine, directive capture, or ceremonies). Squadboard server at 70% (agent mgmt, ceremonies, routing rules, consult; no directive inbox, no auto-route on labels, no personal agents). Squadboard UI at 65% (agent/ceremony/inbox/skills pages; no setup wizard, no directive capture, no personal agent badges). Three critical W31 gaps logged (directive inbox, auto-route on labels, personal agents).
+- **Source:** Hockney (hockney-w30-cli-replication), report at `.squad/reports/wave-30-cli-parity.md`
+- **Commit(s):** cee813548
+
+### W30: squad.agent.md Rules vs Coordinator vs SDK vs Squadboard — Architecture Report
+- **Decision/Finding:** Catalogued every rule in `squad.agent.md` (1325 lines) and mapped each to one of: deterministic workflow state machine (move to code), LLM/agent driven (stays in coordinator), human policy (stays in playbook). Documented divergence vs the Squad SDK approach. Feeds the q6/q7/q8/q9 coordinator-model fork in Stream Q.
+- **Source:** Coordinator-dispatched architecture audit, report at `.squad/reports/wave-30-squad-agent-md-rules.md`
+- **Commit(s):** 39870b777
+
+### W30: SDK Logs / Orchestration-Log Generation Report
+- **Decision/Finding:** Compared `.squad/orchestration-log/` (95 files) and `.squad/log/` (28 files) on disk against the SDK's `closeOut()` task-0..8 generators. SDK path produces faithful copies but the close-out has never been run end-to-end from Squadboard (UI button missing). Documented every generator + its inputs; mapped each artifact to its tasks. Written manually by Coordinator after Kobayashi sonnet spawn timed out 2x.
+- **Source:** Coordinator (after Kobayashi failure), report at `.squad/reports/wave-30-sdk-logs-orchlogs.md`
+- **Commit(s):** 354d7c9c1
+
+### W30: Test Hygiene — Unhandled-Rejection Silencer + Vitest dist Exclude
+- **Decision/Finding:** Two vitest hygiene fixes:
+  1. `process-handlers.test.ts` was leaking unhandled rejections (each bare `Promise.reject(...)` arg counted as a real unhandled rejection across test isolation). Added `silentlyRejected()` helper that attaches `.catch(() => {})` to keep the promise rejected for the function-under-test while silencing the runtime event.
+  2. Vitest was scanning stale `dist/__tests__/*.js` referencing YAML files only in `src/`. Added `packages/server/vitest.config.ts` excluding `dist/**`.
+  Re-verified: server 1043 / SDK 24 / client 150 = **1217 tests passing, zero failures**.
+- **Source:** Coordinator
+- **Commit(s):** 4255c8820
+
+### W30: C-1 + C-3 — Opt-in HTTP Auth + CSRF Middleware for Hosted Deployment
+- **Decision/Finding:** Threat model: local dogfood (loopback-only) needs zero security; hosted multi-tenant deployment needs auth + CSRF. Shipped two opt-in middleware modules with zero impact on the dogfood inner-loop:
+  - `auth.ts`: Bearer token enforcement gated by `SQUADBOARD_AUTH_TOKEN`. No-op when unset. `/api/health` exempt. 5 tests.
+  - `csrf.ts`: Sec-Fetch-Site + Origin enforcement on state-changing methods. No-op for non-browser clients (no Sec-Fetch-Site header). `SQUADBOARD_DISABLE_CSRF=1` escape hatch. 8 tests.
+  Mounted before route registration in `src/index.ts`. 4 follow-ups filed (full RBAC, CORS preflight, auth-failure rate-limit, token rotation) — staged for later wave when hosted deploy ships.
+- **Source:** Keyser (keyser-w30-auth-csrf)
+- **Commit(s):** b0bc5eca6
+
+### W30: Add Project / Suggest Setup — UX Revisit Report
+- **Decision/Finding:** 483-line UX audit. Top P0: promote "Suggest Setup" to tab position 2 (after Discover, before Connect existing) + add explainer above the textarea so the value prop is visible. S complexity, no backend change. Secondary: add a "Start blank" opt-out from the suggestion preview (rename "Customize" → "Customize this template"). 5 open questions for Brady.
+- **Source:** Verbal (verbal-w30-add-project-flow), report at `.squad/reports/wave-30-add-project-suggest-setup.md`
+- **Commit(s):** f85e4e651
+
+### W30: Dogfooding Architecture Audit
+- **Decision/Finding:** Critical finding: the server-side dogfood plumbing (capture tool, `done:` matching, idempotency) is production-quality, BUT the coordinator NEVER actually calls `capture()` in live sessions W11-W30. The entire dogfood loop is decorative. Top fix: add a mandatory `capture({prompt, hint:'issue'})` call in `squad.agent.md` immediately after writing each directive markdown. Also: `.squad/dogfood.md` close-out section has a stale claim that match-by-text logic "does not yet exist" when it shipped in Wave 12. Filed as `w31-dogfood-capture-spec-fix` (low-risk spec change). 8 open questions for Brady at §7.
+- **Source:** Keaton (keaton-w30-dogfooding), report at `.squad/reports/wave-30-dogfooding-architecture.md`
+- **Commit(s):** a354d2905
+
+### W30: App / Bundle / Template / Plugin — Glossary + Canonical Model
+- **Decision/Finding:** Audited 4 overloaded terms across ~960 file references: Squad App (~57), Bundle (~250+), Template (~580+), Plugin (~75). Canonical model proposed (matches `docs/squadapp-spec.md`):
+  - **Squad App** = portable user-facing artifact
+  - **App `kind`** = classification field on the manifest (`project-template`, `skills-pack`, `team-preset`, `ceremony-pack`)
+  - **(Saved) Template** = DB-backed in-instance config (NOT distributable — rename `project-template.ts` → `saved-template.ts`)
+  - **Plugin** = runtime extension (Coordinator Plugin = markdown fragment in `~/.squad/extensions/coordinator/*.md` per Q3; Skill Plugin = SKILL.md)
+  Migration plan: 15 renames across P0/P1/P2 bands, 6 PRs over 3-5 days. Feeds W34 `sabbour/squadboard-bundles` repo move with concrete what-moves/what-stays. 5 open questions for Brady. Written manually by Coordinator after Hockney sonnet spawn timed out with CAPIError.
+- **Source:** Coordinator (after Hockney failure), report at `.squad/reports/wave-30-app-bundle-template-plugin.md`
+- **Commit(s):** 8f6117e65
+
