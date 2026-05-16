@@ -12,12 +12,26 @@ import {
   gracefulTeardown,
 } from '../process-handlers.js';
 
+/**
+ * Helper: produce a rejected promise that won't trigger an
+ * `unhandledRejection` event on the test runtime. The function under
+ * test (`formatUnhandledRejection`) only inspects the rejection reason
+ * passed alongside the promise, so attaching a no-op `.catch` here is
+ * test-only noise reduction — the promise is still in the rejected state
+ * when handed to the formatter.
+ */
+function silentlyRejected<T = unknown>(reason: T): Promise<T> {
+  const p = Promise.reject(reason);
+  p.catch(() => {});
+  return p;
+}
+
 describe('process-handlers — formatUnhandledRejection', () => {
   it('formats an Error rejection with stack trace', () => {
     const err = new Error('Something went wrong');
     err.stack = 'Error: Something went wrong\n  at file.ts:10';
 
-    const result = formatUnhandledRejection(err, Promise.reject(err));
+    const result = formatUnhandledRejection(err, silentlyRejected(err));
 
     expect(result).toContain('unhandledRejection');
     expect(result).toContain('Something went wrong');
@@ -28,33 +42,33 @@ describe('process-handlers — formatUnhandledRejection', () => {
     const err = new Error('No stack error');
     err.stack = undefined;
 
-    const result = formatUnhandledRejection(err, Promise.reject(err));
+    const result = formatUnhandledRejection(err, silentlyRejected(err));
 
     expect(result).toContain('No stack error');
     expect(result).toContain('(no stack)');
   });
 
   it('formats a string rejection', () => {
-    const result = formatUnhandledRejection('string rejection', Promise.reject('string'));
+    const result = formatUnhandledRejection('string rejection', silentlyRejected('string'));
 
     expect(result).toContain('string rejection');
   });
 
   it('formats null rejection', () => {
-    const result = formatUnhandledRejection(null, Promise.reject(null));
+    const result = formatUnhandledRejection(null, silentlyRejected(null));
 
     expect(result).toContain('null');
   });
 
   it('formats undefined rejection', () => {
-    const result = formatUnhandledRejection(undefined, Promise.reject(undefined));
+    const result = formatUnhandledRejection(undefined, silentlyRejected(undefined));
 
     expect(result).toContain('undefined');
   });
 
   it('formats object rejection as JSON', () => {
     const obj = { error: 'test', code: 42 };
-    const result = formatUnhandledRejection(obj, Promise.reject(obj));
+    const result = formatUnhandledRejection(obj, silentlyRejected(obj));
 
     expect(result).toContain('error');
     expect(result).toContain('test');
@@ -65,13 +79,13 @@ describe('process-handlers — formatUnhandledRejection', () => {
     const circular: any = { a: 1 };
     circular.self = circular; // Create circular reference
 
-    const result = formatUnhandledRejection(circular, Promise.reject(circular));
+    const result = formatUnhandledRejection(circular, silentlyRejected(circular));
 
     expect(result).toContain('circular');
   });
 
   it('includes timestamp', () => {
-    const result = formatUnhandledRejection('test', Promise.reject('test'));
+    const result = formatUnhandledRejection('test', silentlyRejected('test'));
 
     expect(result).toMatch(/\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/); // ISO timestamp
   });
