@@ -212,3 +212,14 @@ Per-file `git add -- <path>` again. The repo currently has uncommitted
 work from other agents (mcmanus history, server/index.ts, vite cache
 churn). Per-file staging kept all four commits clean — only my
 intentional changes landed.
+
+## 2026-05-15 — M2 apiFetch guard + M3 Checkbox label-toggle (commit c7dde255)
+
+**Fluent `<Field>` single-htmlFor footgun (⚠️ — share with team):**
+Fluent2's `<Field>` generates one `htmlFor` and binds it to the **first** form control child. If you wrap multiple `<Checkbox>` siblings in a single `<Field>`, clicking ANY label routes the OS click event to that first input. The bug is invisible in code review — everything looks correct. Fix: use `<fieldset>` + `<legend>` for checkbox groups (semantically correct, no single binding). Add explicit `id` props to each `<Checkbox>` for belt-and-suspenders label isolation.
+
+**`import.meta.env.DEV` not `process.env.NODE_ENV` in Vite client:**
+The client package is a Vite app without `@types/node`. `process` is not in scope, so `process.env.NODE_ENV` fails tsc. Use `import.meta.env.DEV` for dev-only guards.
+
+**apiFetch content-type strategy:**
+Guard both branches — `!res.ok` AND the happy-path JSON parse — against non-JSON responses. Read the body first, check `content-type`, then either throw a diagnostic error (with first 200 chars) or parse. This catches Express SPA fallback (HTML-200) and HTML error pages (4xx/5xx) alike.
