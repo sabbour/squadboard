@@ -26,5 +26,6 @@
 export { PageLoading } from './PageLoading.tsx'
 export { SectionLoading } from './SectionLoading.tsx'
 export { InlineLoading } from './InlineLoading.tsx'
+export { ActionLoading } from './ActionLoading.tsx'
 
 

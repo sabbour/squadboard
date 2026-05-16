@@ -10,8 +10,9 @@
  * looks the same everywhere.
  */
 import { useState } from 'react'
-import { Button, Spinner, Textarea, Tooltip, tokens } from '@fluentui/react-components'
+import { Button, Textarea, Tooltip, tokens } from '@fluentui/react-components'
 import { Beaker20Regular } from '@fluentui/react-icons'
+import { ActionLoading } from '../loading/index.tsx'
 
 interface FormulatePanelProps {
   /** Placeholder shown in the textarea when empty. */
@@ -96,7 +97,7 @@ export default function FormulatePanel({
         <Button
           appearance="primary"
           size="small"
-          icon={isPending ? <Spinner size="tiny" /> : <Beaker20Regular />}
+          icon={isPending ? <ActionLoading label="Formulating…" /> : <Beaker20Regular />}
           disabled={disabled || isPending || !draft.trim()}
           onClick={handleClick}
         >

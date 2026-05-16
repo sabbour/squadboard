@@ -19,7 +19,6 @@ import {
   DialogActions,
   Button,
   Field,
-  Spinner,
   Badge,
   Slider,
   Checkbox,
@@ -31,7 +30,7 @@ import {
   Dismiss20Regular,
   PersonCircle24Regular,
 } from '@fluentui/react-icons'
-import { SectionLoading } from '../loading/index.tsx'
+import { SectionLoading, ActionLoading } from '../loading/index.tsx'
 
 interface HireTeamModalProps {
   projectId: string
@@ -422,7 +421,7 @@ export default function HireTeamModal({ projectId, onClose }: HireTeamModalProps
                   appearance="primary"
                   onClick={handlePropose}
                   disabled={propose.isPending || universesLoading}
-                  icon={propose.isPending ? <Spinner size="tiny" /> : <People24Regular />}
+                  icon={propose.isPending ? <ActionLoading label="Casting…" /> : <People24Regular />}
                 >
                   {propose.isPending ? 'Casting…' : 'Cast Team'}
                 </Button>
@@ -435,7 +434,7 @@ export default function HireTeamModal({ projectId, onClose }: HireTeamModalProps
                   appearance="primary"
                   onClick={handleConfirm}
                   disabled={selected.size === 0 || confirm.isPending}
-                  icon={confirm.isPending ? <Spinner size="tiny" /> : undefined}
+                  icon={confirm.isPending ? <ActionLoading label="Hiring…" /> : undefined}
                 >
                   {confirm.isPending ? 'Hiring…' : `Hire ${selected.size} Agent${selected.size !== 1 ? 's' : ''}`}
                 </Button>

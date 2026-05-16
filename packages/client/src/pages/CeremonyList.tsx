@@ -18,6 +18,7 @@ import { apiFetch } from '../api/client.ts'
 import PageHeader from '../components/layout/PageHeader.tsx'
 import { TriggerBadge, KindBadge, ScopeBadge } from '../components/ceremony/CeremonyBadges.tsx'
 import { safeRelativeTime, safeAbsoluteTime } from '../utils/dates.ts'
+import { ActionLoading } from '../components/loading/index.tsx'
 import {
   Button,
   Caption1,
@@ -140,7 +141,7 @@ export default function CeremonyList() {
       <Tooltip content="Manually trigger end-of-wave Scribe close-out" relationship="description">
         <Button
           appearance="subtle"
-          icon={endWaveRunning ? <Spinner size="tiny" /> : <Flag20Regular />}
+          icon={endWaveRunning ? <ActionLoading label="Ending wave…" /> : <Flag20Regular />}
           disabled={endWaveRunning}
           onClick={() => setEndWaveOpen(true)}
         >
@@ -246,7 +247,7 @@ export default function CeremonyList() {
               </DialogTrigger>
               <Button
                 appearance="primary"
-                icon={endWaveRunning ? <Spinner size="tiny" /> : <Flag20Regular />}
+                icon={endWaveRunning ? <ActionLoading label="Ending wave…" /> : <Flag20Regular />}
                 disabled={endWaveRunning}
                 onClick={() => void handleEndWave()}
               >
