@@ -77,13 +77,15 @@ function mapTriggerKind(
 // Step extraction from existing yamlContent (best-effort)
 // ---------------------------------------------------------------------------
 
-function extractSteps(
+/** @internal Exported for testing. */
+export function extractSteps(
   yamlContent: string | null | undefined,
 ): Array<{ id: string; kind: string; [key: string]: unknown }> {
   if (!yamlContent) return [];
   try {
     const parsed = parseDocument(yamlContent).toJSON() as Record<string, unknown>;
-    const steps = parsed?.steps as unknown[] | undefined;
+    const spec = parsed?.spec as Record<string, unknown> | undefined;
+    const steps = spec?.steps as unknown[] | undefined;
     if (Array.isArray(steps)) {
       return steps.filter(
         (s): s is { id: string; kind: string; [key: string]: unknown } =>
