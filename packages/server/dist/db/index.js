@@ -77,6 +77,62 @@ export function getDb() {
     }
     return _db;
 }
+// ---------------------------------------------------------------------------
+// Wave 21 — G6.3: seed default gh_card_side_effects rules (idempotent).
+// Defined BEFORE bootstrapSchema so it is in scope at call time (const is not hoisted).
+// ---------------------------------------------------------------------------
+const DEFAULT_GH_CARD_SIDE_EFFECTS = [
+    {
+        event_type: 'pull_request',
+        action: 'opened',
+        label_filter: null,
+        target_semantic: 'in_review',
+        target_deliverable_status: null,
+        description: 'Move card to In Review when a PR is opened that references it.',
+    },
+    {
+        event_type: 'pull_request',
+        action: 'closed', // merged PRs arrive as action=closed with merged=true; handled in code
+        label_filter: null,
+        target_semantic: 'done',
+        target_deliverable_status: 'accepted',
+        description: 'Move card to Done and set deliverable_status=accepted when a PR is merged.',
+    },
+    {
+        event_type: 'issues',
+        action: 'labeled',
+        label_filter: 'blocked',
+        target_semantic: 'blocked',
+        target_deliverable_status: null,
+        description: "Set card semantic to 'blocked' when the 'blocked' label is applied.",
+    },
+    {
+        event_type: 'issues',
+        action: 'labeled',
+        label_filter: 'bug',
+        target_semantic: null,
+        target_deliverable_status: null,
+        description: "Add a badge marker when the 'bug' label is applied (handled in UI).",
+    },
+];
+async function seedGhCardSideEffects() {
+    if (!_pool)
+        throw new Error('Pool not initialised');
+    for (const rule of DEFAULT_GH_CARD_SIDE_EFFECTS) {
+        await _pool.query(`INSERT INTO gh_card_side_effects
+         (event_type, action, label_filter, target_semantic, target_deliverable_status, description, enabled)
+       VALUES ($1, $2, $3, $4, $5, $6, TRUE)
+       ON CONFLICT DO NOTHING`, [
+            rule.event_type,
+            rule.action,
+            rule.label_filter,
+            rule.target_semantic,
+            rule.target_deliverable_status,
+            rule.description,
+        ]);
+    }
+    console.log(`[db] seeded ${DEFAULT_GH_CARD_SIDE_EFFECTS.length} gh_card_side_effects rules`);
+}
 /**
  * Creates the core tables if they do not already exist.
  * This is the Demo 1 bootstrap; proper migrations via drizzle-kit
@@ -1117,6 +1173,30 @@ async function bootstrapSchema() {
       ADD COLUMN IF NOT EXISTS archived_at     TIMESTAMPTZ,
       ADD COLUMN IF NOT EXISTS archived_reason TEXT;
   `);
+    // Wave 21 — G6.3: card side-effect rules + G6.6: external GH context on issue_runs.
+    await _pool.query(`
+    -- G6.3: side-effect rule table
+    CREATE TABLE IF NOT EXISTS gh_card_side_effects (
+      id                        UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+      event_type                TEXT        NOT NULL,
+      action                    TEXT        NOT NULL,
+      label_filter              TEXT,
+      target_semantic           TEXT,
+      target_deliverable_status TEXT,
+      description               TEXT        NOT NULL DEFAULT '',
+      enabled                   BOOLEAN     NOT NULL DEFAULT TRUE,
+      created_at                TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+
+    -- G6.6: external webhook context for enriching agent prompts
+    ALTER TABLE issue_runs
+      ADD COLUMN IF NOT EXISTS external_gh_context JSONB;
+
+    -- Wave 21 — i3: stale_reason for restart-pickup recovery.
+    ALTER TABLE issue_runs
+      ADD COLUMN IF NOT EXISTS stale_reason TEXT;
+  `);
+    await seedGhCardSideEffects();
     await seedSystemReviewPolicyPresets();
     console.log('[db] schema bootstrapped');
 }

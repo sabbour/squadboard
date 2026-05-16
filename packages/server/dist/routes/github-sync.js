@@ -43,7 +43,229 @@ async function getProject(projectId) {
         .limit(1);
     return project ?? null;
 }
-// ─── GET /api/projects/:id/github ────────────────────────────────────────────
+// ─── G6.3: card-state side-effect helpers ────────────────────────────────────
+/**
+ * Parse issue references from a PR/issue body. Matches "#NNN" patterns.
+ */
+function extractIssueRefs(body) {
+    if (!body)
+        return [];
+    const matches = body.match(/#(\d+)/g) ?? [];
+    return [...new Set(matches.map((m) => parseInt(m.slice(1), 10)))];
+}
+/**
+ * Apply card-state side effects for a webhook event against the enabled rules
+ * persisted in gh_card_side_effects. Idempotent — skips cards already in
+ * the target semantic state.
+ */
+async function applyCardSideEffects(opts) {
+    const pool = getPool();
+    const { projectId, eventType, action, prBody, prMerged, labelName, ghIssueNumber } = opts;
+    // pull_request.closed that is NOT merged → skip (not a merge event)
+    if (eventType === 'pull_request' && action === 'closed' && !prMerged)
+        return;
+    // Normalize action for rule lookup: merged PRs match the 'closed' rule
+    const effectiveAction = action;
+    let rules;
+    try {
+        const { rows } = await pool.query(`SELECT event_type, action, label_filter, target_semantic, target_deliverable_status, enabled
+         FROM gh_card_side_effects
+        WHERE event_type = $1 AND action = $2 AND enabled = TRUE`, [eventType, effectiveAction]);
+        rules = rows;
+    }
+    catch (e) {
+        console.error('[g6.3] failed to load side-effect rules:', e);
+        return;
+    }
+    if (rules.length === 0)
+        return;
+    for (const rule of rules) {
+        // Label-filter guard
+        if (rule.label_filter && rule.label_filter !== labelName)
+            continue;
+        // Collect local issue UUIDs to update
+        const issueIds = [];
+        if (eventType === 'pull_request' && prBody) {
+            // Find issues referenced in the PR body
+            const refs = extractIssueRefs(prBody);
+            for (const ref of refs) {
+                const { rows } = await pool.query(`SELECT id FROM issues WHERE project_id = $1 AND github_issue_number = $2 AND archived = 0 LIMIT 1`, [projectId, ref]);
+                if (rows[0])
+                    issueIds.push(rows[0].id);
+            }
+        }
+        else if (ghIssueNumber) {
+            const { rows } = await pool.query(`SELECT id FROM issues WHERE project_id = $1 AND github_issue_number = $2 AND archived = 0 LIMIT 1`, [projectId, ghIssueNumber]);
+            if (rows[0])
+                issueIds.push(rows[0].id);
+        }
+        for (const issueId of issueIds) {
+            // Apply semantic state change via column_meta lookup (idempotent)
+            if (rule.target_semantic) {
+                // Find the column with this semantic value for this project
+                const { rows: cols } = await pool.query(`SELECT column_id FROM column_meta WHERE project_id = $1 AND semantic = $2 LIMIT 1`, [projectId, rule.target_semantic]);
+                const targetColumnId = cols[0]?.column_id;
+                if (targetColumnId) {
+                    await pool.query(`UPDATE issues SET status = $1, updated_at = NOW()
+              WHERE id = $2 AND (status IS DISTINCT FROM $1)`, [targetColumnId, issueId]);
+                }
+            }
+            // Apply deliverable_status change
+            if (rule.target_deliverable_status) {
+                await pool.query(`UPDATE issues SET deliverable_status = $1, updated_at = NOW()
+            WHERE id = $2 AND (deliverable_status IS DISTINCT FROM $1)`, [rule.target_deliverable_status, issueId]);
+            }
+        }
+        if (issueIds.length > 0) {
+            console.log(`[g6.3] applied rule (${eventType}.${action}) → ${issueIds.length} card(s) updated`, { targetSemantic: rule.target_semantic, targetDeliverableStatus: rule.target_deliverable_status });
+        }
+    }
+}
+/**
+ * When a webhook event references a GitHub issue number that maps to an
+ * active issue_run in the project, append the event to the run's
+ * external_gh_context JSONB so the next invocation can see recent GH activity.
+ *
+ * Keeps at most the 20 most recent events (oldest dropped first).
+ */
+async function enrichRunExternalContext(opts) {
+    const { pool, projectId, eventType, action, payload } = opts;
+    // Extract GH issue/PR number from payload
+    let ghNumber = null;
+    const issue = payload.issue;
+    const pr = payload.pull_request;
+    if (issue?.number)
+        ghNumber = issue.number;
+    else if (pr?.number)
+        ghNumber = pr.number;
+    if (!ghNumber)
+        return;
+    // Find active issue_runs linked to this GH issue in this project
+    const { rows } = await pool.query(`SELECT ir.id AS run_id, ir.external_gh_context
+       FROM issue_runs ir
+       JOIN issues i ON i.id = ir.issue_id
+      WHERE i.project_id = $1
+        AND i.github_issue_number = $2
+        AND ir.status IN ('pending', 'running')
+      LIMIT 10`, [projectId, ghNumber]);
+    if (rows.length === 0)
+        return;
+    const newEvent = {
+        eventType,
+        action,
+        payload: {
+            // Only persist a lightweight subset to avoid ballooning the column
+            action: payload.action,
+            number: ghNumber,
+            html_url: issue?.html_url ?? pr?.html_url,
+            title: issue?.title ?? pr?.title,
+            state: issue?.state ?? pr?.state,
+            merged: pr?.merged,
+            label: payload.label?.name,
+        },
+        receivedAt: new Date().toISOString(),
+    };
+    for (const row of rows) {
+        let existing;
+        try {
+            existing = row.external_gh_context ? JSON.parse(row.external_gh_context) : { events: [] };
+        }
+        catch {
+            existing = { events: [] };
+        }
+        const events = [...(existing.events ?? []), newEvent].slice(-20);
+        await pool.query(`UPDATE issue_runs SET external_gh_context = $1::jsonb, updated_at = NOW() WHERE id = $2`, [JSON.stringify({ events }), row.run_id]);
+    }
+    console.log(`[g6.6] enriched ${rows.length} active run(s) with ${eventType}.${action} context`);
+}
+// ─── G6.5 — GET /api/projects/:id/github/activity ────────────────────────────
+//
+// Cursor-paginated chronological feed of GitHub events for a project.
+// Query params:
+//   cursor  — opaque cursor (ISO timestamp; returns events received_at < cursor)
+//   limit   — page size (default 25, max 100)
+// Response: { items: ActivityItem[], nextCursor: string | null }
+// ---------------------------------------------------------------------------
+router.get('/activity', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const pool = getPool();
+        const limit = Math.min(parseInt(String(req.query['limit'] ?? '25'), 10) || 25, 100);
+        const cursor = req.query['cursor'];
+        // Validate project
+        const project = await getProject(id);
+        if (!project) {
+            res.status(404).json({ error: 'Project not found' });
+            return;
+        }
+        const cursorClause = cursor ? `AND ge.received_at < $3` : '';
+        const params = [id, limit + 1];
+        if (cursor)
+            params.push(cursor);
+        const { rows } = await pool.query(`SELECT ge.id, ge.event_type, ge.action, ge.payload::text AS payload,
+              ge.received_at, ge.delivery_id,
+              ir.id AS run_id, ir.git_branch, ir.pr_number, ir.pr_url, ir.ci_state
+         FROM github_events ge
+         LEFT JOIN LATERAL (
+           -- Best-effort join: match by PR number or gh issue number in related issue_runs
+           SELECT ir2.id, ir2.git_branch, ir2.pr_number, ir2.pr_url, ir2.ci_state
+             FROM issue_runs ir2
+             JOIN issues iss ON iss.id = ir2.issue_id
+            WHERE iss.project_id = $1
+              AND (
+                (ge.event_type = 'pull_request' AND ir2.pr_number = (ge.payload->>'number')::int)
+                OR
+                (ge.event_type IN ('issues','issue_comment') AND iss.github_issue_number = (ge.payload->'issue'->>'number')::int)
+              )
+            ORDER BY ir2.created_at DESC
+            LIMIT 1
+         ) ir ON TRUE
+        WHERE ge.project_id_resolved = $1 ${cursorClause}
+        ORDER BY ge.received_at DESC
+        LIMIT $2`, params);
+        const hasMore = rows.length > limit;
+        const items = rows.slice(0, limit).map((row) => {
+            let parsedPayload;
+            try {
+                parsedPayload = JSON.parse(row.payload);
+            }
+            catch {
+                parsedPayload = {};
+            }
+            // Extract actor
+            const sender = (parsedPayload.sender ?? parsedPayload.pusher);
+            const actor = sender?.login ?? null;
+            const avatarUrl = sender?.avatar_url ?? null;
+            // Extract links
+            const pr = parsedPayload.pull_request;
+            const issue = parsedPayload.issue;
+            const link = (pr?.html_url ?? issue?.html_url ?? null);
+            const title = (pr?.title ?? issue?.title ?? null);
+            return {
+                id: row.id,
+                eventType: row.event_type,
+                action: row.action,
+                actor,
+                avatarUrl,
+                link,
+                title,
+                receivedAt: row.received_at,
+                runId: row.run_id,
+                gitBranch: row.git_branch,
+                prNumber: row.pr_number,
+                prUrl: row.pr_url,
+                ciState: row.ci_state,
+            };
+        });
+        const nextCursor = hasMore && items.length > 0
+            ? items[items.length - 1].receivedAt
+            : null;
+        res.json({ items, nextCursor });
+    }
+    catch (err) {
+        handleError(res, err);
+    }
+});
 router.get('/', async (req, res) => {
     try {
         const project = await getProject(req.params.id);
@@ -356,10 +578,42 @@ router.post('/webhook', async (req, res) => {
                             issueId: localIssueId,
                             githubIssueNumber: ghIssue.number,
                         }).catch((err) => console.error('[github-webhook] auto-assign error:', err));
+                        // G6.3 — card state side-effects for issues.labeled
+                        applyCardSideEffects({
+                            projectId: id,
+                            eventType: 'issues',
+                            action: 'labeled',
+                            labelName,
+                            ghIssueNumber: ghIssue.number,
+                        }).catch((e) => console.error('[g6.3] issues.labeled side-effect error:', e));
                     }
                 }
             }
         }
+        // ── pull_request: G6.3 card-state side-effects ───────────────────────────
+        if (ghEvent === 'pull_request' && action && payload.pull_request) {
+            const pr = payload.pull_request;
+            const prMerged = typeof pr.merged === 'boolean' ? pr.merged : false;
+            if (action === 'opened' || (action === 'closed' && prMerged)) {
+                applyCardSideEffects({
+                    projectId: id,
+                    eventType: 'pull_request',
+                    action,
+                    prBody: pr.body,
+                    prMerged,
+                }).catch((e) => console.error('[g6.3] pull_request side-effect error:', e));
+            }
+        }
+        // ── G6.6 — enrich active issue_runs external_gh_context ──────────────────
+        // When an event references an issue tied to an active run, append the event
+        // payload so the next agent invocation sees recent GH activity.
+        enrichRunExternalContext({
+            pool,
+            projectId: id,
+            eventType: ghEvent,
+            action: action ?? null,
+            payload,
+        }).catch((e) => console.error('[g6.6] enrich run context error:', e));
         // ── push: filter to tracked refs (project.githubRepo exists = GitHub sync enabled) ──
         if (ghEvent === 'push' && project.githubOwner && project.githubRepo) {
             const ref = typeof payload.ref === 'string' ? payload.ref : '';

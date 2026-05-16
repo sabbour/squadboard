@@ -48,11 +48,29 @@ export interface ConjureContext {
   currentProjectId?: string | null;
   /** Display name of the current project (helps the LLM choose). */
   currentProjectName?: string | null;
+  /** Other project names in the workspace (helps with cross-project routing). */
+  knownProjectNames?: string[];
 }
 
 export interface ConjureRequest {
-  prompt: string;
+  /**
+   * The user's free-form prose input. W22: preferred field name is `prose`;
+   * `prompt` is accepted as a backward-compatible alias.
+   * Keyser-w22 should use `prose` in new ConjureModal calls.
+   */
+  prose?: string;
+  /** @deprecated Use `prose`. Accepted as alias for backward compat. */
+  prompt?: string;
   context?: ConjureContext | null;
+  /**
+   * Flat project context — alternative to nesting inside `context`.
+   * Takes precedence over `context.currentProjectId` when both are set.
+   */
+  projectId?: string | null;
+  /** Display name — takes precedence over `context.currentProjectName`. */
+  projectName?: string | null;
+  /** Known project names for cross-project routing. */
+  knownProjectNames?: string[];
   /**
    * Optional intent the user already picked (e.g. via a chip / kind picker).
    * When set, the rule scorer boosts that intent so the response respects

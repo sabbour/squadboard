@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { eq } from 'drizzle-orm';
 import { getDb, schema } from '../db/index.js';
 import { eventBus } from '../realtime/event-bus.js';
-import { pushBranch, createPr, commentOnIssue, mergePr, triggerWorkflow, GitOpsError, } from '../services/github-git-ops.js';
+import { pushBranch, createPr, commentOnIssue, mergePr, triggerWorkflow, pollWorkflowRun, GitOpsError, } from '../services/github-git-ops.js';
 /** Sanitize a branch name — reject any shell-unsafe characters */
 function sanitizeBranchName(name) {
     if (!/^[a-zA-Z0-9/_.-]+$/.test(name)) {
@@ -341,7 +341,71 @@ projectRunsRouter.post('/:runId/git/workflow/dispatch', async (req, res) => {
         handleError(res, err);
     }
 });
-// GET /:runId/stream  — SSE output stream (1 s DB poll for Demo 4)
+// ---------------------------------------------------------------------------
+// G1.1 — GET /:runId/git/workflow/poll/:runWorkflowId — poll a workflow run
+// ---------------------------------------------------------------------------
+// Query params: timeoutMs (optional, ms integer)
+// Response 200: WorkflowRunStatus
+// ---------------------------------------------------------------------------
+projectRunsRouter.get('/:runId/git/workflow/poll/:workflowRunId', async (req, res) => {
+    const { runId, projectId, workflowRunId } = req.params;
+    const timeoutMs = req.query['timeoutMs'] ? parseInt(String(req.query['timeoutMs']), 10) : undefined;
+    try {
+        const db = getDb();
+        // Resolve project github config for owner/repo context.
+        const [run] = await db
+            .select({ issueId: schema.issueRuns.issueId })
+            .from(schema.issueRuns)
+            .where(eq(schema.issueRuns.id, runId))
+            .limit(1);
+        if (!run) {
+            res.status(404).json({ error: 'Run not found' });
+            return;
+        }
+        const [issueRow] = await db
+            .select({ projectId: schema.issues.projectId })
+            .from(schema.issues)
+            .where(eq(schema.issues.id, run.issueId))
+            .limit(1);
+        let owner;
+        let repo;
+        if (issueRow) {
+            const [proj] = await db
+                .select({ githubOwner: schema.projects.githubOwner, githubRepo: schema.projects.githubRepo })
+                .from(schema.projects)
+                .where(eq(schema.projects.id, issueRow.projectId))
+                .limit(1);
+            owner = proj?.githubOwner ?? undefined;
+            repo = proj?.githubRepo ?? undefined;
+        }
+        // Also accept override from query string for cross-repo scenarios
+        const effectiveOwner = req.query['owner'] ?? owner;
+        const effectiveRepo = req.query['repo'] ?? repo;
+        if (!effectiveOwner || !effectiveRepo) {
+            res.status(409).json({ error: 'GitHub owner/repo not configured for this project' });
+            return;
+        }
+        const result = await pollWorkflowRun({
+            owner: effectiveOwner,
+            repo: effectiveRepo,
+            run_id: workflowRunId,
+            ...(timeoutMs ? { timeoutMs } : {}),
+        });
+        const resolvedProjectId = projectId ?? issueRow?.projectId;
+        if (resolvedProjectId) {
+            eventBus.emitGitEvent('git.workflow.polled', resolvedProjectId, {
+                runId,
+                workflowRunId,
+                status: result.status,
+                conclusion: result.conclusion,
+            });
+        }
+        res.json(result);
+    }
+    catch (err) {
+        handleError(res, err);
+    }
+});
 projectRunsRouter.get('/:runId/stream', async (req, res) => {
     const { runId } = req.params;
     const db = getDb();

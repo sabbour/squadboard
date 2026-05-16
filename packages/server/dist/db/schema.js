@@ -199,6 +199,10 @@ export const issueRuns = pgTable('issue_runs', {
     ciState: text('ci_state'), // 'passing'|'failing'|'running'|'unknown'
     ciUrl: text('ci_url'), // URL to latest CI check run
     gitCacheRefreshedAt: timestamp('git_cache_refreshed_at', { withTimezone: true }), // for 5-min CI TTL
+    // Wave 21 — i3: stale run recovery on restart.
+    // Set to 'restart-pickup' when a run is found in status='running' on boot
+    // with no active process — indicates data-safe recovery after a server kill.
+    staleReason: text('stale_reason'),
     // Wave 20 — G4.1: external dispatch reference for copilot runs.
     // Shape: { owner, repo, workflowRunId?, issueNumber? }
     externalRef: jsonb('external_ref'),
@@ -868,4 +872,41 @@ export const copilotAutoAssignDispatches = pgTable('copilot_auto_assign_dispatch
 }, (t) => ({
     uqRuleIssue: uniqueIndex('copilot_auto_assign_dispatches_uq').on(t.ruleId, t.issueId),
 }));
+// ---------------------------------------------------------------------------
+// Wave 21 — G6.3: GitHub card-state side-effect rules
+// ---------------------------------------------------------------------------
+/**
+ * One row per side-effect rule. When a webhook event matching (event_type, action)
+ * arrives and the issue reference resolves, the card transitions described by
+ * target_semantic / target_deliverable_status are applied (when not null).
+ *
+ * Seeded rules:
+ *   1. pull_request.opened   → semantic='in_review'
+ *   2. pull_request.merged   → semantic='done', deliverableStatus='accepted'
+ *   3. issues.labeled/blocked → semantic='blocked'
+ *   4. issues.labeled/bug    → (badge only — handled in code, no semantic change)
+ */
+export const ghCardSideEffects = pgTable('gh_card_side_effects', {
+    id: uuid('id').primaryKey().defaultRandom(),
+    eventType: text('event_type').notNull(), // e.g. 'pull_request', 'issues'
+    action: text('action').notNull(), // e.g. 'opened', 'merged', 'labeled'
+    /** When set, only fire this rule when payload.label.name === this value. */
+    labelFilter: text('label_filter'),
+    /** Semantic column state to move the card to. NULL = no change. */
+    targetSemantic: text('target_semantic'),
+    /** deliverable_status to set. NULL = no change. */
+    targetDeliverableStatus: text('target_deliverable_status'),
+    /** Human-readable description for the Settings UI. */
+    description: text('description').notNull().default(''),
+    enabled: boolean('enabled').notNull().default(true),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+});
+// ---------------------------------------------------------------------------
+// Wave 21 — G6.6: external_context column on issue_runs
+// (runtime migration — schema annotation only; column added via ALTER TABLE)
+// ---------------------------------------------------------------------------
+// externalGhContext: jsonb column added to issue_runs to carry webhook event
+// payloads into the next agent invocation prompt. Persisted as:
+//   { events: Array<{ eventType, action, payload, receivedAt }> }
+// The field name used at runtime is issue_runs.external_gh_context (snake_case).
 //# sourceMappingURL=schema.js.map

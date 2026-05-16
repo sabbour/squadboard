@@ -9,6 +9,12 @@
  *   GET  /api/system/gh-auth-status — parse `gh auth status` for the UI
  *   POST /api/system/gh-test       — dry-run connectivity tests (push/PR/workflow)
  *
+ * G1.2 introspection endpoints (Wave 21):
+ *   GET  /api/system/github/whoami             — gh auth status JSON
+ *   GET  /api/system/github/workflows          — list workflows (query: owner, repo)
+ *   GET  /api/system/github/default-branch     — get default branch (query: owner, repo)
+ *   GET  /api/system/github/branches           — list branches (query: owner, repo, head?)
+ *
  * Used by the Settings page Backup + GitHub sections.
  */
 import { Router } from 'express';
@@ -20,6 +26,7 @@ import { promisify } from 'node:util';
 import { runBackup } from '../scripts/backup.js';
 import { runRestore } from '../scripts/restore.js';
 import { getPool } from '../db/index.js';
+import { whoAmI, listWorkflows, getDefaultBranch, listBranches, GitOpsError } from '../services/github-git-ops.js';
 const execFileAsync = promisify(execFile);
 const router = Router();
 const BACKUP_DIR = join(homedir(), '.squadboard', 'backups');
@@ -315,6 +322,73 @@ router.post('/dedupe', async (req, res) => {
     catch (err) {
         console.error('[system] dedupe error:', err);
         res.status(500).json({ ok: false, error: err.message });
+    }
+});
+// ---------------------------------------------------------------------------
+// G1.2 — GET /api/system/github/whoami
+// ---------------------------------------------------------------------------
+router.get('/github/whoami', async (_req, res) => {
+    try {
+        const result = await whoAmI();
+        res.json({ ok: true, ...result });
+    }
+    catch (err) {
+        const msg = err instanceof GitOpsError ? err.detail : err.message;
+        res.status(500).json({ ok: false, error: msg });
+    }
+});
+// ---------------------------------------------------------------------------
+// G1.2 — GET /api/system/github/workflows?owner=&repo=
+// ---------------------------------------------------------------------------
+router.get('/github/workflows', async (req, res) => {
+    const { owner, repo } = req.query;
+    if (!owner || !repo) {
+        res.status(400).json({ ok: false, error: '`owner` and `repo` query params are required.' });
+        return;
+    }
+    try {
+        const workflows = await listWorkflows({ owner, repo });
+        res.json({ ok: true, workflows });
+    }
+    catch (err) {
+        const msg = err instanceof GitOpsError ? err.detail : err.message;
+        res.status(err instanceof GitOpsError ? err.httpStatus : 500).json({ ok: false, error: msg });
+    }
+});
+// ---------------------------------------------------------------------------
+// G1.2 — GET /api/system/github/default-branch?owner=&repo=
+// ---------------------------------------------------------------------------
+router.get('/github/default-branch', async (req, res) => {
+    const { owner, repo } = req.query;
+    if (!owner || !repo) {
+        res.status(400).json({ ok: false, error: '`owner` and `repo` query params are required.' });
+        return;
+    }
+    try {
+        const result = await getDefaultBranch({ owner, repo });
+        res.json({ ok: true, ...result });
+    }
+    catch (err) {
+        const msg = err instanceof GitOpsError ? err.detail : err.message;
+        res.status(err instanceof GitOpsError ? err.httpStatus : 500).json({ ok: false, error: msg });
+    }
+});
+// ---------------------------------------------------------------------------
+// G1.2 — GET /api/system/github/branches?owner=&repo=&head=
+// ---------------------------------------------------------------------------
+router.get('/github/branches', async (req, res) => {
+    const { owner, repo, head } = req.query;
+    if (!owner || !repo) {
+        res.status(400).json({ ok: false, error: '`owner` and `repo` query params are required.' });
+        return;
+    }
+    try {
+        const branches = await listBranches({ owner, repo, head });
+        res.json({ ok: true, branches });
+    }
+    catch (err) {
+        const msg = err instanceof GitOpsError ? err.detail : err.message;
+        res.status(err instanceof GitOpsError ? err.httpStatus : 500).json({ ok: false, error: msg });
     }
 });
 export default router;

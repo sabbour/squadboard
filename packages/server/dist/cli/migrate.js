@@ -61,6 +61,21 @@ async function main() {
         if (result.skipped) {
             console.log(`[migrate] Skipped: ${result.reason}`);
         }
+        else if (result.snapshotPath) {
+            // Migration created a dumpDataDir snapshot — restore from it so the data
+            // survives the next PGlite restart (NodeFS-to-MEMFS round-trip via loadDataDir).
+            console.log(`[migrate] Restoring snapshot into PGlite data dir via loadDataDir…`);
+            const { runRestore } = await import('../scripts/restore.js');
+            const restoreResult = await runRestore(result.snapshotPath, { force: true });
+            if (restoreResult.ok) {
+                console.log(`[migrate] ✅ Snapshot restore complete — PGlite data dir is live.`);
+            }
+            else {
+                console.error(`[migrate] ❌ Snapshot restore failed: ${restoreResult.message}`);
+                process.exit(1);
+                return;
+            }
+        }
         process.exit(0);
     }
     catch (err) {
