@@ -3,6 +3,7 @@ import path from 'node:path';
 import { eq, and } from 'drizzle-orm';
 import { getDb, schema } from '../db/index.js';
 import { parseCharterContent, computeContentHash } from './charter-compiler.js';
+import { hashCharterContent } from './charter-identity.js';
 import { getAgents } from './sdk-state.js';
 
 export interface SyncResult {
@@ -106,24 +107,33 @@ export async function syncAgentsFromDisk(
         // values payload so the database defaults (`defaultRandom()` /
         // `defaultNow()`) own those columns. Never pass the entity wholesale
         // here — Drizzle would write every supplied column on conflict.
-        await db.insert(schema.agents).values({
-          projectId,
-          name: agentName,
-          role: meta.role,
-          model: meta.model ?? null,
-          status: 'active',
-          charterPath,
-          historyPath: historyExists ? historyPath : null,
-          charterHash: newHash ?? null,
-        });
-        added++;
+        try {
+          await db.insert(schema.agents).values({
+            projectId,
+            name: agentName,
+            role: meta.role,
+            model: meta.model ?? null,
+            status: 'active',
+            charterPath,
+            historyPath: historyExists ? historyPath : null,
+            charterHash: newHash ?? null,
+            charterContent,
+          });
+          added++;
+        } catch (err) {
+          console.warn(
+            `[agent-sync] Error inserting agent '${agentName}':`,
+            err instanceof Error ? err.message : String(err),
+          );
+        }
       } else {
         const row = existing[0];
         const hashChanged = newHash && row.charterHash !== newHash;
         const roleChanged = row.role !== meta.role;
         const modelChanged = (row.model ?? undefined) !== (meta.model ?? undefined);
+        const charterContentChanged = row.charterContent !== charterContent;
 
-        if (hashChanged || roleChanged || modelChanged) {
+        if (hashChanged || roleChanged || modelChanged || charterContentChanged) {
           // UPDATE branch: scope `.set({...})` to MUTABLE fields ONLY.
           //
           // INVARIANT: `createdAt` (and `id`) MUST NEVER appear in this set
@@ -139,14 +149,22 @@ export async function syncAgentsFromDisk(
             role: meta.role,
             model: meta.model ?? null,
             charterHash: newHash ?? null,
+            charterContent,
             historyPath: historyExists ? historyPath : row.historyPath,
             updatedAt: new Date(),
           };
-          await db
-            .update(schema.agents)
-            .set(mutableFields)
-            .where(eq(schema.agents.id, row.id));
-          updated++;
+          try {
+            await db
+              .update(schema.agents)
+              .set(mutableFields)
+              .where(eq(schema.agents.id, row.id));
+            updated++;
+          } catch (err) {
+            console.warn(
+              `[agent-sync] Error updating agent '${agentName}':`,
+              err instanceof Error ? err.message : String(err),
+            );
+          }
         }
       }
     }),
