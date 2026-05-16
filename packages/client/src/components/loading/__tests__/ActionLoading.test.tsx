@@ -6,13 +6,18 @@
  * - Has aria-busy="true" and aria-label set
  * - 150ms anti-flash delay: no Spinner immediately; appears after 150ms
  */
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { render, screen } from '@testing-library/react'
+import { act } from 'react'
 import { ActionLoading } from '../ActionLoading'
 
 describe('ActionLoading', () => {
   beforeEach(() => {
     vi.useFakeTimers()
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
   })
 
   describe('accessibility', () => {
@@ -58,7 +63,9 @@ describe('ActionLoading', () => {
       render(<ActionLoading />)
       expect(screen.queryByRole('progressbar')).not.toBeInTheDocument()
 
-      vi.advanceTimersByTime(150)
+      act(() => {
+        vi.advanceTimersByTime(150)
+      })
 
       expect(screen.getByRole('progressbar')).toBeInTheDocument()
     })
@@ -67,7 +74,9 @@ describe('ActionLoading', () => {
       render(<ActionLoading antiFlashDelayMs={200} />)
       expect(screen.queryByRole('progressbar')).not.toBeInTheDocument()
 
-      vi.advanceTimersByTime(200)
+      act(() => {
+        vi.advanceTimersByTime(200)
+      })
 
       expect(screen.getByRole('progressbar')).toBeInTheDocument()
     })

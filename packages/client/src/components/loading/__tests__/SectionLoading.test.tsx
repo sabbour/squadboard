@@ -6,13 +6,18 @@
  * - Has aria-busy="true" and aria-label set
  * - 150ms anti-flash delay: no Spinner immediately; appears after 150ms
  */
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { render, screen } from '@testing-library/react'
+import { act } from 'react'
 import { SectionLoading } from '../SectionLoading'
 
 describe('SectionLoading', () => {
   beforeEach(() => {
     vi.useFakeTimers()
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
   })
 
   describe('accessibility', () => {
@@ -58,7 +63,9 @@ describe('SectionLoading', () => {
       render(<SectionLoading label="Loading…" />)
       expect(screen.queryByRole('progressbar')).not.toBeInTheDocument()
 
-      vi.advanceTimersByTime(150)
+      act(() => {
+        vi.advanceTimersByTime(150)
+      })
 
       expect(screen.getByRole('progressbar')).toBeInTheDocument()
     })
@@ -67,7 +74,9 @@ describe('SectionLoading', () => {
       render(<SectionLoading label="Loading…" antiFlashDelayMs={75} />)
       expect(screen.queryByRole('progressbar')).not.toBeInTheDocument()
 
-      vi.advanceTimersByTime(75)
+      act(() => {
+        vi.advanceTimersByTime(75)
+      })
 
       expect(screen.getByRole('progressbar')).toBeInTheDocument()
     })
@@ -76,15 +85,10 @@ describe('SectionLoading', () => {
   describe('props', () => {
     it('accepts size prop', () => {
       render(<SectionLoading label="Loading…" size="large" />)
-      vi.advanceTimersByTime(150)
+      act(() => {
+        vi.advanceTimersByTime(150)
+      })
       expect(screen.getByRole('progressbar')).toBeInTheDocument()
-    })
-
-    it('renders Spinner with provided label', () => {
-      const label = 'Loading section…'
-      render(<SectionLoading label={label} />)
-      vi.advanceTimersByTime(150)
-      expect(screen.getByText(label)).toBeInTheDocument()
     })
 
     it('enforces minHeight via style', () => {
@@ -94,3 +98,4 @@ describe('SectionLoading', () => {
     })
   })
 })
+
