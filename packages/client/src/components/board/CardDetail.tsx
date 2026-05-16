@@ -1,7 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { useNavigate } from 'react-router'
-import { tokens, Button, Body1Strong, Caption1, Tooltip } from '@fluentui/react-components'
-import { Lightbulb20Regular } from '@fluentui/react-icons'
+import { tokens, Body1Strong, Caption1 } from '@fluentui/react-components'
 import { type Issue } from '../../api/issues.ts'
 import { useLabels } from '../../api/labels.ts'
 import { useIssueRuns } from '../../api/runs.ts'
@@ -34,7 +32,6 @@ type Tab = 'overview' | 'runs' | 'deliverables' | 'flow'
 
 export default function CardDetail({ projectId, issue, onClose, initialTab }: CardDetailProps) {
   const panelRef = useRef<HTMLDivElement>(null)
-  const navigate = useNavigate()
   const [activeTab, setActiveTab] = useState<Tab>(initialTab ?? 'overview')
   const [showAttachModal, setShowAttachModal] = useState(false)
   const { data: labels } = useLabels(projectId)
@@ -120,20 +117,6 @@ export default function CardDetail({ projectId, issue, onClose, initialTab }: Ca
               {COLUMN_LABELS[issue.column] ?? issue.column}
             </Caption1>
             <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-              <Tooltip content="Consult about this issue (open Ask)" relationship="label">
-                <Button
-                  appearance="subtle"
-                  size="small"
-                  icon={<Lightbulb20Regular />}
-                  onClick={() => {
-                    navigate(
-                      `/projects/${projectId}/consult/new?prefill=issue:${issue.id}`,
-                    )
-                  }}
-                >
-                  Consult
-                </Button>
-              </Tooltip>
               <button
                 onClick={onClose}
                 style={{

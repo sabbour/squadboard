@@ -10,11 +10,10 @@ import {
   NavItem,
   NavSectionHeader,
   Button,
-  Menu,
-  MenuTrigger,
-  MenuPopover,
-  MenuList,
-  MenuItem,
+  Combobox,
+  Option,
+  OptionGroup,
+  Tooltip,
   makeStyles,
   tokens,
 } from '@fluentui/react-components'
@@ -36,7 +35,6 @@ import {
   Eye24Regular,
   Heart24Regular,
   HeartPulse24Regular,
-  ChevronDown16Regular,
   DocumentBulletList24Regular,
 } from '@fluentui/react-icons'
 import type { OnNavItemSelectData } from '@fluentui/react-components'
@@ -88,25 +86,38 @@ const useStyles = makeStyles({
     alignItems: 'center',
     gap: tokens.spacingHorizontalS,
   },
-  projectSwitcher: {
-    // Wave 10 C4: long project names (e.g. "Content Creation Workflow — Squad Edition")
-    // were wrapping in the top bar. Cap at 320px and force single-line ellipsis;
-    // tooltip on the button surfaces the full name.
-    minWidth: '180px',
-    maxWidth: '320px',
+  // O6: Fluent2 Combobox project switcher — min 320px, max 480px, no wrap.
+  projectCombobox: {
+    minWidth: '320px',
+    maxWidth: '480px',
     fontWeight: tokens.fontWeightSemibold,
-    '& .fui-Button__text': {
+    // Prevent the input from stretching the top bar on narrow viewports.
+    flexShrink: 1,
+    '& input': {
       overflow: 'hidden',
       textOverflow: 'ellipsis',
       whiteSpace: 'nowrap',
-      display: 'block',
     },
   },
-  projectSwitcherPopover: {
-    // Match the trigger so single-line names don't wrap inside the menu either.
-    minWidth: '280px',
-  },
 })
+
+// ── Recent-projects persistence (localStorage, last 5 IDs) ──────────────────
+const RECENT_KEY = 'squadboard:recent-project-ids'
+const MAX_RECENT = 5
+
+function getRecentIds(): string[] {
+  try {
+    return JSON.parse(localStorage.getItem(RECENT_KEY) ?? '[]') as string[]
+  } catch {
+    return []
+  }
+}
+
+function pushRecentId(id: string): string[] {
+  const next = [id, ...getRecentIds().filter((x) => x !== id)].slice(0, MAX_RECENT)
+  localStorage.setItem(RECENT_KEY, JSON.stringify(next))
+  return next
+}
 
 // Project-scoped sidebar items, grouped by intent.
 // Group 1 — Work: where you go to see and do the project's work.
@@ -181,13 +192,46 @@ export default function Layout() {
   const projectsQuery = useProjects()
   const projects = projectsQuery.data
 
-  // Sorted alphabetically; the active project is filtered out of the menu.
-  const switcherProjects = useMemo(() => {
+  // O6: Combobox search text. When it matches the current project name (or is
+  // empty), no filtering is applied. When the user types something different,
+  // the list filters to matching project names.
+  const [comboValue, setComboValue] = useState<string>('')
+
+  // O6: Recent project IDs persisted to localStorage (up to MAX_RECENT).
+  const [recentIds, setRecentIds] = useState<string[]>(() => getRecentIds())
+
+  // Sync combobox display value whenever the active project name changes.
+  useEffect(() => {
+    setComboValue(projectName ?? '')
+  }, [projectName])
+
+  // All projects sorted alphabetically (for the main list).
+  const allProjectsSorted = useMemo(() => {
     if (!projects) return []
-    return [...projects]
-      .filter((p) => p.id !== id)
-      .sort((a, b) => a.name.localeCompare(b.name))
-  }, [projects, id])
+    return [...projects].sort((a, b) => a.name.localeCompare(b.name))
+  }, [projects])
+
+  // Filtered by combobox search (only when the user has typed something other
+  // than the exact current project name — avoids filtering the full list away
+  // on initial open).
+  const filteredProjects = useMemo(() => {
+    const q = comboValue.trim().toLowerCase()
+    if (!q || q === (projectName ?? '').toLowerCase()) return allProjectsSorted
+    return allProjectsSorted.filter((p) => p.name.toLowerCase().includes(q))
+  }, [comboValue, allProjectsSorted, projectName])
+
+  // Recent projects shown at the top (max 5, excluding current project, in
+  // recent-first order, and respecting current search filter).
+  const recentProjects = useMemo(() => {
+    if (!projects) return []
+    const q = comboValue.trim().toLowerCase()
+    const isFiltering = q && q !== (projectName ?? '').toLowerCase()
+    return recentIds
+      .filter((rid) => rid !== id)
+      .map((rid) => projects.find((p) => p.id === rid))
+      .filter((p): p is NonNullable<typeof p> => Boolean(p))
+      .filter((p) => !isFiltering || p.name.toLowerCase().includes(q))
+  }, [recentIds, projects, id, comboValue, projectName])
 
   // The category segment we want to preserve when switching projects.
   const currentCategory = useMemo(
@@ -196,6 +240,8 @@ export default function Layout() {
   )
 
   function handleProjectSwitch(newProjectId: string) {
+    const next = pushRecentId(newProjectId)
+    setRecentIds(next)
     if (currentCategory) {
       void navigate(`/projects/${newProjectId}/${currentCategory}`)
     } else {
@@ -348,34 +394,59 @@ export default function Layout() {
       <main className={styles.main}>
         <div className={styles.topBar}>
           <div className={styles.topBarLeft}>
-            {projectName && (
-              <Menu>
-                <MenuTrigger disableButtonEnhancement>
-                  <Button
-                    appearance="subtle"
-                    iconPosition="after"
-                    icon={<ChevronDown16Regular />}
-                    className={styles.projectSwitcher}
-                    title={projectName}
-                  >
-                    {projectName}
-                  </Button>
-                </MenuTrigger>
-                <MenuPopover className={styles.projectSwitcherPopover}>
-                  <MenuList>
-                    {switcherProjects.length === 0 ? (
-                      <MenuItem disabled>No other projects</MenuItem>
-                    ) : (
-                      switcherProjects.map((p) => (
-                        <MenuItem key={p.id} onClick={() => handleProjectSwitch(p.id)}>
+            {/* O6: Fluent2 Combobox project switcher — searchable, min 320px,
+                max 480px. Tooltip surfaces the full project name on overflow.
+                Recent projects (last 5) appear at the top of the dropdown. */}
+            {id && projects && (
+              <Tooltip
+                content={projectName ?? ''}
+                relationship="label"
+                positioning="below-start"
+                hideDelay={0}
+              >
+                <Combobox
+                  className={styles.projectCombobox}
+                  value={comboValue}
+                  selectedOptions={id ? [id] : []}
+                  placeholder="Select project…"
+                  onInput={(e) => setComboValue(e.currentTarget.value)}
+                  onOptionSelect={(_, data) => {
+                    if (!data.optionValue) return
+                    const selected = projects.find((p) => p.id === data.optionValue)
+                    if (selected) {
+                      setComboValue(selected.name)
+                      handleProjectSwitch(data.optionValue)
+                    }
+                  }}
+                  onBlur={() => {
+                    // Restore the current project name if the user typed but
+                    // didn't pick anything.
+                    setComboValue(projectName ?? '')
+                  }}
+                >
+                  {recentProjects.length > 0 && (
+                    <OptionGroup label="Recent">
+                      {recentProjects.map((p) => (
+                        <Option key={p.id} value={p.id} text={p.name}>
                           {p.name}
-                        </MenuItem>
-                      ))
+                        </Option>
+                      ))}
+                    </OptionGroup>
+                  )}
+                  <OptionGroup label={recentProjects.length > 0 ? 'All Projects' : undefined}>
+                    {filteredProjects.map((p) => (
+                      <Option key={p.id} value={p.id} text={p.name}>
+                        {p.name}
+                      </Option>
+                    ))}
+                    {filteredProjects.length === 0 && (
+                      <Option value="" disabled text="">
+                        No projects match "{comboValue}"
+                      </Option>
                     )}
-                    <MenuItem onClick={() => void navigate('/')}>All projects…</MenuItem>
-                  </MenuList>
-                </MenuPopover>
-              </Menu>
+                  </OptionGroup>
+                </Combobox>
+              </Tooltip>
             )}
           </div>
           <div className={styles.topBarRight}>

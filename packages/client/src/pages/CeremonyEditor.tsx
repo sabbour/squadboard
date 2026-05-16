@@ -498,11 +498,11 @@ export default function CeremonyEditor() {
       ) : (
         <div
           style={{
-            padding: '12px 20px',
-            borderBottom: '1px solid var(--border)',
+            padding: `${tokens.spacingVerticalM} ${tokens.spacingHorizontalXL}`,
+            borderBottom: `1px solid ${tokens.colorNeutralStroke1}`,
             display: 'flex',
             alignItems: 'center',
-            gap: 12,
+            gap: tokens.spacingHorizontalM,
             flexShrink: 0,
           }}
         >
@@ -526,12 +526,12 @@ export default function CeremonyEditor() {
           <div style={{ flex: 1 }} />
 
           {saveOk && (
-            <Caption1 style={{ color: '#3fb950', display: 'flex', alignItems: 'center', gap: 4 }}>
+            <Caption1 style={{ color: tokens.colorPaletteGreenForeground1, display: 'flex', alignItems: 'center', gap: 4 }}>
               <Checkmark16Regular /> Saved
             </Caption1>
           )}
           {saveErr && (
-            <Caption1 style={{ color: '#f85149', display: 'flex', alignItems: 'center', gap: 4 }} title={saveErr}>
+            <Caption1 style={{ color: tokens.colorPaletteRedForeground1, display: 'flex', alignItems: 'center', gap: 4 }} title={saveErr}>
               <Warning16Regular /> {saveErr.slice(0, 60)}
             </Caption1>
           )}

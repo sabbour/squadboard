@@ -172,3 +172,37 @@ Run: w17
 
 - **verbal**: Stream G phase 2A (G2.3 comment + G2.5 merge PR with CI gate + G2.6 card badges)
 - **redfoot**: 4 docs (README + ceremonies concept + features audit + MCP install)
+
+## Wave 18 — W18 UX Polish: O6 Combobox + H6 Ceremonies Audit + O5 Consult Removal (build green)
+
+**Date:** 2026-05-15T22:42:29.855-07:00
+
+Three polish items from Ahmed's bug-bash intake landed in one pass:
+
+**O6 — Project selector → Fluent2 Combobox (Layout.tsx):**
+- Replaced `Menu`/`MenuTrigger`/`MenuPopover`/`Button` switcher with `Combobox` + `Option`/`OptionGroup`.
+- Min 320px / max 480px, flex-shrink on narrow viewports.
+- Searchable: `onInput` filters `allProjectsSorted` in real-time; exact-name match shows unfiltered list.
+- Recent projects: last 5 IDs persisted to `localStorage['squadboard:recent-project-ids']`; shown as "Recent" `OptionGroup` at top; updated via `pushRecentId()` on every project switch.
+- `onBlur` restores the current project name if user didn't pick anything.
+- `Tooltip` wraps the Combobox, surfaces full name on hover for overflow cases.
+- Removed: `Menu`/`MenuTrigger`/`MenuPopover`/`MenuList`/`MenuItem` + `ChevronDown16Regular`.
+
+**H6 — Ceremonies page Fluent2 audit (CeremonyEditor.tsx):**
+- `CeremonyList.tsx` was already Fluent2-compliant (tokens, PageHeader, proper button appearances, good empty state).
+- Edit-mode header in `CeremonyEditor.tsx` had 3 issues: `var(--border)` → `tokens.colorNeutralStroke1`; raw `gap: 12` → `tokens.spacingHorizontalM`; hardcoded `#3fb950`/`#f85149` → `tokens.colorPaletteGreenForeground1`/`tokens.colorPaletteRedForeground1`.
+- Empty-state convergence for Skills/Tools/MCP deferred to W19 (not trivial enough to batch here).
+
+**O5 — Remove Consult button from work-item side view (CardDetail.tsx):**
+- Removed `<Tooltip>`+`<Button>Consult</Button>` block from CardDetail panel header.
+- Removed now-unused imports: `useNavigate`, `Button`, `Tooltip`, `Lightbulb20Regular`.
+- Filed W19 follow-up: `conjure-workitem-deeplink` — implement `?context=workItem:{id}` in Conjure + "Investigate with Conjure" in CardDetail overflow menu.
+
+**Key learnings:**
+- Fluent2 `Combobox` `value` prop controls the text in the input; use `onBlur` to restore the display name if the user abandons without selecting.
+- `selectedOptions` on Combobox takes an array of option `value` strings — pass `[currentProjectId]` to mark the active project.
+- `OptionGroup` with `label={undefined}` renders without a group header — useful when there are no recent projects.
+- After removing a CTA from a component, always grep for *all* the now-unused imports it pulled in (Tooltip, navigate, icon) — tsc `noUnusedLocals` will catch them at build time but it's cleaner to fix proactively.
+
+**Files changed:** `Layout.tsx`, `CeremonyEditor.tsx`, `CardDetail.tsx`
+**Build:** ✓ green — `tsc -b && vite build` in 6.71s, zero errors.
