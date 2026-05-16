@@ -4,6 +4,7 @@ import { type Agent } from '../../api/agents.ts'
 import RunStatusBadge from './RunStatusBadge.tsx'
 import CostDisplay from './CostDisplay.tsx'
 import { RoutingTierBadge } from '../routing/RoutingTierBadge.tsx'
+import GitActions from './GitActions.tsx'
 import { wsClient } from '../../realtime/ws-client.ts'
 import { Search20Regular, Play20Regular } from '@fluentui/react-icons'
 
@@ -164,12 +165,17 @@ export default function RunOutputPanel({ projectId, run, agent }: RunOutputPanel
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
+            gap: '8px',
+            flexWrap: 'wrap',
           }}
         >
           <span style={{ fontSize: '12px', color: run.status === 'completed' ? '#3fb950' : '#f85149' }}>
             {run.status === 'completed' ? '✓ Completed' : run.status === 'cancelled' ? '⊘ Cancelled' : '✗ Failed'}
           </span>
-          <CostDisplay costUsd={run.costUsd} costTokens={run.costTokens} />
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <GitActions projectId={projectId} run={run} />
+            <CostDisplay costUsd={run.costUsd} costTokens={run.costTokens} />
+          </div>
         </div>
       )}
     </div>

@@ -111,7 +111,10 @@ export async function runWorker(issueRunId: string): Promise<void> {
   // --- Resolve workspace ---
   let workspacePath: string;
   try {
-    workspacePath = await resolveWorkspace(issueRunId, run.workspaceStrategy);
+    workspacePath = await resolveWorkspace(issueRunId, run.workspaceStrategy, {
+      agentName: agent.name,
+      issueTitle: issue.title,
+    });
     await db
       .update(issueRuns)
       .set({ workspacePath, updatedAt: new Date() })

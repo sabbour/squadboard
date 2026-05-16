@@ -82,3 +82,47 @@ Dispatched in Wave 14: Standalone coordinator daemon. Q6=B (autonomous daemon mo
 
 Manual override button (q9) will be built on top as Wave 15 follow-up.
 
+
+
+## Learnings — 2026-05-15T22:14:50.847-07:00 — q7-coordinator-server-agent
+
+**Guard composition pattern:** Each guard is a pure function returning `{ allowed: boolean, reason?: string }`. `shouldRun()` composes them via a `find(g => !g.allowed)` short-circuit and returns the full guard snapshot alongside the boolean. This means every tick log contains the exact guard state at that moment — no guessing. Guards are re-checked on every tick, not just startup. A CLI session that starts mid-daemon causes a graceful idle on the next tick.
+
+**PID-file lock design:** The PID file at `~/.squadboard/daemon.pid` is the single-machine lock. On `startDaemon()`, we first call `process.kill(pid, 0)` to verify the stored PID is alive (a stale file doesn't count). The file is written by the daemon process itself after the live-check clears. On `SIGTERM`/`SIGINT`/`exit`, it's removed. The daemon CLI's `stop` command reads the PID, sends `SIGTERM`, and lets the daemon's own shutdown handler clean up. This avoids races: the CLI never writes or deletes the PID file itself during normal stop operations.
+
+**q8 dependency handling (stub vs real):** The invoker resolves `closeOut` via a dynamic `import('@sabbour/squadboard-sdk')` at module-load time, swallowing `MODULE_NOT_FOUND`. If the import fails, it falls back to `closeOutStub()` which logs a clear `(q8 not yet landed)` message and returns a fake `CloseOutResult`. The resolution promise is captured once — subsequent ticks reuse it without retrying the import each time. When Kobayashi's PR lands, drop-in replacement: the dynamic import will succeed and the real function takes over with zero daemon code changes.
+
+**Concurrency gotcha:** The `isCeremonyRunning` boolean is the only in-process concurrency guard. It's set synchronously before the async `invokeCeremony()` call and cleared in a `finally` block. If the scheduler fires a tick while a ceremony is still running (unusual given 4h intervals, but possible if the interval is set very short for testing), the second tick logs a `daemon.skipped` entry and exits immediately. This is intentional: we'd rather miss a tick than double-invoke the ceremony.
+
+**Auto-start path:** The server's `index.ts` calls `maybeAutoStartDaemon()` (non-blocking, no `await`) after `initGitHubSyncHooks()`. The function forks `daemon/process.ts` (or `.js` in production) as a fully detached child (`stdio: 'ignore'`, `child.unref()`). Server startup is never blocked. A failed auto-start logs a warning and continues. The daemon detects its own PID file on the next guard cycle, so double-fork on hot-reload is prevented.
+
+---
+
+## 2026-05-15T22:42:29.855-07:00 — Wave 16 — Stream G Phase 1 (GitHub integration)
+
+**Task:** Stream G Phase 1 — branch convention, PR template, push + create-PR endpoints with WS fast-path.
+
+**Files changed:**
+- `packages/server/src/engine/workspace.ts` — `deriveSquadBranchName()` (squad/{agent}/{slug} convention), `assertSafeWorkspacePath()` (must be under `~/.squadboard/` or tmpdir), `resolveWorkspace` extended with optional agent/issue opts; worktrees now live under `~/.squadboard/worktrees/` (always inside allowed root); `cleanupWorkspace` reads branch from worktree HEAD instead of reconstructing.
+- `packages/server/src/engine/stepper.ts` — passes `agent.name + issue.title` to `resolveWorkspace` so convention applies at worktree creation.
+- `packages/server/src/realtime/event-bus.ts` — added `GitEventType` (`git.push.complete`, `git.pr.created`) and `emitGitEvent`.
+- `packages/server/src/routes/runs.ts` — `POST /:runId/git/push` (shell: `git push -u origin <branch>`), `POST /:runId/git/pr` (shell: `gh pr create`), `buildPrBody()` pre-fills PR template. Safety: protected-branch block, path validation, branch sanitization, 30 s timeouts, stderr surfaced to client.
+- `packages/client/src/realtime/ws-client.ts` — `git.push.complete` and `git.pr.created` added to `WsEventMap`.
+- `packages/client/src/api/git.ts` — `usePushBranch`, `useCreatePr` mutation hooks.
+- `packages/client/src/components/runs/GitActions.tsx` — new component: "Push branch" button + PR modal, WS fast-path via `wsClient.on('git.push.complete' / 'git.pr.created')`.
+- `packages/client/src/components/runs/RunOutputPanel.tsx` — imports and renders `<GitActions>` in the completed-run footer (worktree runs only).
+- `.github/PULL_REQUEST_TEMPLATE.md` — new default PR template.
+
+**Decision records:**
+- `.squad/decisions/inbox/verbal-git-branch-convention.md` — branch convention spec + slug rules
+- `.squad/decisions/inbox/verbal-stream-g-phase1.md` — endpoint shapes, WS payloads, safety guards, Phase 2 queue
+
+**Learnings this wave:**
+
+**Workspace path safety pattern:** `assertSafeWorkspacePath` uses `path.resolve()` then checks prefix against an allow-list (`~/.squadboard/`, OS tmpdir). The old `<repoParent>/<repoName>-run-<id>` worktree path escaped this boundary — sibling directories of the repo root are outside `~/.squadboard/`. Moving worktrees under `~/.squadboard/worktrees/` fixes this and makes the allow-list enforceable.
+
+**Branch cleanup pattern:** Old cleanup reconstructed the branch name from the run ID (`squadboard/run-{id}`). With convention-named branches we don't know the name at cleanup time. Correct fix: read `git rev-parse --abbrev-ref HEAD` from the worktree before removing it; delete only if it starts with `squad/`. Handles legacy branches and convention branches uniformly.
+
+**WS as fast path, DB as truth:** The `git.push.complete` and `git.pr.created` WS events exist purely to snap the button state before the next React query refetch. If the socket drops, the button will still catch up on next render via normal query invalidation (future: add `invalidateQueries` in mutation `onSuccess`). The events carry no state that isn't also derivable from the DB — exactly "WS is a hint, not a delivery guarantee."
+
+**gh CLI output format:** `gh pr create` emits progress to stderr and the final PR URL (https://github.com/…/pull/N) as the last stdout line. Extracting `prNumber` via `/\/pull\/(\d+)$/` from that last line is reliable even if gh adds new output lines above it.

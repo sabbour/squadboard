@@ -58,6 +58,9 @@ export interface WsEventMap {
   'consult.usage':             { sessionId: string; inputTokens: number; outputTokens: number; model?: string | null; cost: number }
   'consult.error':             { sessionId: string; message: string }
   'consult.completed':         { sessionId: string; reason: 'completed' | 'cancelled' | 'failed' }
+  // Stream G: GitHub integration — git push + PR lifecycle
+  'git.push.complete': { runId: string; branch: string; branchUrl: string; pushOutput: string }
+  'git.pr.created':    { runId: string; branch: string; prUrl: string; prNumber?: number }
   // Connection control (sent by server)
   connected: { serverId: string }
   error: { message: string }

@@ -108,6 +108,17 @@ export type FlowEventType =
   | 'flow.instance.ended'
   | 'flow.lineage.edge.created';
 
+/**
+ * Stream G — GitHub integration: git push + PR lifecycle events.
+ * Scoped to a project room so the run drawer button updates without page refresh.
+ *
+ * git.push.complete — branch pushed to origin; payload includes branch + URL
+ * git.pr.created    — PR opened via gh; payload includes PR URL + number
+ */
+export type GitEventType =
+  | 'git.push.complete'
+  | 'git.pr.created';
+
 export type BusEventType =
   | IssueEventType
   | RunEventType
@@ -119,7 +130,8 @@ export type BusEventType =
   | FanOutEventType
   | ConsultEventType
   | HeartbeatEventType
-  | FlowEventType;
+  | FlowEventType
+  | GitEventType;
 
 export interface BusEvent {
   type: BusEventType;
@@ -245,6 +257,12 @@ class EventBus extends EventEmitter {
     this.on('heartbeat', handler);
     return () => this.off('heartbeat', handler);
   }
+  /** Stream G: emit a git push / PR event scoped to a project. */
+  emitGitEvent(type: GitEventType, projectId: string, payload: unknown): void {
+    const event: BusEvent = { type, projectId, payload };
+    this.emit('event', event);
+  }
+
   /**
    * Phase 19 (Now view): Subscribe to ALL events across ALL projects.
    * The handler receives every BusEvent emitted on the in-process bus,
