@@ -12,6 +12,8 @@ import {
 } from '../api/templates.ts'
 import { McpConfigPanel } from '../components/settings/McpConfigPanel.tsx'
 import { ReviewPolicySection } from '../components/settings/ReviewPolicySection.tsx'
+import { SystemBackupSection } from '../components/settings/SystemBackupSection.tsx'
+import { SystemGitHubSection } from '../components/settings/SystemGitHubSection.tsx'
 import PageHeader from '../components/layout/PageHeader.tsx'
 import {
   Dropdown,
@@ -43,9 +45,11 @@ import {
   BookmarkAddFilled,
   ArrowDownload20Regular,
   ArrowUpload20Regular,
+  DatabaseArrowRight20Regular,
+  Branch20Regular,
 } from '@fluentui/react-icons'
 
-type Section = 'general' | 'mcp' | 'budget' | 'reviews' | 'portability'
+type Section = 'general' | 'mcp' | 'budget' | 'reviews' | 'portability' | 'backup' | 'github'
 
 const SECTIONS: { id: Section; label: string; icon: React.ReactNode }[] = [
   { id: 'general', label: 'General', icon: <TextDescription20Regular /> },
@@ -53,6 +57,8 @@ const SECTIONS: { id: Section; label: string; icon: React.ReactNode }[] = [
   { id: 'budget', label: 'Budget', icon: <Money20Regular /> },
   { id: 'reviews', label: 'Review policy', icon: <Shield20Regular /> },
   { id: 'portability', label: 'Portability', icon: <FolderArrowRight20Regular /> },
+  { id: 'backup', label: 'Backup & Restore', icon: <DatabaseArrowRight20Regular /> },
+  { id: 'github', label: 'GitHub', icon: <Branch20Regular /> },
 ]
 
 function SectionHeader({ title, sub }: { title: string; sub?: string }) {
@@ -704,6 +710,26 @@ export default function Settings() {
                 sub="Export, import, and template this project for reuse across environments."
               />
               <PortabilitySection projectId={projectId} projectName={project.name} />
+            </>
+          )}
+
+          {activeSection === 'backup' && (
+            <>
+              <SectionHeader
+                title="Backup & Restore"
+                sub="Create and restore PGlite data snapshots. Restore preserves a pre-restore rollback copy."
+              />
+              <SystemBackupSection />
+            </>
+          )}
+
+          {activeSection === 'github' && (
+            <>
+              <SectionHeader
+                title="GitHub Integration"
+                sub="Authentication status, required permissions, branch convention, and connectivity tests."
+              />
+              <SystemGitHubSection />
             </>
           )}
         </div>
