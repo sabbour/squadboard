@@ -558,3 +558,251 @@ This unblocks users who have existing squadboard board data from the embedded-po
 **Owner:** Hockney
 **Blocked by:** Nothing (PGlite is now live; migrator can land in Wave 14).
 
+### 2026-05-15T22:34: User bug-bash batch (Wave 15 intake)
+**By:** Ahmed Sabbour (via Copilot)
+**What:** Seven items landed in one message — captured as the Wave 15 slate.
+
+1. **Templates page — "Workflows" tab is confusing.** Brady doesn't know what a Workflow is vs a Ceremony. The Templates page shows tabs: Ceremonies | Workflows | Teams | Projects. The conceptual model needs to be explained in-product (or the tab needs to die / merge into Ceremonies). Owner candidate: McManus (docs) + Keyser (UI copy).
+
+2. **"Use template" on a ceremony card → blank New Ceremony page.** Regression / bug. Clicking Use template should pre-fill the New Ceremony form with the template's fields. Currently lands on empty form. Owner: Keyser.
+
+3. **Built-in project templates are missing — they used to come from squad-irl.** Regression. The Projects tab on Templates used to show project layouts sourced from squad-irl; now empty. Owner: Hockney (data ingest / source-of-truth question — where do project templates live now?).
+
+4. **Simplify the built-in ceremony templates.** UX. Current list is large / overwhelming. Brady wants a curated set, quality over quantity. Owner: McManus + Keyser.
+
+5. **🚨 "For the 3rd time" — Universal Project Bundle.** Escalation. Brady wants a way to deploy entire project configs (kanban board template + ceremonies + team roster + skills + tools + MCP servers) as a single artifact. Aligns with the earlier ask for an import/export/community-plugin format that mirrors upstream Squad. This has been deferred across Waves 11/12/13. Wave 15 must make visible progress: at minimum a bundle spec + one shipping bundle (the "Default Software Project" template). Owner: Verbal (architecture / spec) + Hockney (loader).
+
+6. **Ceremony scope options are not understood.** UX. The scope dropdown on the ceremony create/edit form doesn't communicate what each scope means. Brady wants either inline help text or a simpler model. Owner: Keyser + McManus.
+
+7. **Conjure still not visible.** Persistent regression — "Conjure replacement of Capture" was a Wave 10 item, still hasn't landed. Owner: Keyser (frontend wiring) — needs a hard look at whether the page is mounted, the route works, and the entry point exists.
+
+**Why:** Bug-bash items — Wave 15 slate. The "3rd time" comment on item 5 is the headline; the bundle work has been deferred too long. Items 2, 3, 7 are regressions and should be hot. Items 1, 4, 6 are taxonomy/UX clarifications.
+
+**Routing intent for Wave 15** (Wave 14 must close first — Hockney + Kobayashi still in flight):
+- 🏗️ Verbal — Universal Project Bundle spec + reference implementation (item 5)
+- 🔧 Hockney — built-in project templates loader, restore squad-irl source (item 3) [can pair with #5]
+- ⚛️ Keyser — Use-template prefill bug (#2) + Conjure entry point (#7) + ceremony scope copy (#6) [batched UI lane]
+- 📝 McManus — Workflow vs Ceremony nomenclature doc + ceremony template curation (#1, #4) [docs lane]
+- 📋 Scribe — close-out
+
+
+### 2026-05-15T22:42: Operating mode change — Full autopilot
+**By:** Ahmed Sabbour (via Copilot)
+**What:** Coordinator runs in continuous autopilot until the entire 101-pending backlog is cleared (or genuinely blocked). No mid-wave pauses for go/hold confirmation. Reports issued at every wave boundary in compact format: spawn results table + outstanding count + next wave slate. Wave discipline (≤3 fresh domain spawns + 1 Scribe per wave) still applies. The wave cycle is: dispatch → notifications → compact report → Scribe → next wave, until backlog is empty.
+**Why:** User explicitly directed continuous autopilot on ALL pending work with periodic reports. Eliminates per-wave approval gate. Coordinator owns the slate ordering using existing prioritization signals (escalation count, dependency graph, recency, regression severity).
+
+
+# Hockney — Stream I (Reliability) Decision Record
+**Date:** 2026-05-15T22:42:29.855-07:00  
+**Wave:** 15  
+**Author:** Hockney (Backend / Workflow Engine Dev)
+
+---
+
+## Deliverable 1 — W14 Migration Verification
+
+### Verification Outcome
+
+Migration verified **clean** on first run (before any server kills this session):
+- All 39 tables: `actual >= expected`  
+- Marker stamped with `dest_counts` block for self-contained audit trail
+
+### Verification Architecture
+
+**New surface:** `squadboard migrate --verify` (flag on existing CLI; calls `runVerify()` from `scripts/verify-migration.ts`).
+
+**Key design choice — dual mode:**  
+When the squadboard server is detected alive at `http://localhost:3000`, verify fetches counts via `GET /api/system/db-counts` (new endpoint) instead of booting a second PGlite WASM instance. This avoids the two-PGlite problem: two processes opening the same PGlite nodefs data directory produce inconsistent reads and potential WAL corruption.
+
+When the server is NOT running, PGlite is booted directly.
+
+**Marker upgrade:** `~/.squadboard/data/.migrated-to-pglite-v1` now includes a `dest_counts` block:
+```json
+{
+  "row_counts": { ... },  // source: from legacy embedded-PG at migration time
+  "dest_counts": {
+    "verified_at": "2026-05-16T...",
+    "counts": { ... },    // dest: live PGlite counts at verify time
+    "all_ok": true
+  }
+}
+```
+
+### Session Data Loss (not a migration bug)
+
+During W15 development, the running server was killed with `kill <PID>` (SIGKILL equivalent). PGlite's WASM runtime did not complete a clean checkpoint before exit. On next startup, the data directory was in a partially-committed WAL state, resulting in most rows being invisible.
+
+**Root cause:** PGlite relies on SIGTERM/SIGINT → graceful close for durability. Hard kills bypass the checkpoint. The process.on('SIGINT'/'SIGTERM') handlers in the server call `closeDb()` which must be the only shutdown path.
+
+**Mitigation going forward:** The restore flow (Deliverable 3) always preserves a pre-restore rollback copy, so a future accidental kill can be recovered from the last backup.
+
+---
+
+## Deliverable 2 — Periodic DB Backup + Retention
+
+### Format Chosen: PGlite Native dumpDataDir (Format A)
+
+`PGlite.dumpDataDir('gzip')` — returns a `Blob` containing a gzipped tar of the entire PGDATA directory. Written as `.tar.gz`. Backed by PGlite's internal checkpoint + WASM FS tar routine.
+
+**Why not raw filesystem tar (Format B):**
+- dumpDataDir is atomic: PGlite checkpoints before tarring, so the result is always a consistent snapshot even under concurrent queries.
+- Raw filesystem tar of an in-flight WASM nodefs directory would capture partial page writes.
+
+**Default output:** `~/.squadboard/backups/squadboard-{ISO8601}.tar.gz`  
+**Average size:** ~5 MB for a fresh cluster with 39 tables.
+
+### Files Shipped
+
+| File | Purpose |
+|------|---------|
+| `packages/server/src/scripts/backup.ts` | Core: `runBackup()`, `pruneBackups()` |
+| `packages/server/src/cli/backup.ts` | CLI: `squadboard backup [--out PATH] [--retain N]` |
+| `packages/server/src/routes/system.ts` | Routes: `POST /api/system/backup`, `GET /api/system/backups`, `GET /api/system/db-counts` |
+
+### Backup CLI — Server-Aware Dispatch
+
+Same dual-mode pattern as verify:
+- **Server running:** `POST /api/system/backup` via HTTP → in-process PGlite → safe
+- **Server not running:** `runBackup()` directly → boots PGlite standalone
+
+### Scheduled Backup (Daemon)
+
+Added to `packages/server/src/daemon/index.ts`:
+- `maybeRunBackup(tickAt)` — checks if `tickAt >= nextBackupAt`; if so, calls `runBackup()` in the daemon process (which runs inside the server process, so PGlite is already live)
+- `nextBackupAt` advances by `intervalMs` after each backup (even on error, to avoid retry-spam)
+- Daemon status (`getDaemonStatus()`) now exposes `backup.lastBackupAt` and `backup.nextBackupAt`
+
+### Retention Defaults
+
+| Parameter | Default | Override |
+|-----------|---------|---------|
+| `retainCount` | 7 (one week of dailies) | `~/.squadboard/config.json { "backup": { "retainCount": N } }` |
+| `intervalMs` | 86400000 (24h) | `~/.squadboard/config.json { "backup": { "intervalMs": Ms } }` |
+
+After each backup, `pruneBackups()` sorts by mtime descending and deletes all beyond retainCount.
+
+---
+
+## Deliverable 3 — Restore Flow
+
+### Restore CLI
+
+`squadboard restore <backup-file>` — implemented in `packages/server/src/cli/restore.ts` + `packages/server/src/scripts/restore.ts`.
+
+### Safety Invariants (in execution order)
+
+1. **File existence + format check** — reject immediately if path missing or not `.tar.gz`/`.tar`
+2. **Daemon PID check** — read `~/.squadboard/daemon.pid`; reject if live process found (skip with `--force` in tests)
+3. **Pre-restore preservation** — `mv ~/.squadboard/data/pglite → ~/.squadboard/data/pglite.pre-restore-{ts}`; this is the rollback copy
+4. **Load backup into fresh cluster** — `new PGlite({ dataDir: PGLITE_DATA_DIR, loadDataDir: blob })`
+5. **Verify** — count all tables via direct pool query against restored PGlite (no `initDb()` — uses `createPoolAdapter()` directly to avoid the singleton problem)
+6. **Rollback on failure** — if load or verify fails, attempt `mv pre-restore → pglite` to recover original cluster
+
+### Exit codes
+
+| Code | Meaning |
+|------|---------|
+| 0 | Restore + verify pass |
+| 1 | Load error (rollback attempted) or verify failure |
+
+### Restore UI (deferred)
+
+TODO (Keyser, W16): Settings page "Restore from backup" — call `GET /api/system/backups` to list, display table with "Restore" buttons, confirm modal, call `POST /api/system/restore` (not yet implemented — requires daemon stop guard on the server side). The CLI is the production-grade path for W15.
+
+---
+
+## Open Questions
+
+### Encryption at Rest
+PGlite backup files are plaintext `.tar.gz`. They may contain API keys (stored in agents table), GitHub tokens, etc. Options:
+- **Age encryption:** `age -r <pubkey> < backup.tar.gz > backup.tar.gz.age` — simple, no deps
+- **PGlite native:** no encryption support in 0.4.5
+- **Priority:** HIGH — should land in W16 before backup files proliferate
+
+### Cross-Machine Restore (Different PGlite Versions)
+`loadDataDir` replays a PGlite WASM filesystem tarball. PGlite's PGDATA is tied to the internal Postgres version compiled into the WASM bundle. Restoring a `@electric-sql/pglite@0.4.5` backup to `@0.5.x` may fail if the on-disk format changed. **Mitigation:** embed PGlite version in backup filename or a metadata sidecar file (`.meta.json` alongside the `.tar.gz`). Track this as a breaking change risk on PGlite upgrades.
+
+### Cloud Sync
+No cloud sync in W15. Backups live only in `~/.squadboard/backups/`. Options for W16+:
+- S3/Cloudflare R2 upload after each backup (add to `runBackup`)
+- A `squadboard backup --upload` flag
+- Stream-L (Electron) packaging with cloud sync as a premium tier
+
+### Graceful Shutdown Discipline
+After the W15 WAL corruption experience: add a health check that validates PGlite's `postmaster.pid` is absent before server start. If present, PGlite was killed hard and WAL replay may be incomplete. Log a warning + consider triggering a restore from latest backup automatically.
+
+
+# Keyser W15 — UI Bug Batch Decision Record
+
+**Date:** 2026-05-15T22:42:29.855-07:00  
+**Author:** Keyser (Frontend Dev)  
+**Wave:** 15  
+**Commit:** 5f9fab1e
+
+---
+
+## Bug 1 — Use-template on ceremony lands on blank New Ceremony page
+
+### Files touched
+- `packages/client/src/pages/CeremonyEditor.tsx`
+- `packages/client/src/pages/Templates.tsx` (read-only investigation — no change needed)
+
+### Root cause
+`Templates.tsx` line 634 navigates to `/projects/${projectId}/ceremonies/new?template=${tpl.slug}`.  
+`CeremonyEditor.tsx` never imported `useSearchParams` and never read the `?template` param — so the editor always rendered a blank form regardless of the URL.
+
+### Before → After
+**Before:** Clicking "Use template" navigated to `/ceremonies/new?template=<slug>` and the form loaded completely blank. The slug was silently discarded.  
+**After:** `CeremonyEditor` reads `?template=<slug>` on mount, calls `useCeremonyTemplates()`, finds the matching template and pre-fills `name`, `description`, and `steps` from its `yamlContent`. The manual form auto-expands so the pre-filled fields are immediately visible. If the slug is unknown, a warning `MessageBar` says "Template not found — starting with a blank form."
+
+### Changes summary
+- Added `useSearchParams` to react-router import.
+- Added `useCeremonyTemplates` to ceremonies API import.
+- Reads `templateSlug = isNew ? searchParams.get('template') : null` (null-guarded — no-op on edit routes).
+- New `useEffect` triggers on `[templateSlug, builtinTemplates]`: finds template, sets `name` / `description` / `steps` / `headerExtras`, calls `setShowManualForm(true)`.
+- Added `templateNotFound` state + warning `MessageBar` for invalid slugs.
+- Added info `MessageBar` for valid pre-fill ("Pre-filled from template…").
+
+---
+
+## Bug 2 — Conjure entry point not visible (W10 / W11 / W14 persistent regression)
+
+### Root cause (definitive — third-time miss)
+**Conjure was never given its own visible label in the UI.** Wave 10 B2 correctly wired the Conjure intent flow to the `/consult/new` route, but every label (nav item, top-bar button, tooltip) was set to "Consult". Users looking for "Conjure" in the nav found "Consult" and assumed Conjure hadn't shipped. The feature was fully functional — just invisible under the wrong name. Waves 11 and 14 each picked up the bug but never traced it to the label discrepancy, so the fix never landed.
+
+### Files touched
+- `packages/client/src/components/Layout.tsx`
+
+### Changes
+| Location | Before | After |
+|---|---|---|
+| Sidebar `NavItem` label | "Consult" | "Conjure" |
+| Top-bar `Button` text | "Consult" | "Conjure" |
+| Top-bar `Button` title | "Consult / Conjure (press c or ?)" | "Conjure (press c or ?)" |
+
+Routes are **unchanged** — `/consult/new`, `/projects/:id/consult/new`. Keyboard shortcuts are **unchanged** — `c` and `?`. The Consult page component (`Consult.tsx`) is **unchanged**. Only display labels were updated.
+
+### Why it kept regressing
+No test or visual regression check covered the nav label text. The nav item `value` prop (used for routing) remained `"consult"` throughout, making the bug invisible to router-level checks.
+
+---
+
+## Bug 3 — Ceremony scope dropdown is confusing
+
+### Files touched
+- `packages/client/src/pages/CeremonyEditor.tsx` (`TriggerConfigForm` component)
+
+### Copy decisions
+| Scope | Help text |
+|---|---|
+| `project` | "Trigger fires for ANY board in the project that matches column_slug + labels." |
+| `board` | "Trigger fires only for the specified board." |
+| `task` | "Trigger fires only for a specific issue/card." |
+
+### Components added / changed
+- Replaced bare `<label style={{ fontSize: 12 }}>scope` with a `<div>` containing `<Label weight="semibold">Scope</Label>` + `<Dropdown>` (unchanged options) + `<Caption1>` help text that updates reactively on current scope value.
+- Added `<MessageBar intent="info">` below the help text when scope is `board` or `task`, explaining the narrowed-firing behaviour: "Scope set to board — this trigger will only fire for the specified board; existing matches in other boards will stop firing." (and equivalent for task).
+
+### Closes
+- `h5-scope-clarify` (existing todo)
+- `w15-ceremony-scope-options-ux` (W15 bug)

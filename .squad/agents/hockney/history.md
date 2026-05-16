@@ -208,3 +208,10 @@ W14 migration verified **clean** on initial run — all 39 tables had `actual >=
 - **CLI standalone guard is mandatory**: every script with both an exported function AND a standalone `main()` must gate `main()` with `fileURLToPath(import.meta.url) === argv1`.
 - **Restore verification must not use initDb()**: `initDb()` reads the module-level PGlite singleton. In a subprocess that called `PGlite.create()` directly, use `createPoolAdapter(instance)` instead.
 - **Graceful shutdown discipline**: hard process kills bypass the SIGTERM handler — PGlite will not checkpoint cleanly. Always stop via registered signal handlers. Consider adding postmaster.pid presence check on startup as a WAL-replay warning.
+
+## Team Update — undefined
+
+Run: wave-15
+
+- **mcmanus**: Universal Project Bundle (3rd escalation cleared)
+- **keyser**: UI batch (#2, #6, #7 fixes)

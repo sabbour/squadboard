@@ -126,3 +126,10 @@ Three bugs landed in one commit cluster:
 - `useSearchParams` from react-router is the correct hook for reading URL query params in Vite/react-router v7 (not `new URLSearchParams(window.location.search)`).
 - Nav label regressions are invisible to router-level tests — the `value` prop (used for routing) was "consult" throughout; only the display text was wrong. Consider adding a smoke test that verifies visible nav label text matches product names.
 - `useCeremonyTemplates()` is safe to call on both new and edit routes — React Query caches it and the pre-fill effect is guarded by `templateSlug` being null on edit routes.
+
+## Team Update — undefined
+
+Run: wave-15
+
+- **mcmanus**: Universal Project Bundle (3rd escalation cleared)
+- **hockney**: Stream I (backup/restore + W14 migration)

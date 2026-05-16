@@ -194,3 +194,10 @@ This is a cross-repo effort. PR should be authored and submitted by you (or coor
 **Closes:** `w15-universal-project-bundle`, `f5-unified-import-export`
 
 **Decision doc:** `.squad/decisions/inbox/mcmanus-universal-project-bundle.md`
+
+## Team Update — undefined
+
+Run: wave-15
+
+- **hockney**: Stream I (backup/restore + W14 migration)
+- **keyser**: UI batch (#2, #6, #7 fixes)
