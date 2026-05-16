@@ -1,0 +1,27 @@
+{
+  "name": "@sabbour/squadboard-electron",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "out/main/index.js",
+  "scripts": {
+    "dev": "electron-vite dev",
+    "build": "electron-vite build",
+    "start": "electron-vite preview",
+    "lint": "tsc --noEmit && tsc --noEmit -p tsconfig.renderer.json",
+    "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.renderer.json"
+  },
+  "dependencies": {
+    "@sabbour/squadboard": "workspace:*",
+    "@sabbour/squadboard-sdk": "workspace:*",
+    "@sabbour/squadboard-client": "workspace:*"
+  },
+  "devDependencies": {
+    "electron": "^42.0.0",
+    "electron-builder": "^26.0.0",
+    "electron-vite": "^5.0.0",
+    "typescript": "^5.7.0",
+    "vite": "^6.0.0",
+    "@types/node": "^22.0.0"
+  }
+}

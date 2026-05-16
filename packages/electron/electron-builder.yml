@@ -1,0 +1,53 @@
+# electron-builder configuration
+# STUB for L2 — just enough to verify pnpm build produces a runnable binary.
+# Full packaging (installers, DMG, NSIS, AppImage) is L7.
+# Code signing (Apple notarization, Windows EV cert) is L9.
+
+appId: com.sabbour.squadboard
+productName: Squadboard
+copyright: Copyright © 2026 Ahmad Sabbour
+
+# L7 will set these properly with real icons.
+# icon: build/icons/icon
+
+directories:
+  output: release
+  buildResources: build
+
+files:
+  - dist/**/*
+  - node_modules/**/*
+  - package.json
+
+# Extra resources: the pre-built server dist gets bundled here.
+# L7 will configure this properly; L4 adds embedded PG data.
+extraResources:
+  - from: ../server/dist
+    to: server/dist
+    filter:
+      - '**/*'
+
+# Target platforms — named but no signing config yet (L9).
+mac:
+  target:
+    - target: dmg
+      arch: [x64, arm64]
+  # L9: hardenedRuntime, notarize, entitlements
+
+win:
+  target:
+    - target: nsis
+      arch: [x64]
+  # L9: signingHashAlgorithms, certificateSubjectName
+
+linux:
+  target:
+    - target: AppImage
+      arch: [x64]
+
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+
+# Auto-update is L8.
+# publish: []

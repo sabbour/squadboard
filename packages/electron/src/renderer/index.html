@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Squadboard</title>
+    <style>
+      * { margin: 0; padding: 0; box-sizing: border-box; }
+      body {
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+        background: #0f0f11;
+        color: #e5e5e7;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        height: 100vh;
+        flex-direction: column;
+        gap: 12px;
+      }
+      h1 { font-size: 1.5rem; font-weight: 600; }
+      p { font-size: 0.875rem; color: #888; }
+      a { color: #3b82f6; text-decoration: none; cursor: pointer; }
+    </style>
+    <script type="module" src="./index.ts"></script>
+  </head>
+  <body>
+    <h1>Squadboard</h1>
+    <p>Loading client…</p>
+    <div id="status"></div>
+  </body>
+</html>

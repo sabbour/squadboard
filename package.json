@@ -9,7 +9,9 @@
     "build": "pnpm -r build",
     "dev": "pnpm --filter @sabbour/squadboard-server --filter @sabbour/squadboard-client run dev",
     "start": "pnpm --filter @sabbour/squadboard-cli start",
-    "test:e2e": "pnpm --filter @sabbour/squadboard-e2e test"
+    "test:e2e": "pnpm --filter @sabbour/squadboard-e2e test",
+    "electron:dev": "pnpm --filter @sabbour/squadboard-electron dev",
+    "electron:build": "pnpm --filter @sabbour/squadboard-electron build"
   },
   "engines": {
     "node": ">=20.0.0",
