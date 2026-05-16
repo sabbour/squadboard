@@ -119,7 +119,44 @@ echo "T1=$T1  T2=$T2"
 
 ---
 
-## Bulk-Import Refactor (2026-05-15)
+## Wave 13 — Q1 PGlite Migration (2026-05-15T19:39:32-07:00)
+
+### What we did
+Executed the full embedded-postgres → PGlite spike-and-swap per Ahmed's directive.
+
+### The spike → swap → charter-update sequence
+
+1. **Spike first.** Before touching any production files, write a standalone script (`scripts/pglite-spike.ts`) that boots PGlite in a temp dir and runs the EXACT bootstrap SQL verbatim. All 17 feature checks passed. This gave us confidence before any production file was touched.
+
+2. **One non-obvious PGlite quirk — `query()` vs `exec()`.**  
+   PGlite has two query paths:
+   - `pglite.query(sql, params?)` — uses the PostgreSQL *extended query* (prepared statement) protocol. Rejects multi-statement SQL with `"cannot insert multiple commands into a prepared statement"`.
+   - `pglite.exec(sql)` — uses the *simple query* protocol. Accepts multi-statement DDL blocks (same as pg Pool's `pool.query(sql)` with no params).
+   
+   The bootstrap schema sends large multi-statement SQL blocks via `_pool.query()` (no params). The pool adapter must detect param-less calls and route them through `exec()`. This was discovered by running the server and seeing the crash — the spike missed it because the spike used `exec()` directly. **Lesson: the spike must also test via the pool adapter, not just raw PGlite API.**
+
+3. **`rowCount` ↔ `affectedRows` mapping.** PGlite returns `affectedRows`; pg returns `rowCount`. The pool adapter maps transparently. Sweeper code reads `.rowCount ?? 0` — the `?? 0` guard handles both null and undefined safely.
+
+4. **Union Drizzle types don't compose.** Exposing `DrizzleDb = PgliteDb | PgDb` caused TypeScript to refuse calling any query builder method (`.returning()`, `.insert()`, etc.) because the two HKT types differ. Fix: expose only `PgliteDatabase<typeof schema>` as `DrizzleDb`; cast the pg driver at the assignment site. Runtime API is identical.
+
+5. **Charter update is part of the task.** After any DB driver swap, update the "What I Own" section in `charter.md` so future agents see the current state, not the pre-migration state.
+
+### Files touched
+- **NEW** `packages/server/src/db/pglite.ts` — PGlite engine, pool adapter, shutdown handlers
+- **MODIFIED** `packages/server/src/db/index.ts` — Drizzle driver swap, `PoolLike` abstraction
+- **MOVED** `packages/server/src/db/postgres.ts` → `.deprecated/postgres.ts`
+- **MODIFIED** `src/index.ts`, `src/cli/bulk-import.ts`, `src/mcp/index.ts`, `src/scripts/seed-wave10-backlog.ts` — import sites
+- **MODIFIED** `packages/server/package.json` — `embedded-postgres` removed, `@electric-sql/pglite@0.4.5` added
+- **NEW** `packages/server/src/scripts/pglite-spike.ts` — feasibility script (17/17 PASS)
+- **NEW** `.squad/decisions/inbox/hockney-pglite-migration.md` — decision record
+- **MODIFIED** `.squad/agents/hockney/charter.md` — "What I Own" updated
+
+### Decision filed
+`.squad/decisions/inbox/hockney-pglite-migration.md`
+
+### Status
+COMPLETE. `tsc --noEmit` clean. 4/4 vitest tests pass. Server starts, `GET /api/projects` returns 200 + JSON from fresh PGlite cluster.
+
 
 ### Files Changed
 

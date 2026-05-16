@@ -19,7 +19,8 @@
 - Declarative retry policy on every step (`retry: { max_attempts, backoff_ms, on_exhausted }`)
 - Workflow step catalogue evaluators: `route`, `agent_run`, `peer_review`, `human_approve`, `fan_out`, `wait_event`, `wait_timer`, `triage_assign`, `branch`, `retry_wrap`, `github_pr`, `github_pr_wait_merged`
 - Workspace strategies: `scratch`, `dir:<absolute_path>` (reject relative paths), `worktree` (default for code-touching agents)
-- Embedded Postgres for local installs (~50MB binary), hosted Postgres for cloud — same Drizzle schema either way
+- PGlite (~5MB WASM) for local installs, hosted Postgres for cloud — same Drizzle schema either way, swapped at runtime via DATABASE_URL
+- **Decision recorded 2026-05-15 (Ahmed): no embedded PG. PGlite replaces embedded-postgres.**
 
 ## How I Work
 

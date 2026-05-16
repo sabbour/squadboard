@@ -14,7 +14,9 @@
     "db:studio": "drizzle-kit studio"
   },
   "dependencies": {
+    "@electric-sql/pglite": "^0.4.5",
     "@bradygaster/squad-sdk": "0.9.4",
+    "@electric-sql/pglite": "^0.4.5",
     "@modelcontextprotocol/sdk": "^1.29.0",
     "@types/multer": "^2.1.0",
     "@types/ws": "^8.18.1",
@@ -22,7 +24,6 @@
     "chokidar": "^3.6.0",
     "cron-parser": "^5.5.0",
     "drizzle-orm": "^0.36.4",
-    "embedded-postgres": "18.3.0-beta.17",
     "express": "^5.0.0",
     "jose": "^6.0.0",
     "js-yaml": "^4.1.0",

@@ -20,7 +20,7 @@
 
 import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
-import { startEmbeddedPostgres } from '../db/postgres.js';
+import { startPglite } from '../db/pglite.js';
 import { initDb } from '../db/index.js';
 import { bulkImportIssues } from '../services/bulk-import-issues.js';
 import type { InertStatus } from '../services/bulk-import-issues.js';
@@ -113,8 +113,8 @@ async function main() {
     process.exit(1);
   }
 
-  // Bootstrap DB (connects to embedded postgres or DATABASE_URL).
-  const connectionString = await startEmbeddedPostgres();
+  // Bootstrap DB (connects to PGlite or DATABASE_URL).
+  const connectionString = await startPglite();
   await initDb(connectionString);
 
   // Build items.

@@ -1,30 +1,84 @@
-import { drizzle } from 'drizzle-orm/node-postgres';
+import { drizzle as drizzlePglite } from 'drizzle-orm/pglite';
+import { drizzle as drizzlePg } from 'drizzle-orm/node-postgres';
 import { Pool } from 'pg';
 import * as schema from './schema.js';
+import {
+  getPglite,
+  PGLITE_SENTINEL,
+  createPoolAdapter,
+  type PoolLike,
+} from './pglite.js';
 
-export type DrizzleDb = ReturnType<typeof drizzle<typeof schema>>;
+// ─── Drizzle DB type ─────────────────────────────────────────────────────────
+// Both drizzle-orm/pglite and drizzle-orm/node-postgres extend PgDatabase and
+// expose an identical query API (select/insert/update/delete/etc.).
+// We expose the PgliteDatabase type as the canonical type. When the pg pool is
+// used (DATABASE_URL mode), the drizzle-orm/node-postgres instance is cast to
+// this type — safe at runtime because the query builder interface is the same.
+export type DrizzleDb = ReturnType<typeof drizzlePglite<typeof schema>>;
 type Db = DrizzleDb;
 
-let _pool: Pool | null = null;
+// Always PoolLike so bootstrapSchema() and getPool() callers have a stable API.
+let _pool: PoolLike | null = null;
 let _db: Db | null = null;
 
 /**
  * Initialise the Drizzle DB connection. Must be called after
- * `startEmbeddedPostgres()` resolves. Also bootstraps the schema
- * so Demo 1 works without a separate `pnpm db:push` step.
+ * `startPglite()` (or `startEmbeddedPostgres()`) resolves. Also bootstraps
+ * the schema so Demo 1 works without a separate `pnpm db:push` step.
+ *
+ * @param connectionOrSentinel Either the PGLITE_SENTINEL (→ PGlite mode) or a
+ *   real postgres:// connection string (→ external Postgres via pg.Pool).
  */
-export async function initDb(connectionString: string): Promise<void> {
-  _pool = new Pool({ connectionString });
-  _db = drizzle(_pool, { schema });
+export async function initDb(connectionOrSentinel: string): Promise<void> {
+  if (connectionOrSentinel === PGLITE_SENTINEL) {
+    // ── PGlite mode ──────────────────────────────────────────────────────
+    const pglite = getPglite();
+    if (!pglite) throw new Error('[db] PGlite sentinel returned but no PGlite instance found');
+    _db = drizzlePglite(pglite, { schema });
+    _pool = createPoolAdapter(pglite);
+  } else {
+    // ── External Postgres mode (DATABASE_URL override) ───────────────────
+    const pgPool = new Pool({ connectionString: connectionOrSentinel });
+    // Cast is safe: NodePgDatabase and PgliteDatabase share the same
+    // PgDatabase query-builder API; only the HKT generic differs internally.
+    _db = drizzlePg(pgPool, { schema }) as unknown as Db;
+    _pool = wrapPgPool(pgPool);
+  }
 
   await bootstrapSchema();
 }
 
+/** Wrap a real pg.Pool in the PoolLike interface used by getPool() callers. */
+function wrapPgPool(pool: Pool): PoolLike {
+  // The PoolLike query generic (R extends Record<string,unknown>) is structurally
+  // compatible with pg's Pool.query return type. We cast after wrapping.
+  const runQuery = async (sql: string, params?: unknown[]) => {
+    const r = await pool.query(sql, params as never[]);
+    return { rows: r.rows as Record<string, unknown>[], rowCount: r.rowCount };
+  };
+  return {
+    query: runQuery as PoolLike['query'],
+    connect: async () => {
+      const client = await pool.connect();
+      return {
+        query: (async (sql: string, params?: unknown[]) => {
+          const r = await client.query(sql, params as never[]);
+          return { rows: r.rows as Record<string, unknown>[], rowCount: r.rowCount };
+        }) as PoolLike['query'],
+        release: () => client.release(),
+      };
+    },
+    end: async () => pool.end(),
+  };
+}
+
 /**
- * Returns the raw pg Pool (for raw-SQL transactions that Drizzle can't handle).
+ * Returns the pool-like handle for raw-SQL queries.
+ * In PGlite mode this is a PoolLike adapter; in external-PG mode a wrapped pg.Pool.
  * Throws if called before `initDb()`.
  */
-export function getPool(): Pool {
+export function getPool(): PoolLike {
   if (!_pool) {
     throw new Error('DB not initialised — call initDb() first');
   }

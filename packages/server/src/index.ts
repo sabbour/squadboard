@@ -3,7 +3,7 @@ import { createServer } from 'node:http';
 import { existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
-import { startEmbeddedPostgres } from './db/postgres.js';
+import { startPglite } from './db/pglite.js';
 import { initDb, closeDb } from './db/index.js';
 import healthRouter from './routes/health.js';
 import projectsRouter from './routes/projects.js';
@@ -79,7 +79,7 @@ async function main(): Promise<void> {
   const startMs = Date.now();
   console.log('[squadboard] starting…');
 
-  const connectionString = await startEmbeddedPostgres();
+  const connectionString = await startPglite();
   await initDb(connectionString);
 
   // Wave 10 Stream A1: dogfood — self-register the running squadboard repo as

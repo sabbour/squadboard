@@ -15,7 +15,7 @@
  * fallback projectId without the caller having to thread it on every call.
  */
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
-import { startEmbeddedPostgres } from '../db/postgres.js';
+import { startEmbeddedPostgres } from '../db/pglite.js';
 import { initDb } from '../db/index.js';
 import { createMcpServer, setDefaultProjectId } from './server.js';
 
