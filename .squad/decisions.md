@@ -3455,3 +3455,402 @@ The `mcpServers` and `seedIssues` sections are also defined inline in `squadapp.
 ## Build Status
 
 ✓ Green (tsc + vite, 7.05s, zero type errors)
+
+---
+
+# 2026-05-16T02:55:00-07:00: Keyser W25 — Collapsible Nav Regression Fix
+
+# Decision: W25 Collapsible Nav Regression Fix
+
+**Agent:** Keyser (Frontend Dev)  
+**Date:** 2026-05-16  
+**Commit:** f5d03f4f  
+
+## What Was Fixed
+
+### Bug 1 — Collapse toggle alignment (expanded state)
+The `navCollapseToggle` wrapper div used `justifyContent: 'center'` unconditionally.
+Added a second style `navCollapseToggleExpanded` with `justifyContent: 'flex-end'` and `paddingInlineEnd: tokens.spacingHorizontalS`.
+Applied via `mergeClasses(styles.navCollapseToggle, !navCollapsed && styles.navCollapseToggleExpanded)`.
+Result: toggle sits at the right edge of the sidebar header when expanded (push-away affordance), centered when collapsed.
+
+### Bug 2 — NavItems not clickable in collapsed mode
+**Root cause:** All collapsed-mode `NavItem`s were rendered with no children (e.g., `<NavItem icon={...} value="projects" />`).
+Fluent UI's `NavItem` uses its children content as the inner button/link element. Without children, there is no DOM click target — clicks silently die. The surrounding `Tooltip relationship="label"` only wires up `aria-labelledby`, it does NOT create a click target.
+
+**Option chosen: A (minimal diff, hidden span)**  
+Every collapsed `NavItem` now receives a hidden `<span>` as children:
+```tsx
+<NavItem icon={<Home24Regular />} value="projects">
+  <span className={styles.navLabelHidden}>Projects</span>
+</NavItem>
+```
+`navLabelHidden: { display: 'none' }` suppresses the text visually.
+The click target exists in the DOM, `handleNavItemSelect` fires, selected state renders, keyboard nav works, tooltips still show.
+
+Affected items: Projects, Now, all PROJECT_NAV_GROUPS (Dashboard, Board, Flow, Agents, Skills, Tools, MCP Servers, Ceremonies, Templates, Costs), Diagnostics, Heartbeat, Settings.
+
+## Why Option A (not B or C)
+
+- **Option B** (rely on parent overflow:hidden to clip text) is fragile — the 56px width might not perfectly clip all label widths and could cause flicker during the CSS transition.
+- **Option C** (NavItem as="button") was not verified; NavDrawer preview components don't document this prop.
+- **Option A** is deterministic: CSS `display:none` is guaranteed to hide the text without affecting the click target or layout.
+
+## Rule for Future Agents
+
+> **DO NOT render Fluent `NavItem` without children in any clickable context.**  
+> The Tooltip+NavItem-without-children pattern silently breaks click handling.  
+> Always pass children (even a hidden span) to keep the click target alive.
+
+---
+
+# 2026-05-16T02:55:00-07:00: Hockney W25 — Untrack 139,183 Build Artifacts
+
+# W25: Untrack 139,183 Build Artifacts
+
+**Date:** 2026-05-16  
+**Issue:** Pre-existing tracked-by-mistake build artifacts continue to pollute `git status` despite W24 .gitignore patch  
+**Owner:** Hockney  
+**Status:** ✓ Complete  
+
+## Summary
+
+Safely removed 139,183 build artifacts from git's index (files left untouched on disk). Build verified green after cleanup.
+
+## Artifacts Untracked
+
+| Category | Count | Path |
+|----------|-------|------|
+| pnpm cache | 138,715 | `node_modules/.pnpm/**` |
+| Client dist | ~230 | `packages/client/dist/**` |
+| Server dist | ~236 | `packages/server/dist/**` |
+| tsbuildinfo | 1 | `*.tsbuildinfo` |
+| **Total** | **139,183** | |
+
+## Exceptions Retained
+
+None. All tracked artifacts were legitimate build outputs that must not be tracked.
+
+## Verification
+
+- ✓ Build: `pnpm -r build` completed successfully (all packages green)
+- ✓ Status: `git status --short` shows only the 139,183 deletions, no spurious "modified" lines
+- ✓ Index: `git ls-files` no longer contains any files matching `(node_modules/|/dist/|/build/|/out/|\.vite/|\.tsbuildinfo$)`
+
+## Commit
+
+- **SHA:** `bef36a4755b556215244fdd83365a08859d19d99`
+- **Message:** `chore(repo): untrack 139,183 build artifacts (W25)`
+- **Files Changed:** 139,183 deletions (index only, disk untouched)
+
+## Impact
+
+After this cleanup:
+- `git status` will no longer show spuious `M packages/client/dist/index.html` and similar lines
+- `git diff` will not include unintended build output changes
+- New builds will not re-stage these artifacts (W24 .gitignore patch prevents new additions)
+- Repo health significantly improved—developers can now use `git status` reliably
+
+## Notes
+
+The actual count (139k) was significantly higher than the ~71 estimate in the original task description. This is because the pnpm cache structure (.pnpm/) contains many linked dependency entries—each resolved version becomes a separate tracked file.
+
+Audit discipline applied: Verified all 139k entries matched the pattern before untracking.
+
+---
+
+# 2026-05-16T02:55:00-07:00: Verbal W25 — Heartbeat Configurability
+
+# Verbal W25 — Heartbeat Configurability
+
+**Author:** Verbal (Backend Dev / real-time / WebSocket specialist)
+**Date:** 2026-05-16
+**Commit:** `3583d07e`
+**Status:** Shipped
+
+---
+
+## Decision
+
+Per-sweep cadence overrides for the heartbeat sweep registry are now
+configurable via a single editable file (`packages/server/heartbeat.config.json`).
+Brady can tune intervalMs, scale defaults by multiplier, or disable sweeps
+without touching code. A new `GET /api/heartbeat/config` endpoint exposes
+the effective settings for verification.
+
+## Why
+
+Heartbeat sweeps were hard-coded at registration (5s/30s/60s). Tuning
+cadences for noisy/quiet environments required a code change → rebuild
+→ restart cycle. Brady asked for a config file. This unblocks future
+operational tuning (e.g., lengthen `github-sync-overdue` on low-bandwidth
+networks, disable `idle-live-sessions` during local dev to reduce log
+noise).
+
+## What changed
+
+| File | Change |
+|---|---|
+| `packages/server/heartbeat.config.json` | NEW — editable defaults matching coded cadences |
+| `packages/server/src/engine/heartbeat-config.ts` | NEW — loader + `applyHeartbeatConfig()` mutator |
+| `packages/server/src/engine/heartbeat.ts` | adds `getEffectiveIntervals()` for introspection |
+| `packages/server/src/routes/heartbeat.ts` | NEW route `GET /api/heartbeat/config` |
+| `packages/server/src/index.ts` | calls `applyHeartbeatConfig()` immediately before `heartbeat.register()` block |
+| `packages/server/src/__tests__/heartbeat-config.test.ts` | NEW — 11 vitest cases (ENOENT, invalid JSON, overrides, multiplier, enabled toggle, invalid values, multi-sweep) |
+| `packages/server/package.json` | adds `heartbeat.config.json` to published files list |
+
+## Config schema
+
+```json
+{
+  "sweeps": {
+    "<sweep-id>": {
+      "intervalMs": 5000,    // exact override (takes precedence)
+      "multiplier": 2,       // OR scale the coded default by this factor
+      "enabled": true        // toggle the sweep at startup
+    }
+  }
+}
+```
+
+Loaded once at boot, never hot-reloaded — restart required for changes.
+
+## Verification
+
+- `pnpm test heartbeat-config` → 11/11 passing
+- `pnpm -r build` → green
+- `curl localhost:3000/api/heartbeat/config` → returns effective intervals
+
+## Tradeoffs
+
+- **No hot reload.** Intentional: the loader runs in `applyHeartbeatConfig()`
+  before `register()`, so a change requires a restart. Hot reload would
+  require coordinating with running `setInterval` handles; out of scope.
+- **No validation beyond type-checks.** Invalid `intervalMs` (0, negative,
+  non-number) is silently ignored. Future: schema validation via Ajv if
+  the file grows.
+- **Cached load.** The first `loadHeartbeatConfig()` call wins for the
+  process lifetime. Tests use the `_resetHeartbeatConfigCache()` escape
+  hatch (underscore-prefixed to discourage prod use).
+
+## Follow-ups (optional)
+
+- Add a small Heartbeat UI panel that pretty-prints `/api/heartbeat/config`
+  alongside the existing per-sweep status cards. Currently the data is
+  reachable only via curl or the JSON endpoint.
+- If we ever ship a hosted install, document precedence: env var >
+  config file > coded default (currently only config file > coded default).
+
+---
+
+# 2026-05-16T02:55:00-07:00: Verbal W25 — Sweep Animation Visualisation
+
+# Verbal W25 — Sweep Animation Visualisation
+
+**Author:** Verbal (Backend Dev / real-time / WebSocket specialist)
+**Date:** 2026-05-16
+**Commit:** `2fc72086`
+**Status:** Shipped
+
+---
+
+## Decision
+
+Heartbeat sweeps now broadcast a `sweep.tick` event over the existing
+WebSocket infrastructure on every completion (success + error). A new
+`SweepTimeline` React component subscribes to this channel and renders
+animated pulses on a per-sweep horizontal lane. Mounted on both the
+Heartbeat page (full mode) and the Now page (compact mode).
+
+## Why
+
+Heartbeat sweeps were a black box — operators had to refresh the
+Heartbeat page (polling every 5s) and read a text log to know what
+fired and when. There was no sense of liveness or cadence at a glance.
+
+This change makes the heartbeat **visibly alive**: you can see ceremonies
+firing every 5s, presence sweeps every 30s, and GitHub catch-up sweeps
+every minute as pulses sliding from right to left across their lane.
+On the Now page (operator's home screen) the compact mode shows the
+4 most critical sweeps without taking much space.
+
+## What changed
+
+### Server
+
+| File | Change |
+|---|---|
+| `packages/server/src/realtime/event-bus.ts` | extends `HeartbeatEventType` with `'sweep.tick'` |
+| `packages/server/src/engine/heartbeat.ts` | `_runSweep()` emits `sweep.tick` on success + error (committed in Item 1's edit) |
+| `packages/server/src/realtime/ws-server.ts` | adds an `onHeartbeat` handler that fans `sweep.tick` to every `__global__` subscriber |
+
+`sweep.completed` and `sweep.error` remain server-internal — the
+in-memory ring buffer at `services/heartbeat.ts` consumes those; the
+Heartbeat page polls `/api/heartbeat/sweeps` for the history list. Only
+`sweep.tick` flows over WS, keeping channel volume minimal.
+
+### Client
+
+| File | Change |
+|---|---|
+| `packages/client/src/realtime/ws-client.ts` | adds `'sweep.tick'` entry to `WsEventMap` |
+| `packages/client/src/components/heartbeat/SweepTimeline.tsx` | NEW — full + compact modes, 6/4 lanes, 60 s sliding window, animated pulses, Fluent2-only |
+| `packages/client/src/pages/Heartbeat.tsx` | adds a fourth `SectionCard` rendering `<SweepTimeline windowSizeMs={60_000} compact={false} />` |
+| `packages/client/src/pages/Now.tsx` | adds a compact card after `ProjectMiniGrid` rendering `<SweepTimeline compact />` |
+
+## WS event extension pattern (for future agents)
+
+Three coordinated edits are required to add a new event type that flows
+to global subscribers:
+
+1. **Server union:** add the literal to `event-bus.ts` `HeartbeatEventType`
+   (or the relevant `*EventType` for project-scoped events).
+2. **Server fan-out:** in `ws-server.ts`, add a branch in `onBusEvent` or
+   `onHeartbeat` that forwards the payload to `globalClients` (or to the
+   relevant `rooms` Set for project-scoped events).
+3. **Client typing:** add an entry to `WsEventMap` in `ws-client.ts` with
+   the payload shape — TypeScript then enforces correct handlers.
+
+The compact `sweep.tick` payload (`{sweepName, timestamp, agentsActivated,
+durationMs, status}`) intentionally leaves the door open for future
+agent-attribution metadata (`agentsActivated`) without a breaking change.
+
+## Sweep lane registry (must stay in sync with `index.ts`)
+
+| ID | Compact? | Label |
+|---|---|---|
+| `ceremonies-due`       | ✓ | Ceremonies |
+| `ready-workflow-steps` | ✓ | Workflow Steps |
+| `stuck-issue-runs`     | ✓ | Stuck Runs |
+| `stale-presence`       |   | Presence |
+| `idle-live-sessions`   |   | Live Sessions |
+| `github-sync-overdue`  | ✓ | GitHub Sync |
+
+If a new sweep is added to `index.ts`, also add it to `ALL_SWEEPS` in
+`SweepTimeline.tsx` and (optionally) `COMPACT_SWEEPS`.
+
+## Visual design
+
+- Each lane = a `tokens.colorNeutralBackground3` track, 10 px tall
+  (7 px compact).
+- Pulses = circles, `tokens.colorBrandBackground` (success) or
+  `tokens.colorPaletteRedBackground3` (error), with a matching halo
+  ring, 10 px (6 px compact).
+- Pulse animates in via CSS keyframes (`scale 0.4 → 1.25 → 1`, 0.4 s).
+- A 2 s `setInterval` re-renders so the window slides smoothly and old
+  pulses get pruned.
+- Tooltip on hover shows `sweepName · durationMs · status`.
+
+## Tradeoffs
+
+- **DOM-not-canvas.** At 6 lanes × ~12 pulses/min the dot count stays
+  under 100. A canvas implementation would be needed only if we ever
+  flooded the channel with thousands of pulses.
+- **No persistence.** Refresh wipes the visible window. Acceptable —
+  the Heartbeat page already has a historical view via
+  `/api/heartbeat/sweeps`.
+- **No filter / pause.** First pass; can be added if Brady wants it.
+
+## Verification
+
+- `pnpm -r build` → all 7 packages green
+- Component renders with no console warnings
+- Compact mode visibly shorter (22 px rows vs 28 px) and 4 lanes
+- No emojis anywhere; only Fluent2 icons (`ArrowSync20Regular`)
+- ConjureModal, Consult button, top bar, collapsed nav untouched
+
+## Follow-ups (optional)
+
+- Add a "Pause" toggle so operators can freeze the window while
+  inspecting a specific pulse.
+- Surface `agentsActivated` once Lupita's coordinator-attribution work
+  lands; the payload field already exists.
+- Add an integration test that boots the server, fires a sweep, asserts
+  a `sweep.tick` reaches a `__global__` WS subscriber.
+
+---
+
+# 2026-05-16T02:55:00-07:00: Keyser W24 — UX Corrections
+
+# W24 UX Corrections — Keyser Close-Out
+
+**Date:** 2026-05-16
+**Branch:** keyser/w17-settings-backup-github
+**Author:** Keyser (Frontend Dev)
+
+---
+
+## Item A — Conjure→Consult Top-Bar Swap + Remove Consult from Left Nav
+
+**Tag:** w24-ux-conjure-consult-swap
+**Commit:** 6cd1ae15
+
+### What changed
+
+- **Top-bar button:** `Wand20Regular` / "Conjure" (opens ConjureModal) replaced with `ChatHelp20Regular` / "Consult" (navigates to `/projects/:id/consult/new` when in a project, `/consult/new` globally).
+- **Left nav:** `<NavItem value="consult">Consult</NavItem>` removed. The route `/consult/new` still exists and is reachable via the top-bar button or deep link.
+- **`handleNavItemSelect`:** `value === 'consult'` case removed (no longer reachable from sidebar).
+- **`getSelectedValue()`:** `/consult` pathname detection retained — if a user navigates directly to `/consult/*`, the sidebar won't highlight a non-existent item (returns `'consult'` but no NavItem has that value, so nothing lights up; harmless).
+- **Imports removed:** `ChatHelp24Regular` (was the left-nav icon), `Wand20Regular` (was top-bar).
+- **Import added:** `ChatHelp20Regular` (20px, matches Mail20Regular sibling in top-bar).
+- **W22 code comment** about Conjure top-bar removed.
+
+### NOT changed
+
+- `ConjureModal.tsx` — untouched.
+- `ConjureContext.tsx` — untouched.
+- `Board.tsx` FAB — still opens ConjureModal.
+- Keyboard shortcuts (`c`, `?`, `Ctrl+K`) — still open ConjureModal.
+- `/consult/new` route component — untouched.
+
+### Smoke test checklist for testers
+
+- [ ] Press `c` from a non-input field → ConjureModal opens
+- [ ] Press `?` → ConjureModal opens
+- [ ] Press `Ctrl+K` → ConjureModal opens
+- [ ] Click "+" FAB on Board → ConjureModal opens
+- [ ] Click "Consult" in top bar (inside a project) → navigates to `/projects/:id/consult/new`
+- [ ] Click "Consult" in top bar (no project selected) → navigates to `/consult/new`
+- [ ] Left sidebar has no "Consult" item
+
+---
+
+## Item B — Collapsible Left Navigation
+
+**Tag:** w24-ux-collapsible-nav
+**Commit:** 6cd1ae15 (bundled with Item A — both in Layout.tsx)
+
+### What changed
+
+- **State:** `navCollapsed: boolean` initialized from `localStorage.getItem('squadboard.nav.collapsed') === 'true'`.
+- **Persistence:** `toggleNav()` writes `localStorage.setItem('squadboard.nav.collapsed', String(next))` on every toggle.
+- **CSS:** `navDrawerCollapsed` makeStyles class (`width: 56px; minWidth: 56px; overflow: hidden`). Base `navDrawer` style gains `transition: width 200ms ease`.
+- **Toggle button:** `ChevronDoubleLeftRegular` (collapse) / `ChevronDoubleRightRegular` (expand) button at top of `NavDrawerBody`. `appearance="subtle"`.
+- **Collapsed rendering:**
+  - Each NavItem wraps in `<Tooltip positioning="after" hideDelay={0}>` when collapsed.
+  - NavItem children are `null` when collapsed (icon-only).
+  - `NavSectionHeader` elements hidden when collapsed.
+  - Logo image hidden when collapsed (horizontal image overflows 56px).
+- **Approach:** Hybrid CSS-width + conditional Tooltip JSX (not full conditional render). NavDrawer component tree stays singular; only label text and Tooltip wrapping are conditional.
+
+### Smoke test checklist for testers
+
+- [ ] Toggle button collapses sidebar smoothly (~200ms)
+- [ ] Toggle again expands
+- [ ] Reload page → collapsed state persists (or not, depending on what you left it at)
+- [ ] Collapsed: icons visible, no text labels, hover on icon shows Tooltip with label
+- [ ] Collapsed: selected item still highlighted
+- [ ] Expanded: normal layout, section headers visible, no regressions
+- [ ] Top bar position unaffected by collapse (main content reflows automatically)
+
+### Caveats
+
+- Section headers (WORK, SQUAD, OPERATIONS, SYSTEM) are absent in collapsed state — no grouping visual. Expected for icon-only mode.
+- Logo is hidden when collapsed. No compact logo variant exists — a small icon-only logo could be added in a future wave.
+- The empty `55b4383f` commit is a bookkeeping artifact (Item B was already in 6cd1ae15).
+
+---
+
+## Build Status
+
+`pnpm -C packages/client build` → ✓ green (tsc + vite, 7.05s, zero type errors)

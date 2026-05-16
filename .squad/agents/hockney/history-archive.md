@@ -1,450 +1,349 @@
-# Hockney — History
-
-## Core Context
-
-- **Project:** Squadboard — local-first kanban + workflow board for [Squad](https://github.com/bradygaster/squad) agents
-- **Package:** `@sabbour/squadboard` · Local install: `npx @sabbour/squadboard init` · MIT · Self-hosted
-- **Role:** Backend / Workflow Engine Dev
-- **Joined:** 2026-05-14T08:17:03Z
-- **Hired by:** Ahmed Sabbour
-- **PRD:** `/home/asabbour/.copilot/session-state/b22555db-ec9d-4ffd-9266-4553cda5bb11/research/squad-web-design-v4.md`
-
-## Tech stack I own
-
-- Node.js single-process, Express v5
-- Postgres — embedded `embedded-postgres` for local, hosted Postgres for cloud (same Drizzle schema)
-- Drizzle ORM (~30 tables; 8 load-bearing)
-- TypeScript
-- Subprocess spawning (`setsid` + pgid) for isolated runWorkers
-- WebSocket fan-out via in-process `EventEmitter` (real-time piece coordinated with Verbal)
-
-## Five invariants I defend
-
-1. **`agent_run` is the only step that does LLM work.** `peer_review`, tier-3 routing, and `split` are composites that desugar to `issue_runs` rows with distinct `kind` values.
-2. **Single-spawner discipline.** The stepper alone spawns runs via `FOR UPDATE SKIP LOCKED`. The dispatcher only ticks, sweeps, and wakes.
-3. **Lease + heartbeat is the authoritative liveness signal.** `lease_expires_at` (90s TTL) + `heartbeat_at` (30s interval).
-4. **Output schema validation happens at session end.** After `sendAndWait`, before `recordRunCompletion`. Never on post-tool-use hooks.
-5. **`fan_out` and `split` materialize full child workflow_runs.** Six-step transaction, no phantom columns.
-
-## Roadmap I deliver against
-
-15 demoable thin slices. The engine appears progressively across:
-- **Demo 4** — One-shot agent (workspaces + live header)
-- **Demo 6** — First workflow (engine end-to-end with retry + cost)
-- **Demo 7** — Resilience + cost (lease/heartbeat sweepers, budget caps)
-- **Demo 9** — Peer review (4-verb approvals, quorum)
-- **Demo 10** — Fan-out + handoff (subtrees + additive skills)
-- **Demo 14** — MCP + slash command + idempotent create
-- **Demo 15** — GitHub sync (pushes, PRs, check runs, webhooks)
-
-## Recent Learnings (2026-05-15)
-
-### Bytea + Image Attachment Design
-
-**Bytea pattern in Drizzle ORM:**  
-Drizzle pg-core does not ship a built-in `bytea` helper; you add it via `customType` from `drizzle-orm/pg-core`. The minimal definition is:
-```ts
-const bytea = customType<{ data: Buffer; driverData: Buffer }>({
-  dataType() { return 'bytea'; },
-});
-```
-The pg driver returns bytea columns as Node.js `Buffer` objects automatically — no `fromDriver` conversion needed for the common case. The `customType` import must be added to the existing pg-core import list in `schema.ts`.
-
-**multer memoryStorage usage:**  
-`multer({ storage: multer.memoryStorage(), limits: { fileSize: N } })` makes the uploaded file available at `req.file.buffer` (a `Buffer`). The `limits.fileSize` guard rejects oversized streams before they reach the route handler — the service layer applies a second check to guard against middleware bypasses. The multer `MulterError` with `code === 'LIMIT_FILE_SIZE'` (or `message === 'File too large'`) maps to `{ ok: false, error: 'image_too_large' }`.
-
-**Staging discipline:**  
-On a previous commit (column-meta work) I accidentally staged untracked scratch files by using `git add packages/` instead of listing paths explicitly. Correct discipline: `git add -- <path1> <path2> ...` for each intentional file, then `git status` to confirm only those files are staged before committing. Never use `git add .` or broad directory globs in a repo with `.squad/` log files and editor artifacts.
-
-## Team Activity Log
-
-**2026-05-15 Round 2 shipped:** Hockney (attachments backend), McManus (multi-modal frontend), Verbal (Consult chat fix), Fenster (typography sweep), Kobayashi (Ceremony Conjure UX), Keyser (layout rebalance). See `.squad/decisions.md` for Fluent2 canon, image bytea architecture, create-page pattern, react-markdown rendering.
-
-## Archive
-
-For older learnings (Demo 1–15 architecture notes, GitHub App auth, TS fixes, UTC bug), see `history-archive.md`.
-
-## Learnings
-
-**2026-05-15T08:21:46-07:00 — P0 fix: resolveAnchorIssue spam-loop root cause**
-
-Fixed the ceremony scheduler anchor spam loop (root cause identified by Verbal in
-`verbal-spam-loop-rootcause.md`). Added a `NOT EXISTS (SELECT 1 FROM issue_links
-WHERE child_issue_id = issues.id AND link_type = 'fan_out')` filter to
-`resolveAnchorIssue()` in `ceremony-scheduler.ts`. The `issue_links` table from
-Demo 10 already had the discriminator — no schema migration needed. Only the one
-occurrence of the bad anchor selector pattern was in scope; the grep sweep of
-`packages/server/src/services/` and `packages/server/src/engine/` confirmed no
-other anchor-picker queries. TS check confirmed no regressions (pre-existing
-`conjure-classifier.ts` errors were present on the base commit). See
-`.squad/decisions/inbox/hockney-anchor-filter.md` for the exact filter and
-follow-ups.
-
-**2026-05-15 — Phase 3 Doctor (diagnostics service):**
-
-- `getWebSocketServer()` is already exported from `realtime/ws-server.ts` — no new singleton needed. The `WebSocketServer` node from `ws` doesn't expose a `.readyState` in its TypeScript types the same way a client `WebSocket` does; checking `wss !== null` is the primary liveness signal; `.clients.size` gives connected count.
-- `execFile` (promisified) is the safest way to invoke `gh auth status` — avoids shell injection, handles ENOENT cleanly. A non-zero exit still rejects the promise, so catch handles both "not found" and "not authed" cases.
-- Pool.connect() + client.query() both need independent timeouts for the postgres health check. 50ms is tight but correct for embedded Postgres — if that fails the DB is genuinely unhealthy.
-- Dynamic `import('@bradygaster/squad-sdk/client')` inside async functions works cleanly with ESM + `"moduleResolution": "bundler"` — no top-level import needed, which keeps the diagnostics service from throwing at module load time if the SDK isn't configured yet.
-- `Promise.all` across all checks (each individually try/catch'd) gives true parallelism — total wall-clock bounded by the slowest single check, not the sum of all. The SDK checks each re-connect/disconnect to avoid state leakage.
-- `mergeParams: true` on sub-routers is not needed for `GET /api/projects/:id/diagnostics` when mounted via `app.use('/api/projects/:id/diagnostics', projectDiagnosticsRouter)` because Express automatically merges params for routers created with `Router({ mergeParams: true })` or when mounted directly. Use `req.params['id']` (bracket notation) not `.id` to keep TS happy with index signature types. Also handle `string | string[]` on `req.params` values — cast with `Array.isArray(rawId) ? rawId[0] : rawId`.
-- Pre-existing TypeScript errors in `conjure-classifier.ts` (`.modelId` / `.source` on `ResolveModelResult`) are not regressions from this work — confirmed by stashing and re-running `tsc --noEmit` on the base commit.
-
-**2026-05-15T15:21:46Z — Coordination snag: Parallel commit with Keyser**
-
-Keyser's Diagnostics UI work (commit 13c34dca) accidentally swept Hockney's server files when both agents committed diagnostics changes in parallel. Functional code is verified OK; server routes and diagnostics service are intact. **Audit trail is murky** — the commit appears to contain both agents' changes under one SHA. This happened because neither agent used explicit `git add -- <path>` per-file staging; Keyser's broader staging glob swept Hockney's uncommitted work into the same commit. **Action for future parallel sessions:** Use `git add -- <path1> <path2> ...` (bracket notation) for each intentional file. Never use `git add .` or `git add <directory>/` when multiple agents have working trees. Always `git status` before committing to confirm ONLY your changes are staged.
-
----
-
-**2026-05-15T17:29:06-07:00 — m1-hire-team-routes: Missing propose/confirm routes**
-
-Root cause of Cast-Team modal crash was two completely absent route handlers; Express
-SPA catch-all was returning `index.html`, causing `JSON.parse('<!doctype...')` → crash.
-Key learnings:
-
-- `castTeam()` in `casting-engine.ts` handles all extended-role → base-role mapping internally;
-  route handlers should pass raw strings and let the engine normalise. No need to call
-  `EXTENDED_ROLE_TO_BASE_ROLE` explicitly in the route.
-- `Parameters<typeof fn>[0]['field']` is the right TS idiom to cast a runtime-validated string
-  to a sealed union type without duplicating the union in route code.
-- Append `buildPersonaSection(member)` after `writeCharter()` to give cast agents richer context.
-- Per-member error collection (vs. 500-abort) matches the client's `HireTeamConfirmResult`
-  interface which has `errors: { agentName, error }[]`. Always match the client interface exactly
-  before designing the server return shape.
-- tsx watch on WSL2 auto-reloaded on file save — no manual server restart needed.
-
-
-
-**Commit:** `3e3fefad` — `fix(templates): resolve workloads page load error + empty state`
-
-**Root cause:** `Templates.tsx` never existed as a page. Navigation to the template catalog hit the catch-all redirect (`*` → `/`) and rendered nothing. `TemplatePicker.tsx` was orphaned (written but never imported anywhere). The `ceremoniesTopRouter.get('/templates')` handler also lacked a `try/catch`, leaving it without a graceful error envelope on any unexpected throw.
-
-**Changes:**
-- `packages/server/src/routes/ceremonies.ts` — Wrapped `GET /templates` in try/catch; returns `{ ok: false, error: '...' }` 500 JSON on failure instead of crashing Express.
-- `packages/client/src/pages/Templates.tsx` — New page: loading spinner → empty state (`Body1`: "No workload templates yet.") → error state (`Subtitle1`: "Couldn't load templates — try again" + Retry button) → template card grid. Never throws or renders a stack trace.
-- `packages/client/src/App.tsx` — Wired `Templates` at `/projects/:id/ceremonies/templates`.
-
-**Verification:** `cd packages/client && npx tsc --noEmit` → clean. `cd packages/server && npx tsc --noEmit` → 2 pre-existing errors in `conjure-classifier.ts` (confirmed pre-existing by stash test), none from this change.
-
-## Team update (2026-05-15T16:09:55Z — Wave 3)
-
-Anchor filter fix (r3, commit 4ecb5525): `resolveAnchorIssue()` now excludes fan-out child issues via `issue_links` table. Closes spam loop at source — no ceremony anchor will pick a recently-created child that itself has fan-out steps. Indexed by existing `(child_issue_id, link_type)` pair from Demo 10; no schema migration. P1 follow-up: persist sweep failure count to Redis for process-restart recovery.
-
----
-
-**2026-05-15T09:09:55-07:00 — Task: Phase 19 Templates & Portability backend**
-
-**Commits:** 3 batches (see SHAs below after commit)
-
-**Scope:**
-- `db/schema.ts`: Added `templates` pgTable — UUID PK, kind TEXT + CHECK('workflow'|'team'|'project'), name, description, payload JSONB, optional project_id FK, timestamps.
-- `db/index.ts`: Bootstrap DDL — `CREATE TABLE IF NOT EXISTS templates` + `CREATE INDEX IF NOT EXISTS templates_kind_name_idx ON templates (kind, name)`.
-- `services/templates/workflow-template.ts`: exportWorkflow, importWorkflow (creates ceremony + version row), saveAsTemplate, instantiateTemplate.
-- `services/templates/team-template.ts`: exportTeam (agents + skills/tools/mcp by key), importTeam (with name-conflict skip/force), saveAsTemplate, instantiateTemplate.
-- `services/templates/project-template.ts`: exportProject (full bundle excluding issues/runs/comments/inbox/costs), importProject (transactional), saveAsTemplate, instantiateTemplate.
-- `routes/templates.ts`: GET /api/templates (filter by kind), GET /api/templates/:id, DELETE /api/templates/:id.
-- `routes/team-portability.ts`: POST export/import/save-as-template/instantiate-template under /api/projects/:id/team/.
-- `routes/project-portability.ts`: POST export/import/save-as-template/instantiate-template under /api/projects (import + instantiate-template are static paths mounted before /:id handlers).
-- `index.ts`: Mounted all 3 new route modules at end of mount block.
-
-**Route count:** 11 new endpoints.
-
-**No-conflict:** Did NOT touch engine/, sdk/, client/, ceremonies.ts existing GET /templates handler, Kobayashi's charter-compiler.ts/agent-sync.ts, McManus's engine/, or Verbal's sdk/.
-
-**TypeScript:** `npx tsc --noEmit` → only 2 pre-existing conjure-classifier.ts errors. Zero new errors from this change.
-
-**Decision filed:** `.squad/decisions/inbox/hockney-phase19-backend.md`
-
----
-
-## 2026-05-15 — Phase 12 Reframe: Agent-Centric Flow Data API
-
-**Task:** Build the data API powering the new agent-centric Flow page. Per Ahmed's request: "I want the flow page to be agent centric, see instances of agents, what are they active on, lineage of what triggered them, visually."
-
-**Batch A** — `ce01a382` — Schema queries + 3 routes + service
-**Batch B** — `9a9fb8a3` — WS event hooks (workflow-runner, stepper, fan-out, consult-stream)
-
-**Scope:**
-- `services/flow-agents.ts` (new): `getFlowAgents()` + `getFlowLineage()`. Uses CTE-based UNION ALL query across 4 data sources (workflow_runs, issue_runs, live_sessions, consult_sessions). LATERAL join for current step attribution. Trailing-24h cap of 50 completed rows per source type.
-- `routes/flow.ts`: Added `GET /agents`, `GET /lineage`, `GET /graph` sub-routes to existing `projectFlowRouter`. Original `GET /flow` kanban payload unchanged.
-- `realtime/event-bus.ts`: Added `FlowEventType` union, `emitFlowEvent()`, and `emitFlowHeartbeat()` (in-memory 1/s throttle per instanceId).
-- `engine/workflow-runner.ts`: Surgical adds — `flow.instance.started` on `createWorkflowRun`, heartbeat/ended in `advanceToNextStep`, ended in `handleAgentRunStep` failure path. Added `getProjectIdForWorkflowRun()` internal helper.
-- `engine/stepper.ts`: `flow.instance.started` before SDK call, heartbeat in DB timer, ended on success and both failure paths.
-- `engine/fan-out.ts`: `flow.lineage.edge.created` for each child run after `materializeFanOut()` commits.
-- `sdk/consult-stream.ts`: `flow.instance.started` after `startConsultSession`, `flow.instance.ended` in `endRunningConsult`.
-
-**Route count:** 3 new endpoints.
-
-**Data gaps logged in decision doc:**
-- `workflow_runs` with no step agent and no issue assignee excluded silently.
-- `consult_sessions` mode='model' excluded (no agentId).
-- No issue_run→issue_run direct lineage (schema gap).
-- No workflow_run→consult_session cross-source edges (no FK).
-- `parentInstanceId` not emitted in flow.instance.started for issue_runs (deferred).
-
-**TypeScript:** `npx tsc --noEmit` → only 2 pre-existing conjure-classifier.ts errors. Zero new errors.
-
-**Smoke test:** Dev server started, all 3 new endpoints returned `{ ok: true, data: {...} }` with correct shapes. Project "foo" returned 11 agents, fenster with 1 consult_session instance, hockney with 1 issue_run instance. Original `/flow` returned 5 columns + activeRunsCount intact.
-
-**Decision filed:** `.squad/decisions/inbox/hockney-flow-agent-api.md`
-
----
-
-## Wave 5 Update (2026-05-15T10:18:00Z)
-
-**Run:** hockney-6  
-**Model:** claude-sonnet-4.6  
-**Task:** Flow page agent-centric API + templates backend
-
-**Outcome:**
-- Redesigned Flow page API to center on agent instances (not runs)
-- New endpoint: GET /api/projects/:id/flow/agents
-- Response model: FlowAgentsResponse (agents, instances, lineage, active/idle state)
-- Batch A (endpoints): commit `ce01a382`
-- Batch B (models): commit `9a9fb8a3`
-- Batch C (docs): commit `72511689`
-- Decisions: `.squad/decisions/inbox/hockney-flow-agent-api.md` (Keyser builds against), `.squad/decisions/inbox/hockney-phase19-backend.md` (templates table: kind TEXT + JSONB payload)
-- Templates: kind discriminator chosen (TEXT + CHECK), payload shape per kind (workflow | team | project)
-
-**Status:** COMPLETE — Flow API and templates backend ready for Phase 19 integration and Keyser client work.
-
----
-
-## 2026-05-15 — Conjure classify endpoint (Phase 1)
-
-**Commit:** `9e6bf984` — `feat(server): add /api/conjure/classify endpoint for intent routing`
-
-**Task:** Replace the free-form Capture inbox with a smart-create surface that
-takes any prose prompt and routes the user to the right creation flow with a
-pre-filled draft. Phase 1 = backend classify endpoint only; frontend follows
-(Keyser).
-
-**Endpoint:** `POST /api/conjure/classify`
-- Request: `{ prompt, context?, hint?, useLlm? }`
-- Response: `{ ok, data: { intent, confidence, draft, routing: { destination, presentation, fallbacks }, rationale, strategy } }`
-- 6 intents: `project | issue | team | agent | skill | tool`
-- Errors: 400 missing prompt, 413 oversized (>10k chars), 500 unhandled
-
-**Classifier strategy chosen: Option C (hybrid)**
-- Rule-based scorer first — weighted regex signals per intent, soft-saturated to 0..1 confidence.
-- LLM disambiguation (`runFormulator` + `extractJsonObject`) fires only when rule confidence < 0.55 AND `useLlm !== false`.
-- LLM call wrapped in try/catch — missing GITHUB_TOKEN / SDK / model never breaks the surface; degrades to best rule candidate.
-- Default ambiguous fallback: `issue` (per locked-in design — board captures default to issues).
-- Phase 1 happy path is rule-based-only: 13/13 of the sample prompts in the brief classified correctly at confidence ≥ 0.55, so the LLM never fires.
-
-**Files:**
-- `packages/server/src/services/conjure-classifier.ts` — rewrote (was 200 lines of broken/unused code with two pre-existing TS errors). New file ~556 lines: `classifyAndDraft()` + rule scorer + 6 draft builders + routing table + LLM fallback. Test-only `__test__` export for unit-test reach-in.
-- `packages/server/src/routes/conjure.ts` — new, ~75 lines. Thin wrapper around `classifyAndDraft()` with input validation + standard `{ ok, error }` envelope.
-- `packages/server/src/index.ts` — mounted `app.use('/api/conjure', conjureRouter)` between MCP HTTP and presence endpoints.
-
-**Decision filed:** `.squad/decisions/inbox/hockney-conjure-classify.md` — endpoint shape, classifier strategy, intent/draft contract, Phase 2 roadmap (storage, accuracy tuning, multi-artifact suggestion strip, top-3 candidates).
-
-**Side benefit:** The two pre-existing TS errors in `conjure-classifier.ts` (`ResolveModelResult.modelId` / `.source`) that have been polluting `tsc --noEmit` output for several waves are now gone. `cd packages/server && npx tsc --noEmit` is fully clean (exit 0, no errors).
-
-**Verification:** Rule classifier smoke test (offline, `useLlm: false`) on 13 sample prompts from the brief → 13/13 correct intent classification. Edge cases: empty → 400; vague ("something about AKS") → defaults to `issue` conf=0.2; mixed ("fix the team build pipeline") → top `issue`, fallback `team`.
-
-**NOT done (deferred to Phase 2 / other waves):**
-- Frontend integration (Keyser, after Fenster's design)
-- Removing CaptureFAB / CaptureModal (Keyser)
-- `event_log` persistence of classify invocations (additive — needs telemetry plan first)
-- Re-introducing the 4 dropped kinds (`inbox-item`, `consult`, `ceremony`, `mcp-server`) — currently folded into the 6
-- Top-3 candidates with full per-candidate drafts (currently fallbacks return only intent IDs)
-
-**Coordination note:** Saw that `templatesRouter`, `teamPortabilityRouter`, `projectPortabilityRouter` are imported in `index.ts` but never mounted on the Express app — looks like a pre-existing gap from Phase 19 work (mine, originally). Out of scope for this commit; flagging here for a follow-up.
-
-**Staging discipline:** Per-file `git add --` only. Confirmed via `git diff --cached --name-status` that exactly 3 files were staged (M index.ts, A routes/conjure.ts, A services/conjure-classifier.ts). No `.squad/` log files, no node_modules, no other agents' work swept in. Decision file lives in `.squad/decisions/inbox/` which is gitignored — not committed (matches existing inbox convention).
-
-**Status:** COMPLETE — endpoint live in main, ready for Keyser to wire up the modal once Fenster's design lands.
-
-
----
-
-## 2026-05-15 — MCP starter tools + diagnostics false-negative fix
-
-Two-task wave under one prompt. Both complete.
-
-### Task A — MCP server (Phase 1 starter tools)
-
-The MCP plumbing was already in place from earlier waves: `createMcpServer()`
-factory in `packages/server/src/mcp/server.ts`, stdio entry point
-(`mcp/index.ts`), and Streamable HTTP transport (`mcp/http-transport.ts`)
-mounted on the live Express app at `/mcp`. Phase 18 had already dropped the
-`squadboard_*` prefix on tool names because the server name (`squadboard`)
-already namespaces.
-
-So the wave was *additive* — wire the four tools the brief asked for into the
-existing factory, not stand up a new package.
-
-**Tools added (4):**
-- `list_projects` — every project + a resolved `.squad/` path so an external
-  CLI can pick a `projectId` to pass to other tools.
-- `list_inbox` — Conjure / quick-capture queue, filterable by `status` /
-  `projectId`. Trims long bodies into a `originalDraftPreview` for list view.
-- `capture` — drops a free-form prompt through `classifyAndDraft()` (the
-  Conjure classifier I shipped in `9e6bf984`). When `intent='issue'` AND
-  `projectId` is provided, materialises the card immediately and returns
-  `{ action: 'issue_created', issue, classification }`. For other intents
-  returns `{ action: 'draft_only', classification }` so the caller can route
-  the user into the matching create flow.
-- `get_routing` — reads the resolved `.squad/routing.md` for the project.
-  Uses the same `resolveSquadDir()` helper as the diagnostics fix below.
-
-**Wiring choice — in-process, not HTTP:** all 4 tools call services /
-Drizzle directly (`getDb()`, `inboxService.listInboxItems`,
-`classifyAndDraft`). No HTTP roundtrip to localhost. Matches the existing
-7 tools' pattern; faster; no double serialisation.
-
-**Total tool count:** 11 (was 7). All registered via `TOOLS` array →
-auto-listed on `/mcp/health` and via MCP `list_tools`.
-
-**README:** new `packages/server/src/mcp/README.md` (~140 lines) with
-`.copilot/mcp-config.json` and Claude Desktop install snippets, tool
-table, transport notes, and what's deferred (auth, multi-project routing
-in stdio, prompts/resources MCP primitives).
-
-**Build:** `tsc --noEmit` → 0 errors. `dist/mcp/index.js` already in the
-existing build pipeline.
-
-### Task B — Diagnostics false-negative fix
-
-**Root cause** (verified against live `/api/projects` data):
-- `projects.path` is stored inconsistently across the table.
-  - `foo` project: `/home/asabbour/GitWSL/EMU/foo/.squad` — points AT `.squad/`.
-  - other projects: `/home/asabbour/.squadboard/projects/<slug>` — point at the project ROOT.
-- `checkSquadDirShape()` blindly did `join(projectPath, '.squad')`, which for
-  `foo` resolved to `/home/asabbour/GitWSL/EMU/foo/.squad/.squad/` — doesn't
-  exist, so EVERY child collection check (`agents/`, `log/`, `routing.md`,
-  `decisions.md`) failed simultaneously. Hence the screenshot.
-- The `.squad/` parent `access()` check at the top of the function actually
-  also failed in the `foo` case — but caught by the outer `try/catch` and
-  reported as a single warn — which is why Ahmed's screenshot showed all 4
-  inner checks in the SAME diagnostic line.
-
-**Fix:** new tolerant resolver `resolveSquadDir(storedPath)` exported from
-`services/diagnostics.ts`:
-1. `path.resolve()` to absolute (so a relative `projects.path` can't pivot
-   off `process.cwd()` silently — was a CWD/team-root mismatch suspect per
-   the Worktree Awareness pattern, ruled out but the fix preserves
-   correctness either way).
-2. If `basename === '.squad'` AND it exists → use as-is, `projectRoot` is
-   parent.
-3. Else if `<path>/.squad/` exists → use that.
-4. Else → `{ ok: false, reason }` so the caller surfaces ONE clear
-   "project path is wrong" diagnostic + remediation instead of N
-   cascading "missing collection" errors.
-
-Applied to both:
-- `checkSquadDirShape()` — when `ok=false`, returns single `status: 'fail'`
-  with remediation; when `ok=true`, the existing required-collection /
-  required-file loop runs against the resolved `squadDir`.
-- `checkDiskWriteable()` — only adds the `.squad/` write target when
-  `resolveSquadDir().ok` is true. Otherwise `checkSquadDirShape` already
-  surfaces the actionable error; no need to double-report.
-
-The MCP `get_routing` tool also reuses `resolveSquadDir`, so the fix
-benefits both surfaces.
-
-**Verification:** ran the resolver against the three live `projects.path`
-values (`/.../foo/.squad`, two `/.../.squadboard/projects/<slug>`):
-- foo → `ok: true, squadDir: /home/asabbour/GitWSL/EMU/foo/.squad`. ✅
+# Hockney Agent — Compact History Summary
+
+**Focus areas:** Server architecture (routes, websockets, MCP, embedded-postgres), diagnostics, heartbeat registry, backend lifecycle management.
+
+**Key learnings:**
+- Heartbeat registry: 6 sweeps, ~30s cadence per sweep (5s fast, 25s standard, 5s heartland). Check `lastTickAt` and ring cursor advancement via `GET /api/heartbeat/status` for smoke-test verification.
+- Diagnostics false-negative resolution: double-nesting bug in `resolveSquadDir()` when `projects.path` pointed AT `.squad/` (not parent). Solution: helper tolerates both layouts, returns single clear error.
+- MCP Phase 1 starter tools: 11 tools total (stdio + HTTP transports), naming convention (bare names, no `squadboard.*` prefix). Tools: `list_projects`, `list_inbox`, `capture` (Conjure classifier), `get_routing`.
+- Express route ordering trap: `POST /formulate` MUST register BEFORE parameterized `GET /:id` / `PATCH /:id` routes. Express matches declaration order.
+- Formulate routes use `{ ok, error }` envelope (not bare `{ error }`), matching `apiFetch<Envelope<T>>`.
+- `curl` smoke-test for missing routes: returns `<!doctype html>` when route not mounted → client `JSON.parse('<!doctype ...')` throws. Add route-mount auditing to Wave DoD.
+- per-file `git add -- <path>` discipline: prevents accidental sweeps of other agents' uncommitted changes (mcmanus history, server/index.ts, vite churn).
+
+**Recent work:**
 - other two → `ok: false, reason: "no .squad/ directory found at ... or ..."`
-5. **Charter update is part of the task.** After any DB driver swap, update the "What I Own" section in `charter.md` so future agents see the current state, not the pre-migration state.
+  — single, clear, actionable. (Their `.squad/` was indeed never created.)
 
-### Files touched
-- **NEW** `packages/server/src/db/pglite.ts` — PGlite engine, pool adapter, shutdown handlers
-- **MODIFIED** `packages/server/src/db/index.ts` — Drizzle driver swap, `PoolLike` abstraction
-- **MOVED** `packages/server/src/db/postgres.ts` → `.deprecated/postgres.ts`
-- **MODIFIED** `src/index.ts`, `src/cli/bulk-import.ts`, `src/mcp/index.ts`, `src/scripts/seed-wave10-backlog.ts` — import sites
-- **MODIFIED** `packages/server/package.json` — `embedded-postgres` removed, `@electric-sql/pglite@0.4.5` added
-- **NEW** `packages/server/src/scripts/pglite-spike.ts` — feasibility script (17/17 PASS)
-- **NEW** `.squad/decisions/inbox/hockney-pglite-migration.md` — decision record
-- **MODIFIED** `.squad/agents/hockney/charter.md` — "What I Own" updated
+**Files touched (4 total):**
+- `packages/server/src/services/diagnostics.ts` — +`resolveSquadDir`,
+  rewrote `checkSquadDirShape` body, updated `checkDiskWriteable`.
+- `packages/server/src/mcp/server.ts` — +4 TOOLS entries, +4 handlers,
+  +4 switch cases, imports for new services.
+- `packages/server/src/mcp/README.md` — new file.
+
+**Decision filed:** `.squad/decisions/inbox/hockney-mcp-and-diagnostics.md`.
+
+**Status:** COMPLETE. `tsc --noEmit` clean. Local commits only — not pushed.
+
+### Learnings
+
+1. **Read what's already there before adding a new package.** The brief
+   suggested standing up `packages/mcp/` for the MCP server. A 30-second
+   look at `packages/server/src/mcp/` showed the whole stdio + HTTP
+   apparatus was already built (Phase 18). Extending the existing factory
+   was the right call — same lifecycle, same DB pool, same build.
+2. **`projects.path` semantics are inconsistent across the table.** The
+   schema comment says ".squad/ directory" but seeders / project-create
+   flows have stored both layouts. Future writers should either (a) pick
+   one layout and migrate, or (b) keep using `resolveSquadDir()`. Logged
+   in the decision doc as a follow-up.
+3. **Cascading false-negatives mask the actual bug.** When a parent check
+   fails, don't run dependent child checks — they generate noise. Pattern
+   is now: resolve once, fail-fast with remediation, only descend when the
+   parent is healthy.
+
+---
+
+## Heartbeat live verification path — Wave 10 E4 (2026-05-15T13:09:47-07:00)
+
+**Verified by:** Hockney (programmatic, no browser needed)
+
+### Data path traced
+
+| Layer | Detail |
+|---|---|
+| Engine | `engine/heartbeat.ts` — `Heartbeat._runSweep()` sets `this.lastTickAt = new Date()` on every sweep completion |
+| Sweeps | 6 registered: `stuck-issue-runs` (30s), `stale-presence` (30s), `idle-live-sessions` (60s), `ready-workflow-steps` (5s), `ceremonies-due` (5s), `github-sync-overdue` (60s) |
+| Service | `services/heartbeat.ts` — `getHeartbeatSnapshot()` reads `heartbeat.getStatus().lastTickAt` and returns it as `lastTickAt` in the snapshot. Also maintains an in-memory ring buffer (capacity 200) of recent sweep events keyed by monotonic `seq`. |
+| API endpoint | `GET /api/heartbeat/status` — returns `{ active, lastTickAt, lastError, sweeps[], recent }` |
+| React component | `pages/Heartbeat.tsx` — polls `/api/heartbeat/status` every 5s; renders `lastTickAt` via `relativeTime()` helper in the "Last tick" section card |
+| No DB column | `lastTickAt` is pure in-memory (`Heartbeat` singleton). The lease+heartbeat column `heartbeat_at` on `issue_runs` is separate (written by runWorker at 30s interval during active LLM runs). |
+
+### Live-fire samples (server was already running on :3000)
+
+| Sample | `lastTickAt` | Ring cursor |
+|---|---|---|
+| T1 | `2026-05-15T20:15:30.871Z` | 374 |
+| T2 | `2026-05-15T20:15:58.809Z` | 384 |
+
+- **Delta:** 27.9 s ✅ (within ~30s ± 5s; driven by the 5s fast-sweeps so actual cadence is ≤5s between any tick)
+- **Ring advancement:** +10 events — confirms continuous sweep completions
+- **Status:** ✅ TICKING — `active: true`, no `lastError`
+
+### Quick re-verify command (future agents)
+
+```bash
+T1=$(curl -s http://localhost:3000/api/heartbeat/status | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['lastTickAt'])")
+sleep 10
+T2=$(curl -s http://localhost:3000/api/heartbeat/status | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['lastTickAt'])")
+echo "T1=$T1  T2=$T2"
+# Expect T2 > T1 by ≥5s (fastest sweep cadence)
+```
+
+- **2026-05-15 Wave 11B — M1 (Hire-team server routes) — IN-FLIGHT:** Dispatched to fix missing POST handlers for `/api/projects/:projectId/agents/hire-team/propose` and `/hire-team/confirm`. Root cause: Express SPA catch-all returned index.html instead of JSON, client `apiFetch` threw "Unexpected token '<'". M1 adds route handlers, returns proper JSON errors. Sequenced first in Stream M to unblock M2+M3 (client-side fixes) and M4 (e2e regression test).
+
+### Wave 11B — M1 M4 Landing (2026-05-15)
+
+**Completed:** Added two missing POST routes in `packages/server/src/routes/agents.ts`:
+- `POST /api/projects/:projectId/agents/hire-team/propose` → `{ ok: true, data: { members: CastedMember[] } }`
+- `POST /api/projects/:projectId/agents/hire-team/confirm` → `{ ok: true, data: { created: Agent[], errors: [...] } }`
+
+**Context:** Cast-Team modal crash root cause. When routes are `import`ed but missing an `app.use()` mount, Express silently falls through to SPA fallback (`res.sendFile('index.html')`). Client calls `JSON.parse('<!doctype...')` → "Unexpected token '<'" with zero context.
+
+**Learning:** Router mounting discipline — grep `index.ts` for unmatched imports after adding any new router file. Add route-mount audit to squad DoD. The SPA catch-all is a feature trap; unimplemented routes should ideally throw 404 or register a default 404 handler instead of silently serving HTML.
+
+### Wave 12 — N7/N5/N1/N2 (2026-05-15)
+
+**N7 — Junk project cleanup:** Deleted 41 test projects via DELETE /api/projects/:id, all returned 204. Remaining: 3 canonical projects (foo, Content Creation Workflow, Social Media Content Manager).
+
+**N5 — Test MCP Connection fix:** Root cause: `McpConfigPanel.tsx` constructed `healthUrl` as `${window.location.hostname}:3000/mcp/health` (absolute URL). In Vite dev mode (port 5173 → 3000 cross-origin), browsers block the fetch because no CORS headers are set. Fix: changed to relative URL `/mcp/health` + added `/mcp` to the Vite proxy in `vite.config.ts`. The proxy forwards to localhost:3000 in dev; in prod the relative URL resolves same-origin. **Learning:** Never hardcode port in client-side absolute URLs — always use relative paths + proxy config so dev/prod behave identically.
+
+---
+
+## Wave 14 — PGlite permanent, data migration queued
+
+**Date:** 2026-05-15T22:14:50-07:00  
+**Spawned by:** Copilot Coordinator  
+**Task:** q1-followup-data-migration  
+
+Ahmed confirmed: PGlite (commit `ca257838`) is now permanent. Local-first single-user kanban fits PGlite's model. Stream-L (Electron) packaging is simpler without per-platform Postgres binaries.
+
+Queued in Wave 14 backlog: Migrator to unlock foo's 166 stranded cards from legacy embedded-PG cluster → PGlite cluster. No rollback planned.
+
+
+---
+
+## Wave 14 — Legacy data migrator (q1-followup-data-migration) COMPLETED
+
+**Date:** 2026-05-15T22:14:50.847-07:00
+**Task:** Build one-time legacy embedded-postgres → PGlite migrator
+
+### Approach Selected: Option (c) — cached pnpm binaries
+
+The workspace's pnpm virtual store still holds `embedded-postgres@18.3.0-beta.17` and `@embedded-postgres/linux-arm64@18.3.0-beta.17` even though the package was removed from `packages/server/package.json`. Discovery algorithm: read `PG_VERSION` from legacy data dir → scan `node_modules/.pnpm/` for `@embedded-postgres+{platform}-{arch}@{pgMajor}.`* → resolve the `native/bin/` directory. Zero re-installs, zero network.
+
+`pg_ctl start -D legacyDataDir -o "-p <randomPort>" -w` brings the cluster up. `pg` client (already in deps) connects and reads all tables. PGlite pool adapter (already in deps) writes all rows. `pg_ctl stop` cleans up. Whole round-trip is self-contained.
+
+### Deliverables shipped
+
+| File | Purpose |
+|------|---------|
+| `packages/server/src/scripts/migrate-from-legacy-pg.ts` | Core migrator (~360 lines) |
+| `packages/server/src/scripts/verify-migration.ts` | Post-migration row count checker |
+| `packages/server/src/cli/migrate.ts` | CLI surface (`squadboard migrate [flags]`) |
+| `packages/server/src/index.ts` | Auto-run integration (before `startPglite()`) |
+| `bin/squad-migrate` | Shell shim |
+
+### Edge cases hit and fixed
+
+1. **FK ordering bug**: `workflow_runs.workflow_version_id` has a live FK constraint in PGlite's DDL even though Drizzle schema doesn't declare `.references()` on it. Fix: moved `workflow_versions` before `workflow_runs` in `TABLE_ORDER`. Verified by running the actual migration.
+
+2. **Path resolution**: `resolve(fileURL, '../../../../../..')` walked one level too far (6 `..` instead of 5). The file is at `packages/server/src/scripts/`, so 5 `..` levels reach the workspace root.
+
+3. **Pre-existing PGlite data**: `ON CONFLICT DO NOTHING` on INSERT handles the case where PGlite's `bootstrapSchema()` already seeded review policy presets. Verify script treats `actual >= expected` as passing (extras are from post-migration server activity, not data loss).
+
+### Migration results (dev run)
+
+```
+225 issues + 3 projects + 58 issue_runs (652 total rows across 39 tables)
+Marker written at ~/.squadboard/data/.migrated-to-pglite-v1
+```
+
+### Invariants to watch for in future migrators
+
+- **Always derive FK order empirically**: Drizzle schema `.references()` declarations don't always match live DDL (bootstrapSchema may add FKs not in the schema file). Test with actual `--force` run, not just dry-run.
+- **pnpm store binary discovery is workspace-layout-dependent**: if the workspace root changes (monorepo restructure), the `resolve(thisFile, '../../../../..')` path must be updated.
+- **Binary version must match PG_VERSION exactly** (major version): PG17 binary cannot start a PG18 cluster. Read `PG_VERSION` file first.
+- **pg_ctl log must not go to /tmp**: wrote to `~/.squadboard/data/migrate-pg_ctl.log` instead.
+- **Auto-run must be non-fatal**: migration failure in `index.ts` auto-run is caught and logged; server continues. Users can retry with `squadboard migrate`.
+
+---
+
+## Wave 15 — Stream I (Reliability): verify + backup + restore
+
+**Date:** 2026-05-15T22:42:29.855-07:00  
+**Tasks:** w15-migration-verify, i1 (backup), i2 (restore)
+
+### Deliverable 1: W14 Migration Verify (`squadboard migrate --verify`)
+
+W14 migration verified **clean** on initial run — all 39 tables had `actual >= expected` counts. Migration marker upgraded to include a `dest_counts` block with live PGlite counts at verify time, making future verifications self-contained.
+
+**Key learning — two-PGlite problem**: opening a second PGlite WASM instance against the same nodefs data directory while the server is running causes inconsistent reads. All CLI tools that need live counts now detect the running server via `GET /api/health` and fall back to `GET /api/system/db-counts` HTTP endpoint. Direct PGlite boot only when server is confirmed stopped.
+
+**Learnings:**
+- PGlite singleton in `db/pglite.ts` uses module-level state — second process has no visibility into it
+- All CLI standalone entry points must use the ESM `fileURLToPath(import.meta.url) === argv1` guard to avoid double-running when imported as a module
+- Hard process termination bypasses SIGTERM handler — PGlite does not checkpoint and the next startup sees partial WAL state. Production discipline: only stop via SIGINT/SIGTERM, which triggers the registered handler in the server.
+
+### Deliverable 2: Periodic DB Backup (`squadboard backup`)
+
+**Format:** PGlite native `dumpDataDir('gzip')` — produces a `.tar.gz`. Chosen over raw filesystem tar because PGlite checkpoints before tarring (consistent snapshot even under live queries). ~5 MB per cluster.
+
+**Files shipped:**
+- `packages/server/src/scripts/backup.ts` — `runBackup()`, `pruneBackups()`
+- `packages/server/src/cli/backup.ts` — CLI surface; HTTP-first (server-aware)
+- `packages/server/src/routes/system.ts` — `POST /api/system/backup`, `GET /api/system/backups`, `GET /api/system/db-counts`
+- `packages/server/src/daemon/index.ts` — `maybeRunBackup()` tied to daemon tick
+- `packages/server/src/daemon/guards.ts` — `BackupConfig` added to `SquadboardConfig`
+- `packages/server/package.json` — scripts: `migrate:verify`, `backup`, `restore`
+
+**Defaults:** retainCount=7, intervalMs=24h. Both overridable via `~/.squadboard/config.json { "backup": { ... } }`.
+
+### Deliverable 3: Restore Flow (`squadboard restore <backup-file>`)
+
+**Safety order (invariants):**
+1. Validate backup file format
+2. Reject if daemon PID live (unless `--force`)
+3. Move pglite dir to pglite.pre-restore-{ts} (rollback preserved)
+4. `new PGlite({ dataDir, loadDataDir: blob })` — PGlite native tarball restore
+5. Verify row counts via `createPoolAdapter()` directly (no `initDb()` singleton dependency)
+6. On any failure: auto-rollback pre-restore back to pglite
+
+**Restore UI:** Deferred to Keyser / W16. TODO left in decision file.
+
+### Invariants Added
+
+- **Never open two PGlite instances on the same data dir**: use HTTP API when server is running.
+- **CLI standalone guard is mandatory**: every script with both an exported function AND a standalone `main()` must gate `main()` with `fileURLToPath(import.meta.url) === argv1`.
+- **Restore verification must not use initDb()**: `initDb()` reads the module-level PGlite singleton. In a subprocess that called `PGlite.create()` directly, use `createPoolAdapter(instance)` instead.
+- **Graceful shutdown discipline**: hard process kills bypass the SIGTERM handler — PGlite will not checkpoint cleanly. Always stop via registered signal handlers. Consider adding postmaster.pid presence check on startup as a WAL-replay warning.
+
+## Team Update — undefined
+
+Run: wave-15
+
+- **mcmanus**: Universal Project Bundle (3rd escalation cleared)
+- **keyser**: UI batch (#2, #6, #7 fixes)
+
+## Team Update — undefined
+
+Run: wave-15-final
+
+- **mcmanus**: Universal Project Bundle (3rd escalation cleared)
+- **keyser**: UI batch (#2, #6, #7 fixes)
+- **scribe**: W15 close-out + SDK fidelity audit
+
+---
+
+## Wave 16 — Bug Bash #3: Built-in Project Templates
+
+**Date:** 2026-05-15T22:42:29.855-07:00  
+**Task:** Restore built-in project templates Ahmed remembered from squad-irl; wire them into the New Project flow using the Universal Project Bundle format McManus shipped in W15.
+
+### What shipped
+
+**6 built-in bundles** at `bundles/{slug}/squad-bundle.json`:
+
+| Bundle | Icon | Core focus |
+|--------|------|------------|
+| `default-software-project` | 🚀 | Pre-existing McManus bundle — kept as-is |
+| `library-or-sdk-project` | 📦 | npm/PyPI lib dev: API RFC + semver + changelog |
+| `bug-bash-project` | 🐛 | Backlog cleaner: triage → verified → in-fix → verified-fixed |
+| `research-spike` | 🔬 | Time-boxed exploration: questions → findings |
+| `content-writing-project` | ✍️ | Non-technical: pitches → outlines → drafting → review → published |
+| `ops-runbook-project` | 🚨 | Incident response: alerts → triaging → mitigating → resolved → postmortem |
+
+**Backend** (`packages/server/src/services/builtin-bundles.ts`):
+- Lazy scanner: `getBuiltinBundles()`, `getBuiltinBundle(id)`, `getBuiltinBundleDir(id)`
+- In-process cache; `resetBuiltinBundleCache()` called by diagnostics on each check run so edits are visible without restart
+
+**Routes** (added to `packages/server/src/routes/templates.ts`, before `/:id`):
+- `GET /api/templates/builtin-projects` → list
+- `POST /api/templates/builtin-projects/:bundleId/apply` → calls `applyBundle()`
+
+**Diagnostics**: `checkBuiltinBundles()` added to `runDiagnostics()` battery. Invalid bundles → `warn`; unreadable bundles dir → `fail`. Server never crashes on invalid bundles.
+
+**Frontend** (`packages/client/src/pages/ProjectPicker.tsx`):
+- `CreateFromTemplateModal` updated to show "Built-in" section (built-in bundles) + "My templates" section (user-saved)
+- New hooks: `useBuiltinProjectTemplates()`, `useApplyBuiltinProjectTemplate()` in `packages/client/src/api/templates.ts`
+
+### squad-irl check
+
+Not found in this tree or parent directories. Content curated from first principles.
+
+### McManus coordination
+
+`mcmanus-workflow-vs-ceremony-nomenclature.md` not yet written at time of wave. Used provisional slugs: `simple-review`, `bug-fix`, `rfc`, `spike`.
+
+### Invariants added
+
+- Built-in bundle scanner must always be defensive: log warnings, never throw, never crash server.
+- `/builtin-projects` routes must be declared **before** `/:id` in the Express router — "builtin-projects" would otherwise be treated as an id param.
+- Diagnostics resets the bundle cache on every check run (not just boot) — ensures freshness without restart.
+- `bundleDir` must be passed to `applyBundle()` for any bundle that uses `bodyPath` references to external markdown files.
+
+---
+
+## Stream G Phase 2B — GitHub Integration Layer (Wave 18)
+
+**Completed by:** Hockney
+
+### What was built
+
+**D4 — pg stdio SIGPIPE fix:** Added `SIGPIPE`, `SIGTERM`, `SIGINT` handlers to `mcp/index.ts` that call `closeDb()` before exit. Prevents pg pool connection leaks when Claude Desktop terminates the MCP stdio process.
+
+**D1 — 5 MCP GitHub tools:**
+- `github_push_branch` — push a local branch to remote
+- `github_open_pr` — create a pull request via `gh pr create`
+- `github_comment_issue` — add a comment to an issue or PR
+- `github_trigger_workflow` — fire a `workflow_dispatch` event and return the new run ID
+- `github_merge_pr` — merge a PR via `gh pr merge`
+
+Logic extracted from inline route handlers into `services/github-git-ops.ts`. Both HTTP routes and MCP handlers call the same service functions. `GitOpsError` carries `code`, `detail`, `httpStatus`.
+
+**D2 — Expanded webhook handler:**
+- `POST /api/projects/:id/github/webhook` now handles 8 event types: `pull_request`, `pull_request_review`, `pull_request_review_comment`, `issue_comment`, `issues`, `push`, `workflow_run`, `check_run`
+- HMAC-SHA256 signature validation against per-project `github_webhook_secret`
+- All events persisted to `github_events` table with dedup on `X-GitHub-Delivery`
+- Re-emitted on internal bus as `github.<event>.<action>` via new `emitGithubWebhookEvent()`
+
+**D3 — GitHub ceremony triggers:**
+- New `triggerKind = 'github'` in ceremony dispatcher
+- `triggerConfig.event` + optional `action` + optional `filters` (`label`, `branch`, `author_team`)
+- Idempotency via `ceremony_github_fires(ceremony_slug, delivery_id)` DB unique index
+- `BundleCeremonyGithubTrigger` added to SDK bundle schema
+- `TriggerSource.kind` extended with `'github'`
+
+### New tables (Wave 18 migration)
+- `github_events` — raw GitHub webhook event store
+- `ceremony_github_fires` — dedup table for ceremony/delivery pairs
+
+### Key files
+- `services/github-git-ops.ts` — shared git service (NEW)
+- `routes/github-sync.ts` — expanded webhook handler
+- `realtime/event-bus.ts` — `GitHubWebhookEventType` + `emitGithubWebhookEvent()`
+- `services/ceremony-dispatcher.ts` — `handleGithubEvent()` + GitHub ceremony matching
+- `engine/workflow-runner.ts` — `TriggerSource.kind += 'github'`
+- `packages/squadboard-sdk/src/bundle/schema.ts` — `BundleCeremonyGithubTrigger`
 
 ### Decision filed
-`.squad/decisions/inbox/hockney-pglite-migration.md`
-
-### Status
-COMPLETE. `tsc --noEmit` clean. 4/4 vitest tests pass. Server starts, `GET /api/projects` returns 200 + JSON from fresh PGlite cluster.
-
-
-### Files Changed
-
-| File | Change |
-|------|--------|
-| `packages/server/src/db/schema.ts` | Added `completedAt` (TIMESTAMPTZ), `createdBy` (TEXT DEFAULT 'user') to `issues` table |
-| `packages/server/src/db/index.ts` | Wave-13 idempotent migration: `ALTER TABLE issues ADD COLUMN IF NOT EXISTS completed_at, created_by` |
-| `packages/server/src/services/issues.ts` | Rewrote `createIssue()` with unified signature (see below) |
-| `packages/server/src/services/bulk-import-issues.ts` | **NEW** — `bulkImportIssues()` service |
-| `packages/server/src/cli/bulk-import.ts` | **NEW** — CLI real logic |
-| `packages/server/src/mcp/server.ts` | `handleCreateIssue` now delegates to `createIssueService()` from services/issues.ts |
-| `packages/server/src/routes/issues.ts` | POST handler delegates to `createIssue()`, column validation moved to route layer |
-| `packages/server/src/services/inbox.ts` | Updated call-site to new signature |
-| `packages/server/src/sdk/consult-stream.ts` | Updated two call-sites to new signature |
-| `packages/server/src/__tests__/issues-service.test.ts` | **NEW** — 4 smoke tests (vitest) |
-| `packages/server/package.json` | Added `test` script + vitest devDependency |
-| `bin/squad-bulk-import` | **NEW** — shell shim |
-
-### `createIssue()` Signature
-
-```ts
-createIssue(input: {
-  projectId: string;
-  title: string;
-  body?: string;
-  status?: 'backlog' | 'todo' | 'in_progress' | 'in_review' | 'done';
-  position?: number;
-  archived?: boolean;
-  completedAt?: Date | null;
-  assigneeId?: string | null;
-  labels?: string[];
-  idempotencyKey?: string;
-  createdBy?: string;
-}): Promise<{ created: boolean; id: string; issue?: Issue; idempotencyKey?: string }>
-```
-
-Return value changed from the raw issue row to an envelope. All callers updated.
-
-### Inertness Invariant Location
-
-`packages/server/src/services/bulk-import-issues.ts` — `bulkImportIssues()`, before any `createIssue()` call:
-```ts
-if (status !== 'backlog' && status !== 'done') {
-  // BulkImportInvariantError — returns error item, does NOT abort batch
-}
-```
-Also enforced at the TypeScript type level via `InertStatus = 'backlog' | 'done'`.
-
-### Bulk Port Results
-
-131 issues ported to project `7a9cc07a-d463-4f8c-864a-c733342aa8a8` (foo):
-- created=131, skipped=0, errors=0
-- Board: 35 → 166 issues
-- All ported cards: assigneeId=null, status∈{backlog,done}, createdBy='bulk-import'
-
-### What N9 (MCP Adapter) Needs To Do
-
-In `packages/server/src/mcp/server.ts`:
-1. Import `bulkImportIssues` from `../services/bulk-import-issues.js`.
-2. Add `squadboard_bulk_import_cards` tool definition to the `TOOLS` array with the input schema.
-3. Add a case in the tool-call switch/if dispatcher.
-4. Parse MCP args into `BulkImportItem[]` and call `bulkImportIssues()`.
-
-The handler is N9-ready — no service changes needed for N9.
+`.squad/decisions/inbox/hockney-stream-g-phase2b.md`
 
 ---
 
-## Wave 13 Learnings — Bulk-import + inertness invariant
+## W21 Lesson (Closed in W22) — PGlite Persistence + Graceful Shutdown
 
-**Added by:** Scribe (Wave 13 close-out)  
-**Date:** 2026-05-15T19:39:32-07:00
+**Date:** 2026-05-16
+**Wave:** 21 (closed in Wave 22)
 
-### Bulk-port outcome
+PGlite persistence and graceful shutdown from Hockney-w21.
 
-Successfully ported 131 historical items (48 done, 83 pending) from external todo list into project `foo`. All cards landed with inert status (backlog/done only), no assignee, no labels — the invariant held edge-to-edge.
+**PGlite NodeFS persistence bug fix:**
+- PGlite NodeFS is unreliable for complex schemas. Reopening a corrupted NodeFS directory triggers WebAssembly Aborted() crash.
+- **Solution:** Use dumpDataDir → runRestore cycle. CHECKPOINT before exit. Call stopPglite() cleanly.
+- **Result:** 225 issues restored (was 0 before fix); all 656 rows recovered
 
-**Going forward:** The inertness invariant (status ∈ {backlog, done}) is now a charter contract for all bulk-import handlers. Enforce at both the TypeScript type level AND runtime to catch contract violations early.
+**Graceful shutdown pattern:**
+- Stop heartbeat, sync loops, Copilot watcher immediately
+- Set 10s drain timeout (unref so it does not block clean exits)
+- After server.close(): CHECKPOINT → closeDb() → log shutdown event
 
-### Charter update reminder
+**Stale-run recovery (boot-time):**
+- Mark orphaned running rows as failed with stale_reason="restart-pickup" on boot
+- Prevents hung processes from blocking users
 
-Your charter section says: "Embedded Postgres for local installs (~50MB binary)". This becomes stale post-Q1 when PGlite migration lands (Ahmed's directive). Flag: update charter `## How I Work` after PGlite ships so new agents don't assume embedded-postgres setup.
+**Lessons:** Always CHECKPOINT before exit. Use dumpDataDir for complex schemas. Stale-run recovery prevents user-blocking hung states. Daemon spawn errors need .on("error") handlers.
+
+---
 

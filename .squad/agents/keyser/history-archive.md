@@ -1,180 +1,244 @@
-### 2026-05-15 — FormulatePanel + handleFormulate pattern (feat/issues-formulate)
+# Keyser Agent — Compact History Summary
 
-**FormulatePanel composition pattern:**
-- Import `FormulatePanel` from `../formulate/FormulatePanel.tsx`
-- Call `useFormulateXxx(projectId)` hook at the top of the component
-- Hold `modelUsed: FormulateModelInfo | null` and `formulateError: string | null` in local state
-- `handleFormulate(draft)` calls `formulate.mutate(draft, { onSuccess, onError })` — populate form fields on success, set error string on failure, never crash the dialog
-- Place `<FormulatePanel ... compact />` at the TOP of the `<form>` body, before all other fields; use `compact` prop in dialogs ≤520px wide
+**Focus areas:** UI component patterns (Fluent2 canonicals, DnD, form styling), client API contracts, TypeScript enforcement.
 
-**Label name→ID mapping:**
-When the LLM returns `suggestedLabels: string[]` (names), map to IDs using:
-```ts
-const matched = suggestedLabels.flatMap((name) => {
-  const found = labels?.find((l) => l.name.toLowerCase() === name.toLowerCase())
-  return found ? [found.id] : []
-})
-```
-Silently drop names that don't match any existing label.
+**Key learnings:**
+- Fluent2 page padding canon: `tokens.spacingHorizontalXXL + tokens.spacingVerticalXXL` (24px + 24px); use both axes explicitly.
+- Sidebar bottom-anchor: `<div style={{ flex: 1 }} />` spacer in NavDrawerBody flex column.
+- Error boundary per-row pattern for resilience (class component required, function-component `getDerivedStateFromError` N/A in React 18).
+- Defensive `retry` callback in useQuery for 404 short-circuit (skip retry backoff when service not deployed).
+- Explicit per-file `git add -- <path>` only; never `git add .` or glob patterns (prevents accidental file sweeps in parallel sessions).
+- Fluent `<Field>` single-htmlFor footgun: binds all labels to first child. Use `<fieldset>` + `<legend>` for checkbox groups instead.
+- `import.meta.env.DEV` in Vite client (not `process.env.NODE_ENV`; `process` not in scope).
+- apiFetch content-type guard: defend both `!res.ok` AND JSON parse against non-JSON responses (catches SPA fallback HTML + error pages).
 
-**Express route ordering trap:**
-`POST /formulate` MUST be registered BEFORE the parameterized `GET /:id` and `PATCH /:id` routes. Express matches in declaration order — registering it after `/:id` causes Express to capture "formulate" as an ID value.
-
-**`{ ok, error }` envelope for formulate routes:**
-Formulate routes use `{ ok: true, data: T }` / `{ ok: false, error }` envelopes (matching `apiFetch<Envelope<T>>`), not the bare `{ error }` shape used by `handleError()` in the rest of the routes file.
-
-### 2026-05-15 — New Consult layout rebalance (style/consult-layout)
-
-**CSS grid for compact config knobs:**
-When a form has ≥4 small fields and one hero field, group the small ones in a `display: grid; gridTemplateColumns: '1fr 1fr'` block and render the hero below with `marginTop: tokens.spacingVerticalL`. This keeps the visual hierarchy: knobs at top, focal input front and center.
-
-**Sidebar button full-width trap:**
-A `flexDirection: 'column'` parent without `alignItems` defaults to `alignItems: 'stretch'`, making all children full-width. Fix: add `alignItems: 'flex-start'` to the parent container so buttons size to their content.
-
-**PageHeader consistency:**
-Every in-project pane should open with `<PageHeader>` from `components/layout/PageHeader.tsx`. Avoids divergent `<Title2>` + `<Body1>` bespoke headers with inconsistent spacing. The pane wraps as: `<div flexColumn height:100%> + <PageHeader /> + <scrollable content>`.
-
-**Submit button disabled logic:**
-"Disabled until draft OR agent selected (in agent mode)" = `disabled={isPending || (!draft.trim() && !(mode==='agent' && agentId))}`. This lets users start a session without a first message if they've picked an agent, but requires a draft for model-mode where there's no agent context to bootstrap.
-
-## Recent team activity
-
-New decisions merged to `.squad/decisions.md`:
-- Demo 9 open question #2: `request_changes_policy` default is `'first'` (Hockney)
-- Demo 12 open question #6: Optimistic concurrency for concurrent issue edits (Verbal)
-- Demo 15 open question #8: GitHub issue mirroring OFF by default, opt-in per project (Hockney)
-
-See `.squad/decisions.md` for full details.
-
-Multi-agent fanout session completed 2026-05-15T12:35:00Z:
-- 5 agents shipped (2 keyser rounds, mcmanus, hockney, verbal)
-- 5 commits landed (42c120a0, d74c9622, d7cc2ada, 4d9fb813, base a97e2bce)
-- 2 agents in flight (fenster, kobayashi)
-
-Session log: `.squad/log/2026-05-15T12:35:00Z-squad-fanout.md`
-
-## Recent team activity
-
-**2026-05-15 Round 2 shipped:** Hockney (attachments backend), McManus (multi-modal frontend), Verbal (Consult chat fix), Fenster (typography sweep), Kobayashi (Ceremony Conjure UX), Keyser (layout rebalance). See `.squad/decisions.md` for Fluent2 canon, image bytea architecture, create-page pattern, react-markdown rendering.
-
-## Learnings
-
-### 2026-05-15 — Diagnostics + Heartbeat scaffolding (Phase 3)
-
-**Defensive 404 handling in useQuery:**
-Use the `retry` callback to short-circuit retries when `error.message.startsWith('API 404')`. This lets the UI immediately render an empty-state ("service not available yet") without waiting for the default retry backoff — critical when a backend service hasn't deployed yet.
-
-**Error boundary per-row pattern:**
-Wrap each `<CheckCard>` in a `class CheckCardErrorBoundary extends React.Component` rather than a single page-level boundary. This means one malformed server response row won't blank the entire list. The class approach is required because `getDerivedStateFromError` has no function-component equivalent in React 18.
-
-**Fluent icon naming (24px):**
-The `@fluentui/react-icons` package uses the pattern `{Name}24Regular` (size before variant), e.g. `Heart24Regular`, `HeartPulse24Regular`. The shorthand `Heart24Regular` and `HeartPulse24Regular` both exist at 24px. Generic `Pulse24Regular` does NOT exist — use `HeartPulse24Regular` instead.
-
-**Top-level system routes:**
-Diagnostics and Heartbeat are system-scoped, not project-scoped. Route them top-level (`/diagnostics`, `/heartbeat`) with an additional project-scoped alias (`/projects/:id/diagnostics`) that mirrors the server API path. Do NOT nest them under Settings — Settings is configurational, Diagnostics is operational.
-
-**SYSTEM nav section header:**
-Added `<NavSectionHeader>SYSTEM</NavSectionHeader>` above the global nav items (Diagnostics, Heartbeat), rendered before project-specific groups. This is consistent with the `WORK / SQUAD / OPERATIONS` group convention for project nav.
-
-**Cache-bust mutation pattern:**
-`useRunDiagnostics` appends `?bust=${Date.now()}` to the query string to force the server to bypass any result caching, then calls `queryClient.setQueryData` with the result to update the cache optimistically without a refetch round-trip.
-
-**2026-05-15T15:21:46Z — Coordination snag: Parallel commit swept Hockney's work**
-
-When both Keyser and Hockney committed diagnostics work in parallel (Phase 3, commit 13c34dca), Keyser's staging accidentally swept Hockney's server files into the same commit. Functional code verified OK, but the audit trail is murky — one commit SHA contains both agents' changes. This happened because explicit `git add -- <path>` per-file was not used; Keyser's broader staging glob (likely `git add packages/` or similar) swept uncommitted server work. **Action for future parallel sessions:** Always use `git add -- <path1> <path2> ...` (bracket notation, one file per add) for intentional changes. Never use `git add .` or `git add <directory>/`. Always run `git status` before committing to verify ONLY your changes are staged. This prevents accidental file sweeps and keeps audit trails clean.
-
-
-## 2026-05-15 Phase 19 client surfaces (commit 8eb337dd)
-
-**5 surfaces shipped in one wave:**
-
-1. `api/templates.ts` (NEW) — 13 React Query hooks for full portability contract.
-2. `pages/Templates.tsx` — Extended with 4-tab TabList (Ceremonies / Workflows / Teams / Projects), URL search-param state (`?tab=`), TemplateGrid with Apply/Delete, DragImportZone with payload.kind validation.
-3. `pages/Agents.tsx` — Export team / Import team / Save as template buttons in agents-tab header.
-4. `pages/Settings.tsx` — New "Portability" sidebar section with Export / Import / Save as template rows.
-5. `pages/ProjectPicker.tsx` — "Create from template" CTA (DocumentCopy icon) beside "Add Project", opens CreateFromTemplateModal.
-6. `pages/CeremonyEditor.tsx` — "Save as template" (Dialog) + "Export YAML" (triggerTextDownload) buttons in ceremony header.
-
-**TypeScript:** `npx tsc --noEmit` passes clean — zero errors, no `any`.
-
-**Coordination note for Hockney:** `useImportWorkflow` calls `POST /api/projects/:id/ceremonies/import` which is NOT in the Phase 19 contract. The hook degrades gracefully (will 404 until Hockney ships the endpoint). Also `useSaveWorkflowAsTemplate` calls `/api/projects/:id/ceremonies/:ceremonyId/save-as-template` — Hockney should confirm this route.
-
-### Lesson (reinforced)
-**Explicit `git add -- <path>` per file; never let parallel agents' files leak into my commits.**
-Always run `git status --short -- packages/client/` first. Stage each file individually. NEVER use `git add .` or `git add packages/` or any directory pattern. This is critical when Hockney, Kobayashi and others have uncommitted server changes in the working tree simultaneously.
-
-## Phase 19 – Wave 2 (Hockney r5 contract alignment) — commit 2363ece6
-
-**Trigger:** Hockney updated 11 portability endpoints to `{ ok, data }` envelope; 2 project endpoints (`/import`, `/instantiate-template/:id`) now require `squadPath` in request body.
-
-**Changes:**
-- `api/templates.ts`: Added `ApiEnvelope<T>` + `unwrapEnvelope<T>()`; updated all hooks to unwrap; added `squadPath` param to `useImportProject` + `useInstantiateProjectTemplate`; return types simplified (no longer nested `.project`).
-- `pages/Settings.tsx`: Replaced direct-import flow with `ImportProjectDialog` collecting `squadPath` + file picker; fixed `result.name` reference.
-- `pages/ProjectPicker.tsx`: Added `squadPath` state + input to `CreateFromTemplateModal`; fixed `result.id` navigation reference.
-- `pages/Templates.tsx`:
-  - Replaced `ApplyNameDialog` with `ApplyTemplateDialog` that conditionally shows `squadPath` field for project kind.
-  - `handleApply` now accepts `(tpl, name?, squadPath?)` and passes `squadPath` to `instantiateProject`.
-  - Fixed `result.id` navigation reference (was `result.project.id`).
-  - Rewrote `DragImportZone`: project file drops now park the payload and display an inline `squadPath` prompt before calling `importProject.mutateAsync`; kind-validation factored into `validateKind()`.
-  - Removed stale `useCallback` import.
-
-**TypeScript:** Passed 0 errors before commit.
-
-**Lesson reinforced:** Explicit per-file `git add -- <path>` only; never `git add .`.
-
----
-
-## Wave 5 Update (2026-05-15T10:18:00Z)
-
-**Run:** keyser-3 (PARTIAL)  
-**Model:** claude-sonnet-4.6  
-**Task:** Column UI Batch A (dynamic list) + Batch B (add/remove UX)
-
-**Outcome:**
-- **Batch A — COMPLETE:**
-  - Built dynamic column list component
-  - Commit: `c6dfcd6c`
-  - Renders available columns per project, supports add/remove UX
-  - Decision: `.squad/decisions/inbox/keyser-phase19-client.md` (TabList URL state contract)
-  
-- **Batch B — TIMED OUT:**
-  - No commits yet
-  - Retry scheduled as keyser-5 (in flight — not logged in this round)
-
-**Status:** PARTIAL COMPLETE — Batch A landed. Batch B retrying as keyser-5.
-
-
----
-
-## 2026-05-15 — keyser-3 timeout / keyser-4 Batch B completion
-
-**keyser-3** timed out partway through the columns feature task. Batch A landed cleanly as commit `c6dfcd6c` ("feat(board): dynamic column list — KanbanBoard consumes useColumnMeta") before the timeout.
-
-**keyser-4** picked up from where keyser-3 left off and shipped Batch B as commit `e4d87359` ("feat(board): add/remove/reorder columns in ColumnSettingsPanel + CaptureModal dropdown"):
-
-- `ColumnSettingsPanel.tsx`: DnD reorder, add column inline form, delete with confirm + reassign, make-default star, semantic badge + select, 480px drawer, updated reset confirm text.
-- `CaptureModal.tsx`: replaced hardcoded COLUMNS with `useColumnMeta(projectId)` + static fallback for empty projectId.
-
-TypeScript (`npx tsc --noEmit`) was clean before commit.
-
-## 2026-05-15 — UI bundle: 5 fixes in one wave
-
-Five small UI fixes Ahmed batched together. Per-file commits, TS clean.
-
-| Fix | File(s) | Commit |
-|-----|---------|--------|
-| 1. Fluent2 spacing on CeremonyList | `pages/CeremonyList.tsx` | `8b3f7197` |
-| 2. Widen Consult form (880→1200) | `pages/Consult.tsx` | `16414e90` |
-| 3+5. Project switcher Menu + System anchored bottom | `components/Layout.tsx` | `d72fd8a7` |
-| 4. PresenceBar alignment + WS stale-timer fix | `pages/Board.tsx`, `realtime/ws-client.ts` | `5673d57b` |
-
-### Patterns worth remembering
-
-**Fluent2 page padding canon (per Fenster's typography canon):** every
-list/data surface needs `tokens.spacingHorizontalXXL` + `tokens.spacingVerticalL`
-on the scroll container so content breathes against the sidebar. Empty
-states use `spacingHorizontalXXL` + `spacingVerticalXXL`. Never use a single
-axis token (`padding: tokens.spacingVerticalXXL`) for both axes — that's
-semantically wrong even when the px value happens to be the same.
-
+**Recent work:**
 **Sidebar bottom-anchor pattern:** Fluent's `NavDrawerBody` is already
+`display: flex; flex-direction: column` (and `flex: 1; overflow: auto`
+from `useDrawerBodyStyles_unstable`). Drop a `<div style={{ flex: 1 }} />`
+spacer between the top items and the section you want anchored to the
+bottom. No CSS overrides needed.
+
+**Two `marginLeft: 'auto'` siblings = visual middle-pin trap:** in a
+flex row with three children where two carry `marginLeft: 'auto'`, the
+middle child gets pinned to the visual centre instead of right-aligned.
+Always pick a single right-aligned anchor; subsequent siblings ride
+along with the natural flex gap.
+
+**Project switcher = Fluent2 `Menu`:** replaced the plain navigate-to-/
+button with a `Menu` + `MenuTrigger` + `MenuList` populated from
+`useProjects()`. The selection handler swaps the project segment in
+`location.pathname` while preserving the category segment after it
+(via `extractProjectCategory()`), so switching from foo's Boards to bar
+lands on bar's Boards. Unknown / non-project routes fall back to
+`/projects/<id>/dashboard`. Sub-paths beyond the segment are dropped
+intentionally — switching projects lands on the category root, not a
+stale sub-resource id.
+
+**WS reconnect `connect()` must cancel pending timers:** if `connect()`
+runs while a reconnect timer is scheduled (e.g. route change during
+backoff), the stale timer can fire after the new socket opens and
+spawn a second competing socket. Added `cancelReconnect()` at the top
+of `connect()` to drop the orphan timer. Pattern: any method that
+restarts the connection lifecycle must cancel scheduled work from the
+prior lifecycle.
+
+### Lesson reinforced
+Per-file `git add -- <path>` again. The repo currently has uncommitted
+work from other agents (mcmanus history, server/index.ts, vite cache
+churn). Per-file staging kept all four commits clean — only my
+intentional changes landed.
+
+## 2026-05-15 — M2 apiFetch guard + M3 Checkbox label-toggle (commit c7dde255)
+
+**Fluent `<Field>` single-htmlFor footgun (⚠️ — share with team):**
+Fluent2's `<Field>` generates one `htmlFor` and binds it to the **first** form control child. If you wrap multiple `<Checkbox>` siblings in a single `<Field>`, clicking ANY label routes the OS click event to that first input. The bug is invisible in code review — everything looks correct. Fix: use `<fieldset>` + `<legend>` for checkbox groups (semantically correct, no single binding). Add explicit `id` props to each `<Checkbox>` for belt-and-suspenders label isolation.
+
+**`import.meta.env.DEV` not `process.env.NODE_ENV` in Vite client:**
+The client package is a Vite app without `@types/node`. `process` is not in scope, so `process.env.NODE_ENV` fails tsc. Use `import.meta.env.DEV` for dev-only guards.
+
+**apiFetch content-type strategy:**
+Guard both branches — `!res.ok` AND the happy-path JSON parse — against non-JSON responses. Read the body first, check `content-type`, then either throw a diagnostic error (with first 200 chars) or parse. This catches Express SPA fallback (HTML-200) and HTML error pages (4xx/5xx) alike.
+
+- **2026-05-15 Wave 11A — K1 (PageLoading component) — SILENT-SUCCESS:** Shipped canonical PageLoading, SectionLoading, InlineLoading components. Consumer smoke-test: Costs.tsx adopted canonical PageLoading. Components follow Fluent2 theming, integrate with tokens.*, support role attribute for accessibility. Merged from Wave 11A dispatch; committed as silent-success deliverable.
+
+- **2026-05-15 Wave 11B — M2+M3 (Hire-team UI + apiFetch fix) — COMPLETE:** Fixed "Cast a Team" modal bugs (live bug report w/ HIGH priority).
+  - **M2 (apiFetch Content-Type Guard):** Added defensive check on both error (`!res.ok`) and success paths. Before calling `JSON.parse()`, verify `content-type: application/json`. If not, throw human-readable diagnostic including HTTP status, actual content-type, and first 200 chars of body. Catches Express SPA fallback (HTML-200) and HTML error pages (4xx/5xx) — no more cryptic "Unexpected token '<'".
+  - **M3 (HireTeamModal checkbox label-toggle bug):** Fluent `<Field>` wraps all 16 `<Checkbox>` siblings and emits single `htmlFor` pointing at first child (Lead). Every label click routed to Lead only. Fixed: replaced `<Field>` with `<fieldset>` + `<legend>` (semantically correct for checkbox groups) + explicit `id={`role-${r.id}`}` on every `<Checkbox>` for belt-and-suspenders label binding + added DEV-only invariant to throw if any two roles share the same id.
+  - **Commit:** c7dde255 (both M2+M3 in one commit)
+  - **Locked by:** Kujan M4 e2e regression suite (4 sub-tests green in 9.9s)
+
+## 2026-05-15 — Wave 12 N3+N4 (Now global dashboard + flow clickable nodes)
+
+**`react-router` not `react-router-dom`:** The client package does not install `react-router-dom` as a separate peer — it ships `react-router` v7 which re-exports everything. Always import from `'react-router'`. Any `from 'react-router-dom'` will typecheck-fail with "Cannot find module".
+
+**`useQueries` fan-out pattern for cross-project aggregation:** When there's no server-side aggregate endpoint, `useQueries` from TanStack Query lets you fan out per-project queries in parallel. Each result has its own `isLoading`/`data` — reduce over `results` to aggregate. Set `staleTime: 60_000` and `retry: false` (don't hammer the server if one project's endpoint is down). If project count grows to 30+, push for a dedicated aggregate endpoint instead.
+
+**ReactFlow `onNodeClick` preferred over node-level `onClick`:** For IssueFlowDag navigation, attaching `onNodeClick` at the ReactFlow canvas level (reading `node.data.projectId`, `node.data.issueId`) is cleaner than adding `useNavigate` to every node component. Node components stay pure/dumb; navigation logic lives in the parent.
+
+**SVG `<g>` accessibility:** For clickable SVG groups, add `role="button"`, `tabIndex={0}`, `aria-label`, and `onKeyDown` (Enter/Space). Mouse-enter/leave on a child `<rect>` with `setAttribute('opacity', ...)` is the simplest hover effect in SVG without pulling in CSS-in-JS SVG helpers.
+
+**CeremonyStepNode in editor context:** The VisualCanvas (ceremony editor) does NOT pass `projectId`/`ceremonyId` in node data, so the onClick guard (`Boolean(projectId && ceremonyId)`) keeps editor selection behavior intact. When the component is used in read-only contexts with those fields, navigation activates automatically.
+
+**`PageLoading` for full-page loading states:** Now uses the canonical `PageLoading` component (with `header` prop) instead of inline spinners, consistent with CeremonyList canonical pattern.
+
+## Wave 12 — Cast-Team Follow-On + Dogfood Loop (2026-05-15)
+
+**Team deployment:** Hockney-2, Keyser-2, Fenster-2
+
+**This agent's contributions:**
+- **N3: Now Page — Global Dashboard:** 6-stat-tile row (In-flight, Queued, Done today, Active projects, Cost MTD, Health) + live panels (sessions, issue runs, workflow runs) + 15-event activity feed + per-project mini-rollup grid. Client-side fan-out via `useQueries` TanStack Query. Files: `packages/client/src/pages/Now.tsx`, `packages/client/src/pages/ProjectFlow.tsx`, `packages/client/src/components/flow/AgentFlowGraph.tsx`, `packages/client/src/components/flow/IssueFlowDag.tsx`, `packages/client/src/components/flow/StepNode.tsx`, `packages/client/src/components/flow/nodes/CeremonyStepNode.tsx`.
+- **N4: Clickable Flow Nodes:** Agent/Step/Ceremony nodes now navigable to `/projects/{projectId}/agents/{agentId}`, `/projects/{projectId}/board?focus={issueId}`, `/projects/{projectId}/ceremonies/{ceremonyId}` with keyboard+aria support (Enter, Space, tabIndex, role="button").
+
+**Status:** 2/2 done. Build green (6.94s).
+
+**Follow-ups:** Hockney to add agent detail route, run-detail route, and daily activity stats endpoint (as noted above).
+
+---
+
+## Wave 14 — q9 wave button reframed as post-daemon UX
+
+**Date:** 2026-05-15T22:14:50-07:00  
+
+Note: q9-end-wave-button reframed from primary to manual-override. After q7 (autonomous daemon) ships, q9 becomes the UI for forcing an immediate ceremony, ignoring the schedule. Lower priority than q7.
+
+---
+
+## Wave 15 — UI Bug Batch (commit 5f9fab1e)
+
+**Date:** 2026-05-15T22:42:29.855-07:00
+
+Three bugs landed in one commit cluster:
+
+**Bug 1 — Use-template pre-fill (CeremonyEditor.tsx):**
+- Templates.tsx passed `?template=<slug>` on navigate but CeremonyEditor never read it — form always blank.
+- Fix: added `useSearchParams` + `useCeremonyTemplates()` call. `useEffect` on `[templateSlug, builtinTemplates]` pre-fills name / description / steps, auto-expands manual form. Invalid slug shows warning banner ("Template not found — starting with blank form."). Valid slug shows info banner ("Pre-filled from template.").
+
+**Bug 2 — Conjure nav (Layout.tsx) — ROOT CAUSE FOUND:**
+- Feature was fully functional at `/consult/new` since W10. Root cause: Wave 10 B2 relabeled every UI surface "Consult" when the product name was "Conjure." The nav item said "Consult", the button said "Consult" — no user looking for "Conjure" would find it. Regressed silently through W10, W11, W14 because no test covered nav label text.
+- Fix: renamed `NavItem` label and top-bar `Button` text from "Consult" → "Conjure". Routes, keyboard shortcuts, and page component unchanged.
+
+**Bug 3 — Scope dropdown help text (CeremonyEditor.tsx TriggerConfigForm):**
+- Bare `<label>scope` replaced with `<Label>` + `<Dropdown>` + reactive `<Caption1>` help text per scope value + `<MessageBar intent="info">` for board/task scopes explaining narrowed-firing behaviour.
+- Closes `h5-scope-clarify` and `w15-ceremony-scope-options-ux`.
+
+**Key learnings:**
+- `useSearchParams` from react-router is the correct hook for reading URL query params in Vite/react-router v7 (not `new URLSearchParams(window.location.search)`).
+- Nav label regressions are invisible to router-level tests — the `value` prop (used for routing) was "consult" throughout; only the display text was wrong. Consider adding a smoke test that verifies visible nav label text matches product names.
+- `useCeremonyTemplates()` is safe to call on both new and edit routes — React Query caches it and the pre-fill effect is guarded by `templateSlug` being null on edit routes.
+
+## Team Update — undefined
+
+Run: wave-15
+
+- **mcmanus**: Universal Project Bundle (3rd escalation cleared)
+- **hockney**: Stream I (backup/restore + W14 migration)
+
+## Team Update — undefined
+
+Run: wave-15-final
+
+- **mcmanus**: Universal Project Bundle (3rd escalation cleared)
+- **hockney**: Stream I (backup/restore + W14 migration)
+- **scribe**: W15 close-out + SDK fidelity audit
+
+## Wave 17 — W17 Settings Batch: Backup/Restore UI + GitHub Integration (commit 7b3930e6)
+
+**Date:** 2026-05-15T22:42:29.855-07:00
+**Branch:** keyser/w17-settings-backup-github
+
+Two deliverables batched into one commit:
+
+**Deliverable 1 — Backup & Restore section (w16-restore-ui):**
+- `SystemBackupSection.tsx`: `useQuery` for backup list (30s refetch), useMutation for backup-now, RestoreDialog (custom radio list, warning MessageBar, confirmation checkbox, spinner, reload on success).
+- `POST /api/system/restore` added to `routes/system.ts` — delegates to Hockney's `runRestore()`.
+- Retain: static retention info card; W18 will add config editing.
+
+**Deliverable 2 — GitHub Integration section (g5-3):**
+- `SystemGitHubSection.tsx`: gh-not-installed banner (https://cli.github.com/), auth card (username/protocol/scopes from `gh auth status` parse), permission table (6 actions × required scope × granted status), branch convention display (Verbal's W16 decision), three dry-run test buttons.
+- `GET /api/system/gh-auth-status` + `POST /api/system/gh-test` added to `routes/system.ts`.
+
+**Settings.tsx:** Added 'backup' + 'github' to Section type + SECTIONS array + section renderers; used `DatabaseArrowRight20Regular` + `Branch20Regular` (no GH icon in Fluent2 — Branch is the closest semantic match).
+
+**Key learnings this wave:**
+- Fluent `<RadioGroup>` doesn't render metadata alongside each radio option cleanly — use a custom div-based radio pattern with `role="radio"` + `aria-checked` + `tabIndex` + `onKeyDown` for full a11y, and put the metadata (filename, size, date) inline.
+- `gh auth status` writes to stderr, not stdout — must capture both stdout+stderr from execFileAsync. execFileAsync throws with `{ stdout, stderr }` on non-zero exit, so catch and read from the error object too.
+- `MarkGithub16Regular` does not exist in `@fluentui/react-icons` — use `Branch20Regular` as the closest semantic match for GitHub/git.
+- Pre-existing tsc errors in parallel agents' WIP files (Verbal's `runs.ts`, `GitActions.tsx`) will surface on `pnpm build` — isolate with `tsc --noEmit` and grep for your own file paths to confirm zero new errors.
+
+## Team Update — undefined
+
+Run: w17
+
+- **verbal**: Stream G phase 2A (G2.3 comment + G2.5 merge PR with CI gate + G2.6 card badges)
+- **redfoot**: 4 docs (README + ceremonies concept + features audit + MCP install)
+
+## Wave 18 — W18 UX Polish: O6 Combobox + H6 Ceremonies Audit + O5 Consult Removal (build green)
+
+**Date:** 2026-05-15T22:42:29.855-07:00
+
+Three polish items from Ahmed's bug-bash intake landed in one pass:
+
+**O6 — Project selector → Fluent2 Combobox (Layout.tsx):**
+- Replaced `Menu`/`MenuTrigger`/`MenuPopover`/`Button` switcher with `Combobox` + `Option`/`OptionGroup`.
+- Min 320px / max 480px, flex-shrink on narrow viewports.
+- Searchable: `onInput` filters `allProjectsSorted` in real-time; exact-name match shows unfiltered list.
+- Recent projects: last 5 IDs persisted to `localStorage['squadboard:recent-project-ids']`; shown as "Recent" `OptionGroup` at top; updated via `pushRecentId()` on every project switch.
+- `onBlur` restores the current project name if user didn't pick anything.
+- `Tooltip` wraps the Combobox, surfaces full name on hover for overflow cases.
+- Removed: `Menu`/`MenuTrigger`/`MenuPopover`/`MenuList`/`MenuItem` + `ChevronDown16Regular`.
+
+**H6 — Ceremonies page Fluent2 audit (CeremonyEditor.tsx):**
+- `CeremonyList.tsx` was already Fluent2-compliant (tokens, PageHeader, proper button appearances, good empty state).
+- Edit-mode header in `CeremonyEditor.tsx` had 3 issues: `var(--border)` → `tokens.colorNeutralStroke1`; raw `gap: 12` → `tokens.spacingHorizontalM`; hardcoded `#3fb950`/`#f85149` → `tokens.colorPaletteGreenForeground1`/`tokens.colorPaletteRedForeground1`.
+- Empty-state convergence for Skills/Tools/MCP deferred to W19 (not trivial enough to batch here).
+
+**O5 — Remove Consult button from work-item side view (CardDetail.tsx):**
+- Removed `<Tooltip>`+`<Button>Consult</Button>` block from CardDetail panel header.
+- Removed now-unused imports: `useNavigate`, `Button`, `Tooltip`, `Lightbulb20Regular`.
+- Filed W19 follow-up: `conjure-workitem-deeplink` — implement `?context=workItem:{id}` in Conjure + "Investigate with Conjure" in CardDetail overflow menu.
+
+**Key learnings:**
+- Fluent2 `Combobox` `value` prop controls the text in the input; use `onBlur` to restore the display name if the user abandons without selecting.
+- `selectedOptions` on Combobox takes an array of option `value` strings — pass `[currentProjectId]` to mark the active project.
+- `OptionGroup` with `label={undefined}` renders without a group header — useful when there are no recent projects.
+- After removing a CTA from a component, always grep for *all* the now-unused imports it pulled in (Tooltip, navigate, icon) — tsc `noUnusedLocals` will catch them at build time but it's cleaner to fix proactively.
+
+**Files changed:** `Layout.tsx`, `CeremonyEditor.tsx`, `CardDetail.tsx`
+**Build:** ✓ green — `tsc -b && vite build` in 6.71s, zero errors.
+
+## Wave 19 — W19 Triple: O7 Formulate bug + Conjure deeplink + End-wave button (build green)
+
+**Date:** 2026-05-15T22:42:29.855-07:00
+
+Three items from Ahmed's intake batched into one pass:
+
+**O7 — Formulate ceremony grammar bug:**
+- Root cause: `buildProseAuthorPrompt` used `- agent_run: { ... }` shorthand which LLMs parse as a YAML mapping key, not as `type: agent_run`. `validateWorkflowYaml` rejected the output because `type:` was missing from every step.
+- Fix 1: Rewrote the prompt step schema section to show explicit `type:` indented YAML + a concrete two-step example (`Daily Standup`).
+- Fix 2: `apiFetch` (client.ts) now parses `{ error: "..." }` JSON bodies and throws with the inner string, so users see a clean error instead of `API 502: {"error":"..."}`.
+- Removed narrative path: `'narrative'` filtered from both kind dropdowns in CeremonyEditor via `deprecated: true` on `CEREMONY_KIND_OPTIONS`; `handleConvert`, `convertToast`, `convertCeremony`, `useConvertCeremony` all deleted. Backend routes kept (shared SDK infra). Existing `kind='narrative'` ceremonies remain read-only in the UI.
+
+**conjure-workitem-deeplink — Conjure deep-link from CardDetail:**
+- Added `…` overflow menu to the CardDetail panel header (`Menu`/`MenuTrigger`/`MenuPopover`/`MenuList`/`MenuItem`, Fluent2).
+- "Investigate in Conjure" item navigates to `/projects/${projectId}/consult/new?prefill=issue:${issue.id}` using the existing Phase 17 prefill mechanism (no Consult.tsx changes needed).
+- Prefill maps: title + body → Conjure input, labels + runs → context block, git PR → reference. Non-fatal fallback (blank session) on fetch failure is already in Consult.tsx.
+
+**Q9 — Manual End-wave button (CeremonyList.tsx):**
+- "End wave" button added to CeremonyList page header toolbar (left of "New ceremony"), with `Flag20Regular` icon.
+- Confirmation `Dialog`: explains Scribe close-out, primary "End wave" + Cancel.
+- `POST /api/projects/:projectId/ceremonies/invoke` endpoint added to ceremonies route; delegates to `invokeBuiltInCeremony('scribe-close-out', ctx)`.
+- Toast: "Running Scribe close-out…" → "Wave closed ✓ (commit abc1234)" on success, error message on failure. Auto-dismisses in 8s.
+- Button disabled + spinner while running.
+
+**Key learnings:**
+- LLM prompt YAML schema shorthand (`- stepType: { ... }`) is fatally ambiguous — always provide a verbatim YAML block with the actual keys the validator expects.
+- When removing a mutation hook from a component, also check: the import, the `const x = useHook()` declaration, all useCallback closures that reference it, all state variables it drives (toast/result state), and all JSX that renders that state.
+- `apiFetch` error unwrapping: parse the body as JSON first; if `body.error` is a string, throw that — users never need to see the raw `{"error":"..."}` envelope.
+- Fluent2 `Menu`/`MenuTrigger` wraps a raw `<button>` cleanly; no need for `<Button appearance="...">` as the trigger when matching an existing icon-button pattern.
+
+**Files changed:** `services/ceremony-translator.ts`, `api/client.ts`, `pages/CeremonyEditor.tsx`, `components/board/CardDetail.tsx`, `pages/CeremonyList.tsx`, `routes/ceremonies.ts`
+**Build:** ✓ green — client `tsc -b && vite build` ✓; server `tsc` ✓
+
+---
+
