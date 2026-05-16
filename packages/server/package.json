@@ -1,7 +1,7 @@
 {
   "name": "@sabbour/squadboard",
   "version": "0.1.0",
-  "description": "Local-first kanban + workflow board for Squad agents — MCP server and CLI",
+  "description": "Local-first kanban + workflow board for Squad agents \u2014 MCP server and CLI",
   "type": "module",
   "license": "MIT",
   "main": "./dist/index.js",
@@ -58,7 +58,8 @@
     "js-yaml": "^4.1.0",
     "multer": "^2.1.1",
     "pg": "^8.13.0",
-    "ws": "^8.20.1"
+    "ws": "^8.20.1",
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "@types/express": "^5.0.0",
