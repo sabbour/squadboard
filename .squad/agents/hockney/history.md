@@ -344,3 +344,23 @@ PGlite persistence and graceful shutdown from Hockney-w21.
 - Prevents hung processes from blocking users
 
 **Lessons:** Always CHECKPOINT before exit. Use dumpDataDir for complex schemas. Stale-run recovery prevents user-blocking hung states. Daemon spawn errors need .on("error") handlers.
+
+---
+
+## W23 Lesson — Idempotency Pattern at Scale
+
+**Date:** 2026-05-16  
+**Wave:** 23  
+
+**I7 — Idempotency on capture + MCP writes.** Pattern: sha256(scope-id + canonical-payload)[0:32]; partial unique indexes scoped per project; backward-compat null-key legacy path preserved. ⚠️ Live tsx server needs manual restart to pick up migration (WSL inotify didn't trigger auto-reload).
+
+**Takeaway:** Project-scoped dedup is safer than global. Always provide a legacy path for callers that don't supply explicit keys. Test (1) new key derivation, (2) distinct keys yield distinct rows, (3) cross-project isolation, (4) no-key backwards-compat path.
+
+
+
+---
+
+## Compaction Note
+
+This history file exceeds 15KB. Older waves (W1–W20) are archived in `.squad/decisions.md`.
+Current focus: W21–W23. For earlier context, search `.squad/decisions.md` by wave number.

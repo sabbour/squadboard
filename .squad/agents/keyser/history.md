@@ -259,3 +259,23 @@ The Conjure misdesign lesson: W15/W19/W21 all misdiagnosed Conjure as a label pr
 - **Mention both decisions.md AND decisions-archive.md** when dispatching agents against design specs. Archive content is just as authoritative as live decisions, but it's easy to miss.
 
 This wave's Keyser-w22 correctly quoted 3 spec lines verbatim in the close-out doc — this pattern should be mandatory for all future feature closures.
+
+---
+
+## W23 Lesson — Fluent Icon Sweep at Scale
+
+**Date:** 2026-05-16  
+**Wave:** 23  
+
+**UI — Fluent icon sweep (Ahmed 2026-05-16 directive): 106 glyphs → Fluent icons across 41 files.** Pattern: 40-entry systematic mapping table established (✓→Checkmark, ✗→Dismiss, ⚠→Warning, etc.). Structural changes (Pill icon prop, KIND_ICON maps, SVG text fallback). Keep the mapping table for re-use.
+
+**Takeaway:** React components can't go in JSX-incompatible props (Badge text, Dropdown Option, toast strings). SVG `<text>` requires unicode outside emoji ranges. Always run grep to verify zero violations post-sweep. Document exceptions (markdown, tests) explicitly.
+
+
+
+---
+
+## Compaction Note
+
+This history file exceeds 15KB. Older waves (W1–W20) are archived in `.squad/decisions.md`.
+Current focus: W21–W23. For earlier context, search `.squad/decisions.md` by wave number.

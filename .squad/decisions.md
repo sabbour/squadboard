@@ -2957,3 +2957,450 @@ The following TypeScript errors existed before this wave and are owned by Keyser
 
 No new errors were introduced by K5 or K7 changes.
 
+# 2026-05-16T02:55:00-07:00: # Hockney W23 — I7: Idempotency Keys on Capture + MCP Writes
+
+**Date:** 2026-05-16  
+**Author:** Hockney (platform/reliability/data)  
+**Wave:** 23  
+**Stream:** I  
+
+---
+
+## Schema Changes
+
+### `inbox_items`
+- **Removed** global `UNIQUE` constraint on `idempotency_key` (was `inbox_items_idempotency_key_key`).
+- **Added** project-scoped partial unique index:  
+  `CREATE UNIQUE INDEX inbox_items_project_idempotency_uq ON inbox_items (suggested_project_id, idempotency_key) WHERE idempotency_key IS NOT NULL`
+- Drizzle schema annotation updated: `.unique()` removed from `idempotencyKey` column (enforcement is now at DB index level).
+
+### `issues`
+- **Added** nullable column: `idempotency_key TEXT`
+- **Added** project-scoped partial unique index:  
+  `CREATE UNIQUE INDEX issues_project_idempotency_uq ON issues (project_id, idempotency_key) WHERE idempotency_key IS NOT NULL`
+- Drizzle schema: `idempotencyKey: text('idempotency_key')` added.
+
+### `dispatches`
+- The W20 verbal mention of "dispatches" maps to `copilot_auto_assign_dispatches`, which already has its own idempotency guard `(rule_id, issue_id)`. No change needed.
+
+---
+
+## Key Generation Algorithm (MCP layer)
+
+```
+idempotencyKey = sha256(projectId + '\0' + normalizedPrompt).slice(0, 32)
+```
+
+- `projectId` is the resolved project UUID (or empty string if absent).
+- `normalizedPrompt` is `prompt.trim()`.
+- Result is a 32-char lowercase hex string.
+- **Same call, same content → same key** → deduped on retry.
+- **Different explicit keys** for semantically distinct calls → distinct rows.
+
+Applied in `handleCapture()` in `packages/server/src/mcp/server.ts` when
+the caller omits an `idempotencyKey` argument.
+
+---
+
+## HTTP Header / Body Convention
+
+Both routes accept the key from two sources (header takes precedence):
+
+| Source | Format |
+|--------|--------|
+| HTTP header | `Idempotency-Key: <uuid-or-hash>` |
+| JSON body | `{ "idempotencyKey": "<uuid-or-hash>" }` |
+
+**Routes updated:**
+- `POST /api/inbox` — returns `201` on create, `200` on duplicate hit.
+- `POST /api/projects/:projectId/issues` — same status convention.
+
+---
+
+## Coordinator Dogfood: Two-Flow Pattern
+
+When a coordinator calls `capture` for both intake and close-out of the
+same directive, recommended explicit key derivation:
+
+```
+intake key    = sha256(directiveId + ':intake').slice(0, 32)
+close-out key = sha256(directiveId + ':closeout').slice(0, 32)
+```
+
+Documented in `.squad/dogfood.md` under "Wave 23 — I7".
+
+---
+
+## Tests
+
+**5 new Vitest tests** in `packages/server/src/__tests__/`:
+
+| File | What it covers |
+|------|---------------|
+| `idempotency-capture.test.ts` | POST same payload + same key → 1 row, second response is existing (created=false) |
+| `idempotency-mcp.test.ts` | sha256 key derivation: same content → same key; different content → different key; 32-char hex |
+| `idempotency-distinct-keys.test.ts` | Same payload, two distinct explicit keys → 2 rows |
+| `idempotency-no-key.test.ts` | No key → legacy path, no dedup check, insert always proceeds |
+| `idempotency-cross-project.test.ts` | Same key in different projects → 2 rows (index is project-scoped) |
+
+---
+
+## Files Touched
+
+| File | Change |
+|------|--------|
+| `packages/server/src/db/schema.ts` | Added `idempotencyKey` to `issues`; removed `.unique()` from `inboxItems.idempotencyKey` |
+| `packages/server/src/db/index.ts` | W23 migration block: `issues.idempotency_key` column + two partial unique indexes |
+| `packages/server/src/services/inbox.ts` | `CreateInboxInput` + `idempotencyKey`; `createInboxItem` returns `{item, created}`; project-scoped dedup |
+| `packages/server/src/routes/inbox.ts` | POST `/api/inbox` reads `Idempotency-Key` header / body; 200 vs 201 |
+| `packages/server/src/routes/issues.ts` | POST `/api/projects/:id/issues` reads `Idempotency-Key` header / body; 200 vs 201 |
+| `packages/server/src/services/issues.ts` | `createIssue` now checks `idempotency_key` column + stores it on insert; legacy title-prefix fallback kept |
+| `packages/server/src/mcp/server.ts` | `handleCapture` auto-generates sha256 key; project-scoped dedup check |
+| `packages/server/src/sdk/consult-stream.ts` | Updated two callers of `createInboxItem` for new `{item, created}` return shape |
+| `.squad/dogfood.md` | Added W23 I7 deterministic intake/close-out key guidance |
+| `.squad/decisions/inbox/hockney-w23-i7-idempotency.md` | This file |
+
+---
+
+## Defensive Backup Paths
+
+- Pre-migration backup: `~/.squadboard/backups/pre-w23-idempotency-20260516-013835/`
+- Migration is idempotent: `ADD COLUMN IF NOT EXISTS`, `CREATE INDEX IF NOT EXISTS`,
+  `DROP CONSTRAINT` wrapped in `DO $$ IF EXISTS … END $$`.
+
+---
+
+## SDK Note
+
+`packages/squadboard-sdk` has no HTTP write surface (it's a pure
+file-system / scribe SDK). The `idempotencyKey` is exposed via the
+MCP `capture` tool parameter and the HTTP route header/body convention.
+A dedicated SDK HTTP client with typed `idempotencyKey` is deferred.
+
+---
+
+## Follow-ups
+
+- **SDK HTTP client**: If a `squadboard-sdk` HTTP write client is added in a future wave,
+  expose `idempotencyKey?: string` on each write method.
+- **`report_bug` / `add_feature` / `add_chore` MCP tools**: These tools do not exist
+  yet in the MCP server; all issue creation goes through `capture`. When dedicated write
+  tools are added, wire the same auto-generation pattern.
+
+# 2026-05-16T02:55:00-07:00: # Keyser W23 — Full Fluent Icon Sweep
+
+**Author:** Keyser (UI/UX)  
+**Date:** 2026-05-16  
+**Wave:** 23  
+**Commit:** `41782624`  
+**Branch:** `keyser/w17-settings-backup-github`
+
+---
+
+## Summary
+
+Completed Ahmed's 2026-05-16 directive: **zero unicode emoji glyphs in rendered UI**. This wave swept the backlog documented in the W22 decision doc (`.squad/decisions/inbox/keyser-w22-conjure-modal.md`).
+
+- **106 violations fixed** across **41 files**
+- Build: ✅ clean (`tsc -b` + `vite build`, 3561 modules)
+- Verified: `grep -rPn '[\x{1F300}-\x{1FAFF}\x{2600}-\x{27BF}\x{2700}-\x{27BF}]'` → 0 hits in non-test TSX (excluding `loading/` and `conjure/` which were already clean)
+
+---
+
+## Icon Mapping Used
+
+| Emoji | Fluent Icon | Notes |
+|-------|-------------|-------|
+| `✓` `✔` `✅` | `Checkmark20Regular` | success, done, saved |
+| `✗` `✖` | `Dismiss20Regular` | failure, error |
+| `✕` | `Dismiss20Regular` | close buttons |
+| `⚠` `⚠️` | `Warning20Regular` | warning |
+| `💡` | `Lightbulb20Regular` | tip, remediation |
+| `🔒` | `LockClosed20Regular` | secret, locked |
+| `🧪` | `Beaker20Regular` | test routing |
+| `📎` | `Attach20Regular` | attachment, deliverable |
+| `🌿` | `Branch20Regular` | git branch |
+| `🔀` | `Merge20Regular` | PR, merge |
+| `📦` | `Box20Regular` | deliverable type |
+| `💬` | `Comment20Regular` | comment count, consult |
+| `💬⚠` | `Warning20Regular` | consult error (single icon) |
+| `💬↩` `💬?` | `Comment20Regular` | consult direction indicators |
+| `🤖` | `Bot20Regular` | session kind |
+| `📋` | `Clipboard20Regular` | run kind, board scope |
+| `⚙️` `⚙` | `Settings20Regular` | workflow kind, steering |
+| `🎛` | `Settings20Regular` | steering control |
+| `💸` | `Money20Regular` | token cost |
+| `🏗️` | `Building20Regular` | lead role |
+| `🔧` | `Wrench20Regular` | developer role |
+| `👁️` `👀` | `Eye20Regular` | reviewer, peer review |
+| `🎭` | `Diversity20Regular` | prompt engineer role |
+| `👔` | `Person20Regular` | founder role |
+| `💼` | `Briefcase20Regular` | sales role |
+| `📣` | `Megaphone20Regular` | marketing role |
+| `🎧` | `Headset20Regular` | customer success role |
+| `🔬` | `Microscope20Regular` | research role |
+| `⚛️` | `Code20Regular` | designer frontend role |
+| `🎨` | `PaintBrush20Regular` | designer brand/UX role |
+| `🎯` | `Target20Regular` | PM role, task scope |
+| `🌐` | `Globe20Regular` | project scope |
+| `🗂️` | `FolderOpen20Regular` | empty board state |
+| `🧭` | `CompassNorthwest20Regular` | route step kind |
+| `🤝` | `Handshake20Regular` | handoff step kind |
+| `⚡` | `Flash20Regular` | auto routing badge |
+| `⊘` | *(removed)* | "Cancelled" — glyph dropped, text kept |
+| `🔴 Degraded` | `"Degraded"` | plain text — color already conveys status |
+| `🟡 Review needed` | `"Review needed"` | plain text |
+| `🟢 Healthy` | `"Healthy"` | plain text |
+
+---
+
+## Notable Structural Changes
+
+### Pill component (AgentActivityFeed.tsx)
+Changed `icon: string` prop to `icon: ReactNode` so Fluent icon components can be passed directly. All 4 call sites updated.
+
+### KIND_ICON maps → getKindIcon() functions
+Three files had `Record<string, string>` icon maps:
+- `pages/Now.tsx` (session/run/workflow activity feed)
+- `components/flow/StepNode.tsx`
+- `components/flow/nodes/CeremonyStepNode.tsx`
+
+All converted to typed `getKindIcon()` functions returning `React.ReactNode`. `VisualCanvas.tsx` which transitively imported the `KIND_ICON` const from `CeremonyStepNode.tsx` was also updated.
+
+### ciStateIcon (IssueCard.tsx)
+`function ciStateIcon(state: CiState): string` → `function ciStateIcon(state: CiState): React.ReactNode`. Returns `CheckmarkCircle20Regular` (passing), `Warning20Regular` (failing), `null` (running/unknown — previously `⏳`/`⚪`).
+
+### WorkflowStepFlow.tsx SVG text
+SVG `<text>` nodes can't host React components. The `approve: '✓'` glyph was replaced with `'√'` (U+221A SQUARE ROOT — not in emoji ranges) since SVG text must be a string.
+
+### HireTeamModal.tsx role labels
+Stripped emoji prefixes from all 16 ROLE_OPTIONS labels. The `Checkbox` label prop renders as plain text; wrapping in JSX would require a custom render prop not present in the Fluent Checkbox API.
+
+### CardDetail.tsx Option values
+`<Option>` text in Fluent Dropdown also cannot contain JSX. Stripped trailing `✓`/`✗` from `"Accepted ✓"` and `"Rejected ✗"`.
+
+### CeremonyList.tsx toast string
+Toast message `msg` is a plain string. Replaced `'Wave closed ✓'` → `'Wave closed'`.
+
+---
+
+## Intentionally Kept (not replaced)
+
+| Location | Content | Reason |
+|----------|---------|--------|
+| `WorkflowStepFlow.tsx` SVG | `√` (U+221A) | Not in emoji Unicode range; SVG text can't host React icons |
+| `AgentActivityFeed.tsx` | `▶` `●` | U+25B6/U+25CF in Geometric Shapes block (U+2500–U+25FF) — not in grep's emoji range; semantically fine |
+| Any `.md` / comment strings | Any emoji | Per directive: markdown and code comments explicitly allowed |
+| Test files (`*.test.tsx`) | Any emoji | Per directive: tests are excluded |
+| `loading/` and `conjure/` | Already clean | Per W23 exclusion rules |
+
+---
+
+## Files Touched (41)
+
+```
+pages/: Agents, CeremoniesReview, CeremonyEditor, CeremonyList, Consult,
+        Dashboard, Diagnostics, LiveSession, McpServers, Now, ProjectFlow, Settings
+components/: EmptyBoard, VisualCanvas
+components/agents/: AgentDetailPanel, CharterEditor, HireAgentModal, HireTeamModal
+components/board/: BulkActionBar, CardDetail, CreateIssueModal, FilterBar,
+                   IssueCard, RoutingBadge, WorkflowBadge
+components/ceremony/: CeremonyBadges
+components/deliverables/: DeliverableCard
+components/flow/: StepNode, nodes/CeremonyStepNode
+components/inbox/: CaptureModal
+components/routing/: CastPanel
+components/runs/: GitActions, RunButton, RunOutputPanel
+components/sessions/: AgentActivityFeed, SessionSteeringBar
+components/settings/: McpConfigPanel, SystemBackupSection, SystemGitHubSection
+components/workflows/: WorkflowList, WorkflowStepFlow
+```
+
+---
+
+## 5 Most-Impacted Files
+
+1. **`components/sessions/AgentActivityFeed.tsx`** — Structural change to Pill API (`icon: ReactNode`), 4 call sites, ConsultRow icon conversion
+2. **`components/runs/GitActions.tsx`** — 9 occurrences (push/PR/merge/comment status indicators)
+3. **`components/agents/HireTeamModal.tsx`** — 16 role label strings de-emoji'd
+4. **`components/board/IssueCard.tsx`** — ciStateIcon type change, branch/PR/deliverable/comment icons
+5. **`components/flow/StepNode.tsx`** — KIND_ICON → getKindIcon() function, attach icon for deliverables
+
+---
+
+## Maintenance Guidance for Future Agents
+
+- **Always use `@fluentui/react-icons` components.** No `✓`, `✗`, `✕`, `⚠`, or any emoji in JSX.
+- **For `<Option>`, `<Badge>` text and toast string literals** — emoji cannot go in JSX-incompatible string props; just drop the glyph and rely on color/context.
+- **For SVG `<text>` content** — React components are not allowed; use a unicode symbol outside emoji ranges (e.g., `√` for checkmark) or restructure to use `<image>` or foreignObject.
+- **Run this grep to verify clean:** `grep -rPn '[\x{1F300}-\x{1FAFF}\x{2600}-\x{27BF}\x{2700}-\x{27BF}]' packages/client/src --include='*.tsx' | grep -v '__tests__' | grep -v '\.test\.tsx'`
+
+# 2026-05-16T02:55:00-07:00: # Kobayashi W23 — F4 AKS Feature Kanban: First Curated Squad App
+
+**Author:** Kobayashi (SDK + data-shapes specialist)
+**Wave:** 23
+**Stream:** F4 (curated apps)
+**Date:** 2026-05-16
+**Deliverable:** `bundles/aks-feature-kanban/`
+
+---
+
+## Verbatim Spec Quotes (≥3 required — W22 post-mortem standard)
+
+> **Quote 1** (§2.2 Directory Layout, line 111):
+> "`squadapp.json` MUST be present at the root of the `.squadapp/` directory."
+
+Used to anchor the bundle root: `bundles/aks-feature-kanban/squadapp.json` is the required entry point. All other files are discoverable from this root.
+
+> **Quote 2** (§2.4 Inline vs File-Based Artifacts, table row for Kanban):
+> "| Kanban | `kanban` | *(inline only)* | — |"
+
+This resolved a potential ambiguity: the task spec mentioned a `project.json` that "includes the kanban board," but per McManus's spec the kanban section is **inline-only** in `squadapp.json`. I placed the kanban definition in `squadapp.json` and used `project.json` only for the project skeleton (name, description, icon, defaultLabels).
+
+> **Quote 3** (§5.3 Rollback on Partial Failure):
+> "Exception: **seed issues** are written outside the main transaction (after commit) to avoid blocking the install on GitHub API rate limits. If seed issue creation fails, the install is still considered successful and the failure is reported as a non-fatal warning."
+
+Confirms that seed issues in `issues/seed.json` (and the alias at `seed-issues/issues.json`) do not need to be in the main rollback transaction. This is preserved in the bundle design — seed issues are defined separately.
+
+> **Quote 4** (§4.2 Collision Rules, seed issues row):
+> "| Seed issues | `title`+`column` pair | Skip silently | Never re-create |"
+
+Used to verify that the 5 seed issues are idempotent-safe: each has a unique `title + column` pair across the entire set.
+
+---
+
+## Files Written
+
+### Bundle root (`bundles/aks-feature-kanban/`)
+
+| File | Purpose |
+|---|---|
+| `squadapp.json` | Manifest — schemaVersion 1, all inline section defs + charterPath/workflowPath refs |
+| `project.json` | Project skeleton (name, icon, defaultLabels) |
+| `README.md` | Install instructions, what's included, file layout, customisation guide |
+
+### Agents (`agents/`)
+
+| File | Agent | Role |
+|---|---|---|
+| `agents/aks-pm/charter.md` | aks-pm | AKS Product Manager — triage, signals, scope, disclosures |
+| `agents/aks-platform-engineer/charter.md` | aks-platform-engineer | ARM + Kubernetes API + az CLI + Helm |
+| `agents/aks-quality-engineer/charter.md` | aks-quality-engineer | Playwright + Azure CLI tests + cluster bringup |
+| `agents/aks-docs-engineer/charter.md` | aks-docs-engineer | learn.microsoft.com docs + disclosure review |
+
+### Ceremonies (`ceremonies/`)
+
+| File | Trigger | Purpose |
+|---|---|---|
+| `ceremonies/weekly-aks-triage.yaml` | `on_schedule` Mon 09:00 UTC | Labels bugs, routes P0/P1, confirms repros |
+| `ceremonies/feature-cut-review.yaml` | `manual` | Pre-ship scope + test + docs review + human gate |
+| `ceremonies/customer-signals-digest.yaml` | `on_schedule` Fri 08:00 UTC | Aggregates 6 sources into ranked signal digest |
+
+### Skills (`skills/`)
+
+| File | Skill key |
+|---|---|
+| `skills/aks-customer-signal-collection/SKILL.md` | `aks-customer-signal-collection` |
+| `skills/aks-disclosure-quality/SKILL.md` | `aks-disclosure-quality` |
+
+### Tools (`tools/`)
+
+| File | Tool key |
+|---|---|
+| `tools/aks-cluster-info.json` | `aks-cluster-info` |
+
+### MCP Servers
+
+| File | Location | Notes |
+|---|---|---|
+| `mcp/azure-mcp.json` | Spec-canonical (`mcp/<name>.json`) | Used by installer |
+| `mcp-servers/azure-mcp.json` | Task-specified (`mcp-servers/`) | Extended recipe with install prerequisites |
+
+### Seed Issues
+
+| File | Location | Notes |
+|---|---|---|
+| `issues/seed.json` | Spec-canonical (`issues/seed.json`) | Used by installer |
+| `seed-issues/issues.json` | Task-specified (`seed-issues/`) | Alias; installer ignores unknown dirs per spec §2.2 |
+
+### Schema + Test
+
+| File | Purpose |
+|---|---|
+| `packages/server/src/services/squad-apps/schema.json` | Canonical draft-07 schema (verbatim from spec §3.1) |
+| `packages/server/src/__tests__/squad-apps/validate-aks-kanban.test.ts` | Vitest test suite — 23 assertions |
+
+---
+
+## Validation Results
+
+```
+Test Files  1 passed (1)
+     Tests  23 passed (23)
+  Start at  01:44:18
+  Duration  252ms
+
+Tests cover:
+  1. JSON Schema validation (Ajv draft-07, strict: false for format keywords)
+  2. schemaVersion === 1
+  3. SemVer version format
+  4. Required top-level fields (appId, name, description)
+  5. 6 kanban columns with correct slugs
+  6. defaultColumn references a valid slug
+  7. All 4 charterPath files exist
+  8. All 3 workflowPath ceremony files exist
+  9. Both SKILL.md files exist
+ 10. aks-cluster-info.json exists with required fields
+ 11. Both MCP server files exist (canonical + extended recipe)
+ 12. issues/seed.json exists with 5 issues
+ 13. Seed issue columns reference valid kanban slugs
+ 14. 2 bugs, 2 features, 1 chore distribution
+ 15. README.md and project.json exist
+```
+
+---
+
+## Spec Ambiguities Resolved
+
+### A1 — `agents/` vs `team/` directory for charter files
+
+**Ambiguity:** McManus's spec (§2.2) defines `team/<AgentName>.json` for per-agent files with an optional `charterPath` reference. The task brief specified `agents/{name}/charter.md`. The spec also says "The installer ignores unknown top-level keys in `squadapp.json` and unknown directories at the `.squadapp/` root" (§2.2 Invariants).
+
+**Resolution:** Charter markdown files live at `agents/<name>/charter.md` (as the task requires), referenced via `charterPath` in `squadapp.json`'s inline team definitions. This is valid per spec because `charterPath` is "relative to the `.squadapp/` root" (§2.5) and can point anywhere inside the bundle. The spec's `team/<AgentName>.json` per-file format is an alternative discovery mechanism for agents not defined inline; since all 4 agents are defined inline in `squadapp.json` with `charterPath`, no `team/*.json` files are needed.
+
+### A2 — `mcp-servers/` vs `mcp/` and `seed-issues/` vs `issues/`
+
+**Ambiguity:** Task specifies `mcp-servers/azure-mcp.json` and `seed-issues/issues.json`. Spec specifies `mcp/<name>.json` and `issues/seed.json` as the canonical per-file locations the installer discovers.
+
+**Resolution:** Created both:
+- Spec-canonical paths (`mcp/azure-mcp.json`, `issues/seed.json`) — used by the installer.
+- Task-specified paths (`mcp-servers/azure-mcp.json`, `seed-issues/issues.json`) — ignored by installer per the forward-compat invariant but provide the extended recipe format requested.
+The `mcpServers` and `seedIssues` sections are also defined inline in `squadapp.json` (which takes priority over per-file discovery per §2.4), so the install path is unambiguous.
+
+### A3 — `kind: "project-template"` field
+
+**Ambiguity:** Task requires `kind: "project-template"` in the manifest. This field does not appear in McManus's JSON Schema (§3.1). The schema root has `"additionalProperties": true`.
+
+**Resolution:** Added `kind: "project-template"` as an additional property. This is forward-compatible per spec §2.2: "The installer ignores unknown top-level keys in `squadapp.json` (forward-compat)." The field is preserved in the manifest as a hint for future marketplace filtering.
+
+### A4 — `displayName` field
+
+**Ambiguity:** Task requires `displayName`. Not in schema. Same resolution as A3 — additional property, installer ignores it.
+
+### A5 — Kanban column names
+
+**Ambiguity:** Example B in the spec (§9) shows columns: Inbox · Design · In Progress · Review · Done. The task requires: Backlog · Triage · In Progress · In Review · Validation · Done.
+
+**Resolution:** Used the task-specified columns. The spec's Example B is illustrative, not prescriptive. The task spec is the authoritative description for what this curated app should contain. The 6-column layout (Backlog → Triage → In Progress → In Review → Validation → Done) better reflects real AKS feature team workflows.
+
+---
+
+## Spec Follow-Ups for McManus W24
+
+| ID | Topic | Detail |
+|---|---|---|
+| SF-1 | `kind` field | The spec has no first-class `kind` field on the manifest. Curated apps (F4) and community apps (F6) may benefit from a `kind: "project-template" | "skill-pack" | "ceremony-pack"` enum to support marketplace filtering. Recommend adding as optional field in schemaVersion 1 minor update. |
+| SF-2 | `displayName` | Spec uses `name` as the display name. Marketplace UIs may want a separate `displayName` (e.g., "AKS Feature Kanban") vs a shorter `name` for search/slug. Recommend clarifying or adding `displayName` as optional. |
+| SF-3 | `artifacts` manifest listing | No `artifacts` section is defined in the schema. I added it as an additional property to document all included files. Useful for `--dry-run` output. Recommend formalising in a minor schema update. |
+| SF-4 | Agent directory naming | Spec says `team/<AgentName>.json`; many apps may want `agents/` as the top-level directory. Recommend adding `agents/` as an alternative per-file discovery path with the same semantics as `team/`. |
+| SF-5 | Ajv strict format validation | The schema uses `"format": "uri"` on `homepage`. Ajv v8 (used in this repo) throws on unknown formats without `strict: false`. Recommend either (a) removing the `format` keyword and using a regex pattern, or (b) documenting that `ajv-formats` is a peer dependency of the squad-apps validator. |

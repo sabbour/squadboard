@@ -203,3 +203,14 @@ Loading gallery (K5) + ActionLoading component (K7) from Kobayashi-w22.
 **Surgical sweep strategy:** Fix the most critical sites first (button actions), defer UI-only spinners (status indicators, text inline spinners) to future waves. Keeps PRs focused and reviewable.
 
 **Future:** 8+ remaining tiny-spinner sites documented for next sweep wave (ProjectPicker, SystemBackup, SystemGitHub, GitHubActivityFeed, LiveSession).
+
+---
+
+## W23 Lesson — First Squad App Pattern
+
+**Date:** 2026-05-16  
+**Wave:** 23  
+
+**F4 — AKS Feature Kanban curated Squad App shipped.** Pattern: spec-quotes-in-decision-doc enforced (3+ quotes required, per W22 post-mortem standard). Ambiguities resolved systematically (5 total, all documented). Spec gaps flagged as W24 follow-up todos (`kind` enum, `displayName` field, `artifacts` section, agent discovery path, Ajv format validator).
+
+**Takeaway:** Future Squad App specs should pre-define: `kind` enum (project-template|skill-pack|ceremony-pack), optional `displayName`, `artifacts` manifest section, alternative `agents/` directory discovery. No divergence from schema — use `additionalProperties` for experimental fields.
