@@ -13,11 +13,9 @@
  *      the LLM call is wrapped in try/catch so a missing SDK / model never
  *      breaks the surface — we degrade to the best rule-based candidate.
  *
- * Phase 1 surfaces 6 intents (per Ahmed's task brief):
- *   project | issue | team | agent | skill | tool
- *
- * Phase 2 will likely re-introduce inbox-item / consult / ceremony /
- * mcp-server / project-template — see decision doc for the roadmap.
+ * W22 surfaces 10 intents (per decisions-archive.md §2):
+ *   project | issue | team | agent | skill | tool |
+ *   ceremony | mcp-server | inbox-item | consult
  */
 import { extractJsonObject, runFormulator } from './formulator.js';
 export const ALL_INTENTS = [
@@ -27,6 +25,10 @@ export const ALL_INTENTS = [
     'agent',
     'skill',
     'tool',
+    'ceremony',
+    'mcp-server',
+    'inbox-item',
+    'consult',
 ];
 const SIGNALS = {
     project: [
@@ -68,13 +70,47 @@ const SIGNALS = {
         { pattern: /\b(claude|copilot)\s+skill\b/i, weight: 4 },
     ],
     tool: [
-        { pattern: /\b(MCP\s+server|model\s+context\s+protocol)\b/i, weight: 4 },
+        { pattern: /\b(MCP\s+server|model\s+context\s+protocol)\b/i, weight: 2 },
         { pattern: /\b(a|an)\s+(custom\s+)?(tool|script|utility|cli\s+command|function|helper)\b/i, weight: 3 },
         { pattern: /\btool\s+(that|to|for|which)\b/i, weight: 3 },
         { pattern: /\bscript\s+(that|to|for|which)\b/i, weight: 3 },
         { pattern: /\b(summarize|summarise|extract|parse|fetch|crawl|scrape|convert|transform|generate|format)\s+(pdf|html|json|markdown|csv|xml|file|files|docs|images?)\b/i, weight: 3 },
         { pattern: /\b(API|endpoint|webhook|integration)\b/i, weight: 1 },
         { pattern: /\b(function|callable|action)\s+the\s+(agent|model|llm)\s+can\s+call\b/i, weight: 4 },
+    ],
+    ceremony: [
+        { pattern: /\b(new\s+)?ceremony\b/i, weight: 4 },
+        { pattern: /\b(standup|stand[-\s]?up|daily\s+sync)\b/i, weight: 4 },
+        { pattern: /\b(retrospective|retro)\b/i, weight: 4 },
+        { pattern: /\b(sprint\s+(planning|review|kickoff)|planning\s+session|kickoff\s+meeting)\b/i, weight: 4 },
+        { pattern: /\b(create|schedule|set\s+up|add)\s+(a|an)?\s*(ceremony|ritual|standup|meeting|sync)\b/i, weight: 3 },
+        { pattern: /\b(recurring|weekly|daily|bi[-\s]?weekly)\s+(meeting|sync|session|ceremony)\b/i, weight: 3 },
+        { pattern: /\b(post[\s-]?mortem|incident\s+review|blameless\s+retro)\b/i, weight: 3 },
+    ],
+    'mcp-server': [
+        { pattern: /\b(MCP\s+server|model\s+context\s+protocol\s+server)\b/i, weight: 5 },
+        { pattern: /\b(mcp[-\s]server|mcp\s+tool\s+server)\b/i, weight: 5 },
+        { pattern: /\b(stdio|sse|http)\s+(transport|server|mcp)\b/i, weight: 4 },
+        { pattern: /\b(register|add|create|connect)\s+(a|an|an?\s+)?(mcp|model\s+context\s+protocol)\s+server\b/i, weight: 5 },
+        { pattern: /\bmcp\s+(integration|endpoint|host|daemon)\b/i, weight: 4 },
+        { pattern: /\b(npx|uvx|node|python)\s+[^\s]+\s+(stdio|mcp)\b/i, weight: 3 },
+    ],
+    'inbox-item': [
+        { pattern: /\b(capture|inbox|log\s+this|save\s+this|add\s+to\s+inbox)\b/i, weight: 4 },
+        { pattern: /\b(make\s+a\s+note|note:|remember\s+this|jot\s+(this\s+)?down)\b/i, weight: 4 },
+        { pattern: /\b(I\s+need\s+to\s+(think\s+about|look\s+into|revisit|follow\s+up\s+on))\b/i, weight: 3 },
+        { pattern: /\b(reminder|remind\s+me|don'?t\s+forget|flag\s+this)\b/i, weight: 3 },
+        { pattern: /\b(unstructured|rough\s+idea|brain\s*dump|not\s+sure\s+yet)\b/i, weight: 3 },
+        { pattern: /\b(add\s+to\s+my\s+(list|backlog|notes?|to[-\s]?do))\b/i, weight: 3 },
+    ],
+    consult: [
+        { pattern: /\b(consult|advice|advise|your\s+thoughts?\s+on)\b/i, weight: 4 },
+        { pattern: /\b(help\s+me\s+(think\s+through|understand|figure\s+out|decide|plan))\b/i, weight: 4 },
+        { pattern: /\b(what\s+do\s+you\s+think\s+(about|of))\b/i, weight: 4 },
+        { pattern: /\b(I\s+want\s+to\s+(discuss|talk\s+(through|about)|chat\s+about|explore))\b/i, weight: 4 },
+        { pattern: /\b(can\s+you\s+(help\s+me|explain|walk\s+me\s+through|analyze))\b/i, weight: 3 },
+        { pattern: /\b(question:|ask:|should\s+I|how\s+should\s+I|trade[-\s]?off)\b/i, weight: 3 },
+        { pattern: /\b(brainstorm|ideate|explore\s+options|pros\s+and\s+cons)\b/i, weight: 3 },
     ],
 };
 /** Run the rule-based scorer over `prompt`. Returns scores for ALL intents,
@@ -282,6 +318,62 @@ function buildToolDraft(prompt) {
         isMcpServer: /\bmcp\b/i.test(prompt),
     };
 }
+function buildCeremonyDraft(prompt) {
+    const title = imperativeTitle(prompt);
+    let triggerKind = 'manual';
+    if (/\b(daily|every\s+day|each\s+day|weekday|monday|tuesday|wednesday|thursday|friday)\b/i.test(prompt)) {
+        triggerKind = 'scheduled';
+    }
+    else if (/\b(on\s+merge|post[-\s]?merge|after\s+merge|pr\s+merged)\b/i.test(prompt)) {
+        triggerKind = 'on-merge';
+    }
+    else if (/\b(sprint\s+(start|end|kickoff|review|planning)|beginning\s+of\s+sprint|end\s+of\s+sprint)\b/i.test(prompt)) {
+        triggerKind = 'sprint-boundary';
+    }
+    return {
+        name: toKebab(title || 'ceremony'),
+        prose: prompt.trim(),
+        triggerKind,
+    };
+}
+function buildMcpServerDraft(prompt) {
+    let transport = 'stdio';
+    if (/\bsse\b/i.test(prompt))
+        transport = 'sse';
+    else if (/\bhttp\b/i.test(prompt))
+        transport = 'http';
+    const sentence = firstSentence(prompt);
+    const cleaned = sentence
+        .replace(/^\s*(a|an|register|add|create|connect)\s+(an?\s+)?(mcp\s+server|mcp-server|model\s+context\s+protocol\s+server)\s+(that|to|for|which|called|named)?\s*/i, '')
+        .trim();
+    const result = {
+        name: toKebab(cleaned || 'mcp-server'),
+        transport,
+    };
+    const cmdMatch = prompt.match(/\b(npx|uvx|node|python|deno|bun)\s+([\w@/.-]+(?:\s+[\w@/.-]+)*)/i);
+    if (cmdMatch)
+        result['command'] = cmdMatch[0].trim();
+    const urlMatch = prompt.match(/https?:\/\/[^\s"']+/i);
+    if (urlMatch)
+        result['url'] = urlMatch[0];
+    return result;
+}
+function buildInboxItemDraft(prompt) {
+    const title = imperativeTitle(prompt);
+    const suggestedLabels = detectKeywords(prompt, ['ui', 'backend', 'frontend', 'docs', 'idea', 'research', 'follow-up']);
+    return {
+        title,
+        body: prompt.trim(),
+        suggestedLabels: suggestedLabels.length > 0 ? suggestedLabels : undefined,
+    };
+}
+function buildConsultDraft(prompt) {
+    const topic = imperativeTitle(prompt, 80);
+    return {
+        topic,
+        prompt: prompt.trim(),
+    };
+}
 const DRAFT_BUILDERS = {
     project: buildProjectDraft,
     issue: buildIssueDraft,
@@ -289,20 +381,25 @@ const DRAFT_BUILDERS = {
     agent: buildAgentDraft,
     skill: buildSkillDraft,
     tool: buildToolDraft,
+    ceremony: buildCeremonyDraft,
+    'mcp-server': buildMcpServerDraft,
+    'inbox-item': buildInboxItemDraft,
+    consult: buildConsultDraft,
 };
 // ---------------------------------------------------------------------------
 // Routing table (intent → destination + presentation)
 // ---------------------------------------------------------------------------
 const ROUTING_TABLE = {
-    // The client substitutes :projectId from its current context. When the
-    // user is in the global (no-project) layer, the client SHOULD prompt for
-    // a project first OR fall back to the project picker.
     project: { destination: '/projects/new', presentation: 'page' },
     issue: { destination: '/projects/:projectId/board?conjure=issue', presentation: 'modal' },
     team: { destination: '/projects/:projectId/agents?conjure=team', presentation: 'page' },
     agent: { destination: '/projects/:projectId/agents?conjure=agent', presentation: 'modal' },
     skill: { destination: '/projects/:projectId/skills?conjure=skill', presentation: 'page' },
     tool: { destination: '/projects/:projectId/tools?conjure=tool', presentation: 'page' },
+    ceremony: { destination: '/projects/:projectId/ceremonies?conjure=ceremony', presentation: 'page' },
+    'mcp-server': { destination: '/projects/:projectId/mcp?conjure=mcp-server', presentation: 'page' },
+    'inbox-item': { destination: '/projects/:projectId/board?conjure=inbox-item', presentation: 'modal' },
+    consult: { destination: '/consult?conjure=1', presentation: 'modal' },
 };
 function buildRouting(intent, scores) {
     const base = ROUTING_TABLE[intent];
@@ -320,35 +417,49 @@ function buildRouting(intent, scores) {
 // LLM disambiguation (Option C — only fires when rule-based is uncertain)
 // ---------------------------------------------------------------------------
 const LLM_SYSTEM_MESSAGE = 'You are an intent classifier for Squadboard. Given a user prompt, decide ' +
-    'which of these 6 kinds of artifact they want to create: project, issue, ' +
-    'team, agent, skill, tool. Return JSON only — no prose, no fences.';
+    'which of these 10 kinds of artifact they want to create: project, issue, ' +
+    'team, agent, skill, tool, ceremony, mcp-server, inbox-item, consult. ' +
+    'Return JSON only — no prose, no fences.';
 function buildLlmPrompt(prompt, ctx) {
     const project = ctx?.currentProjectName
         ? `User is in project: "${ctx.currentProjectName}".`
         : 'User is not currently in a project.';
-    return `${project}
+    const known = ctx?.knownProjectNames?.length
+        ? `Known projects in workspace: ${ctx.knownProjectNames.join(', ')}.`
+        : '';
+    return `${project}${known ? '\n' + known : ''}
 
 USER PROMPT:
 """
 ${prompt.trim()}
 """
 
-Choose ONE of: project | issue | team | agent | skill | tool
+Choose the best match from: project | issue | team | agent | skill | tool | ceremony | mcp-server | inbox-item | consult
 
 Definitions:
-- project   = a new app / system / codebase / MVP to build
-- issue     = a bug, fix, or work item to track on the kanban board
-- team      = hiring / assembling a multi-agent cast
-- agent     = a single AI agent / role / persona
-- skill     = a reusable instruction / pattern / how-to / playbook
-- tool      = a callable function, script, or MCP server
+- project    = a new app / system / codebase / MVP to build
+- issue      = a bug, fix, or work item to track on the kanban board
+- team       = hiring / assembling a multi-agent cast
+- agent      = a single AI agent / role / persona
+- skill      = a reusable instruction / pattern / how-to / playbook
+- tool       = a callable function, script, or utility (not an MCP server)
+- ceremony   = a recurring meeting or agile ritual (standup, retro, planning)
+- mcp-server = a Model Context Protocol server (stdio/http/sse transport)
+- inbox-item = a loose capture / note / reminder with no clear type yet
+- consult    = the user wants a conversation / advice / brainstorm session
 
-Return EXACTLY this JSON shape:
+Return EXACTLY this JSON shape (top-3 candidates ordered by confidence desc):
 {
-  "intent": "<one of the 6>",
+  "intent": "<top choice>",
   "confidence": <number 0..1>,
-  "rationale": "<one short sentence>"
-}`;
+  "rationale": "<one short sentence>",
+  "candidates": [
+    { "intent": "<1st>", "confidence": <number 0..1>, "reason": "<one short sentence>" },
+    { "intent": "<2nd>", "confidence": <number 0..1>, "reason": "<one short sentence>" },
+    { "intent": "<3rd>", "confidence": <number 0..1>, "reason": "<one short sentence>" }
+  ]
+}
+If only one intent is plausible, return a candidates array with 1 entry.`;
 }
 async function classifyWithLlm(prompt, ctx) {
     try {
@@ -367,7 +478,20 @@ async function classifyWithLlm(prompt, ctx) {
         }
         const conf = typeof obj['confidence'] === 'number' ? Math.min(1, Math.max(0, obj['confidence'])) : 0.6;
         const rationale = typeof obj['rationale'] === 'string' ? obj['rationale'].trim() : 'Classified by LLM.';
-        return { intent: intent, confidence: conf, rationale };
+        // Parse candidates array if the LLM returned it.
+        let candidates;
+        if (Array.isArray(obj['candidates'])) {
+            candidates = obj['candidates']
+                .filter((c) => !!c && typeof c === 'object' && !Array.isArray(c))
+                .filter((c) => typeof c['intent'] === 'string' && ALL_INTENTS.includes(c['intent']))
+                .map((c) => ({
+                intent: c['intent'],
+                confidence: typeof c['confidence'] === 'number' ? Math.min(1, Math.max(0, c['confidence'])) : 0,
+                reason: typeof c['reason'] === 'string' ? c['reason'].trim() : '',
+            }))
+                .slice(0, 3);
+        }
+        return { intent: intent, confidence: conf, rationale, candidates };
     }
     catch (err) {
         console.warn('[conjure] LLM disambiguation failed, falling back to rule-based:', err.message);
@@ -375,16 +499,71 @@ async function classifyWithLlm(prompt, ctx) {
     }
 }
 // ---------------------------------------------------------------------------
+// Helpers — candidate list construction
+// ---------------------------------------------------------------------------
+/** Build up to `limit` candidates from rule scores, pre-building their drafts. */
+function ruleBasedCandidates(scores, prompt, limit = 3) {
+    return scores
+        .filter((s) => s.rawScore > 0)
+        .slice(0, limit)
+        .map((s) => ({
+        intent: s.intent,
+        confidence: rawScoreToConfidence(s.rawScore),
+        reason: `Rule-based signal (score=${s.rawScore.toFixed(1)}, ${s.matched.length} pattern${s.matched.length === 1 ? '' : 's'} hit).`,
+        draft: DRAFT_BUILDERS[s.intent](prompt),
+    }));
+}
+/** Merge LLM-returned candidates with rule-based fallback up to `limit` total. */
+function mergeCandidates(llm, ruleScores, prompt, limit = 3) {
+    // If the LLM gave us a structured candidates list, use it (trust the model).
+    if (llm.candidates && llm.candidates.length > 0) {
+        return llm.candidates.slice(0, limit).map((c) => ({
+            intent: c.intent,
+            confidence: c.confidence,
+            reason: c.reason || llm.rationale,
+            draft: DRAFT_BUILDERS[c.intent](prompt),
+        }));
+    }
+    // Otherwise, LLM gave us only the top pick — complement with rule-based.
+    const result = [{
+            intent: llm.intent,
+            confidence: llm.confidence,
+            reason: llm.rationale,
+            draft: DRAFT_BUILDERS[llm.intent](prompt),
+        }];
+    for (const s of ruleScores) {
+        if (result.length >= limit)
+            break;
+        if (s.intent === llm.intent || s.rawScore <= 0)
+            continue;
+        result.push({
+            intent: s.intent,
+            confidence: rawScoreToConfidence(s.rawScore),
+            reason: `Rule-based signal (score=${s.rawScore.toFixed(1)}).`,
+            draft: DRAFT_BUILDERS[s.intent](prompt),
+        });
+    }
+    return result;
+}
+// ---------------------------------------------------------------------------
 // Public entry
 // ---------------------------------------------------------------------------
 export async function classifyAndDraft(req) {
-    const prompt = (req.prompt ?? '').trim();
+    // Accept `prose` (new canonical name) or `prompt` (backward-compat alias).
+    const rawInput = req.prose ?? req.prompt ?? '';
+    const prompt = rawInput.trim();
     if (!prompt) {
-        throw Object.assign(new Error('prompt is required'), { status: 400 });
+        throw Object.assign(new Error('prose (or prompt) is required'), { status: 400 });
     }
     if (prompt.length > 10_000) {
-        throw Object.assign(new Error('prompt exceeds 10,000 characters'), { status: 413 });
+        throw Object.assign(new Error('prose exceeds 10,000 characters'), { status: 413 });
     }
+    // Build a unified context from either the nested `context` object or flat fields.
+    const ctx = {
+        currentProjectId: req.projectId ?? req.context?.currentProjectId ?? null,
+        currentProjectName: req.projectName ?? req.context?.currentProjectName ?? null,
+        knownProjectNames: req.knownProjectNames ?? req.context?.knownProjectNames ?? [],
+    };
     const useLlm = req.useLlm !== false;
     const scores = scorePromptByRules(prompt, req.hint ?? null);
     const top = scores[0];
@@ -392,44 +571,53 @@ export async function classifyAndDraft(req) {
     const allZero = scores.every((s) => s.rawScore === 0);
     const ruleIntent = allZero ? AMBIGUOUS_DEFAULT : top.intent;
     // Fast path: rule-based is confident enough — return immediately.
+    // candidates = [winner] only (spec: "single high-confidence match").
     if (ruleConfidence >= CONFIDENCE_THRESHOLD) {
         const draft = DRAFT_BUILDERS[ruleIntent](prompt);
+        const rationale = `Rule-based match (score=${top.rawScore.toFixed(1)}, ${top.matched.length} signal${top.matched.length === 1 ? '' : 's'} hit).`;
+        const winner = { intent: ruleIntent, confidence: ruleConfidence, reason: rationale, draft };
         return {
             intent: ruleIntent,
             confidence: ruleConfidence,
             draft,
+            candidates: [winner],
             routing: buildRouting(ruleIntent, scores),
-            rationale: `Rule-based match (score=${top.rawScore.toFixed(1)}, ${top.matched.length} signal${top.matched.length === 1 ? '' : 's'} hit).`,
+            rationale,
             strategy: 'rule-based',
         };
     }
-    // Slow path: ambiguous → ask the LLM. Wrapped: missing SDK / model never
-    // breaks the surface — we degrade to the best rule-based candidate.
+    // Slow path: ambiguous → ask the LLM.
     if (useLlm) {
-        const llm = await classifyWithLlm(prompt, req.context ?? null);
+        const llm = await classifyWithLlm(prompt, ctx);
         if (llm) {
             const draft = DRAFT_BUILDERS[llm.intent](prompt);
+            const candidates = mergeCandidates(llm, scores, prompt, 3);
             return {
                 intent: llm.intent,
                 confidence: llm.confidence,
                 draft,
+                candidates,
                 routing: buildRouting(llm.intent, scores),
                 rationale: llm.rationale,
                 strategy: 'llm',
             };
         }
     }
-    // Final fallback: best rule guess (or AMBIGUOUS_DEFAULT) with a low
-    // confidence so the client UI knows to surface the fallback chips.
+    // Final fallback: best rule guess (or AMBIGUOUS_DEFAULT) with low confidence.
     const draft = DRAFT_BUILDERS[ruleIntent](prompt);
+    const candidates = allZero
+        ? [{ intent: ruleIntent, confidence: 0.2, reason: `Defaulted to "${AMBIGUOUS_DEFAULT}" (no clear signals).`, draft }]
+        : ruleBasedCandidates(scores, prompt, 3);
+    const rationale = allZero
+        ? `Prompt was ambiguous — defaulted to "${AMBIGUOUS_DEFAULT}". User can override via fallbacks.`
+        : `Rule-based best guess (low confidence, ${top.matched.length} signal${top.matched.length === 1 ? '' : 's'} hit).`;
     return {
         intent: ruleIntent,
         confidence: allZero ? 0.2 : ruleConfidence,
         draft,
+        candidates,
         routing: buildRouting(ruleIntent, scores),
-        rationale: allZero
-            ? `Prompt was ambiguous — defaulted to "${AMBIGUOUS_DEFAULT}". User can override via fallbacks.`
-            : `Rule-based best guess (low confidence, ${top.matched.length} signal${top.matched.length === 1 ? '' : 's'} hit).`,
+        rationale,
         strategy: 'rule-based',
     };
 }

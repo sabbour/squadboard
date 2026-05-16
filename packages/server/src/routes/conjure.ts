@@ -1,13 +1,14 @@
 /**
  * routes/conjure.ts — POST /api/conjure/classify
  *
- * Phase 1 surface for the Conjure smart-create flow. Takes a free-form
- * prompt, classifies into one of 6 intents (project|issue|team|agent|
- * skill|tool), and returns a pre-filled draft + routing recommendation.
+ * W22: Extended to 10 intents + top-3 candidates (see decisions-archive.md §5).
+ * Accepts both the new flat request shape and the old nested context shape.
  *
- * The classifier strategy is hybrid (rule-based first, optional LLM
- * disambiguation for ambiguous prompts) — see services/conjure-classifier.ts
- * and .squad/decisions/inbox/hockney-conjure-classify.md.
+ * Wire notes for Keyser-w22 (ConjureModal integration):
+ *   - Send `prose` (preferred) or `prompt` (backward-compat alias) for the user input.
+ *   - Send `projectId` / `projectName` flat (preferred) or nest them in `context`.
+ *   - Response now includes `candidates: ConjureCandidate[]` (up to 3).
+ *   - Top-level `intent`, `confidence`, `draft` are still present (= candidates[0]).
  */
 
 import { Router } from 'express';
@@ -17,43 +18,62 @@ import { classifyAndDraft, ALL_INTENTS, type ConjureIntent } from '../services/c
 const router: Router = Router();
 
 // POST /api/conjure/classify
-// Body: { prompt: string, context?: { currentProjectId?, currentProjectName? }, hint?: ConjureIntent, useLlm?: boolean }
+// Body: {
+//   prose: string,          ← preferred W22 field name
+//   prompt?: string,        ← backward-compat alias
+//   hint?: ConjureIntent,
+//   projectId?: string,
+//   projectName?: string,
+//   knownProjectNames?: string[],
+//   context?: { currentProjectId?, currentProjectName? },  ← old shape
+//   useLlm?: boolean
+// }
 router.post('/classify', async (req: Request, res: Response) => {
   try {
-    const body = (req.body ?? {}) as {
-      prompt?: unknown;
-      context?: unknown;
-      hint?: unknown;
-      useLlm?: unknown;
-    };
+    const body = (req.body ?? {}) as Record<string, unknown>;
 
-    if (typeof body.prompt !== 'string') {
-      res.status(400).json({ ok: false, error: '`prompt` is required and must be a string' });
+    // Accept `prose` (new) or `prompt` (old alias). One of them must be a non-empty string.
+    const prose = typeof body['prose'] === 'string' ? body['prose']
+      : typeof body['prompt'] === 'string' ? body['prompt']
+      : null;
+    if (!prose) {
+      res.status(400).json({ ok: false, error: '`prose` (or `prompt`) is required and must be a string' });
       return;
     }
 
     const hint =
-      typeof body.hint === 'string' && ALL_INTENTS.includes(body.hint as ConjureIntent)
-        ? (body.hint as ConjureIntent)
+      typeof body['hint'] === 'string' && ALL_INTENTS.includes(body['hint'] as ConjureIntent)
+        ? (body['hint'] as ConjureIntent)
         : null;
 
-    const ctxIn = body.context && typeof body.context === 'object' && !Array.isArray(body.context)
-      ? (body.context as Record<string, unknown>)
+    // Flat context fields (W22 preferred shape).
+    const projectId = typeof body['projectId'] === 'string' ? body['projectId'] : null;
+    const projectName = typeof body['projectName'] === 'string' ? body['projectName'] : null;
+    const knownProjectNames = Array.isArray(body['knownProjectNames'])
+      ? (body['knownProjectNames'] as unknown[]).filter((x): x is string => typeof x === 'string')
+      : undefined;
+
+    // Nested context (old shape — still accepted for backward compat).
+    const ctxIn = body['context'] && typeof body['context'] === 'object' && !Array.isArray(body['context'])
+      ? (body['context'] as Record<string, unknown>)
       : null;
     const context = ctxIn
       ? {
           currentProjectId:
-            typeof ctxIn['currentProjectId'] === 'string' ? (ctxIn['currentProjectId'] as string) : null,
+            typeof ctxIn['currentProjectId'] === 'string' ? ctxIn['currentProjectId'] : null,
           currentProjectName:
-            typeof ctxIn['currentProjectName'] === 'string' ? (ctxIn['currentProjectName'] as string) : null,
+            typeof ctxIn['currentProjectName'] === 'string' ? ctxIn['currentProjectName'] : null,
         }
       : null;
 
-    const useLlm = body.useLlm === false ? false : true;
+    const useLlm = body['useLlm'] === false ? false : true;
 
     const result = await classifyAndDraft({
-      prompt: body.prompt,
+      prose,
       context,
+      projectId,
+      projectName,
+      knownProjectNames,
       hint,
       useLlm,
     });

@@ -1,31 +1,52 @@
 /**
  * routes/conjure.ts — POST /api/conjure/classify
  *
- * Phase 1 surface for the Conjure smart-create flow. Takes a free-form
- * prompt, classifies into one of 6 intents (project|issue|team|agent|
- * skill|tool), and returns a pre-filled draft + routing recommendation.
+ * W22: Extended to 10 intents + top-3 candidates (see decisions-archive.md §5).
+ * Accepts both the new flat request shape and the old nested context shape.
  *
- * The classifier strategy is hybrid (rule-based first, optional LLM
- * disambiguation for ambiguous prompts) — see services/conjure-classifier.ts
- * and .squad/decisions/inbox/hockney-conjure-classify.md.
+ * Wire notes for Keyser-w22 (ConjureModal integration):
+ *   - Send `prose` (preferred) or `prompt` (backward-compat alias) for the user input.
+ *   - Send `projectId` / `projectName` flat (preferred) or nest them in `context`.
+ *   - Response now includes `candidates: ConjureCandidate[]` (up to 3).
+ *   - Top-level `intent`, `confidence`, `draft` are still present (= candidates[0]).
  */
 import { Router } from 'express';
 import { classifyAndDraft, ALL_INTENTS } from '../services/conjure-classifier.js';
 const router = Router();
 // POST /api/conjure/classify
-// Body: { prompt: string, context?: { currentProjectId?, currentProjectName? }, hint?: ConjureIntent, useLlm?: boolean }
+// Body: {
+//   prose: string,          ← preferred W22 field name
+//   prompt?: string,        ← backward-compat alias
+//   hint?: ConjureIntent,
+//   projectId?: string,
+//   projectName?: string,
+//   knownProjectNames?: string[],
+//   context?: { currentProjectId?, currentProjectName? },  ← old shape
+//   useLlm?: boolean
+// }
 router.post('/classify', async (req, res) => {
     try {
         const body = (req.body ?? {});
-        if (typeof body.prompt !== 'string') {
-            res.status(400).json({ ok: false, error: '`prompt` is required and must be a string' });
+        // Accept `prose` (new) or `prompt` (old alias). One of them must be a non-empty string.
+        const prose = typeof body['prose'] === 'string' ? body['prose']
+            : typeof body['prompt'] === 'string' ? body['prompt']
+                : null;
+        if (!prose) {
+            res.status(400).json({ ok: false, error: '`prose` (or `prompt`) is required and must be a string' });
             return;
         }
-        const hint = typeof body.hint === 'string' && ALL_INTENTS.includes(body.hint)
-            ? body.hint
+        const hint = typeof body['hint'] === 'string' && ALL_INTENTS.includes(body['hint'])
+            ? body['hint']
             : null;
-        const ctxIn = body.context && typeof body.context === 'object' && !Array.isArray(body.context)
-            ? body.context
+        // Flat context fields (W22 preferred shape).
+        const projectId = typeof body['projectId'] === 'string' ? body['projectId'] : null;
+        const projectName = typeof body['projectName'] === 'string' ? body['projectName'] : null;
+        const knownProjectNames = Array.isArray(body['knownProjectNames'])
+            ? body['knownProjectNames'].filter((x) => typeof x === 'string')
+            : undefined;
+        // Nested context (old shape — still accepted for backward compat).
+        const ctxIn = body['context'] && typeof body['context'] === 'object' && !Array.isArray(body['context'])
+            ? body['context']
             : null;
         const context = ctxIn
             ? {
@@ -33,10 +54,13 @@ router.post('/classify', async (req, res) => {
                 currentProjectName: typeof ctxIn['currentProjectName'] === 'string' ? ctxIn['currentProjectName'] : null,
             }
             : null;
-        const useLlm = body.useLlm === false ? false : true;
+        const useLlm = body['useLlm'] === false ? false : true;
         const result = await classifyAndDraft({
-            prompt: body.prompt,
+            prose,
             context,
+            projectId,
+            projectName,
+            knownProjectNames,
             hint,
             useLlm,
         });
