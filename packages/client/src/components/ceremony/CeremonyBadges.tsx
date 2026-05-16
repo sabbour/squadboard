@@ -23,7 +23,7 @@
 
 import { Badge } from '@fluentui/react-components'
 import { Clipboard20Regular, Target20Regular, Globe20Regular } from '@fluentui/react-icons'
-import type { TriggerKind, CeremonyKind } from '../../api/ceremonies.ts'
+import type { TriggerKind, CeremonyKind, CeremonyOrigin } from '../../api/ceremonies.ts'
 
 export function TriggerBadge({ kind }: { kind: TriggerKind | undefined | null }) {
   if (!kind) return <Badge appearance="outline" color="subtle">—</Badge>
@@ -71,5 +71,28 @@ export function ScopeBadge({
       return <Badge appearance="outline" color="brand"><Target20Regular style={{ verticalAlign: 'middle', marginRight: '3px' }} />Task</Badge>
     default:
       return <Badge appearance="outline" color="subtle"><Globe20Regular style={{ verticalAlign: 'middle', marginRight: '3px' }} />Project</Badge>
+  }
+}
+
+/**
+ * CER-1: OriginBadge — shows where a ceremony came from.
+ *
+ * Color mapping (Fluent2 tokens via color prop):
+ *   built-in     → "brand"       (colorBrandBackground2 family)
+ *   yaml-import  → "informative" (colorPaletteBlueBackground2 family)
+ *   conjure-llm  → "success"     (closest to colorPaletteRoyalBlueBackground2 in Fluent2 Badge API)
+ *   user-created → "subtle"      (colorNeutralBackground3 family)
+ */
+export function OriginBadge({ origin }: { origin: CeremonyOrigin | undefined | null }) {
+  switch (origin) {
+    case 'built-in':
+      return <Badge appearance="filled" color="brand">Built-in</Badge>
+    case 'yaml-import':
+      return <Badge appearance="filled" color="informative">YAML</Badge>
+    case 'conjure-llm':
+      return <Badge appearance="filled" color="success">Conjure</Badge>
+    case 'user-created':
+    default:
+      return <Badge appearance="outline" color="subtle">User</Badge>
   }
 }

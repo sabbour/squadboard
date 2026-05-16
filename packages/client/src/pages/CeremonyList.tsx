@@ -16,7 +16,7 @@ import {
 } from '../api/ceremonies.ts'
 import { apiFetch } from '../api/client.ts'
 import PageHeader from '../components/layout/PageHeader.tsx'
-import { TriggerBadge, KindBadge, ScopeBadge } from '../components/ceremony/CeremonyBadges.tsx'
+import { TriggerBadge, KindBadge, ScopeBadge, OriginBadge } from '../components/ceremony/CeremonyBadges.tsx'
 import { safeRelativeTime, safeAbsoluteTime } from '../utils/dates.ts'
 import { ActionLoading, PageLoading } from '../components/loading/index.tsx'
 import {
@@ -46,7 +46,7 @@ import {
   MessageBar,
   MessageBarBody,
 } from '@fluentui/react-components'
-import { Add16Regular, Flag20Regular } from '@fluentui/react-icons'
+import { Add16Regular, Flag20Regular, ChartMultiple20Regular } from '@fluentui/react-icons'
 
 const columns: TableColumnDefinition<Ceremony>[] = [
   createTableColumn<Ceremony>({
@@ -55,6 +55,11 @@ const columns: TableColumnDefinition<Ceremony>[] = [
     renderCell: (item) => (
       <TableCellLayout style={{ fontWeight: tokens.fontWeightSemibold }}>{item.name}</TableCellLayout>
     ),
+  }),
+  createTableColumn<Ceremony>({
+    columnId: 'origin',
+    renderHeaderCell: () => 'Origin',
+    renderCell: (item) => <OriginBadge origin={item.origin} />,
   }),
   createTableColumn<Ceremony>({
     columnId: 'trigger',
@@ -137,6 +142,15 @@ export default function CeremonyList() {
           <CounterBadge count={draftCount} color="brand" size="small" />
         </div>
       )}
+      <Tooltip content="View ceremony diagnostics: orphans, dead triggers, and count by origin" relationship="description">
+        <Button
+          appearance="subtle"
+          icon={<ChartMultiple20Regular />}
+          onClick={() => navigate(`/projects/${projectId}/ceremonies/audit`)}
+        >
+          Audit
+        </Button>
+      </Tooltip>
       <Tooltip content="Manually trigger end-of-wave Scribe close-out" relationship="description">
         <Button
           appearance="subtle"

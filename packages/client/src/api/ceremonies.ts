@@ -18,6 +18,9 @@ export type CeremonyKind = 'workflow' | 'ceremony' | 'review_policy' | 'narrativ
 
 export type CeremonyStatus = 'active' | 'draft' | 'paused' | 'archived'
 
+// CER-1: origin/provenance of a ceremony (computed server-side from existing columns)
+export type CeremonyOrigin = 'built-in' | 'yaml-import' | 'conjure-llm' | 'user-created'
+
 export interface Ceremony {
   id: string
   projectId: string
@@ -32,6 +35,8 @@ export interface Ceremony {
   parentNarrativeId?: string | null
   lastTranslationError?: string | null
   lastTranslationAttemptAt?: string | null
+  // CER-1: computed provenance field (derived server-side, no schema change)
+  origin?: CeremonyOrigin
   createdAt: string
   updatedAt: string
 }
@@ -493,5 +498,33 @@ export function useCeremonyRun(projectId: string, issueId: string) {
       if (!data) return false
       return data.status === 'running' || data.status === 'pending' ? 3000 : false
     },
+  })
+}
+
+// ---------------------------------------------------------------------------
+// CER-8: Ceremony audit
+// ---------------------------------------------------------------------------
+
+export interface CeremonyOrphan {
+  id: string
+  name: string
+  reason: string
+}
+
+export interface CeremonyAuditReport {
+  total: number
+  byOrigin: Record<CeremonyOrigin, number>
+  byTrigger: Record<string, number>
+  byStatus: Record<string, number>
+  orphans: CeremonyOrphan[]
+  dead: CeremonyOrphan[]
+}
+
+export function useCeremonyAudit(projectId: string) {
+  return useQuery<CeremonyAuditReport>({
+    queryKey: ['ceremony-audit', projectId],
+    queryFn: () =>
+      apiFetch<CeremonyAuditReport>(`/api/projects/${projectId}/ceremonies/audit`),
+    enabled: Boolean(projectId),
   })
 }

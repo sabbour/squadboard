@@ -83,7 +83,7 @@ import {
   Checkmark20Regular,
 } from '@fluentui/react-icons'
 import VisualCanvas from '../components/ceremony/VisualCanvas.tsx'
-import { ScopeBadge } from '../components/ceremony/CeremonyBadges.tsx'
+import { ScopeBadge, OriginBadge } from '../components/ceremony/CeremonyBadges.tsx'
 // Stream D — D5: ProseTab removed. The "Formulate" hero on the new-ceremony
 // flow still exposes prose → YAML; the always-visible Prose tab inside the
 // editor was a duplicate path (see plan.md D5). The component file
@@ -1092,6 +1092,19 @@ export default function CeremonyEditor() {
               Use <strong>workflow</strong> for most automations.
             </Caption1>
           </div>
+
+          {/* CER-1: Origin — read-only provenance field (computed server-side) */}
+          {!isNew && detail?.ceremony.origin && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+              <Label weight="semibold">Origin</Label>
+              <div>
+                <OriginBadge origin={detail.ceremony.origin} />
+              </div>
+              <Caption1 style={{ color: tokens.colorNeutralForeground3 }}>
+                How this ceremony was created.
+              </Caption1>
+            </div>
+          )}
 
           {/* Schedules side-pane (only meaningful for on_schedule). */}
           {triggerKind === 'on_schedule' && !isNew && (

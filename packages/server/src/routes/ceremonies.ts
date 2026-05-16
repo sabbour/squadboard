@@ -31,9 +31,10 @@
 
 import { Router } from 'express';
 import type { Request, Response } from 'express';
-import { eq, and, sql } from 'drizzle-orm';
+import { eq, and, sql, gte, count, isNotNull, inArray } from 'drizzle-orm';
 import { getDb, schema } from '../db/index.js';
 import { parseWorkflowYaml, validateWorkflowYaml } from '../services/workflow-parser.js';
+import { deriveOrigin, type CeremonyOrigin } from '../services/ceremony-origin.js';
 import {
   spawnCeremonyRun,
   previewNextFireTimes,
@@ -121,7 +122,13 @@ ceremoniesRouter.get('/', async (req: Request, res: Response) => {
       .from(schema.workflows)
       .where(and(...conditions));
 
-    res.json(rows);
+    // CER-1: attach computed origin field (no schema change; derived from existing columns)
+    const result = rows.map((row) => ({
+      ...row,
+      origin: deriveOrigin({ parentNarrativeId: row.parentNarrativeId }) satisfies CeremonyOrigin,
+    }));
+
+    res.json(result);
   } catch (err) {
     handleError(res, err);
   }
@@ -257,7 +264,13 @@ ceremoniesRouter.get('/:id', async (req: Request, res: Response) => {
 
     const activeVersion = versions.find((v) => v.isActive) ?? versions[versions.length - 1] ?? null;
 
-    res.json({ ceremony: workflow, activeVersion, versions });
+    // CER-1: attach computed origin field
+    const ceremonyWithOrigin = {
+      ...workflow,
+      origin: deriveOrigin({ parentNarrativeId: workflow.parentNarrativeId }) satisfies CeremonyOrigin,
+    };
+
+    res.json({ ceremony: ceremonyWithOrigin, activeVersion, versions });
   } catch (err) {
     handleError(res, err);
   }
@@ -605,6 +618,155 @@ async function loadAvailableAgents(projectId: string): Promise<TranslatorAvailab
     .where(eq(schema.agents.projectId, projectId));
   return rows.map((a) => ({ name: a.name, role: a.role }));
 }
+
+/**
+ * GET /api/projects/:projectId/ceremonies/audit — CER-8
+ *
+ * Returns aggregated statistics and diagnostics for the project's ceremonies:
+ *   - total count
+ *   - byOrigin: count per origin value
+ *   - byTrigger: count per triggerKind
+ *   - byStatus: count per status
+ *   - orphans: active ceremonies with zero runs in last 30 days
+ *   - dead: active ceremonies whose trigger condition cannot currently fire
+ *
+ * "Orphans" = status='active' but no workflowRun in last 30 days.
+ * "Dead"    = status='active' + triggerKind is github-event-based but the project
+ *             has no GitHub integration configured (githubOwner/githubRepo null).
+ */
+ceremoniesRouter.get('/audit', async (req: Request, res: Response) => {
+  try {
+    const { projectId } = req.params as Record<string, string>;
+    const db = getDb();
+
+    // Fetch all ceremonies for this project
+    const ceremonies = await db
+      .select()
+      .from(schema.workflows)
+      .where(eq(schema.workflows.projectId, projectId));
+
+    // Fetch project for GitHub connectivity check
+    const [project] = await db
+      .select({
+        githubOwner: schema.projects.githubOwner,
+        githubRepo: schema.projects.githubRepo,
+        githubSyncEnabled: schema.projects.githubSyncEnabled,
+      })
+      .from(schema.projects)
+      .where(eq(schema.projects.id, projectId))
+      .limit(1);
+
+    const githubConnected = Boolean(
+      project && project.githubSyncEnabled && project.githubOwner && project.githubRepo,
+    );
+
+    // Count runs per workflowId in last 30 days
+    const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+    const runCounts = await db
+      .select({
+        workflowId: schema.workflowVersions.workflowId,
+        runCount: count(schema.workflowRuns.id),
+      })
+      .from(schema.workflowRuns)
+      .innerJoin(
+        schema.workflowVersions,
+        eq(schema.workflowRuns.workflowVersionId, schema.workflowVersions.id),
+      )
+      .where(gte(schema.workflowRuns.createdAt, thirtyDaysAgo))
+      .groupBy(schema.workflowVersions.workflowId);
+
+    const runCountByWorkflow = new Map<string, number>(
+      runCounts.map((r) => [r.workflowId, Number(r.runCount)]),
+    );
+
+    // Fetch active ceremony schedule info (for dead-detection of on_schedule ceremonies)
+    const ceremonyIds = ceremonies.map((c) => c.id);
+    const schedules = ceremonyIds.length > 0
+      ? await db
+          .select({ workflowId: schema.ceremonySchedules.workflowId, enabled: schema.ceremonySchedules.enabled })
+          .from(schema.ceremonySchedules)
+          .where(inArray(schema.ceremonySchedules.workflowId, ceremonyIds))
+      : [];
+
+    const enabledScheduleByWorkflow = new Map<string, boolean>();
+    for (const sched of schedules) {
+      const existing = enabledScheduleByWorkflow.get(sched.workflowId) ?? false;
+      enabledScheduleByWorkflow.set(sched.workflowId, existing || sched.enabled);
+    }
+
+    // Accumulate aggregates
+    const byOrigin: Record<CeremonyOrigin, number> = {
+      'built-in': 0,
+      'yaml-import': 0,
+      'conjure-llm': 0,
+      'user-created': 0,
+    };
+    const byTrigger: Record<string, number> = {};
+    const byStatus: Record<string, number> = {};
+    const orphans: Array<{ id: string; name: string; reason: string }> = [];
+    const dead: Array<{ id: string; name: string; reason: string }> = [];
+
+    for (const ceremony of ceremonies) {
+      // origin
+      const origin = deriveOrigin({ parentNarrativeId: ceremony.parentNarrativeId });
+      byOrigin[origin] = (byOrigin[origin] ?? 0) + 1;
+
+      // trigger
+      byTrigger[ceremony.triggerKind] = (byTrigger[ceremony.triggerKind] ?? 0) + 1;
+
+      // status
+      const status = ceremony.status ?? 'active';
+      byStatus[status] = (byStatus[status] ?? 0) + 1;
+
+      // orphan: active, no runs in 30 days
+      if (status === 'active') {
+        const runs = runCountByWorkflow.get(ceremony.id) ?? 0;
+        if (runs === 0) {
+          orphans.push({
+            id: ceremony.id,
+            name: ceremony.name,
+            reason: 'No runs in the last 30 days',
+          });
+        }
+
+        // dead: trigger condition cannot fire
+        const triggerConfig = (ceremony.triggerConfig ?? {}) as Record<string, unknown>;
+        const eventType = typeof triggerConfig.eventType === 'string' ? triggerConfig.eventType : '';
+        const isGithubTrigger =
+          ceremony.triggerKind === 'on_event' &&
+          (eventType.startsWith('github.') || eventType.startsWith('gh.'));
+        if (isGithubTrigger && !githubConnected) {
+          dead.push({
+            id: ceremony.id,
+            name: ceremony.name,
+            reason:
+              'Trigger requires GitHub integration, but no GitHub repo is connected to this project',
+          });
+        }
+
+        const isScheduleTrigger = ceremony.triggerKind === 'on_schedule';
+        if (isScheduleTrigger && !enabledScheduleByWorkflow.get(ceremony.id)) {
+          dead.push({
+            id: ceremony.id,
+            name: ceremony.name,
+            reason: 'Scheduled ceremony has no enabled schedule (trigger cannot fire)',
+          });
+        }
+      }
+    }
+
+    res.json({
+      total: ceremonies.length,
+      byOrigin,
+      byTrigger,
+      byStatus,
+      orphans,
+      dead,
+    });
+  } catch (err) {
+    handleError(res, err);
+  }
+});
 
 /**
  * POST /api/projects/:projectId/ceremonies/invoke
