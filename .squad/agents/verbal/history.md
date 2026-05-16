@@ -218,3 +218,81 @@ Classifier extension pattern from Verbal-w22:
 5. **Test coverage must span:** heuristic fast-path (all intents), LLM happy path (top-3 parsing), LLM degradation (legacy single-intent), backward-compat aliases, edge cases (ambiguous prompts, no matches, etc).
 
 **Result for W22:** 56 tests, all passing. Coexistence of Keyser-w22's modal works seamlessly; modal automatically uses `candidates` array when present, gracefully falls back if not.
+
+
+---
+
+## W25 Lessons — Heartbeat Config + Sweep Timeline Viz
+
+**Date:** 2026-05-16
+**Wave:** 25
+**Commits:** `3583d07e` (config), `2fc72086` (viz)
+
+### Heartbeat infrastructure file map (for future agents)
+
+The heartbeat is split across **3 server layers** + **1 routes file**:
+
+| Layer | Path | Purpose |
+|---|---|---|
+| **Engine** | `packages/server/src/engine/heartbeat.ts` | `Heartbeat` class: registry, scheduler, `register()`, `start()`, `stop()`, `tick()`, `_runSweep()`, `setSweepEnabled()`, and now `getEffectiveIntervals()`. Emits `heartbeat.sweep.completed` / `heartbeat.sweep.error` / `sweep.tick` via `eventBus.emitHeartbeatEvent()`. |
+| **Engine — sweeps** | `packages/server/src/engine/sweeps/*.ts` | One file per sweep (`stuck-issue-runs`, `idle-live-sessions`, `stale-presence`, `ready-workflow-steps`, `github-sync-overdue`, `ceremonies-due`). Each exports a `Sweep` object: `{id, intervalMs, enabled, run()}`. |
+| **Engine — sweeper** | `packages/server/src/engine/sweeper.ts` | Raw DB sweep helpers used by the sweep files. |
+| **Service** | `packages/server/src/services/heartbeat.ts` | In-memory ring buffer + `getRecentSweeps()` + `getHeartbeatSnapshot()`. Subscribes to `eventBus.onHeartbeat` as a side-effect at import time — `index.ts` must `import './services/heartbeat.js'` BEFORE `heartbeat.start()` so the first tick is captured. |
+| **Routes** | `packages/server/src/routes/heartbeat.ts` | HTTP plane: `GET /`, `/status`, `/sweeps?since=`, `POST /sweeps/:id/run`, `PATCH /sweeps/:id`, and now `GET /config`. |
+| **Wiring** | `packages/server/src/index.ts` (lines ~48–170) | Imports the sweeps, calls `applyHeartbeatConfig()`, then `heartbeat.register()` 6× then `heartbeat.start()`. |
+| **W25 config** | `packages/server/heartbeat.config.json` + `packages/server/src/engine/heartbeat-config.ts` | NEW — editable per-sweep overrides, loaded once at boot, applied before `register()`. |
+
+### Sweep lane registry (must stay in sync — server `index.ts` ↔ client `SweepTimeline.tsx`)
+
+| Sweep ID | intervalMs | Compact lane? |
+|---|---|---|
+| `ceremonies-due`       | 5000  | ✓ |
+| `ready-workflow-steps` | 5000  | ✓ |
+| `stuck-issue-runs`     | 30000 | ✓ |
+| `stale-presence`       | 30000 |   |
+| `idle-live-sessions`   | 60000 |   |
+| `github-sync-overdue`  | 60000 | ✓ |
+
+When adding a new sweep:
+1. Create `packages/server/src/engine/sweeps/<id>.ts` exporting `Sweep`.
+2. Import + `heartbeat.register()` in `index.ts`.
+3. Add a row to `heartbeat.config.json` (defaults override).
+4. Add an entry to `ALL_SWEEPS` in `packages/client/src/components/heartbeat/SweepTimeline.tsx` (and optionally `COMPACT_SWEEPS`).
+
+### WS event extension pattern (used for `sweep.tick`)
+
+Three coordinated edits to add a typed event that flows to global subscribers:
+
+1. **Server union** — add the literal to the relevant `*EventType` in `event-bus.ts` (e.g., `HeartbeatEventType`).
+2. **Server fan-out** — add a forwarder in `ws-server.ts`. For heartbeat events: subscribe via `eventBus.onHeartbeat()` (separate channel from `'event'`), filter by `evt.type`, and `send(client.ws, type, payload)` for each `globalClients` entry. For project-scoped events: they flow through `onBusEvent → broadcast(projectId, …)` automatically because they go on the `'event'` channel.
+3. **Client typing** — add a key to `WsEventMap` in `ws-client.ts` so `wsClient.on('sweep.tick', handler)` is type-safe.
+
+The cross-channel split (`'event'` vs `'heartbeat'`) is intentional: heartbeat events carry no `projectId` and would crash the room-routing logic if emitted on `'event'`. Future cross-cutting events (e.g., `daemon.tick`) should follow the same pattern — separate EventEmitter channel + dedicated `eventBus.on<Foo>()` API.
+
+### Config-file design pattern (loader-then-applier)
+
+The W25 `heartbeat-config.ts` shape is a reusable pattern for "user-editable JSON tunables":
+
+1. `loadFooConfig()` — read once, cache, swallow ENOENT (silent) + parse errors (warn).
+2. `applyFooConfig(targets)` — pure mutator that takes the runtime objects (sweeps, agents, whatever) and applies overrides. Logs each effective change.
+3. `_resetFooConfigCache()` — underscore-prefixed test escape hatch so vitest can re-mock `node:fs.readFileSync` between cases.
+4. `getEffectiveFooConfig(targets)` — snapshot for an introspection HTTP endpoint.
+5. Add the JSON file to `package.json` `files` so it ships in the npm artifact.
+
+This avoids env-var sprawl, gives operators a single source of truth, and stays out of the database.
+
+### Animation in Fluent2 components — keyframes workaround
+
+Fluent2's `makeStyles` does not expose `@keyframes` natively (you can use `animationName`, but defining the keyframes requires a `<style>` tag or a CSS file). For one-off pulse animations the cleanest path is:
+
+```tsx
+return (
+  <div className={styles.root}>
+    <style>{`@keyframes sweepPulse { ... }`}</style>
+    ...
+  </div>
+)
+```
+
+The inline `<style>` is global once mounted; mounting the component twice doesn't double-register the keyframe (browsers dedupe by name). For >1 animation, extract to a CSS module instead.
+
