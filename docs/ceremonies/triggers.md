@@ -272,6 +272,48 @@ spec:
       prompt: "Alert the tech lead that the previous step exceeded timeout."
 ```
 
+## agent-signal — Standardized signal names
+
+**Added in W29 CER-6.** The following signal names are the official taxonomy for lifecycle signals emitted by squadboard components. Ceremonies subscribe to a signal by setting `trigger.signalName` in their YAML.
+
+| Signal name | When it fires | Typical emitter |
+|-------------|---------------|-----------------|
+| `before-batch` | Before a batch of `issue_run`s is spawned (e.g. pickup-todos sweep) | batch coordinator, pickup-todos caller |
+| `after-batch` | After the batch of `issue_run`s has started | batch coordinator, pickup-todos caller |
+| `before-run` | Before a single `issue_run` starts | run dispatcher |
+| `after-run` | After a single `issue_run` completes (any terminal status) | run dispatcher |
+| `on-issue-entry` | When an issue enters a new column | column-transition handler |
+
+**Design rules:**
+- **Caller is responsible for emitting** — call `emitSignal()` from `ceremony-signal-emitter.ts` at the right moment.
+- **Emission is fire-and-forget** — `emitSignal` returns an `EmitResult` but callers may ignore it.
+- **Custom signal names** — any `string` is accepted; the table above is advisory, not exhaustive.
+- **Ordering** — `before-*` signals are typically awaited before the triggering action; `after-*` signals are emitted after and may be fire-and-forget depending on caller preference.
+
+### YAML schema (CER-6)
+
+```yaml
+spec:
+  trigger:
+    type: agent-signal
+    signalName: before-batch     # required for CER-6 emitter matching
+```
+
+### Emitter API
+
+```typescript
+import { emitSignal } from 'packages/server/src/services/ceremony-signal-emitter.js';
+
+// Before spawning a batch:
+const result = await emitSignal({
+  projectId,
+  signalName: 'before-batch',
+  contextPayload: { batchSize: issueIds.length },
+  anchorIssueId: issueIds[0],   // optional; resolved automatically if omitted
+});
+// result: { fired: N, skipped: M, errors: K, workflowRunIds: [...] }
+```
+
 ## Trigger Composition and Limits
 
 Each ceremony has **exactly one trigger**. You cannot combine triggers (e.g., "run on manual OR when label is added") — use separate ceremonies for distinct triggers, or use a single `github-event` trigger with multiple labels in `filters.labels`.

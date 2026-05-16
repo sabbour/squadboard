@@ -65,6 +65,15 @@ function mapYamlTriggerToDb(
       return { triggerKind: 'manual', triggerConfig: { ...base } };
 
     case 'agent-signal':
+      // CER-6 (W29): Use 'agent-signal' triggerKind and store signalName in config
+      // so ceremony-signal-emitter.ts can query by signalName.
+      return {
+        triggerKind: 'agent-signal',
+        triggerConfig: {
+          ...base,
+          ...(trigger.signalName ? { signalName: trigger.signalName } : {}),
+        },
+      };
     default:
       return { triggerKind: 'on_issue_entry', triggerConfig: { ...base } };
   }

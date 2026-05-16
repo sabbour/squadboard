@@ -91,6 +91,13 @@ function buildTriggerMap(trigger: WorkflowTrigger): YAMLMap {
   }
 
   // manual | agent-signal
+  if (trigger.type === 'agent-signal') {
+    const entries: Array<[string, unknown]> = [['type', trigger.type]];
+    if (trigger.signalName !== undefined) entries.push(['signalName', trigger.signalName]);
+    return makeMap(entries);
+  }
+
+  // manual
   return makeMap([['type', trigger.type]]);
 }
 

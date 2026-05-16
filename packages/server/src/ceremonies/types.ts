@@ -89,6 +89,8 @@ export interface CronTrigger {
 
 export interface AgentSignalTrigger {
   type: 'agent-signal';
+  /** CER-6 (W29): The specific lifecycle signal this ceremony subscribes to. */
+  signalName?: string;
 }
 
 export type WorkflowTrigger =

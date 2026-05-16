@@ -109,9 +109,13 @@ const cronTriggerSchema = z
   })
   .strict();
 
+// CER-6 (W29): Added signalName so ceremonies can subscribe to a specific
+// lifecycle signal (e.g. 'before-batch'). Optional for backward compatibility
+// with existing ceremonies that were created before CER-6.
 const agentSignalTriggerSchema = z
   .object({
     type: z.literal('agent-signal'),
+    signalName: z.string().min(1).optional(),
   })
   .strict();
 
