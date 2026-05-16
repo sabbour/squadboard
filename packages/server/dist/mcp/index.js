@@ -13,11 +13,45 @@
  * Wave 10 / A3: honours `SQUADBOARD_DEFAULT_PROJECT_ID` so every
  * project-scoped tool (`capture`, `list_inbox`, `list_issues`, …) has a
  * fallback projectId without the caller having to thread it on every call.
+ *
+ * Stream G Phase 2B (D4): SIGPIPE/SIGTERM/SIGINT handlers drain the pg pool
+ * before exit so the parent process never sees a "pool already ended" trace
+ * on stderr from the background PGlite checkpoint flush.
  */
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
-import { startEmbeddedPostgres } from '../db/postgres.js';
-import { initDb } from '../db/index.js';
+import { startEmbeddedPostgres } from '../db/pglite.js';
+import { initDb, closeDb } from '../db/index.js';
 import { createMcpServer, setDefaultProjectId } from './server.js';
+// ---------------------------------------------------------------------------
+// Graceful shutdown — drain pg pool before exit
+// ---------------------------------------------------------------------------
+let shuttingDown = false;
+async function shutdown(signal) {
+    if (shuttingDown)
+        return;
+    shuttingDown = true;
+    process.stderr.write(`[squadboard-mcp] ${signal} received — shutting down cleanly\n`);
+    try {
+        await closeDb();
+    }
+    catch {
+        // Swallow — pool may already be closed if the parent died
+    }
+    process.exit(0);
+}
+// SIGTERM: clean Ctrl-C / systemd stop / process manager shutdown
+process.on('SIGTERM', () => { void shutdown('SIGTERM'); });
+// SIGINT: Ctrl-C in the terminal
+process.on('SIGINT', () => { void shutdown('SIGINT'); });
+// SIGPIPE: stdout pipe broken (parent process died). Exit silently — no trace.
+process.on('SIGPIPE', () => {
+    try {
+        closeDb().catch(() => undefined);
+    }
+    catch { /* ignore */ }
+    process.exit(0);
+});
+// ---------------------------------------------------------------------------
 async function main() {
     // Log to stderr so stdout stays clean for JSON-RPC
     process.stderr.write('[squadboard-mcp] starting…\n');

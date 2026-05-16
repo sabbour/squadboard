@@ -19,6 +19,9 @@ import { assertSafeWorkspacePath } from '../engine/workspace.js';
 
 const execFileAsync = promisify(execFile);
 
+/** Allow tests (and local overrides) to substitute a fake gh binary. */
+export const GH_BIN = (): string => process.env['GH_BIN_OVERRIDE'] ?? 'gh';
+
 const PROTECTED_BRANCHES = new Set(['main', 'master', 'develop', 'trunk']);
 const GIT_TIMEOUT_MS = 30_000;
 
@@ -266,7 +269,7 @@ export async function createPr(runId: string, opts: CreatePrOptions = {}, projec
 
   let ghOutput: string;
   try {
-    const { stdout, stderr } = await execFileAsync('gh', ghArgs, {
+    const { stdout, stderr } = await execFileAsync(GH_BIN(), ghArgs, {
       cwd: run.workspacePath,
       timeout: GIT_TIMEOUT_MS,
     });
@@ -325,7 +328,7 @@ export async function commentOnIssue(runId: string, opts: CommentOnIssueOptions,
   let ghOutput: string;
   try {
     const { stdout } = await execFileAsync(
-      'gh',
+      GH_BIN(),
       ['issue', 'comment', String(issueNumber), '--body-file', '-'],
       {
         timeout: GIT_TIMEOUT_MS,
@@ -355,6 +358,11 @@ export interface TriggerWorkflowOptions {
   workflowFile: string;
   ref: string;
   inputs?: Record<string, string>;
+  /** Optional GitHub repo context (owner/repo). If provided, passes --repo to gh. */
+  owner?: string;
+  repo?: string;
+  /** Working directory for gh; falls back to process cwd if not specified. */
+  cwd?: string;
 }
 
 export interface TriggerWorkflowResult {
@@ -363,7 +371,7 @@ export interface TriggerWorkflowResult {
 }
 
 export async function triggerWorkflow(opts: TriggerWorkflowOptions): Promise<TriggerWorkflowResult> {
-  const { workflowFile, ref, inputs = {} } = opts;
+  const { workflowFile, ref, inputs = {}, owner, repo, cwd } = opts;
 
   if (!workflowFile || typeof workflowFile !== 'string') {
     throw new GitOpsError('workflow_trigger_failed', '`workflowFile` is required.', 400);
@@ -378,13 +386,16 @@ export async function triggerWorkflow(opts: TriggerWorkflowOptions): Promise<Tri
   }
 
   const triggerArgs = ['workflow', 'run', workflowFile, '--ref', ref];
+  if (owner && repo) triggerArgs.push('--repo', `${owner}/${repo}`);
   for (const [key, value] of Object.entries(inputs)) {
     triggerArgs.push('--field', `${key}=${value}`);
   }
 
-  const triggeredAt = new Date();
+  const execOpts: Record<string, unknown> = { timeout: GIT_TIMEOUT_MS };
+  if (cwd) execOpts['cwd'] = cwd;
+
   try {
-    await execFileAsync('gh', triggerArgs, { timeout: GIT_TIMEOUT_MS });
+    await execFileAsync(GH_BIN(), triggerArgs, execOpts as Parameters<typeof execFileAsync>[2]);
   } catch (e: unknown) {
     const stderr = (e as { stderr?: string }).stderr ?? '';
     const msg = e instanceof Error ? e.message : String(e);
@@ -395,13 +406,19 @@ export async function triggerWorkflow(opts: TriggerWorkflowOptions): Promise<Tri
   // enqueue the run with a brief delay).
   await new Promise<void>((resolve) => setTimeout(resolve, 2000));
 
+  const listArgs = [
+    'run', 'list', '--workflow', workflowFile,
+    '--limit', '1', '--json', 'databaseId,url,createdAt',
+  ];
+  if (owner && repo) listArgs.push('--repo', `${owner}/${repo}`);
+
   try {
     const { stdout } = await execFileAsync(
-      'gh',
-      ['run', 'list', '--workflow', workflowFile, '--limit', '1', '--json', 'databaseId,url,createdAt'],
-      { timeout: GIT_TIMEOUT_MS },
+      GH_BIN(),
+      listArgs,
+      execOpts as Parameters<typeof execFileAsync>[2],
     );
-    const runs = JSON.parse(stdout.trim()) as { databaseId: number; url: string; createdAt: string }[];
+    const runs = JSON.parse(String(stdout).trim()) as { databaseId: number; url: string; createdAt: string }[];
     const latest = runs[0];
     if (latest) {
       return { workflowRunId: String(latest.databaseId), runUrl: latest.url };
@@ -448,7 +465,7 @@ export async function mergePr(runId: string, opts: MergePrOptions = {}, projectI
   if (!prNum) {
     try {
       const { stdout } = await execFileAsync(
-        'gh', ['pr', 'view', '--json', 'number,url,state'],
+        GH_BIN(), ['pr', 'view', '--json', 'number,url,state'],
         { cwd: run.workspacePath, timeout: GIT_TIMEOUT_MS },
       );
       const view = JSON.parse(stdout.trim()) as { number: number; url: string; state: string };
@@ -473,7 +490,7 @@ export async function mergePr(runId: string, opts: MergePrOptions = {}, projectI
 
   // Validate CI checks
   try {
-    await execFileAsync('gh', ['pr', 'checks', String(prNum), '--required'], {
+    await execFileAsync(GH_BIN(), ['pr', 'checks', String(prNum), '--required'], {
       cwd: run.workspacePath,
       timeout: GIT_TIMEOUT_MS,
     });
@@ -498,7 +515,7 @@ export async function mergePr(runId: string, opts: MergePrOptions = {}, projectI
   let ghMergeOutput: string;
   try {
     const { stdout, stderr } = await execFileAsync(
-      'gh', ['pr', 'merge', String(prNum), `--${mergeMethod}`, '--delete-branch'],
+      GH_BIN(), ['pr', 'merge', String(prNum), `--${mergeMethod}`, '--delete-branch'],
       { cwd: run.workspacePath, timeout: GIT_TIMEOUT_MS },
     );
     ghMergeOutput = (stdout + stderr).trim();
@@ -520,4 +537,96 @@ export async function mergePr(runId: string, opts: MergePrOptions = {}, projectI
   eventBus.emitGitEvent('git.pr.merged', resolvedProjectId, { runId, prUrl, sha, method: mergeMethod });
 
   return { prUrl, sha, method: mergeMethod };
+}
+
+// ---------------------------------------------------------------------------
+// G4.1 — Assign issue to @copilot (virtual agent dispatch)
+// ---------------------------------------------------------------------------
+
+export interface AssignToCopilotOptions {
+  /** The local Squadboard issue UUID (used to resolve the GitHub issue number). */
+  issueId: string;
+  /** Project GitHub owner (org or user). */
+  owner: string;
+  /** Project GitHub repo name. */
+  repo: string;
+  /**
+   * If set, dispatch a workflow_dispatch event to this workflow file instead
+   * of assigning the GitHub issue to @copilot. Shape: 'copilot-coding-agent.yml'.
+   */
+  workflowFile?: string;
+  /** Git ref for workflow dispatch. Defaults to 'main'. */
+  ref?: string;
+  /** Optional workflow_dispatch inputs passed through to gh workflow run. */
+  inputs?: Record<string, string>;
+}
+
+export interface AssignToCopilotResult {
+  mode: 'workflow' | 'issue_assign';
+  /** Set when mode='workflow'. */
+  workflowRunId?: string;
+  runUrl?: string;
+  /** Set when mode='issue_assign'. */
+  issueNumber?: number;
+}
+
+/**
+ * Assign-to-@copilot — two modes:
+ * 1. If workflowFile is set: `gh workflow run <file> --repo owner/repo --ref ref`
+ * 2. Otherwise: `gh issue edit <issueNumber> --add-assignee copilot --repo owner/repo`
+ *
+ * In both cases the caller is responsible for persisting the issue_runs row
+ * with externalRef and emitting the WS event.
+ */
+export async function assignToCopilot(
+  opts: AssignToCopilotOptions,
+): Promise<AssignToCopilotResult> {
+  const { issueId, owner, repo, workflowFile, ref = 'main', inputs } = opts;
+
+  // Resolve the GitHub issue number from the local issue row.
+  const db = getDb();
+  const [issue] = await db
+    .select({ githubIssueNumber: schema.issues.githubIssueNumber })
+    .from(schema.issues)
+    .where(eq(schema.issues.id, issueId))
+    .limit(1);
+
+  if (!issue) {
+    throw new GitOpsError('run_not_found', `Issue ${issueId} not found.`, 404);
+  }
+
+  if (workflowFile) {
+    // Mode 1: dispatch a workflow_dispatch event.
+    try {
+      const result = await triggerWorkflow({ workflowFile, ref, inputs, owner, repo });
+      return { mode: 'workflow', ...result };
+    } catch (e) {
+      if (e instanceof GitOpsError) throw e;
+      throw new GitOpsError('workflow_trigger_failed', String(e), 500);
+    }
+  }
+
+  // Mode 2: assign the GitHub issue to the copilot user.
+  const ghIssueNumber = issue.githubIssueNumber;
+  if (!ghIssueNumber) {
+    throw new GitOpsError(
+      'run_not_found',
+      'Issue has no linked GitHub issue number. Enable GitHub sync or create the issue on GitHub first.',
+      422,
+    );
+  }
+
+  try {
+    await execFileAsync(
+      GH_BIN(),
+      ['issue', 'edit', String(ghIssueNumber), '--add-assignee', 'copilot', '--repo', `${owner}/${repo}`],
+      { timeout: GIT_TIMEOUT_MS },
+    );
+  } catch (e: unknown) {
+    const stderr = (e as { stderr?: string }).stderr ?? '';
+    const msg = e instanceof Error ? e.message : String(e);
+    throw new GitOpsError('workflow_trigger_failed', (stderr || msg).trim(), 500);
+  }
+
+  return { mode: 'issue_assign', issueNumber: ghIssueNumber };
 }

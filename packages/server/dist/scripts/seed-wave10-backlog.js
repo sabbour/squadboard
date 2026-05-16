@@ -15,7 +15,7 @@
  * server has already started on port 54321 (DATABASE_URL is set
  * automatically when this script can locate the running cluster).
  */
-import { startEmbeddedPostgres } from '../db/postgres.js';
+import { startEmbeddedPostgres } from '../db/pglite.js';
 import { initDb, getDb, schema } from '../db/index.js';
 import { classifyAndDraft } from '../services/conjure-classifier.js';
 import { eq } from 'drizzle-orm';

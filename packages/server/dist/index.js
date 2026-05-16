@@ -3,7 +3,7 @@ import { createServer } from 'node:http';
 import { existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
-import { startEmbeddedPostgres } from './db/postgres.js';
+import { startPglite } from './db/pglite.js';
 import { initDb, closeDb } from './db/index.js';
 import healthRouter from './routes/health.js';
 import projectsRouter from './routes/projects.js';
@@ -37,6 +37,7 @@ import { projectToolsRouter, agentToolsRouter } from './routes/tools.js';
 import { projectMcpRouter, agentMcpRouter } from './routes/mcp.js';
 import { diagnosticsRouter, projectDiagnosticsRouter } from './routes/diagnostics.js';
 import heartbeatRouter from './routes/heartbeat.js';
+import systemRouter from './routes/system.js';
 // Wave 10 B3: side-effect import — subscribes the in-memory ring buffer to
 // `eventBus.onHeartbeat` BEFORE heartbeat.start() schedules sweeps so the
 // first sweep tick is already captured.
@@ -65,6 +66,11 @@ import projectPortabilityRouter from './routes/project-portability.js';
 import conjureRouter from './routes/conjure.js';
 // Wave 10 Stream A1: auto-register the running squadboard repo as a project
 import { registerSelfAtBoot } from './services/self-register.js';
+// Q6=B: standalone coordinator daemon — auto-start when guards allow
+import { maybeAutoStartDaemon } from './daemon/auto-start.js';
+// Wave 20 — Stream G Phase 3: @copilot routes + watcher
+import { copilotRouter } from './routes/copilot.js';
+import { startCopilotWatcher, stopCopilotWatcher } from './services/copilot-watcher.js';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 const PORT = parseInt(process.env.PORT ?? '3000', 10);
@@ -73,7 +79,28 @@ const CLIENT_DIST = join(__dirname, '..', '..', 'client', 'dist');
 async function main() {
     const startMs = Date.now();
     console.log('[squadboard] starting…');
-    const connectionString = await startEmbeddedPostgres();
+    // ── Wave 14: one-time legacy-PG → PGlite migration ─────────────────────
+    // Runs BEFORE startPglite() so the migrator controls the PGlite boot.
+    // Gated by:
+    //   - DATABASE_URL set            → skip (hosted mode)
+    //   - SQUADBOARD_AUTO_MIGRATE=false → skip (opt-out)
+    //   - marker file present         → skip (already done)
+    //   - legacy cluster absent       → skip (fresh install)
+    if (process.env['SQUADBOARD_AUTO_MIGRATE'] !== 'false' && !process.env['DATABASE_URL']) {
+        try {
+            const { runMigration } = await import('./scripts/migrate-from-legacy-pg.js');
+            const result = await runMigration({ force: false, dryRun: false, yes: false });
+            if (result.skipped && result.reason && !result.reason.includes('No legacy cluster')) {
+                console.log(`[migrate] ${result.reason}`);
+            }
+        }
+        catch (err) {
+            // Migration failure must not crash the server — log and continue.
+            // Users can run `squadboard migrate` manually to retry.
+            console.error('[migrate] ⚠️  Auto-migration failed (server will continue without legacy data):', err);
+        }
+    }
+    const connectionString = await startPglite();
     await initDb(connectionString);
     // Wave 10 Stream A1: dogfood — self-register the running squadboard repo as
     // a project on first boot so the MCP capture loop has somewhere to land
@@ -98,9 +125,13 @@ async function main() {
     heartbeat.start();
     // Demo 15: register GitHub sync event-bus hooks
     initGitHubSyncHooks();
+    // Q6=B: auto-start coordinator daemon if no live daemon exists and guards allow.
+    // Non-blocking — forks a detached child; server startup continues immediately.
+    maybeAutoStartDaemon();
     const app = express();
     app.use(express.json());
     app.use('/api/health', healthRouter);
+    app.use('/api/system', systemRouter);
     app.use('/api/activity', activityRouter);
     app.use('/api/inbox', inboxRouter);
     app.use('/api/consult', consultRouter);
@@ -167,6 +198,8 @@ async function main() {
     app.use('/api/projects/:id/analytics', analyticsRouter);
     // Demo 15: GitHub sync endpoints
     app.use('/api/projects/:id/github', githubSyncRouter);
+    // Wave 20 — G4.1 + G4.3: @copilot assign + auto-assign label rules
+    app.use('/api/projects', copilotRouter);
     // Phase 3 Doctor: diagnostics
     app.use('/api/diagnostics', diagnosticsRouter);
     app.use('/api/projects/:id/diagnostics', projectDiagnosticsRouter);
@@ -213,6 +246,8 @@ async function main() {
     // Demo 12: wrap Express app in a raw HTTP server so WS can share port 3000
     const httpServer = createServer(app);
     initWebSocketServer(httpServer);
+    // Wave 20 — G4.2: start @copilot PR watcher (60 s poll).
+    startCopilotWatcher();
     const server = httpServer.listen(PORT, () => {
         const elapsed = Date.now() - startMs;
         console.log(`[squadboard] ready in ${elapsed}ms → http://localhost:${PORT}`);
@@ -221,6 +256,7 @@ async function main() {
         console.log(`[squadboard] received ${signal}`);
         heartbeat.stop();
         stopAllSyncLoops(); // Demo 15: stop GitHub sync polling loops
+        stopCopilotWatcher(); // Wave 20: stop @copilot PR watcher
         server.close(() => {
             closeDb()
                 .then(() => process.exit(0))

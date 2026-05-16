@@ -6,13 +6,23 @@
  * DELETE /api/projects/:id/github         — disable sync, clear credentials
  * POST   /api/projects/:id/github/sync    — trigger full push of all issues
  * GET    /api/projects/:id/github/log     — last 50 sync log entries
- * POST   /api/projects/:id/github/webhook — ingest GitHub webhook events
+ * POST   /api/projects/:id/github/webhook — ingest GitHub webhook events (expanded G6.1)
+ *
+ * G6.1 (Wave 18): webhook handler expanded to handle all major GitHub event types.
+ * Incoming events are:
+ *   1. Signature-validated against the per-project github_webhook_secret (HMAC-SHA256).
+ *   2. Persisted to github_events table.
+ *   3. Matched to a Squadboard project.
+ *   4. Re-emitted on the internal event bus as `github.<event_type>.<action>`.
  */
+import { createHmac, timingSafeEqual } from 'node:crypto';
 import { Router } from 'express';
 import { getDb, getPool, schema } from '../db/index.js';
 import { eq } from 'drizzle-orm';
 import { GitHubSync, startSyncLoop, stopSyncLoop } from '../github/sync.js';
 import { ingestWebhookIssue } from '../github/sync-hook.js';
+import { eventBus } from '../realtime/event-bus.js';
+import { handleLabeledAutoAssign } from './copilot.js';
 const router = Router({ mergeParams: true });
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 function redactToken(token) {
@@ -226,28 +236,146 @@ router.get('/log', async (req, res) => {
         handleError(res, err);
     }
 });
-// ─── POST /api/projects/:id/github/webhook ───────────────────────────────────
-//
-// Ingest GitHub webhook events (issues event type).
-// GitHub sends a JSON body with `action` and `issue` fields.
-// In production you'd verify the X-Hub-Signature-256 header.
-router.post('/webhook', async (req, res) => {
+// ---------------------------------------------------------------------------
+// Signature validation helper (G6.4)
+// ---------------------------------------------------------------------------
+function verifyWebhookSignature(secret, rawBody, signature) {
+    if (!signature)
+        return false;
+    // GitHub sends: sha256=<hex>
+    const expected = `sha256=${createHmac('sha256', secret).update(rawBody).digest('hex')}`;
     try {
-        const { id } = req.params;
+        return timingSafeEqual(Buffer.from(expected, 'utf8'), Buffer.from(signature, 'utf8'));
+    }
+    catch {
+        return false;
+    }
+}
+// Supported event types for full processing (others are accepted but only persisted)
+const HANDLED_EVENTS = new Set([
+    'pull_request',
+    'pull_request_review',
+    'pull_request_review_comment',
+    'issue_comment',
+    'issues',
+    'push',
+    'workflow_run',
+    'check_run',
+]);
+// ---------------------------------------------------------------------------
+// POST /api/projects/:id/github/webhook — expanded webhook handler (G6.1)
+// ---------------------------------------------------------------------------
+//
+// Event handling matrix:
+//   pull_request:               opened | closed | reopened | ready_for_review |
+//                               review_requested | synchronize
+//   pull_request_review:        submitted | dismissed | edited
+//   pull_request_review_comment: created | edited | deleted
+//   issue_comment:              created | edited | deleted
+//   issues:                     opened | closed | reopened | labeled | unlabeled | assigned
+//   push:                       any (filtered to project-tracked refs if configured)
+//   workflow_run:               completed
+//   check_run:                  completed
+// ---------------------------------------------------------------------------
+router.post('/webhook', async (req, res) => {
+    const db = getDb();
+    const pool = getPool();
+    const { id } = req.params;
+    try {
         const project = await getProject(id);
         if (!project) {
             res.status(404).json({ error: 'Project not found' });
             return;
         }
-        const ghEvent = req.headers['x-github-event'];
-        // Only handle "issues" events for now
-        if (ghEvent !== 'issues') {
-            res.json({ ok: true, ignored: true, event: ghEvent });
+        const ghEvent = req.headers['x-github-event'] ?? '';
+        const deliveryId = req.headers['x-github-delivery'];
+        const signature = req.headers['x-hub-signature-256'];
+        // ── Signature validation (G6.4) ─────────────────────────────────────────
+        const secret = project.githubWebhookSecret;
+        if (secret) {
+            // req.body is parsed JSON; we need the raw buffer for HMAC. Express raw
+            // middleware must be mounted *before* JSON parser to capture rawBody.
+            // We fall back to re-serialising JSON when rawBody is absent (acceptable
+            // for development; production should use express.raw({ type: '*/*' })).
+            const rawBody = req.rawBody
+                ?? Buffer.from(JSON.stringify(req.body), 'utf8');
+            if (!verifyWebhookSignature(secret, rawBody, signature)) {
+                res.status(401).json({ error: 'Webhook signature verification failed.' });
+                return;
+            }
+        }
+        // ── Persist raw event (G6.1 step 2) ─────────────────────────────────────
+        const payload = req.body;
+        const action = typeof payload.action === 'string' ? payload.action : null;
+        // Dedup on delivery_id — GitHub retries can cause double-ingest
+        if (deliveryId) {
+            const existing = await pool.query(`SELECT id FROM github_events WHERE delivery_id = $1 LIMIT 1`, [deliveryId]);
+            if (existing.rows.length > 0) {
+                res.json({ ok: true, dedup: true, deliveryId });
+                return;
+            }
+        }
+        await pool.query(`INSERT INTO github_events
+         (event_type, action, payload, delivery_id, project_id_resolved, received_at)
+       VALUES ($1, $2, $3::jsonb, $4, $5, NOW())`, [ghEvent, action, JSON.stringify(payload), deliveryId ?? null, project.id]);
+        // ── Re-emit on internal event bus (G6.1 step 4) ──────────────────────────
+        // Consumed by ceremony dispatcher (D3) and future WS subscribers.
+        if (ghEvent) {
+            eventBus.emitGithubWebhookEvent(ghEvent, action, project.id, { projectId: project.id, payload });
+        }
+        // ── Per-event processing (G6.1 step 3) ────────────────────────────────────
+        if (!HANDLED_EVENTS.has(ghEvent)) {
+            // Event persisted but not specifically handled — acknowledge and continue
+            await pool.query(`UPDATE github_events SET processed_at = NOW(), processed_outcome = 'no_match'
+           WHERE delivery_id = $1`, [deliveryId ?? null]);
+            res.json({ ok: true, ignored: false, event: ghEvent, processed: false, note: 'event persisted but no specific handler' });
             return;
         }
-        const { action, issue: ghIssue } = req.body;
-        await ingestWebhookIssue(id, action, ghIssue);
-        res.json({ ok: true, action, number: ghIssue.number });
+        // ── issues: legacy ingest path (bidirectional sync) ──────────────────────
+        if (ghEvent === 'issues') {
+            const allowedActions = new Set(['opened', 'closed', 'reopened', 'labeled', 'unlabeled', 'assigned']);
+            if (action && allowedActions.has(action) && payload.issue) {
+                const ghIssue = payload.issue;
+                try {
+                    await ingestWebhookIssue(id, action, ghIssue);
+                }
+                catch (err) {
+                    console.error('[github-webhook] ingestWebhookIssue error:', err);
+                }
+                // G4.3 — Auto-assign to @copilot when a label rule matches.
+                if (action === 'labeled' && payload.label) {
+                    const labelObj = payload.label;
+                    const labelName = labelObj.name ?? '';
+                    if (labelName) {
+                        // Resolve the local Squadboard issue UUID by GitHub issue number.
+                        const localIssueResult = await pool.query(`SELECT id FROM issues WHERE project_id = $1 AND github_issue_number = $2 LIMIT 1`, [id, ghIssue.number]);
+                        const localIssueId = localIssueResult.rows[0]?.id ?? null;
+                        handleLabeledAutoAssign({
+                            projectId: id,
+                            label: labelName,
+                            issueId: localIssueId,
+                            githubIssueNumber: ghIssue.number,
+                        }).catch((err) => console.error('[github-webhook] auto-assign error:', err));
+                    }
+                }
+            }
+        }
+        // ── push: filter to tracked refs (project.githubRepo exists = GitHub sync enabled) ──
+        if (ghEvent === 'push' && project.githubOwner && project.githubRepo) {
+            const ref = typeof payload.ref === 'string' ? payload.ref : '';
+            // Only process refs that match the project's default branch or any feature branch
+            // (anything that is NOT a tag ref is processed; tags are ignored)
+            if (ref.startsWith('refs/tags/')) {
+                await pool.query(`UPDATE github_events SET processed_at = NOW(), processed_outcome = 'no_match'
+             WHERE delivery_id = $1`, [deliveryId ?? null]);
+                res.json({ ok: true, event: ghEvent, ignored: true, reason: 'tag push ignored' });
+                return;
+            }
+        }
+        // Mark as processed
+        await pool.query(`UPDATE github_events SET processed_at = NOW(), processed_outcome = 'matched'
+         WHERE delivery_id = $1`, [deliveryId ?? null]);
+        res.json({ ok: true, event: ghEvent, action });
     }
     catch (err) {
         handleError(res, err);

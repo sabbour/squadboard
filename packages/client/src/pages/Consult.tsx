@@ -58,6 +58,7 @@ import {
 import { useActiveAgents, useModels } from '../api/agents.ts'
 import { useProjects } from '../api/projects.ts'
 import PageHeader from '../components/layout/PageHeader.tsx'
+import { ChatBubble } from '../components/ChatBubble.tsx'
 
 const useStyles = makeStyles({
   root: {
@@ -792,6 +793,15 @@ function SessionView({ sessionId, projectId }: { sessionId: string; projectId: s
     })
   }
 
+  // Thinking indicator: show when user has sent a message and no streaming content yet
+  const isSessionActive = session.status === 'active' || session.status === 'idle'
+  const lastMessage = session.messages[session.messages.length - 1]
+  const showThinking =
+    isSessionActive &&
+    !streamingBuffer.content &&
+    !streamingBuffer.reasoning &&
+    lastMessage?.role === 'user'
+
   const handleSend = async () => {
     const text = draft.trim()
     if (!text) return
@@ -882,8 +892,24 @@ function SessionView({ sessionId, projectId }: { sessionId: string; projectId: s
           </Body2>
         )}
         {rows.map((row) => (
-          <ChatRowView key={row.key} row={row} sessionId={sessionId} />
+          <ChatRowView
+            key={row.key}
+            row={row}
+            sessionId={sessionId}
+            agentName={session.agentName ?? (session.mode === 'agent' ? 'Agent' : 'Model')}
+          />
         ))}
+        {showThinking && (
+          <ChatBubble
+            role="agent"
+            identity={{
+              name: session.agentName ?? (session.mode === 'agent' ? 'Agent' : 'Model'),
+              roleBadge: 'thinking',
+            }}
+            content=""
+            streaming
+          />
+        )}
         <div style={{ display: 'flex', justifyContent: 'center', gap: '12px', color: tokens.colorNeutralForeground3 }}>
           <Caption1>
             {session.messageCount} messages · {session.inputTokens.toLocaleString()} in / {session.outputTokens.toLocaleString()} out · ${parseFloat(session.costUsd).toFixed(4)}
@@ -949,17 +975,16 @@ function SessionView({ sessionId, projectId }: { sessionId: string; projectId: s
 // CHAT ROW
 // =============================================================================
 
-function ChatRowView({ row, sessionId }: { row: ChatRow; sessionId: string }) {
-  const styles = useStyles()
+function ChatRowView({ row, sessionId, agentName }: { row: ChatRow; sessionId: string; agentName: string }) {
   if (row.kind === 'message' && row.message) {
     const m = row.message
     if (m.role === 'tool') return null
     if (m.role === 'system') return null
     const isUser = m.role === 'user'
     return (
-      <div className={isUser ? styles.msgUser : styles.msgAssistant}>
+      <>
         {!isUser && m.reasoningContent && (
-          <details style={{ marginBottom: '8px' }}>
+          <details style={{ alignSelf: 'flex-start', maxWidth: '85%', marginBottom: 0 }}>
             <summary style={{ cursor: 'pointer', fontSize: '11px', color: tokens.colorNeutralForeground3 }}>
               reasoning
             </summary>
@@ -968,15 +993,19 @@ function ChatRowView({ row, sessionId }: { row: ChatRow; sessionId: string }) {
             </Caption1>
           </details>
         )}
-        <div>{m.content}</div>
-      </div>
+        <ChatBubble
+          role={isUser ? 'user' : 'agent'}
+          identity={{ name: isUser ? 'You' : agentName }}
+          content={m.content}
+        />
+      </>
     )
   }
   if (row.kind === 'streaming') {
     return (
-      <div className={styles.msgAssistant}>
+      <>
         {row.streamingReasoning && (
-          <details>
+          <details style={{ alignSelf: 'flex-start', maxWidth: '85%' }}>
             <summary style={{ cursor: 'pointer', fontSize: '11px', color: tokens.colorNeutralForeground3 }}>
               reasoning…
             </summary>
@@ -985,11 +1014,13 @@ function ChatRowView({ row, sessionId }: { row: ChatRow; sessionId: string }) {
             </Caption1>
           </details>
         )}
-        <div>
-          {row.streamingText}
-          <span style={{ opacity: 0.5 }}> ▍</span>
-        </div>
-      </div>
+        <ChatBubble
+          role="agent"
+          identity={{ name: agentName }}
+          content={row.streamingText ?? ''}
+          streaming
+        />
+      </>
     )
   }
   if (row.kind === 'proposal' && row.proposal) {

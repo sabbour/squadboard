@@ -1,6 +1,15 @@
-// All curated templates are embedded as inline strings so they survive
-// TypeScript compilation (no runtime fs reads). Each template's `approve`
-// step demonstrates a specific Phase 8 review policy primitive.
+// ---------------------------------------------------------------------------
+// Curated built-in ceremony templates (W16 curation — 5 picks).
+//
+// Removed from built-ins (moved to community-examples pool, not deleted):
+//   feature, refactor, ops_incident, design_review, documentation_update,
+//   security_patch — too niche / half-implemented for a default set.
+//
+// Added: spike, pair_programming.
+//
+// scribe-close-out is intentionally absent — it lives in BUILT_IN_CEREMONIES
+// (ceremony-translator.ts) as an SDK-backed ceremony, not a YAML template.
+// ---------------------------------------------------------------------------
 const SIMPLE_YAML = `# Simple Review Workflow
 # A three-step workflow: auto-route → agent run → manual approve
 name: "Simple Review"
@@ -204,70 +213,93 @@ steps:
     timeout_action: escalate
     fallback_reviewer: lead
 `;
+const SPIKE_YAML = `# Spike Workflow — investigate → write findings → close
+# Use for time-boxed research tasks that produce findings, not shipped code.
+name: "Spike"
+description: "Investigate a question, write up findings, close without merging."
+steps:
+  - type: route
+    description: "Assign to the agent best suited to investigate."
+  - type: agent_run
+    label: "Investigate"
+    prompt: |
+      Time-box your investigation to the agreed duration. Explore the
+      problem space, run experiments, read references. Do not ship code.
+  - type: agent_run
+    label: "Write findings"
+    prompt: |
+      Summarise what you learned: key insights, open questions, recommended
+      next steps. Write for someone who wasn't present during the spike.
+  - type: approve
+    label: "Review findings"
+    description: "Lead reviews the findings document (Solo policy)."
+    approvers: [lead]
+    request_changes_policy: first
+    timeout: 24h
+    timeout_action: notify
+`;
+const PAIR_PROGRAMMING_YAML = `# Pair-Programming Session Workflow
+# Two agents alternate passes on the same context, building on each other's work.
+name: "Pair-Programming Session"
+description: "Two agents alternate work passes on shared context."
+steps:
+  - type: route
+    description: "Assign primary and secondary agents."
+  - type: agent_run
+    label: "First pass"
+    prompt: |
+      Take the first pass on the task. Write clean, readable code.
+      Leave inline comments where you'd like the next agent to pay
+      attention or build on.
+  - type: agent_run
+    label: "Second pass"
+    prompt: |
+      Review the first agent's work. Improve it, fill gaps, and address
+      the inline notes left for you. Do not discard working code.
+  - type: approve
+    label: "Final review"
+    description: "Lead reviews the combined output (Solo policy)."
+    approvers: [lead]
+    request_changes_policy: first
+    timeout: 24h
+    timeout_action: notify
+`;
 export function getBuiltinTemplates() {
     return [
         {
             slug: 'simple',
             name: 'Simple Review',
-            description: 'Route → Agent Run → Approve. Best for most issues.',
+            description: 'Route an issue to the right agent, let them work, then approve.',
             tags: ['baseline', 'solo'],
             yamlContent: SIMPLE_YAML,
         },
         {
             slug: 'bug_fix',
             name: 'Bug Fix',
-            description: 'Reproduce → fix → verify. Solo Reviewer policy.',
+            description: 'Investigate a bug, fix it, verify the fix, ship a PR.',
             tags: ['bug', 'solo'],
             yamlContent: BUG_FIX_YAML,
         },
         {
-            slug: 'feature',
-            name: 'Feature',
-            description: 'Spec → design review → implement → code review → ship. Two Eyes policy.',
-            tags: ['feature', 'two-eyes'],
-            yamlContent: FEATURE_YAML,
-        },
-        {
-            slug: 'refactor',
-            name: 'Refactor',
-            description: 'Spec → implement → review → land. Solo Reviewer policy.',
-            tags: ['refactor', 'solo'],
-            yamlContent: REFACTOR_YAML,
-        },
-        {
             slug: 'rfc',
-            name: 'RFC',
-            description: 'Draft → discuss → decide. Strict (all must approve) policy.',
+            name: 'RFC / Proposal',
+            description: 'Draft a proposal, gather stakeholder input, decide.',
             tags: ['rfc', 'strict'],
             yamlContent: RFC_YAML,
         },
         {
-            slug: 'ops_incident',
-            name: 'Ops Incident',
-            description: 'Triage → mitigate → root-cause → postmortem. Two Eyes review.',
-            tags: ['ops', 'incident', 'two-eyes'],
-            yamlContent: OPS_INCIDENT_YAML,
+            slug: 'spike',
+            name: 'Spike',
+            description: 'Time-boxed investigation — produce findings, not shipped code.',
+            tags: ['research', 'spike'],
+            yamlContent: SPIKE_YAML,
         },
         {
-            slug: 'design_review',
-            name: 'Design Review',
-            description: 'Single-pass review with lead sign-off. Solo Reviewer policy.',
-            tags: ['design', 'solo'],
-            yamlContent: DESIGN_REVIEW_YAML,
-        },
-        {
-            slug: 'documentation_update',
-            name: 'Documentation Update',
-            description: 'Draft → publish. Advisory (auto-approve on timeout) policy.',
-            tags: ['docs', 'advisory'],
-            yamlContent: DOCUMENTATION_UPDATE_YAML,
-        },
-        {
-            slug: 'security_patch',
-            name: 'Security Patch',
-            description: 'Assess → patch → security review → ship. Security Quorum policy.',
-            tags: ['security', 'quorum', 'escalate'],
-            yamlContent: SECURITY_PATCH_YAML,
+            slug: 'pair_programming',
+            name: 'Pair-Programming Session',
+            description: 'Two agents alternate work passes on shared context.',
+            tags: ['pair', 'collaborative'],
+            yamlContent: PAIR_PROGRAMMING_YAML,
         },
     ];
 }

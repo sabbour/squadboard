@@ -2,14 +2,51 @@ import os from 'node:os';
 import path from 'node:path';
 import { execSync } from 'node:child_process';
 import { mkdir, rm } from 'node:fs/promises';
+/** Allowed workspace roots for git operations — must match one of these prefixes. */
+const ALLOWED_WORKSPACE_ROOTS = [
+    path.join(os.homedir(), '.squadboard'),
+    os.tmpdir(),
+];
+/**
+ * Validate that a workspace path is under an allowed root.
+ * Prevents push/PR operations from running against arbitrary paths.
+ */
+export function assertSafeWorkspacePath(workspacePath) {
+    const resolved = path.resolve(workspacePath);
+    const ok = ALLOWED_WORKSPACE_ROOTS.some((root) => resolved.startsWith(root + path.sep) || resolved === root);
+    if (!ok) {
+        throw new Error(`Workspace path "${workspacePath}" is outside allowed roots (${ALLOWED_WORKSPACE_ROOTS.join(', ')}). Refusing operation.`);
+    }
+}
+/**
+ * Derive the canonical Squad branch name from agent name and issue title.
+ * Convention: `squad/{agent-name-lowercased}/{slug-from-issue-title}`
+ * For ceremony runs: `squad/ceremony/{ceremony-slug}-{run-id-suffix}`
+ *
+ * Slug rules: lowercase, alphanumeric + hyphen, max 50 chars, no leading/trailing hyphens.
+ */
+export function deriveSquadBranchName(agentName, issueTitle) {
+    const agentSlug = agentName
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-+|-+$/g, '')
+        .slice(0, 30);
+    const titleSlug = issueTitle
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-+|-+$/g, '')
+        .slice(0, 50);
+    return `squad/${agentSlug}/${titleSlug}`;
+}
 /**
  * Resolve (and create) the workspace directory for a run.
  *
  * scratch  → OS temp dir   : <tmpdir>/squadboard-run-<id>
  * dir      → home dir      : ~/.squadboard/workspaces/<id>
- * worktree → git worktree  : <repoParent>/<repoName>-run-<issueRunId>
+ * worktree → git worktree  : ~/.squadboard/worktrees/<repoName>-run-<issueRunId>
+ *            Branch name follows squad/{agent}/{slug} convention when agentName + issueTitle are provided.
  */
-export async function resolveWorkspace(issueRunId, strategy) {
+export async function resolveWorkspace(issueRunId, strategy, opts) {
     let workspacePath;
     switch (strategy) {
         case 'scratch':
@@ -25,10 +62,15 @@ export async function resolveWorkspace(issueRunId, strategy) {
                 stdio: 'pipe',
                 encoding: 'utf-8',
             }).trim();
-            const repoParent = path.dirname(repoRoot);
             const repoName = path.basename(repoRoot);
-            workspacePath = path.join(repoParent, `${repoName}-run-${issueRunId}`);
-            const branch = `squadboard/run-${issueRunId}`;
+            // Worktrees live under ~/.squadboard/worktrees/ (always within the allowed root)
+            const worktreesRoot = path.join(os.homedir(), '.squadboard', 'worktrees');
+            await mkdir(worktreesRoot, { recursive: true });
+            workspacePath = path.join(worktreesRoot, `${repoName}-run-${issueRunId}`);
+            // Use squad convention when we have the metadata; fall back to run-id slug
+            const branch = opts?.agentName && opts?.issueTitle
+                ? deriveSquadBranchName(opts.agentName, opts.issueTitle)
+                : `squad/run-${issueRunId}`;
             try {
                 execSync(`git worktree add ${workspacePath} -b ${branch} HEAD`, {
                     stdio: 'pipe',
@@ -53,22 +95,28 @@ export async function resolveWorkspace(issueRunId, strategy) {
 }
 /**
  * Remove the workspace directory after a run finishes.
- * For 'worktree', runs `git worktree remove --force` and deletes the branch.
+ * For 'worktree', runs `git worktree remove --force` and attempts branch deletion.
  */
 export async function cleanupWorkspace(workspacePath, strategy) {
     if (strategy === 'worktree') {
-        const runId = path.basename(workspacePath).replace(/^.*-run-/, '');
         try {
             execSync(`git worktree remove --force ${workspacePath}`, { stdio: 'pipe' });
         }
         catch (err) {
             console.warn(`[workspace] git worktree remove failed for ${workspacePath}:`, err);
         }
+        // Best-effort branch deletion; branch name is read from the worktree's HEAD
         try {
-            execSync(`git branch -d squadboard/run-${runId}`, { stdio: 'pipe' });
+            const branch = execSync(`git -C ${workspacePath} rev-parse --abbrev-ref HEAD`, {
+                stdio: 'pipe',
+                encoding: 'utf-8',
+            }).trim();
+            if (branch && branch !== 'HEAD' && branch.startsWith('squad/')) {
+                execSync(`git branch -d ${branch}`, { stdio: 'pipe' });
+            }
         }
-        catch (err) {
-            console.warn(`[workspace] git branch -d failed for squadboard/run-${runId}:`, err);
+        catch {
+            // Non-fatal — the branch may already be gone or the worktree dir removed
         }
         return;
     }

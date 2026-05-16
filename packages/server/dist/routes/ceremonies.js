@@ -33,7 +33,7 @@ import { eq, and, sql } from 'drizzle-orm';
 import { getDb, schema } from '../db/index.js';
 import { parseWorkflowYaml, validateWorkflowYaml } from '../services/workflow-parser.js';
 import { spawnCeremonyRun, previewNextFireTimes, computeNextFire, } from '../services/ceremony-scheduler.js';
-import { translateNarrative, translateProse, refineProse, TranslatorError, TranslatorThrottledError, } from '../services/ceremony-translator.js';
+import { translateNarrative, translateProse, refineProse, TranslatorError, TranslatorThrottledError, invokeBuiltInCeremony, } from '../services/ceremony-translator.js';
 import { getBuiltinTemplates } from '../workflows/templates/index.js';
 // ---------------------------------------------------------------------------
 // Helpers
@@ -511,6 +511,45 @@ async function loadAvailableAgents(projectId) {
         .where(eq(schema.agents.projectId, projectId));
     return rows.map((a) => ({ name: a.name, role: a.role }));
 }
+/**
+ * POST /api/projects/:projectId/ceremonies/invoke
+ *
+ * Body: { ceremonySlug: string, context?: object }
+ *
+ * Invokes a built-in ceremony (e.g. 'scribe-close-out') for the given project.
+ * Used by the manual "End wave" button (q9) when the daemon is not running.
+ *
+ * Returns: { ok: true, result: <ceremony result object> }
+ */
+ceremoniesRouter.post('/invoke', async (req, res) => {
+    try {
+        const { projectId } = req.params;
+        const { ceremonySlug, context } = (req.body ?? {});
+        if (typeof ceremonySlug !== 'string' || !ceremonySlug.trim()) {
+            res.status(400).json({ error: '`ceremonySlug` is required' });
+            return;
+        }
+        let result;
+        try {
+            result = await invokeBuiltInCeremony(ceremonySlug.trim(), {
+                projectId,
+                ...(context ?? {}),
+                extra: context,
+            });
+        }
+        catch (err) {
+            if (err instanceof TranslatorError) {
+                res.status(err.retryable ? 502 : 400).json({ error: err.message });
+                return;
+            }
+            throw err;
+        }
+        res.json({ ok: true, result });
+    }
+    catch (err) {
+        handleError(res, err);
+    }
+});
 /**
  * POST /api/projects/:projectId/ceremonies/generate-from-prose
  *

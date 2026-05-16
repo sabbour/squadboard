@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef } from 'react'
 import { tokens } from '@fluentui/react-components'
 import type { LiveSessionEvent, LiveStreamEntry } from '../../api/sessions.ts'
 import type { Agent } from '../../api/agents.ts'
+import { ChatBubble } from '../ChatBubble.tsx'
 
 interface AgentActivityFeedProps {
   /** Events fetched on mount (durable transcript). */
@@ -11,6 +12,8 @@ interface AgentActivityFeedProps {
   agentName?: string | null
   /** Optional list of project agents — used to resolve names in steering rows. */
   agents?: Agent[]
+  /** Whether the session is currently active (shows thinking indicator after user message). */
+  sessionActive?: boolean
 }
 
 interface FeedRow {
@@ -108,6 +111,7 @@ export default function AgentActivityFeed({
   liveEntries,
   agentName,
   agents,
+  sessionActive,
 }: AgentActivityFeedProps) {
   const merged = useMemo(
     () => coalesceFeed(mergeFeed(initialEvents, liveEntries)),
@@ -119,12 +123,27 @@ export default function AgentActivityFeed({
     return m
   }, [agents])
 
+  // Determine if we should show a thinking indicator:
+  // Show when the session is active and the last coalesced row is a user message
+  // and no assistant streaming row has started yet.
+  const showThinking = useMemo(() => {
+    if (!sessionActive) return false
+    const last = merged[merged.length - 1]
+    if (!last) return false
+    // Show thinking if last row is a user message
+    if (last.type === 'session.message') {
+      const role = (last.payload.role as string) ?? 'assistant'
+      return role === 'user'
+    }
+    return false
+  }, [merged, sessionActive])
+
   const scrollRef = useRef<HTMLDivElement>(null)
   useEffect(() => {
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight
     }
-  }, [merged.length])
+  }, [merged.length, showThinking])
 
   return (
     <div
@@ -148,6 +167,14 @@ export default function AgentActivityFeed({
       {merged.map((r) => (
         <FeedRowView key={r.key} row={r} agentName={agentName ?? null} agentLookup={agentLookup} />
       ))}
+      {showThinking && (
+        <ChatBubble
+          role="agent"
+          identity={{ name: agentName ?? 'Agent', roleBadge: 'thinking' }}
+          content=""
+          streaming
+        />
+      )}
     </div>
   )
 }
@@ -166,12 +193,13 @@ function FeedRowView({
   if (row.type === 'session.message') {
     const role = (row.payload.role as string) ?? 'assistant'
     const content = pickStr(row.payload, 'content') ?? ''
+    const isUser = role === 'user'
     return (
-      <Bubble
-        role={role === 'user' ? 'user' : 'assistant'}
-        author={role === 'user' ? 'You' : agentName ?? 'Agent'}
-        time={time}
-        text={content}
+      <ChatBubble
+        role={isUser ? 'user' : 'agent'}
+        identity={{ name: isUser ? 'You' : (agentName ?? 'Agent') }}
+        content={content}
+        timestamp={row.at}
       />
     )
   }
@@ -180,19 +208,29 @@ function FeedRowView({
     const text = (row.payload.text as string) ?? ''
     const kind = row.payload.kind === 'reasoning' ? 'reasoning' : 'message'
     return (
-      <Bubble
-        role="assistant"
-        author={`${agentName ?? 'Agent'}${kind === 'reasoning' ? ' (thinking)' : ' (typing…)'}`}
-        time={time}
-        text={text}
-        ghost={kind === 'reasoning'}
+      <ChatBubble
+        role="agent"
+        identity={{
+          name: agentName ?? 'Agent',
+          roleBadge: kind === 'reasoning' ? 'thinking' : 'agent',
+        }}
+        content={text}
+        streaming
+        timestamp={row.at}
       />
     )
   }
 
   if (row.type === 'session.tool') {
     const phase = pickStr(row.payload, 'phase') ?? 'tool'
-    return <Pill icon="🔧" label={`tool · ${phase}`} time={time} tone="neutral" />
+    return (
+      <ChatBubble
+        role="tool"
+        identity={{ name: `tool · ${phase}` }}
+        content=""
+        timestamp={row.at}
+      />
+    )
   }
 
   if (row.type === 'session.usage') {
@@ -286,60 +324,6 @@ function fmtSteered(payload: Record<string, unknown>, lookup: Map<string, string
     default:
       return `${actor} steered (${action})`
   }
-}
-
-function Bubble({
-  role,
-  author,
-  time,
-  text,
-  ghost,
-}: {
-  role: 'user' | 'assistant'
-  author: string
-  time: string
-  text: string
-  ghost?: boolean
-}) {
-  const isUser = role === 'user'
-  return (
-    <div
-      style={{
-        alignSelf: isUser ? 'flex-end' : 'flex-start',
-        maxWidth: '85%',
-        background: isUser
-          ? tokens.colorBrandBackground
-          : ghost
-            ? 'transparent'
-            : tokens.colorNeutralBackground1,
-        color: isUser ? tokens.colorNeutralForegroundOnBrand : tokens.colorNeutralForeground1,
-        border: ghost
-          ? `1px dashed ${tokens.colorNeutralStroke2}`
-          : `1px solid ${tokens.colorNeutralStroke1}`,
-        borderRadius: '12px',
-        padding: '10px 14px',
-        fontSize: '13px',
-        lineHeight: 1.5,
-        whiteSpace: 'pre-wrap',
-        wordBreak: 'break-word',
-      }}
-    >
-      <div
-        style={{
-          fontSize: '11px',
-          color: isUser ? 'rgba(255,255,255,0.8)' : tokens.colorNeutralForeground3,
-          marginBottom: '4px',
-          display: 'flex',
-          gap: '8px',
-          alignItems: 'baseline',
-        }}
-      >
-        <strong>{author}</strong>
-        <span>{time}</span>
-      </div>
-      {text || <em style={{ opacity: 0.6 }}>(empty)</em>}
-    </div>
-  )
 }
 
 function Pill({

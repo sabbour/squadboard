@@ -69,6 +69,9 @@ import conjureRouter from './routes/conjure.js';
 import { registerSelfAtBoot } from './services/self-register.js';
 // Q6=B: standalone coordinator daemon — auto-start when guards allow
 import { maybeAutoStartDaemon } from './daemon/auto-start.js';
+// Wave 20 — Stream G Phase 3: @copilot routes + watcher
+import { copilotRouter } from './routes/copilot.js';
+import { startCopilotWatcher, stopCopilotWatcher } from './services/copilot-watcher.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -210,6 +213,8 @@ async function main(): Promise<void> {
   app.use('/api/projects/:id/analytics', analyticsRouter);
   // Demo 15: GitHub sync endpoints
   app.use('/api/projects/:id/github', githubSyncRouter);
+  // Wave 20 — G4.1 + G4.3: @copilot assign + auto-assign label rules
+  app.use('/api/projects', copilotRouter);
   // Phase 3 Doctor: diagnostics
   app.use('/api/diagnostics', diagnosticsRouter);
   app.use('/api/projects/:id/diagnostics', projectDiagnosticsRouter);
@@ -262,6 +267,9 @@ async function main(): Promise<void> {
   const httpServer = createServer(app);
   initWebSocketServer(httpServer);
 
+  // Wave 20 — G4.2: start @copilot PR watcher (60 s poll).
+  startCopilotWatcher();
+
   const server = httpServer.listen(PORT, () => {
     const elapsed = Date.now() - startMs;
     console.log(
@@ -273,6 +281,7 @@ async function main(): Promise<void> {
     console.log(`[squadboard] received ${signal}`);
     heartbeat.stop();
     stopAllSyncLoops(); // Demo 15: stop GitHub sync polling loops
+    stopCopilotWatcher(); // Wave 20: stop @copilot PR watcher
     server.close(() => {
       closeDb()
         .then(() => process.exit(0))

@@ -148,11 +148,14 @@ export async function publishInboxItem(id, input) {
     }
     const title = (item.formulatedTitle ?? item.originalDraft).trim().slice(0, 200);
     const body = item.formulatedBody ?? '';
-    const issue = await issuesService.createIssue(input.projectId, {
+    const issueResult = await issuesService.createIssue({
+        projectId: input.projectId,
         title,
         body,
         status: column,
+        createdBy: 'user',
     });
+    const issue = issueResult.issue;
     // Best-effort: attach suggested labels by name (only if a matching label
     // exists in the target project — silent skip on miss).
     const suggested = Array.isArray(item.suggestedLabels) ? item.suggestedLabels : [];

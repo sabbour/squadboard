@@ -121,7 +121,14 @@ export type GitEventType =
   | 'git.push.complete'
   | 'git.pr.created'
   | 'git.comment.posted'
-  | 'git.pr.merged';
+  | 'git.pr.merged'
+  | 'git.workflow.dispatched';
+
+/**
+ * Wave 20 — G4.2: Copilot-specific events.
+ * copilot.pr.detected — watcher found a draft PR from @copilot matching a run.
+ */
+export type CopilotEventType = 'copilot.pr.detected';
 
 /**
  * GitHub webhook events re-emitted on the internal bus after ingest.
@@ -143,6 +150,7 @@ export type BusEventType =
   | HeartbeatEventType
   | FlowEventType
   | GitEventType
+  | CopilotEventType
   | GitHubWebhookEventType;
 
 export interface BusEvent {
@@ -271,6 +279,12 @@ class EventBus extends EventEmitter {
   }
   /** Stream G: emit a git push / PR event scoped to a project. */
   emitGitEvent(type: GitEventType, projectId: string, payload: unknown): void {
+    const event: BusEvent = { type, projectId, payload };
+    this.emit('event', event);
+  }
+
+  /** Wave 20 — G4.2: emit a copilot-watcher event scoped to a project. */
+  emitCopilotEvent(type: CopilotEventType, projectId: string, payload: unknown): void {
     const event: BusEvent = { type, projectId, payload };
     this.emit('event', event);
   }

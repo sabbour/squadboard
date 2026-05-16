@@ -33,6 +33,7 @@ import { promisify } from 'node:util';
 import { join } from 'node:path';
 import { mkdir } from 'node:fs/promises';
 import { archiveDecisionsBySize, mergeInbox, writeOrchestrationLogs, writeSessionLog, crossAgentHistoryUpdates, summarizeHistoryIfLarge, commitScribeFiles, } from './primitives.js';
+import { writeHealthReport, } from './steps/step-8-health-report.js';
 const execFile = promisify(_execFile);
 // ---------------------------------------------------------------------------
 // Internal helpers
@@ -76,6 +77,7 @@ export async function closeOut(opts = {}) {
         historiesSummarized: [],
         commitSha: null,
         pushed: false,
+        healthReportPath: null,
         errors: [],
     };
     // Track paths written so we can commit them.
@@ -188,6 +190,21 @@ export async function closeOut(opts = {}) {
         }
         catch (err) {
             result.errors.push(toError('git-push', err));
+        }
+    }
+    // --- Step 8: HEALTH REPORT artifact ---
+    // Mirrors squad.agent.md Scribe task #8.
+    // Written AFTER commit so the commit SHA is available to include in the report.
+    if (opts.healthReport) {
+        try {
+            const hrResult = await writeHealthReport({
+                ...opts.healthReport,
+                teamRoot,
+            });
+            result.healthReportPath = hrResult.path;
+        }
+        catch (err) {
+            result.errors.push(toError('health-report', err));
         }
     }
     return result;

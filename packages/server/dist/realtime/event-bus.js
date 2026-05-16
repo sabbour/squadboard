@@ -110,6 +110,24 @@ class EventBus extends EventEmitter {
         this.on('heartbeat', handler);
         return () => this.off('heartbeat', handler);
     }
+    /** Stream G: emit a git push / PR event scoped to a project. */
+    emitGitEvent(type, projectId, payload) {
+        const event = { type, projectId, payload };
+        this.emit('event', event);
+    }
+    /** Wave 20 — G4.2: emit a copilot-watcher event scoped to a project. */
+    emitCopilotEvent(type, projectId, payload) {
+        const event = { type, projectId, payload };
+        this.emit('event', event);
+    }
+    /** Stream G Phase 2B: emit a GitHub webhook event scoped to a project. */
+    emitGithubWebhookEvent(eventType, action, projectId, payload) {
+        const busType = action
+            ? `github.${eventType}.${action}`
+            : `github.${eventType}`;
+        const event = { type: busType, projectId, payload };
+        this.emit('event', event);
+    }
     /**
      * Phase 19 (Now view): Subscribe to ALL events across ALL projects.
      * The handler receives every BusEvent emitted on the in-process bus,

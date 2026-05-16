@@ -49,7 +49,21 @@ router.post('/', async (req, res) => {
     try {
         const { projectId } = req.params;
         const { title, body, status, column, assigneeId, labels } = req.body;
-        const created = await issuesService.createIssue(projectId, { title, body, status: status ?? column, assigneeId });
+        const effectiveStatus = status ?? column;
+        // HTTP path validates column exists before delegating (MCP/CLI skip this).
+        if (effectiveStatus) {
+            await issuesService.assertColumnExists(projectId, effectiveStatus);
+        }
+        const result = await issuesService.createIssue({
+            projectId,
+            title,
+            body,
+            status: effectiveStatus,
+            assigneeId: assigneeId ?? null,
+            labels: labels ?? [],
+            createdBy: 'user',
+        });
+        const created = result.issue;
         // Tier 1 auto-routing: resolve a rule and create an issue_run (Invariant 1)
         let autoRoutedTo = null;
         try {
@@ -145,12 +159,12 @@ router.get('/:id', async (req, res) => {
 router.patch('/:id', async (req, res) => {
     try {
         const { projectId, id } = req.params;
-        const { title, body, status, column, assigneeId, version } = req.body;
+        const { title, body, status, column, assigneeId, version, deliverableType, deliverableLink, deliverableAcceptanceCriteria, deliverableStatus, } = req.body;
         const resolvedStatus = status ?? column;
         // Optimistic concurrency check (OQ #6): if client sends `version`, enforce it.
         if (version !== undefined) {
             const db = getDb();
-            const { issues } = schema;
+            const { issues, columnMeta } = schema;
             const patch = { updatedAt: new Date(), version: sql `${issues.version} + 1` };
             if (title !== undefined)
                 patch.title = title.trim();
@@ -160,6 +174,25 @@ router.patch('/:id', async (req, res) => {
                 patch.status = resolvedStatus;
             if ('assigneeId' in req.body)
                 patch.assigneeId = assigneeId ?? null;
+            if (deliverableType !== undefined)
+                patch.deliverableType = deliverableType;
+            if ('deliverableLink' in req.body)
+                patch.deliverableLink = deliverableLink ?? null;
+            if ('deliverableAcceptanceCriteria' in req.body)
+                patch.deliverableAcceptanceCriteria = deliverableAcceptanceCriteria ?? null;
+            if (deliverableStatus !== undefined) {
+                patch.deliverableStatus = deliverableStatus;
+                // Auto-move to done column when deliverable is accepted.
+                if (deliverableStatus === 'accepted') {
+                    const [doneCol] = await db
+                        .select({ columnId: columnMeta.columnId })
+                        .from(columnMeta)
+                        .where(and(eq(columnMeta.projectId, projectId), eq(columnMeta.semantic, 'done')))
+                        .limit(1);
+                    if (doneCol)
+                        patch.status = doneCol.columnId;
+                }
+            }
             const [updated] = await db
                 .update(issues)
                 .set(patch)

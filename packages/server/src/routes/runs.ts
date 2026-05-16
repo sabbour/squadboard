@@ -9,6 +9,7 @@ import {
   buildPrBody,
   commentOnIssue,
   mergePr,
+  triggerWorkflow,
   GitOpsError,
 } from '../services/github-git-ops.js';
 
@@ -292,6 +293,95 @@ projectRunsRouter.post('/:runId/git/pr/merge', async (req: Request, res: Respons
     const method: 'squash' | 'merge' | 'rebase' =
       rawMethod === 'merge' || rawMethod === 'rebase' ? rawMethod : 'squash';
     const result = await mergePr(runId, { method }, projectId);
+    res.json(result);
+  } catch (err) {
+    handleError(res, err);
+  }
+});
+
+// ---------------------------------------------------------------------------
+// POST /:runId/git/workflow/dispatch — G2.4 Trigger GitHub Actions workflow
+// ---------------------------------------------------------------------------
+// Request body:
+//   { workflowFile: string, ref?: string, inputs?: Record<string, string> }
+// Response 200: { workflowRunId, runUrl }
+// Response 4xx/5xx: { error }
+// ---------------------------------------------------------------------------
+projectRunsRouter.post('/:runId/git/workflow/dispatch', async (req: Request, res: Response) => {
+  const { runId, projectId } = req.params as Record<string, string>;
+  try {
+    const { workflowFile, ref, inputs } = req.body as {
+      workflowFile?: unknown;
+      ref?: unknown;
+      inputs?: unknown;
+    };
+
+    if (typeof workflowFile !== 'string' || !workflowFile.trim()) {
+      res.status(400).json({ error: '`workflowFile` must be a non-empty string, e.g. "deploy.yml"' });
+      return;
+    }
+    if (ref !== undefined && typeof ref !== 'string') {
+      res.status(400).json({ error: '`ref` must be a string when provided' });
+      return;
+    }
+    if (inputs !== undefined && (typeof inputs !== 'object' || Array.isArray(inputs) || inputs === null)) {
+      res.status(400).json({ error: '`inputs` must be an object when provided' });
+      return;
+    }
+
+    // Resolve run to get workspace and project github config.
+    const db = getDb();
+    const [run] = await db
+      .select({ workspacePath: schema.issueRuns.workspacePath, issueId: schema.issueRuns.issueId })
+      .from(schema.issueRuns)
+      .where(eq(schema.issueRuns.id, runId))
+      .limit(1);
+
+    if (!run) {
+      res.status(404).json({ error: 'Run not found' });
+      return;
+    }
+
+    // Resolve project github config for owner/repo context.
+    const [issueRow] = await db
+      .select({ projectId: schema.issues.projectId })
+      .from(schema.issues)
+      .where(eq(schema.issues.id, run.issueId))
+      .limit(1);
+
+    let owner: string | undefined;
+    let repo: string | undefined;
+    if (issueRow) {
+      const [proj] = await db
+        .select({ githubOwner: schema.projects.githubOwner, githubRepo: schema.projects.githubRepo })
+        .from(schema.projects)
+        .where(eq(schema.projects.id, issueRow.projectId))
+        .limit(1);
+      owner = proj?.githubOwner ?? undefined;
+      repo = proj?.githubRepo ?? undefined;
+    }
+
+    const result = await triggerWorkflow({
+      workflowFile,
+      ref: typeof ref === 'string' ? ref : 'main',
+      inputs: inputs as Record<string, string> | undefined,
+      owner,
+      repo,
+      cwd: run.workspacePath ?? undefined,
+    });
+
+    // Emit WS event so the Run Drawer timeline shows the dispatch.
+    const resolvedProjectId = projectId ?? issueRow?.projectId;
+    if (resolvedProjectId) {
+      eventBus.emitGitEvent('git.workflow.dispatched', resolvedProjectId, {
+        runId,
+        workflowFile,
+        ref: typeof ref === 'string' ? ref : 'main',
+        workflowRunId: result.workflowRunId,
+        runUrl: result.runUrl,
+      });
+    }
+
     res.json(result);
   } catch (err) {
     handleError(res, err);

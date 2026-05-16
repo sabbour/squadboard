@@ -29,7 +29,9 @@
  * the ceremony registry (packages/server/src/services/ceremony-translator.ts).
  */
 import { type SpawnManifest } from './primitives.js';
+import { type HealthReportOptions } from './steps/step-8-health-report.js';
 export type { SpawnManifest, SpawnManifestEntry } from './primitives.js';
+export type { HealthReportOptions, HealthReportResult, BacklogSnapshot, SpawnLineageEntry, SpawnSummary, NextWaveTodo, } from './steps/step-8-health-report.js';
 export interface CloseOutOptions {
     /** Which project (defaults to SQUADBOARD_DEFAULT_PROJECT_ID env var). */
     projectId?: string;
@@ -45,6 +47,11 @@ export interface CloseOutOptions {
      * configured; the CLI coordinator and the manual button leave it false.
      */
     push?: boolean;
+    /**
+     * Options for the step-8 HEALTH REPORT artifact.
+     * If omitted, step 8 is skipped (healthReportPath will be null).
+     */
+    healthReport?: Omit<HealthReportOptions, 'teamRoot'>;
 }
 export interface CloseOutResult {
     /** Whether the decisions.md size-archive gate fired. */
@@ -68,6 +75,8 @@ export interface CloseOutResult {
     commitSha: string | null;
     /** Whether a `git push` was attempted and succeeded. */
     pushed: boolean;
+    /** Path to the HEALTH REPORT artifact written in step 8 (null if healthReport opts were not provided). */
+    healthReportPath: string | null;
     /** Any non-fatal errors collected during the run. */
     errors: Array<{
         step: string;

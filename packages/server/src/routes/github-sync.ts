@@ -24,6 +24,7 @@ import { eq } from 'drizzle-orm';
 import { GitHubSync, startSyncLoop, stopSyncLoop } from '../github/sync.js';
 import { ingestWebhookIssue } from '../github/sync-hook.js';
 import { eventBus } from '../realtime/event-bus.js';
+import { handleLabeledAutoAssign } from './copilot.js';
 
 const router = Router({ mergeParams: true });
 
@@ -416,6 +417,26 @@ router.post('/webhook', async (req: Request, res: Response) => {
           await ingestWebhookIssue(id, action, ghIssue);
         } catch (err) {
           console.error('[github-webhook] ingestWebhookIssue error:', err);
+        }
+
+        // G4.3 — Auto-assign to @copilot when a label rule matches.
+        if (action === 'labeled' && payload.label) {
+          const labelObj = payload.label as { name?: string };
+          const labelName = labelObj.name ?? '';
+          if (labelName) {
+            // Resolve the local Squadboard issue UUID by GitHub issue number.
+            const localIssueResult = await pool.query<{ id: string }>(
+              `SELECT id FROM issues WHERE project_id = $1 AND github_issue_number = $2 LIMIT 1`,
+              [id, ghIssue.number],
+            );
+            const localIssueId = localIssueResult.rows[0]?.id ?? null;
+            handleLabeledAutoAssign({
+              projectId: id,
+              label: labelName,
+              issueId: localIssueId,
+              githubIssueNumber: ghIssue.number,
+            }).catch((err) => console.error('[github-webhook] auto-assign error:', err));
+          }
         }
       }
     }

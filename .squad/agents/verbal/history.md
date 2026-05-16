@@ -167,3 +167,33 @@ Run: w17
 
 - **keyser**: Settings batch (Backup/Restore UI + GitHub Integration Settings)
 - **redfoot**: 4 docs (README + ceremonies concept + features audit + MCP install)
+
+
+---
+
+## 2026-05-15T22:42:29.855-07:00 — Wave 19 — Stream J (Chat polish bundle)
+
+**Task:** J1 (avatar + name + role badge), J2 (markdown rendering), J4 (thinking indicator), J6 (extract ChatBubble). J3 + J5 deferred.
+
+**Files changed:**
+- `packages/client/src/components/ChatBubble.tsx` — **new** reusable component. Props: `role`, `identity` (name + avatar + roleBadge), `content`, `streaming`, `actions`, `timestamp`. Renders: initials avatar (djb2-hashed hue), Fluent2 Badge (role-coded color), markdown body (react-markdown + remark-gfm + rehype-highlight + rehype-sanitize), thinking indicator (three pulsing dots + 30s escalation to "taking longer than usual"), hover copy/action buttons.
+- `packages/client/src/components/sessions/AgentActivityFeed.tsx` — replaced local `Bubble` component with `ChatBubble`; added `sessionActive` prop; thinking indicator shows when last coalesced row is a user message and session is active.
+- `packages/client/src/pages/Consult.tsx` — replaced `msgUser`/`msgAssistant` div bubbles with `ChatBubble`; added `showThinking` logic (last message role=user AND streamingBuffer empty AND session active); passed `agentName` into `ChatRowView`.
+- `packages/client/src/realtime/ws-client.ts` — added `assistant.thinking.start` and `assistant.thinking.stop` to `WsEventMap` (pre-registered; server wiring optional, see decision doc).
+- `packages/client/package.json` — added `rehype-sanitize` dependency.
+
+**Decision records:**
+- `.squad/decisions/inbox/verbal-w19-stream-j-chat-polish.md`
+
+**Learnings this wave:**
+
+**Streaming-aware debounce pattern:** `useDebounced(text, streaming ? 100 : 0)` means completed messages render instantly while streaming messages debounce at 100ms. Key insight: the debounce delay should be conditional on the streaming state, not on text length — text length changes with every token, but streaming state changes once.
+
+**Initials avatar with deterministic color:** djb2-ish hash of the name → a hue (0-360) produces visually distinct, stable colors per agent without any external dependency. `hsl(hue, 55%, 40%)` keeps colors dark enough for white text contrast in both light and dark themes.
+
+**Duplicate `Bubble` removal:** AgentActivityFeed had a local `Bubble` function that used `whiteSpace: pre-wrap` and plain text. Replacing with `ChatBubble` gives markdown, identity, and thinking — but for user messages specifically, we keep plain text rendering inside `ChatBubble` (markdown in user messages is unusual and can produce unexpected formatting from casual prose). Agent messages get full markdown.
+
+**React hook ordering with early-return guards:** `showThinking` (a plain variable, not a hook) was computed after the `if (detailQuery.isLoading)` early return in Consult. Referencing it in a `useEffect` dependency array before its declaration would place it in the temporal dead zone. Fix: either compute it before the guard using `detailQuery.data?.`, or don't include it in the dependency array (since the same guard state is already represented by `messages.length`). Chose the latter — the thinking indicator appears right after a user message is added, which is already tracked by `messages.length`.
+
+**rehype-sanitize allowlist for highlight.js:** `defaultSchema` strips all class attributes. highlight.js relies on class names like `language-typescript` on `<code>` and `hljs-keyword` on `<span>`. The allowlist must explicitly permit these patterns via regex (`/^language-.+/`, `/^hljs-.*/`) or code blocks render as unstyled monospace.
+

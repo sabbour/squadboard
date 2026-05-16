@@ -15,6 +15,7 @@ import { randomUUID } from 'node:crypto';
 import { eq } from 'drizzle-orm';
 import { getPool, getDb, schema } from '../db/index.js';
 import { getWebSocketServer } from '../realtime/ws-server.js';
+import { getBuiltinBundles, getBuiltinBundleWarnings, getBuiltinBundleScanError, resetBuiltinBundleCache, } from './builtin-bundles.js';
 const execFileAsync = promisify(execFile);
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 async function timed(fn) {
@@ -464,6 +465,51 @@ async function checkDiskWriteable(projectId) {
         durationMs: Date.now() - start,
     };
 }
+// ─── Built-in bundles check ──────────────────────────────────────────────────
+/**
+ * Checks that all built-in project bundles pass structural validation.
+ * Refreshes the cache on every diagnostics call so fresh edits to bundles/
+ * are picked up without a server restart.
+ * Never throws — returns 'warn' on partial failures, 'fail' if the bundles
+ * directory is unreadable.
+ */
+async function checkBuiltinBundles() {
+    const start = Date.now();
+    // Reset to force a fresh scan so edits to bundle files are visible.
+    resetBuiltinBundleCache();
+    const entries = await getBuiltinBundles();
+    const scanError = getBuiltinBundleScanError();
+    const warnings = getBuiltinBundleWarnings();
+    if (scanError) {
+        return {
+            id: 'builtin.bundles',
+            label: 'Built-in project bundles',
+            status: 'fail',
+            detail: `Cannot scan bundles directory: ${scanError}`,
+            durationMs: Date.now() - start,
+        };
+    }
+    if (warnings.length > 0) {
+        const detail = [
+            `${entries.length} valid bundle(s); ${warnings.length} with errors:`,
+            ...warnings.map((w) => `  • ${w.slug}: ${w.message}`),
+        ].join('\n');
+        return {
+            id: 'builtin.bundles',
+            label: 'Built-in project bundles',
+            status: 'warn',
+            detail,
+            durationMs: Date.now() - start,
+        };
+    }
+    return {
+        id: 'builtin.bundles',
+        label: 'Built-in project bundles',
+        status: 'ok',
+        detail: `${entries.length} bundle(s) valid: ${entries.map((e) => e.bundleId).join(', ')}`,
+        durationMs: Date.now() - start,
+    };
+}
 // ─── Main export ─────────────────────────────────────────────────────────────
 export async function runDiagnostics(opts = {}) {
     const { projectId } = opts;
@@ -476,6 +522,7 @@ export async function runDiagnostics(opts = {}) {
         checkWebSocketHealth,
         ...(projectId ? [() => checkMcpServers(projectId)] : [() => checkMcpServersGlobal()]),
         () => checkDiskWriteable(projectId),
+        checkBuiltinBundles,
     ];
     // Run all checks in parallel; each is already guarded by try/catch internally
     const results = await Promise.all(checks.map((fn) => fn().catch((err) => {

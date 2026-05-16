@@ -1,5 +1,5 @@
 /**
- * services/ceremony-translator.ts — Phase 11
+ * services/ceremony-translator.ts — Phase 11 / Wave 14 (q8)
  *
  * Translates a markdown narrative ceremony into an executable ceremony YAML
  * via a one-shot SquadClient (ACP) session.
@@ -17,6 +17,13 @@
  *
  * Throttle: max 3 translations per ceremony per 60s window. The throttle is
  * in-process; restart resets it.
+ *
+ * Wave 14 (q8) — Built-in ceremony registry:
+ *   BUILT_IN_CEREMONIES defines first-class ceremonies that are always
+ *   available regardless of project YAML. The 'scribe-close-out' ceremony is
+ *   the convergence point for the CLI coordinator, the autonomous daemon (q7),
+ *   and the manual End Wave button (q9). All three paths call the same SDK
+ *   function: squadboard.scribe.closeOut() from @sabbour/squadboard-sdk.
  */
 import { validateWorkflowYaml } from './workflow-parser.js';
 // ---------------------------------------------------------------------------
@@ -37,6 +44,62 @@ export class TranslatorThrottledError extends TranslatorError {
         super(message, false);
         this.name = 'TranslatorThrottledError';
     }
+}
+/**
+ * Registry of first-class ceremonies. Consumers call `getBuiltInCeremony(id)`
+ * to look up a ceremony and `invokeBuiltInCeremony(id, ctx)` to run it.
+ *
+ * To add a new ceremony: push an entry to this array. The daemon, the button,
+ * and the coordinator all discover ceremonies through this registry.
+ */
+const BUILT_IN_CEREMONIES = [
+    {
+        id: 'scribe-close-out',
+        name: 'End-of-Wave Close-Out',
+        description: 'Scribe merges inbox decisions, writes orchestration logs, archives decisions.md if oversized, commits .squad/ changes.',
+        facilitator: 'scribe',
+        participants: ['scribe'],
+        triggers: {
+            manual: true, // "End Wave" button (q9)
+            scheduled: true, // daemon (q7) fires on cron cadence
+            coordinator: true, // CLI coordinator post-work spawn (existing behaviour)
+        },
+        invoke: async (ctx) => {
+            // Lazy-import so the SDK is only loaded when the ceremony runs,
+            // keeping server startup cost zero when Scribe isn't needed.
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const sdk = await import('@sabbour/squadboard-sdk');
+            return sdk.squadboard.scribe.closeOut({
+                projectId: ctx.projectId,
+                spawnManifest: ctx.spawnManifest,
+                teamRoot: ctx.teamRoot,
+                ...(ctx.extra ?? {}),
+            });
+        },
+    },
+];
+/**
+ * Look up a built-in ceremony by id. Returns undefined if not registered.
+ */
+export function getBuiltInCeremony(id) {
+    return BUILT_IN_CEREMONIES.find((c) => c.id === id);
+}
+/**
+ * List all registered built-in ceremonies.
+ * Used by the ceremony picker UI and the daemon's discovery pass.
+ */
+export function listBuiltInCeremonies() {
+    return BUILT_IN_CEREMONIES;
+}
+/**
+ * Invoke a built-in ceremony by id. Throws if the ceremony is not found.
+ */
+export async function invokeBuiltInCeremony(id, ctx) {
+    const ceremony = getBuiltInCeremony(id);
+    if (!ceremony) {
+        throw new TranslatorError(`no built-in ceremony registered with id '${id}'`, false);
+    }
+    return ceremony.invoke(ctx);
 }
 // ---------------------------------------------------------------------------
 // Throttle (in-memory, per ceremony)
@@ -289,12 +352,42 @@ function buildProseAuthorPrompt(input) {
         'Available agents on this project (use only these names; do not invent):',
         availableAgents,
         '',
-        'Our YAML schema supports exactly these step types:',
-        "  - agent_run: { agent: <name|template>, prompt: <string>, timeout?: <duration> }",
-        "  - approve: { approvers: [<agentName|@role>], request_changes_policy: 'first'|'majority'|'all', quorum?: {n,of}, timeout?, timeoutAction?: 'auto_approve'|'auto_reject'|'escalate'|'notify' }",
-        "  - fan_out: { split_by: 'agents'|'labels'|'count', agents?: [...], count?: N, merge_strategy: 'all'|'any'|'first', steps: [...] }",
-        "  - handoff: { to: <agentName>, message?: <string> }",
-        "  - route: { agent: <name|template>, prompt?: <string> }",
+        'CRITICAL: each step object MUST have a `type:` field. The valid values for `type` are: agent_run, approve, fan_out, handoff, route.',
+        '',
+        'Step schema (use the `type:` key exactly as shown):',
+        '  - type: agent_run',
+        '    agent: <agentName|@role>   # optional; omit to let routing decide',
+        '    prompt: <string>',
+        '    timeout: <duration>        # optional, e.g. "30m"',
+        '  - type: approve',
+        "    approvers: [<agentName|@role>]",
+        "    request_changes_policy: first|majority|all",
+        '    quorum: {n: <int>, of: <int>}   # optional',
+        '    timeout: <duration>             # optional',
+        "    timeoutAction: auto_approve|auto_reject|escalate|notify  # optional",
+        '  - type: fan_out',
+        "    split_by: agents|labels|count",
+        '    agents: [<agentName>]   # when split_by=agents',
+        '    count: <int>            # when split_by=count',
+        "    merge_strategy: all|any|first",
+        '    steps: [<step>, ...]',
+        '  - type: handoff',
+        '    to: <agentName>',
+        '    message: <string>   # optional',
+        '  - type: route',
+        '    agent: <agentName|@role>   # optional',
+        '    prompt: <string>           # optional',
+        '',
+        'Example valid yamlContent:',
+        'name: Daily Standup',
+        'steps:',
+        '  - type: agent_run',
+        '    agent: scribe',
+        '    prompt: Post a standup thread to #standups.',
+        '  - type: approve',
+        '    approvers: [lead]',
+        '    request_changes_policy: first',
+        '    timeout: 2h',
         '',
         'There are no engine-level control primitives (no `if`, `switch`, `for_each`, expression DSL). Mid-flow content branching is achieved by an `agent_run` emitting `nextRoute` consumed by a downstream `route` step.',
         '',

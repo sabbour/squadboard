@@ -18,11 +18,15 @@
 
 ---
 
-## What is Squadboard?
+## What It Is
 
-Running multiple Squad agents today means tracking work in terminal logs, Notion, or GitHub Issues and keeping them manually in sync. Handoffs are text-matched and sometimes miss. Parallel fan-outs silently drop children. Engine crashes lose in-flight state.
+Squadboard is a workflow engine and kanban board for running multi-agent ceremonies on issues. It pairs with the upstream Squad agent for hands-off ops, providing durable orchestration, deterministic replay, and real-time visibility into parallel agent runs—all without leaving the browser.
 
-Squadboard gives you a kanban board for visibility, a deterministic workflow engine for reliable orchestration, and a live ops view for real-time awareness — all local-first by default, with GitHub at the seams when you ship.
+It runs locally by default, syncs to GitHub when you ship, and stores everything in an embedded Postgres database (no external setup).
+
+## Who It's For
+
+Developers tired of pasting context between Copilot, GitHub Issues, and a kanban. Teams sharing a `.squad/` directory who need workflow gates (peer review, approvals) without inventing them in agent prompts. Agent builders shipping workflows as first-class versioned artifacts—auditable, demonstrable, composable. If you have one agent and one task at a time, `squad chat` is fine. The moment you have N agents, M tasks, K handoffs—use Squadboard.
 
 ## Getting Started
 
@@ -80,14 +84,41 @@ Frontend (in another terminal):
 pnpm --filter @squadboard/client dev
 ```
 
-### First Run: Initialize Squadboard
+### Initialize & Run
 
-The first time you start, Squadboard:
-- Creates `~/.squadboard/data` directory
-- Spins up embedded Postgres
-- Seeds the schema (projects, runs, workflows, agents)
+**Option A: Start the full app (backend + frontend)**
 
-No additional init command needed — the server does this automatically on startup.
+```bash
+pnpm run dev
+```
+
+This starts:
+- Backend (Express + WebSocket) on http://localhost:3000
+- Frontend (React + Vite) on http://localhost:5173
+- Embedded Postgres on localhost:54321 (auto-managed, no setup needed)
+
+Open http://localhost:5173 in your browser.
+
+**Option B: Start components separately**
+
+Backend:
+```bash
+pnpm --filter @squadboard/server dev
+```
+
+Frontend (in another terminal):
+```bash
+pnpm --filter @squadboard/client dev
+```
+
+### First Run: 60-Second Click-Through
+
+1. **Create a project** — Click "New Project" on the dashboard. Squadboard scans `.squad/` for agents and ceremonies.
+2. **Throw a card on the board** — Type a title (e.g., "Fix login timeout") and drag it into the `todo` column.
+3. **Hit "Run Simple Review ceremony"** — Click the card, then "Run". The run drawer populates live with agent output. Watch the WS event feed.
+4. **See results** — Agent finishes, ceremony awaits approval. Click approve → card moves to done, run closes.
+
+That's the loop. Scale to N agents, M tasks, K handoffs—all with deterministic replay and crash recovery.
 
 ### CLI Reference
 
@@ -276,53 +307,93 @@ pnpm --filter @squadboard/server db:studio
 
 Opens Drizzle Studio on http://localhost:3001.
 
-## What you get
+## Concepts at a Glance
 
-- **Kanban board** — drag-drop cards, comment, filter, bulk-edit, no tab-switching
-- **Deterministic workflows** — YAML-defined steps, versioned, atomic, recoverable from crashes
-- **Agent management** — discover and hire agents from `.squad/`, enable/disable, edit inline
-- **Isolated workspaces** — each run owns its own directory; parallel agents never collide
-- **Peer review + approvals** — N-of-M quorum, 4-verb cycle, threaded audit trail
-- **Fan-out and subtrees** — split tasks atomically; pause/resume whole branches
-- **Live ops view** — real-time active runs, cost per run, activity feed via WebSocket
-- **Dashboards** — agent leaderboard, cost burn, workflow funnel, burndown — all from your data
+- **[Ceremonies](docs/concepts/ceremonies.md)** — Named triggered processes (e.g., "Review on demand", "Auto-fix on bug label"). You author them; the engine runs them.
+- **[Workflows](docs/concepts/ceremonies.md#workflow-step-catalogue)** — Ordered steps inside ceremonies (agent_run, peer_review, approve, fan_out, route, retry, branch, wait_event, wait_timer, github_pr, etc.).
+- **[Projects](docs/prd.md#projects)** — Isolated workspaces. Each project owns a kanban board, team of agents, ceremony templates, and GitHub sync settings.
+- **[Agents & Skills](docs/prd.md#agents)** — Defined in `.squad/agents/` (as agent.md charter files). Skills are reusable capabilities agents can run.
+- **[Bundles](docs/features.md#project-bundles)** — Ship a complete project (board + ceremonies + team + tools + MCP) as a single artifact. 6 built-in templates.
+- **[MCP Integration](docs/setup/mcp-install.md)** — 10 tools (list_issues, create_issue, run_agent, capture, etc.) via stdio (Copilot CLI, VS Code) or HTTP.
+- **[Squad Integration](docs/prd.md#squad-integration)** — Pair with the upstream [Squad agent](https://github.com/bradygaster/squad) for hands-off multi-agent orchestration. Directives auto-capture to Squadboard inbox.
 
-## Who it's for
+---
 
-Solo developers running one agent and needing a better run history. Small teams sharing `.squad/` workflows and needing gates (peer review, approvals) without reinventing them in prompts. Agent builders who want workflows as first-class versioned artifacts — auditable, demonstrable, composable.
+## Features
 
-If you have one agent and one task at a time, `squad chat` is the right tool. The moment you have N agents, M tasks, K handoffs — that's Squadboard.
+See **[Complete Feature List](docs/features.md)** for details on all subsystems.
 
-## Architecture
+### Workflow Engine
+- Durable runs with crash recovery (lease + heartbeat liveness)
+- Single-spawner discipline (no race conditions)
+- Retry policy, fan-out, branch, wait primitives
+- Peer review & human approval gates (N-of-M quorum)
+- Five engine invariants ensure determinism and auditability
 
-Single Node.js process running Express v5. The browser (React 19 SPA) talks HTTP + WebSocket to the engine. The engine owns Postgres (embedded locally, hosted in cloud). Agent runs execute as `runWorker` subprocesses — each owns its workspace, writes heartbeats directly to the DB, and emits final output via MCP. The dispatcher ticks every ~5s; the stepper claims work via `FOR UPDATE SKIP LOCKED` and is the sole spawner.
+### Project Bundles
+- Universal YAML + JSON schema, versioned
+- 6 built-in reference templates
+- Bundle CLI (import/export)
+- Atomic load (one command)
 
-**Five non-negotiable engine invariants** ensure durability, determinism, and crash-recovery:
+### Ceremonies
+- 5 curated built-ins: Simple Review, Bug Fix, RFC, Spike, Pair-Programming
+- Custom YAML (manual, scheduled, or GitHub event triggers)
+- Workflow versioning (lock and swap workflows)
 
-1. `agent_run` is the only step that does LLM work. Peer review, tier-3 routing, and split desugar to `issue_runs` rows with distinct `kind` values.
-2. Single-spawner discipline. The stepper alone spawns runs; the dispatcher only ticks, sweeps, and wakes.
-3. Lease (90s TTL) + heartbeat (30s) is the authoritative liveness signal.
-4. Output schema validation happens at session end — after `sendAndWait` returns, before `recordRunCompletion`.
-5. `fan_out` and `split` materialize full child `workflow_runs` rows in one atomic six-step transaction.
+### GitHub Integration (W16+)
+- Branch convention, PR template, push branch, create PR, card badges
+- Phase 2 (W17): comment, merge, Settings panel (in progress)
 
-[Full topology and implementation details →](docs/prd.md#7-architecture-at-a-glance)
+### Reliability
+- Periodic backup + restore CLI/UI
+- 6-invariant safety checks
+- PGlite (no native binaries)
 
-## Tech stack
+### Real-time UI
+- Live run drawer (WebSocket push from engine)
+- Activity feed, optimistic UI
+- Reconnect cursor (resume after network drop)
 
-- **Runtime:** Node.js + Express v5
-- **Database:** Postgres (embedded locally, hosted in cloud) + Drizzle ORM
-- **Frontend:** React 19 + Vite (SPA)
-- **Real-time:** WebSocket with project-scoped reconnect cursor
-- **Agent runtime:** Squad SDK (`SquadClient`, `CharterCompiler`, `HookPipeline`, `CostTracker`, `EventBus`)
-- **VCS seam:** GitHub API (contents, PRs, checks, issues, webhooks)
-- **License:** MIT
+### SDK + MCP
+- `@sabbour/squadboard-sdk` (SquadClient, CharterCompiler, CostTracker, EventBus)
+- 10 MCP tools (stdio for Copilot CLI / VS Code; HTTP for embedding)
+- Daemon mode for coordinator
 
-## Documentation
+### Conjure (Quick-Capture)
+- Freeform prompt router with intent classifier
+- Auto-capture from Copilot CLI directives
+- Done-prefix to close cards
 
-- **[Product Requirements Document](docs/prd.md)** — what Squadboard is, who it's for, the 15-demo roadmap, success criteria, and the five engine invariants
-- **[Docs + Guides](docs/README.md)** — getting started, workflow syntax, architecture deep-dive, troubleshooting
+---
 
-For implementation details (schema, dispatcher/stepper internals, GitHub adapter, reliability discipline, user journeys), see the deep design document linked from the PRD.
+## Squad Integration
+
+Squadboard integrates with the upstream **[Squad agent](https://github.com/bradygaster/squad)** for hands-off multi-agent orchestration.
+
+When running Squad under Copilot CLI with Squadboard's coordinator extension enabled:
+- Every implementation directive auto-captures to Squadboard's inbox
+- Agent hand-offs resolve to board cards
+- Ceremony runs are visible in real-time
+- Close-out triggers automatic card completion
+
+Setup: Enable the Squadboard coordinator fragment in `~/.squad/extensions/coordinator/squadboard.md` (auto-installed on `npm install`), and set `SQUADBOARD_DEFAULT_PROJECT_ID` env var.
+
+See [Coordinator Extension Guide](docs/plugins/squad-coordinator-extensions.md) and [Dogfood Playbook](.squad/dogfood.md) for details.
+
+---
+
+## Links
+
+- **[Product Requirements Document](docs/prd.md)** — Full vision, roadmap, 15-demo plan, success criteria, engine invariants
+- **[Concepts: Ceremonies & Workflows](docs/concepts/ceremonies.md)** — Ceremony types, workflow steps, custom YAML, trigger configuration
+- **[Feature List](docs/features.md)** — Complete breakdown of workflow engine, bundles, ceremonies, GitHub integration, SDK+MCP, and roadmap
+- **[MCP Install & Configuration](docs/setup/mcp-install.md)** — Setup for Copilot CLI, VS Code, and embedded HTTP
+- **[Dogfood Playbook](.squad/dogfood.md)** — Using Squadboard to run Squadboard (auto-capture + close-out loop)
+- **[GitHub Repository](https://github.com/your/squadboard)** — Source code
+- **[MIT License](LICENSE)**
+
+---
 
 ## Status
 
@@ -339,3 +410,4 @@ MIT
 <img src="assets/squadboard.svg" alt="" width="56" align="left" hspace="12" />
 
 Built by McManus, Hockney, Kobayashi, Keyser, Verbal, Fenster, Kujan, and Redfoot.
+

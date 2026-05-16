@@ -1,20 +1,64 @@
-import { drizzle } from 'drizzle-orm/node-postgres';
+import { drizzle as drizzlePglite } from 'drizzle-orm/pglite';
+import { drizzle as drizzlePg } from 'drizzle-orm/node-postgres';
 import { Pool } from 'pg';
 import * as schema from './schema.js';
+import { getPglite, PGLITE_SENTINEL, createPoolAdapter, } from './pglite.js';
+// Always PoolLike so bootstrapSchema() and getPool() callers have a stable API.
 let _pool = null;
 let _db = null;
 /**
  * Initialise the Drizzle DB connection. Must be called after
- * `startEmbeddedPostgres()` resolves. Also bootstraps the schema
- * so Demo 1 works without a separate `pnpm db:push` step.
+ * `startPglite()` (or `startEmbeddedPostgres()`) resolves. Also bootstraps
+ * the schema so Demo 1 works without a separate `pnpm db:push` step.
+ *
+ * @param connectionOrSentinel Either the PGLITE_SENTINEL (→ PGlite mode) or a
+ *   real postgres:// connection string (→ external Postgres via pg.Pool).
  */
-export async function initDb(connectionString) {
-    _pool = new Pool({ connectionString });
-    _db = drizzle(_pool, { schema });
+export async function initDb(connectionOrSentinel) {
+    if (connectionOrSentinel === PGLITE_SENTINEL) {
+        // ── PGlite mode ──────────────────────────────────────────────────────
+        const pglite = getPglite();
+        if (!pglite)
+            throw new Error('[db] PGlite sentinel returned but no PGlite instance found');
+        _db = drizzlePglite(pglite, { schema });
+        _pool = createPoolAdapter(pglite);
+    }
+    else {
+        // ── External Postgres mode (DATABASE_URL override) ───────────────────
+        const pgPool = new Pool({ connectionString: connectionOrSentinel });
+        // Cast is safe: NodePgDatabase and PgliteDatabase share the same
+        // PgDatabase query-builder API; only the HKT generic differs internally.
+        _db = drizzlePg(pgPool, { schema });
+        _pool = wrapPgPool(pgPool);
+    }
     await bootstrapSchema();
 }
+/** Wrap a real pg.Pool in the PoolLike interface used by getPool() callers. */
+function wrapPgPool(pool) {
+    // The PoolLike query generic (R extends Record<string,unknown>) is structurally
+    // compatible with pg's Pool.query return type. We cast after wrapping.
+    const runQuery = async (sql, params) => {
+        const r = await pool.query(sql, params);
+        return { rows: r.rows, rowCount: r.rowCount };
+    };
+    return {
+        query: runQuery,
+        connect: async () => {
+            const client = await pool.connect();
+            return {
+                query: (async (sql, params) => {
+                    const r = await client.query(sql, params);
+                    return { rows: r.rows, rowCount: r.rowCount };
+                }),
+                release: () => client.release(),
+            };
+        },
+        end: async () => pool.end(),
+    };
+}
 /**
- * Returns the raw pg Pool (for raw-SQL transactions that Drizzle can't handle).
+ * Returns the pool-like handle for raw-SQL queries.
+ * In PGlite mode this is a PoolLike adapter; in external-PG mode a wrapped pg.Pool.
  * Throws if called before `initDb()`.
  */
 export function getPool() {
@@ -965,6 +1009,113 @@ async function bootstrapSchema() {
     CREATE INDEX IF NOT EXISTS inbox_items_claim_idx
       ON inbox_items (claimed_by, claim_expires_at)
       WHERE claimed_by IS NOT NULL;
+  `);
+    // Wave 13 — Bulk-import: provenance + done-timestamp on issues.
+    await _pool.query(`
+    ALTER TABLE issues
+      ADD COLUMN IF NOT EXISTS completed_at  TIMESTAMPTZ,
+      ADD COLUMN IF NOT EXISTS created_by    TEXT NOT NULL DEFAULT 'user';
+  `);
+    // Wave 17 — Stream G Phase 2A: git/PR state cached on issue_runs for fast card badges.
+    await _pool.query(`
+    ALTER TABLE issue_runs
+      ADD COLUMN IF NOT EXISTS git_branch              TEXT,
+      ADD COLUMN IF NOT EXISTS git_branch_url          TEXT,
+      ADD COLUMN IF NOT EXISTS pr_number               INTEGER,
+      ADD COLUMN IF NOT EXISTS pr_url                  TEXT,
+      ADD COLUMN IF NOT EXISTS pr_state                TEXT,
+      ADD COLUMN IF NOT EXISTS ci_state                TEXT,
+      ADD COLUMN IF NOT EXISTS ci_url                  TEXT,
+      ADD COLUMN IF NOT EXISTS git_cache_refreshed_at  TIMESTAMPTZ;
+  `);
+    // Wave 18 — Stream G Phase 2B: GitHub event ingest + ceremony idempotency.
+    await _pool.query(`
+    -- github_events: raw webhook event log for audit and replay
+    CREATE TABLE IF NOT EXISTS github_events (
+      id                   UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+      event_type           TEXT        NOT NULL,
+      action               TEXT,
+      payload              JSONB       NOT NULL,
+      delivery_id          TEXT,
+      project_id_resolved  UUID        REFERENCES projects(id) ON DELETE SET NULL,
+      received_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      processed_at         TIMESTAMPTZ,
+      processed_outcome    TEXT
+    );
+
+    CREATE INDEX IF NOT EXISTS github_events_event_type_idx
+      ON github_events (event_type, received_at DESC);
+
+    CREATE INDEX IF NOT EXISTS github_events_project_idx
+      ON github_events (project_id_resolved, received_at DESC)
+      WHERE project_id_resolved IS NOT NULL;
+
+    CREATE UNIQUE INDEX IF NOT EXISTS github_events_delivery_id_uq
+      ON github_events (delivery_id)
+      WHERE delivery_id IS NOT NULL;
+
+    -- github_webhook_secret on projects: per-project HMAC secret for X-Hub-Signature-256
+    ALTER TABLE projects
+      ADD COLUMN IF NOT EXISTS github_webhook_secret TEXT;
+
+    -- ceremony_github_fires: idempotency guard — one row per (slug, delivery_id) pair
+    CREATE TABLE IF NOT EXISTS ceremony_github_fires (
+      id             UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+      ceremony_slug  TEXT        NOT NULL,
+      delivery_id    TEXT        NOT NULL,
+      fired_at       TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+
+    CREATE UNIQUE INDEX IF NOT EXISTS ceremony_github_fires_uq
+      ON ceremony_github_fires (ceremony_slug, delivery_id);
+  `);
+    // Wave 19 — O4: Deliverable intent fields on issues.
+    await _pool.query(`
+    ALTER TABLE issues
+      ADD COLUMN IF NOT EXISTS deliverable_type   TEXT NOT NULL DEFAULT 'none',
+      ADD COLUMN IF NOT EXISTS deliverable_link   TEXT,
+      ADD COLUMN IF NOT EXISTS deliverable_acceptance_criteria TEXT,
+      ADD COLUMN IF NOT EXISTS deliverable_status TEXT NOT NULL DEFAULT 'not-started';
+  `);
+    // Wave 20 — Stream G Phase 3: @copilot dispatch, watcher, label rules.
+    await _pool.query(`
+    -- G4.1: virtual agent kind discriminator
+    ALTER TABLE agents
+      ADD COLUMN IF NOT EXISTS agent_kind TEXT NOT NULL DEFAULT 'squad';
+
+    -- G4.1: copilot_workflow_file on projects — which workflow to dispatch
+    ALTER TABLE projects
+      ADD COLUMN IF NOT EXISTS copilot_workflow_file TEXT;
+
+    -- G4.1: external_ref on issue_runs — stores copilot dispatch metadata
+    ALTER TABLE issue_runs
+      ADD COLUMN IF NOT EXISTS external_ref JSONB;
+
+    -- G4.3: auto-assign label rules
+    CREATE TABLE IF NOT EXISTS copilot_auto_assign_rules (
+      id          UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+      project_id  UUID        NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+      label       TEXT        NOT NULL,
+      enabled     BOOLEAN     NOT NULL DEFAULT true,
+      created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+
+    -- G4.3: idempotency guard for auto-assign dispatches
+    CREATE TABLE IF NOT EXISTS copilot_auto_assign_dispatches (
+      id          UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+      rule_id     UUID        NOT NULL REFERENCES copilot_auto_assign_rules(id) ON DELETE CASCADE,
+      issue_id    UUID        NOT NULL REFERENCES issues(id) ON DELETE CASCADE,
+      created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+
+    CREATE UNIQUE INDEX IF NOT EXISTS copilot_auto_assign_dispatches_uq
+      ON copilot_auto_assign_dispatches (rule_id, issue_id);
+  `);
+    // Wave 20 — Dedupe: soft-delete tracking columns on issues.
+    await _pool.query(`
+    ALTER TABLE issues
+      ADD COLUMN IF NOT EXISTS archived_at     TIMESTAMPTZ,
+      ADD COLUMN IF NOT EXISTS archived_reason TEXT;
   `);
     await seedSystemReviewPolicyPresets();
     console.log('[db] schema bootstrapped');

@@ -63,6 +63,9 @@ export interface WsEventMap {
   'git.pr.created':    { runId: string; branch: string; prUrl: string; prNumber?: number }
   'git.comment.posted': { runId: string; commentUrl: string; issueNumber: number }
   'git.pr.merged':     { runId: string; prUrl: string; sha: string; method: 'merge' | 'squash' | 'rebase' }
+  // Stream J — Chat polish: agent thinking indicator
+  'assistant.thinking.start': { sessionId: string; agentName?: string | null }
+  'assistant.thinking.stop':  { sessionId: string }
   // Connection control (sent by server)
   connected: { serverId: string }
   error: { message: string }

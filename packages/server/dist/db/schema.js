@@ -21,6 +21,11 @@ export const projects = pgTable('projects', {
     githubAppId: text('github_app_id'), // numeric GitHub App ID as string
     githubAppInstallationId: text('github_app_installation_id'), // installation ID for this repo
     githubAppPrivateKey: text('github_app_private_key'), // PEM private key, plaintext (hacking phase)
+    // Stream G Phase 2B: per-project HMAC secret for X-Hub-Signature-256 webhook validation
+    githubWebhookSecret: text('github_webhook_secret'),
+    // Wave 20 — G4.1: workflow file to dispatch when "Assign to @copilot" is triggered.
+    // e.g. 'copilot-coding-agent.yml'. Null → fall back to gh issue assign.
+    copilotWorkflowFile: text('copilot_workflow_file'),
     // Project-level default model used by the auto-model resolution chain
     // (sdk/model-defaults.ts). Null means "use BUILTIN_FALLBACK".
     defaultModel: text('default_model'),
@@ -47,6 +52,8 @@ export const agents = pgTable('agents', {
     charterPath: text('charter_path').notNull(),
     historyPath: text('history_path'),
     charterHash: text('charter_hash'),
+    // Wave 20 — G4.1: 'squad' = normal Squad agent, 'copilot' = virtual @copilot dispatcher
+    agentKind: text('agent_kind').notNull().default('squad'),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 });
@@ -71,6 +78,23 @@ export const issues = pgTable('issues', {
     githubIssueNumber: integer('github_issue_number'), // linked GitHub issue number
     githubIssueUrl: text('github_issue_url'), // html_url of the GitHub issue
     githubNodeId: text('github_node_id'), // GitHub GraphQL node_id
+    /** Wave 13: set when status='done' (bulk-import or explicit done transition). */
+    completedAt: timestamp('completed_at', { withTimezone: true }),
+    /** Wave 13: provenance tag — 'user' | 'cli' | 'mcp' | 'bulk-import'. */
+    createdBy: text('created_by').notNull().default('user'),
+    // Wave 19 — O4: Deliverable intent (what concrete artifact this work item produces).
+    //   deliverableType:                'pr'|'doc'|'deployment'|'asset'|'decision'|'none'
+    //   deliverableLink:                URL when the artifact is ready (nullable)
+    //   deliverableAcceptanceCriteria:  short markdown describing done (nullable)
+    //   deliverableStatus:              lifecycle of the deliverable itself
+    deliverableType: text('deliverable_type').notNull().default('none'),
+    deliverableLink: text('deliverable_link'),
+    deliverableAcceptanceCriteria: text('deliverable_acceptance_criteria'),
+    deliverableStatus: text('deliverable_status').notNull().default('not-started'),
+    /** Wave 20 — dedupe: when this issue was soft-deleted by dedupe. */
+    archivedAt: timestamp('archived_at', { withTimezone: true }),
+    /** Wave 20 — dedupe: reason for archival (e.g. 'dedupe:bulk-port-vs-seed-backlog'). */
+    archivedReason: text('archived_reason'),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 });
@@ -166,6 +190,18 @@ export const issueRuns = pgTable('issue_runs', {
     routingTier: integer('routing_tier'), // 1 | 2 | 3 — which tier resolved this run
     routingScore: numeric('routing_score', { precision: 5, scale: 4 }), // Tier-2 keyword score
     routingReasoning: text('routing_reasoning'), // Tier-3 LLM reasoning or Tier-2 score breakdown
+    // Stream G Phase 2A: git/PR state cached on the run (fast path for card badges)
+    gitBranch: text('git_branch'), // pushed branch name (e.g. squad/verbal/my-feature)
+    gitBranchUrl: text('git_branch_url'), // GitHub tree URL for the branch
+    prNumber: integer('pr_number'), // PR number from gh pr create / gh pr view
+    prUrl: text('pr_url'), // GitHub PR HTML URL
+    prState: text('pr_state'), // 'open'|'draft'|'merged'|'closed'
+    ciState: text('ci_state'), // 'passing'|'failing'|'running'|'unknown'
+    ciUrl: text('ci_url'), // URL to latest CI check run
+    gitCacheRefreshedAt: timestamp('git_cache_refreshed_at', { withTimezone: true }), // for 5-min CI TTL
+    // Wave 20 — G4.1: external dispatch reference for copilot runs.
+    // Shape: { owner, repo, workflowRunId?, issueNumber? }
+    externalRef: jsonb('external_ref'),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 });
@@ -774,4 +810,62 @@ export const templates = pgTable('templates', {
     createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
 });
+// ---------------------------------------------------------------------------
+// Stream G Phase 2B — GitHub event ingest + ceremony idempotency
+// ---------------------------------------------------------------------------
+/**
+ * Persists every inbound GitHub webhook event for audit + replay.
+ * project_id_resolved is set when the event can be matched to a Squadboard
+ * project via the repo owner/name. NULL means unresolved.
+ */
+export const githubEvents = pgTable('github_events', {
+    id: uuid('id').primaryKey().defaultRandom(),
+    eventType: text('event_type').notNull(), // X-GitHub-Event header value
+    action: text('action'), // payload.action (nullable for push/ping)
+    payload: jsonb('payload').notNull(),
+    deliveryId: text('delivery_id'), // X-GitHub-Delivery — unique per webhook call
+    projectIdResolved: uuid('project_id_resolved'), // FK to projects(id) (best-effort match)
+    receivedAt: timestamp('received_at', { withTimezone: true }).notNull().defaultNow(),
+    processedAt: timestamp('processed_at', { withTimezone: true }),
+    processedOutcome: text('processed_outcome'), // 'matched' | 'no_match' | 'error'
+});
+/**
+ * Idempotency guard for ceremony-trigger fires.
+ * One row per (ceremony_slug, delivery_id) pair prevents double-fire when
+ * GitHub retries a webhook delivery.
+ */
+export const ceremonyGithubFires = pgTable('ceremony_github_fires', {
+    id: uuid('id').primaryKey().defaultRandom(),
+    ceremonySlug: text('ceremony_slug').notNull(),
+    deliveryId: text('delivery_id').notNull(),
+    firedAt: timestamp('fired_at', { withTimezone: true }).notNull().defaultNow(),
+}, (t) => ({
+    uqCeremonyDelivery: uniqueIndex('ceremony_github_fires_uq').on(t.ceremonySlug, t.deliveryId),
+}));
+// ---------------------------------------------------------------------------
+// Wave 20 — G4.3: Copilot auto-assign label rules
+// ---------------------------------------------------------------------------
+/**
+ * One rule per (project, label) pair: when a webhook issues.labeled event
+ * arrives with a matching label, Squadboard auto-dispatches to @copilot.
+ */
+export const copilotAutoAssignRules = pgTable('copilot_auto_assign_rules', {
+    id: uuid('id').primaryKey().defaultRandom(),
+    projectId: uuid('project_id').notNull().references(() => projects.id, { onDelete: 'cascade' }),
+    label: text('label').notNull(),
+    enabled: boolean('enabled').notNull().default(true),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+});
+/**
+ * Idempotency guard: one row per (rule_id, issue_id) prevents re-dispatch on
+ * duplicate webhook deliveries or re-labeling events for the same issue.
+ */
+export const copilotAutoAssignDispatches = pgTable('copilot_auto_assign_dispatches', {
+    id: uuid('id').primaryKey().defaultRandom(),
+    ruleId: uuid('rule_id').notNull().references(() => copilotAutoAssignRules.id, { onDelete: 'cascade' }),
+    issueId: uuid('issue_id').notNull().references(() => issues.id, { onDelete: 'cascade' }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+}, (t) => ({
+    uqRuleIssue: uniqueIndex('copilot_auto_assign_dispatches_uq').on(t.ruleId, t.issueId),
+}));
 //# sourceMappingURL=schema.js.map

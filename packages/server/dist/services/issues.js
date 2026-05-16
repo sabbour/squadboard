@@ -33,7 +33,7 @@ async function getDefaultColumnId(projectId) {
 // ---------------------------------------------------------------------------
 export async function listIssues(projectId, filters = {}) {
     const db = getDb();
-    const { issues, issueLabels, labels } = schema;
+    const { issues, issueLabels, labels, issueRuns } = schema;
     const conditions = [
         eq(issues.projectId, projectId),
         eq(issues.archived, 0),
@@ -72,7 +72,104 @@ export async function listIssues(projectId, filters = {}) {
         existing.push(row.label);
         labelsByIssueId.set(row.issueId, existing);
     }
-    return rows.map((r) => ({ ...r, labels: labelsByIssueId.get(r.id) ?? [] }));
+    // Stream G Phase 2A (G2.6): Batch-fetch the most recent worktree run with git data per issue.
+    // Uses a raw SQL DISTINCT ON (issue_id) ordered by created_at DESC — the most efficient pattern
+    // for "latest row per group" in Postgres without a lateral join.
+    const githubByIssueId = new Map();
+    if (issueIds.length > 0) {
+        const pool = getPool();
+        const placeholders = issueIds.map((_, i) => `$${i + 1}`).join(', ');
+        const { rows: gitRows } = await pool.query(`SELECT DISTINCT ON (issue_id)
+         issue_id, id,
+         git_branch, git_branch_url,
+         pr_number, pr_url, pr_state,
+         ci_state, ci_url, git_cache_refreshed_at
+       FROM issue_runs
+       WHERE issue_id IN (${placeholders})
+         AND workspace_strategy = 'worktree'
+         AND git_branch IS NOT NULL
+       ORDER BY issue_id, created_at DESC`, issueIds);
+        for (const r of gitRows) {
+            const block = {};
+            if (r.git_branch) {
+                block.branch = r.git_branch;
+                if (r.git_branch_url)
+                    block.branchUrl = r.git_branch_url;
+            }
+            if (r.pr_number) {
+                block.pr = {
+                    number: r.pr_number,
+                    state: (r.pr_state ?? 'open'),
+                    url: r.pr_url ?? '',
+                };
+            }
+            if (r.ci_state) {
+                block.ci = {
+                    state: r.ci_state,
+                    url: r.ci_url ?? undefined,
+                };
+            }
+            if (Object.keys(block).length > 0) {
+                githubByIssueId.set(r.issue_id, block);
+                // 5-minute soft TTL for CI state: trigger background refresh if stale
+                if (r.pr_number && r.pr_state !== 'merged' && r.pr_state !== 'closed') {
+                    const refreshedAt = r.git_cache_refreshed_at ? new Date(r.git_cache_refreshed_at).getTime() : 0;
+                    const age = Date.now() - refreshedAt;
+                    if (age > 5 * 60 * 1_000) {
+                        // Fire-and-forget: refresh CI state in the background
+                        void refreshCiState(r.id, r.pr_number);
+                    }
+                }
+            }
+        }
+    }
+    return rows.map((r) => ({
+        ...r,
+        labels: labelsByIssueId.get(r.id) ?? [],
+        github: githubByIssueId.get(r.id) ?? null,
+    }));
+}
+/**
+ * Background CI refresh — called when the 5-min TTL expires on a run's cached CI state.
+ * Runs `gh pr checks <prNumber> --json name,state,conclusion` and updates the run record.
+ * Fire-and-forget; never throws.
+ */
+async function refreshCiState(runId, prNumber) {
+    try {
+        const { execFile } = await import('node:child_process');
+        const { promisify } = await import('node:util');
+        const execFileAsync = promisify(execFile);
+        const db = getDb();
+        const [run] = await db
+            .select({ workspacePath: schema.issueRuns.workspacePath })
+            .from(schema.issueRuns)
+            .where(eq(schema.issueRuns.id, runId))
+            .limit(1);
+        if (!run?.workspacePath)
+            return;
+        const { stdout } = await execFileAsync('gh', ['pr', 'checks', String(prNumber), '--json', 'name,state,conclusion'], { cwd: run.workspacePath, timeout: 30_000 });
+        const checks = JSON.parse(stdout.trim());
+        let ciState = 'unknown';
+        if (checks.length === 0) {
+            ciState = 'unknown';
+        }
+        else if (checks.some((c) => c.state === 'IN_PROGRESS' || c.state === 'QUEUED')) {
+            ciState = 'running';
+        }
+        else if (checks.every((c) => c.conclusion === 'SUCCESS' || c.conclusion === 'NEUTRAL' || c.conclusion === 'SKIPPED')) {
+            ciState = 'passing';
+        }
+        else {
+            ciState = 'failing';
+        }
+        await db
+            .update(schema.issueRuns)
+            .set({ ciState, gitCacheRefreshedAt: new Date(), updatedAt: new Date() })
+            .where(eq(schema.issueRuns.id, runId));
+    }
+    catch {
+        // Non-fatal — stale cache is acceptable
+    }
 }
 export async function getIssue(projectId, id) {
     const db = getDb();
@@ -99,49 +196,90 @@ export async function getIssue(projectId, id) {
         labels: issueLabelsRows.map((r) => r.label),
     };
 }
-export async function createIssue(projectId, data) {
+/**
+ * Unified issue-creation handler. One handler, three adapters (MCP / HTTP / CLI).
+ *
+ * Idempotency: when `idempotencyKey` is provided the check matches on
+ * `projectId + title == '[key] title'` — no time window. Without a key, a
+ * 60-second soft dedup guards against runaway fan-out retries on the HTTP path.
+ *
+ * Column validation is the caller's responsibility (HTTP route calls
+ * assertColumnExists before delegating here; MCP + CLI use inert statuses
+ * that must pre-exist, or 'backlog' which always exists).
+ */
+export async function createIssue(input) {
     const db = getDb();
-    const { issues } = schema;
-    if (!data.title?.trim()) {
+    const { issues, issueLabels } = schema;
+    if (!input.title?.trim()) {
         throw Object.assign(new Error('`title` is required'), { status: 400 });
     }
-    const title = data.title.trim();
-    // Default to the project's is_default column; fall back to position-0 then 'backlog'.
-    const status = data.status ?? await getDefaultColumnId(projectId);
-    // Validate the target column exists in this project's column_meta.
-    await assertColumnExists(projectId, status);
-    // Dedup guard: return any non-archived issue with the same (projectId, title)
-    // created in the last 60 seconds instead of inserting a duplicate. This is a
-    // soft guard against runaway fan-out retries — it does NOT replace a unique index.
-    const sixtySecondsAgo = new Date(Date.now() - 60_000);
-    const [recent] = await db
-        .select()
-        .from(issues)
-        .where(and(eq(issues.projectId, projectId), eq(issues.title, title), eq(issues.archived, 0), sql `${issues.createdAt} >= ${sixtySecondsAgo}`))
-        .limit(1);
-    if (recent) {
-        console.warn(`[createIssue] dedup hit — returning existing issue ${recent.id} ` +
-            `(title="${title}", project=${projectId}). Possible duplicate caller.`);
-        return recent;
+    const rawTitle = input.title.trim();
+    const insertTitle = input.idempotencyKey
+        ? `[${input.idempotencyKey}] ${rawTitle}`
+        : rawTitle;
+    // Key-based idempotency: exact title-prefix match, no time window.
+    if (input.idempotencyKey) {
+        const [existing] = await db
+            .select()
+            .from(issues)
+            .where(and(eq(issues.projectId, input.projectId), eq(issues.title, insertTitle)))
+            .limit(1);
+        if (existing) {
+            return { created: false, id: existing.id, idempotencyKey: input.idempotencyKey };
+        }
     }
-    // Find max position in target column
-    const [maxRow] = await db
-        .select({ maxPos: sql `COALESCE(MAX(${issues.position}), -1)` })
-        .from(issues)
-        .where(and(eq(issues.projectId, projectId), eq(issues.status, status), eq(issues.archived, 0)));
-    const position = (maxRow?.maxPos ?? -1) + 1;
+    else {
+        // Soft 60-second dedup guard for callers without an explicit key.
+        const sixtySecondsAgo = new Date(Date.now() - 60_000);
+        const [recent] = await db
+            .select()
+            .from(issues)
+            .where(and(eq(issues.projectId, input.projectId), eq(issues.title, insertTitle), eq(issues.archived, 0), sql `${issues.createdAt} >= ${sixtySecondsAgo}`))
+            .limit(1);
+        if (recent) {
+            console.warn(`[createIssue] dedup hit — returning existing issue ${recent.id} ` +
+                `(title="${insertTitle}", project=${input.projectId}). Possible duplicate caller.`);
+            return { created: false, id: recent.id, issue: recent };
+        }
+    }
+    const status = input.status ?? 'backlog';
+    // Compute position: explicit > max+1 in target column.
+    let position;
+    if (input.position !== undefined) {
+        position = input.position;
+    }
+    else {
+        const [maxRow] = await db
+            .select({ maxPos: sql `COALESCE(MAX(${issues.position}), -1)` })
+            .from(issues)
+            .where(and(eq(issues.projectId, input.projectId), eq(issues.status, status), eq(issues.archived, 0)));
+        position = (maxRow?.maxPos ?? -1) + 1;
+    }
+    // completedAt: set when status='done' explicitly or caller supplies it.
+    const completedAt = input.completedAt !== undefined
+        ? input.completedAt
+        : status === 'done'
+            ? new Date()
+            : null;
     const [created] = await db
         .insert(issues)
         .values({
-        projectId,
-        title,
-        body: data.body ?? '',
+        projectId: input.projectId,
+        title: insertTitle,
+        body: input.body ?? '',
         status,
-        assigneeId: data.assigneeId ?? null,
+        assigneeId: input.assigneeId ?? null,
         position,
+        archived: input.archived ? 1 : 0,
+        completedAt: completedAt ?? undefined,
+        createdBy: input.createdBy ?? 'user',
     })
         .returning();
-    return created;
+    // Insert label associations if provided.
+    if (input.labels && input.labels.length > 0) {
+        await db.insert(issueLabels).values(input.labels.map((labelId) => ({ issueId: created.id, labelId })));
+    }
+    return { created: true, id: created.id, issue: created, idempotencyKey: input.idempotencyKey };
 }
 export async function updateIssue(projectId, id, data) {
     const db = getDb();

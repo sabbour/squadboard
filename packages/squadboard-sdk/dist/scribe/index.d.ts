@@ -6,5 +6,7 @@
 export { closeOut } from './close-out.js';
 export type { CloseOutOptions, CloseOutResult } from './close-out.js';
 export type { SpawnManifest, SpawnManifestEntry } from './primitives.js';
+export type { HealthReportOptions, HealthReportResult, BacklogSnapshot, SpawnLineageEntry, SpawnSummary, NextWaveTodo, } from './steps/step-8-health-report.js';
+export { writeHealthReport } from './steps/step-8-health-report.js';
 export { archiveDecisionsBySize, mergeInbox, writeOrchestrationLogs, writeSessionLog, crossAgentHistoryUpdates, summarizeHistoryIfLarge, commitScribeFiles, } from './primitives.js';
 //# sourceMappingURL=index.d.ts.map
