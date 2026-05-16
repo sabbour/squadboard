@@ -187,13 +187,14 @@ vi.mock('drizzle-orm', () => {
   const and = (...args: unknown[]) => ({ __and: args });
   const inArray = (col: unknown, vals: unknown) => ({ __inArray: [col, vals] });
   const notInArray = (col: unknown, vals: unknown) => ({ __notInArray: [col, vals] });
+  const gte = (col: unknown, val: unknown) => ({ __gte: [col, val] });
   const sql = Object.assign(
     (strings: TemplateStringsArray, ...vals: unknown[]) => ({ __sql: { strings, vals } }),
     { __brand: 'sql', raw: (s: string) => ({ __raw: s }) },
   );
   const count = (col: unknown) => ({ __count: col });
   const avg = (col: unknown) => ({ __avg: col });
-  return { eq, and, asc, desc, inArray, notInArray, sql, count, avg };
+  return { eq, and, asc, desc, inArray, notInArray, gte, sql, count, avg };
 });
 
 import { pickupTodosSweep } from '../engine/sweeps/pickup-todos.js';
