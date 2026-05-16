@@ -141,3 +141,27 @@ Run: wave-15-final
 - **mcmanus**: Universal Project Bundle (3rd escalation cleared)
 - **hockney**: Stream I (backup/restore + W14 migration)
 - **scribe**: W15 close-out + SDK fidelity audit
+
+## Wave 17 — W17 Settings Batch: Backup/Restore UI + GitHub Integration (commit 7b3930e6)
+
+**Date:** 2026-05-15T22:42:29.855-07:00
+**Branch:** keyser/w17-settings-backup-github
+
+Two deliverables batched into one commit:
+
+**Deliverable 1 — Backup & Restore section (w16-restore-ui):**
+- `SystemBackupSection.tsx`: `useQuery` for backup list (30s refetch), useMutation for backup-now, RestoreDialog (custom radio list, warning MessageBar, confirmation checkbox, spinner, reload on success).
+- `POST /api/system/restore` added to `routes/system.ts` — delegates to Hockney's `runRestore()`.
+- Retain: static retention info card; W18 will add config editing.
+
+**Deliverable 2 — GitHub Integration section (g5-3):**
+- `SystemGitHubSection.tsx`: gh-not-installed banner (https://cli.github.com/), auth card (username/protocol/scopes from `gh auth status` parse), permission table (6 actions × required scope × granted status), branch convention display (Verbal's W16 decision), three dry-run test buttons.
+- `GET /api/system/gh-auth-status` + `POST /api/system/gh-test` added to `routes/system.ts`.
+
+**Settings.tsx:** Added 'backup' + 'github' to Section type + SECTIONS array + section renderers; used `DatabaseArrowRight20Regular` + `Branch20Regular` (no GH icon in Fluent2 — Branch is the closest semantic match).
+
+**Key learnings this wave:**
+- Fluent `<RadioGroup>` doesn't render metadata alongside each radio option cleanly — use a custom div-based radio pattern with `role="radio"` + `aria-checked` + `tabIndex` + `onKeyDown` for full a11y, and put the metadata (filename, size, date) inline.
+- `gh auth status` writes to stderr, not stdout — must capture both stdout+stderr from execFileAsync. execFileAsync throws with `{ stdout, stderr }` on non-zero exit, so catch and read from the error object too.
+- `MarkGithub16Regular` does not exist in `@fluentui/react-icons` — use `Branch20Regular` as the closest semantic match for GitHub/git.
+- Pre-existing tsc errors in parallel agents' WIP files (Verbal's `runs.ts`, `GitActions.tsx`) will surface on `pnpm build` — isolate with `tsc --noEmit` and grep for your own file paths to confirm zero new errors.
