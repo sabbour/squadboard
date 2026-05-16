@@ -2,13 +2,22 @@
  * Templates.tsx — Template catalog (Phase 10 ceremony templates + Phase 19 user templates).
  *
  * Tab layout:
- *   Ceremonies  — built-in ceremony templates (Hockney's original content)
- *   Workflows   — user-saved workflow templates (apply / delete)
- *   Teams       — user-saved team templates (apply / delete / drag-import)
- *   Projects    — user-saved project templates (apply / delete / drag-import)
+ *   Ceremonies       — built-in ceremony templates (pre-built starting points)
+ *   Saved Workflows  — user-saved workflow execution graphs (apply / delete)
+ *   Teams            — user-saved team templates (apply / delete / drag-import)
+ *   Projects         — user-saved project templates (apply / delete / drag-import)
+ *
+ * Nomenclature (Model C — W16 McManus):
+ *   Ceremony  = a named, triggered process (trigger config + workflow execution graph)
+ *   Workflow  = the ordered steps (route, agent_run, approve, …) that run inside a ceremony
+ *   The "Ceremony Templates" tab surfaces pre-built starting points.
+ *   The "Saved Workflows" tab surfaces user-authored execution graphs saved for reuse.
  *
  * Active tab is persisted in the URL: ?tab=ceremonies|workflows|teams|projects
  * Drag-and-drop zone validates payload.kind matches the active tab before import.
+ *
+ * DOC DEBT (Redfoot W17): write the canonical "Ceremonies vs Workflows" doc page
+ * referenced by the explainer below. Target path: /docs/concepts/ceremonies.
  */
 
 import { useState, useRef, DragEvent } from 'react'
@@ -109,6 +118,16 @@ const useStyles = makeStyles({
     color: tokens.colorNeutralForeground3,
     cursor: 'pointer',
     transition: 'border 0.15s, background 0.15s',
+  },
+  explainer: {
+    margin: `${tokens.spacingVerticalM} ${tokens.spacingHorizontalXXL}`,
+    padding: `${tokens.spacingVerticalM} ${tokens.spacingHorizontalL}`,
+    background: tokens.colorNeutralBackground2,
+    border: `1px solid ${tokens.colorNeutralStroke2}`,
+    borderRadius: tokens.borderRadiusMedium,
+    display: 'flex',
+    flexDirection: 'column' as const,
+    gap: tokens.spacingVerticalS,
   },
 })
 
@@ -256,7 +275,7 @@ function TemplateGrid({
           No {kind} templates yet.{' '}
           {kind === 'team' && 'Use "Save as template" on the Agents page.'}
           {kind === 'project' && 'Use "Save as template" on the Settings page.'}
-          {kind === 'workflow' && 'Use "Save as template" on a ceremony.'}
+          {kind === 'workflow' && 'Use "Save as template" on any workflow to store it here for reuse.'}
         </Body1>
       </div>
     )
@@ -483,7 +502,7 @@ function DragImportZone({
         role="button"
         tabIndex={0}
         onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') fileInputRef.current?.click() }}
-        aria-label={`Drop a ${activeKind} JSON file here to import`}
+        aria-label={`Drop a ${activeKind === 'workflow' ? 'saved workflow' : activeKind} JSON file here to import`}
       >
         <DocumentArrowDown20Regular />
         <Caption1>
@@ -604,7 +623,7 @@ function CeremonyTemplatesTab() {
     return (
       <div className={styles.center}>
         <Body1 style={{ color: tokens.colorNeutralForeground3 }}>
-          No workload templates yet.
+          No ceremony templates found.
         </Body1>
       </div>
     )
@@ -647,8 +666,8 @@ function CeremonyTemplatesTab() {
 
 type TabId = 'ceremonies' | 'workflows' | 'teams' | 'projects'
 const TAB_LABELS: Record<TabId, string> = {
-  ceremonies: 'Ceremonies',
-  workflows: 'Workflows',
+  ceremonies: 'Ceremony Templates',
+  workflows: 'Saved Workflows',
   teams: 'Teams',
   projects: 'Projects',
 }
@@ -659,6 +678,7 @@ const USER_TEMPLATE_KINDS: Record<Exclude<TabId, 'ceremonies'>, TemplateKind> = 
 }
 
 export default function Templates() {
+  const styles = useStyles()
   const { id: projectId = '' } = useParams<{ id: string }>()
   const [searchParams, setSearchParams] = useSearchParams()
   const rawTab = searchParams.get('tab') ?? 'ceremonies'
@@ -677,8 +697,31 @@ export default function Templates() {
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'auto' }}>
       <PageHeader
         title="Templates"
-        description="Built-in ceremony templates and your saved workflow · team · project templates."
+        description="Ceremony starting points and your saved workflow, team, and project templates."
       />
+
+      {/* Concept explainer */}
+      <div className={styles.explainer}>
+        <Body1 style={{ fontWeight: 600, color: tokens.colorNeutralForeground1 }}>
+          Ceremonies vs Workflows — what's the difference?
+        </Body1>
+        <Caption1 style={{ color: tokens.colorNeutralForeground2 }}>
+          A <strong>Ceremony</strong> is a named, triggered process your team runs — for example "Bug Fix",
+          "RFC Review", or "End-of-Wave Close-Out." Each ceremony has a <em>trigger</em> (a schedule,
+          an issue label, a manual button) and a <em>workflow</em> that executes when the trigger fires.
+        </Caption1>
+        <Caption1 style={{ color: tokens.colorNeutralForeground2 }}>
+          A <strong>Workflow</strong> is the execution graph inside a ceremony — the ordered steps
+          (route, agent_run, peer_review, approve, fan_out, …) that define exactly what happens when
+          the ceremony runs. You can author workflows in the Workflow Editor and save them here for reuse.
+        </Caption1>
+        <Caption1 style={{ color: tokens.colorNeutralForeground2 }}>
+          <strong>Ceremony Templates</strong> (first tab) are pre-built starting points for common team
+          processes. Pick one, name your ceremony, configure its trigger, and it's ready to run.{' '}
+          <strong>Saved Workflows</strong> (second tab) are execution graphs you've authored and saved —
+          apply one to create a new ceremony wired to that step sequence.
+        </Caption1>
+      </div>
 
       {/* Tab bar */}
       <div style={{ padding: `${tokens.spacingVerticalS} ${tokens.spacingHorizontalXXL} 0`, borderBottom: `1px solid var(--border)`, flexShrink: 0 }}>

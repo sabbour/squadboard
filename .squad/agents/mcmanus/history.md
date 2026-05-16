@@ -209,3 +209,37 @@ Run: wave-15-final
 - **hockney**: Stream I (backup/restore + W14 migration)
 - **keyser**: UI batch (#2, #6, #7 fixes)
 - **scribe**: W15 close-out + SDK fidelity audit
+
+---
+
+## 2026-05-15T22:42 — Wave 16: Workflow vs Ceremony Nomenclature + Template Curation
+
+**Tasks:** Bug-bash items #1 (naming confusion) and #4 (daunting template list)
+
+**Decision: Model C (Clean Split, Properly Explained)**
+The data model already implemented Model C correctly — Ceremonies = named triggered processes; Workflows = execution graphs inside them. The bug was that the UI never explained this. Rejected Model B (collapse to one concept) because the WorkflowEditor page and the step catalogue (route/agent_run/approve/fan_out/…) are real developer vocabulary that must stay visible.
+
+**UI changes (Templates.tsx):**
+- Tab "Ceremonies" → "Ceremony Templates"
+- Tab "Workflows" → "Saved Workflows"
+- Added 3-paragraph explainer block at top of page
+- Updated page description, empty states, aria-labels
+- Added `explainer` style to makeStyles
+- Added `const styles = useStyles()` to root component
+
+**Template curation (workflows/templates/index.ts):**
+- Curated 9 → 5 built-in templates
+- Kept: Simple Review, Bug Fix, RFC
+- Added: Spike (time-boxed investigation → findings → close), Pair-Programming Session (two agents alternating passes)
+- Removed to community-examples pool: Feature, Refactor, Ops Incident, Design Review, Documentation Update, Security Patch
+- Each kept template's description is now one crisp sentence
+
+**BUILT_IN_CEREMONIES:** No change. scribe-close-out stays as the sole SDK-backed ceremony; it is NOT a YAML template and correctly does not appear in the Ceremony Templates tab.
+
+**Bundle schema (W15):** No change. The schema already has separate `ceremonies` and `workflows` sections that map cleanly onto Model C.
+
+**TypeScript:** Clean (zero new errors introduced).
+
+**Decision doc:** `.squad/decisions/inbox/mcmanus-workflow-vs-ceremony-nomenclature.md`
+
+**Doc debt:** Redfoot W17 — write canonical `/docs/concepts/ceremonies` page.
