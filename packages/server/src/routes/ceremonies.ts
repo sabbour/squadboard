@@ -50,6 +50,8 @@ import {
   type TranslatorAvailableAgent,
 } from '../services/ceremony-translator.js';
 import { getBuiltinTemplates } from '../workflows/templates/index.js';
+import { exportCeremonyAsYaml } from '../services/ceremony-yaml-export.js';
+import { importCeremonyFromYaml, type ImportResult } from '../services/ceremony-yaml-import.js';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -275,6 +277,92 @@ ceremoniesRouter.get('/:id', async (req: Request, res: Response) => {
     handleError(res, err);
   }
 });
+
+// GET /:id/yaml — CER-3: export ceremony as canonical workflow YAML
+ceremoniesRouter.get('/:id/yaml', async (req: Request, res: Response) => {
+  try {
+    const { projectId, id } = req.params as Record<string, string>;
+    const db = getDb();
+
+    // Verify ceremony belongs to this project
+    const [row] = await db
+      .select({ id: schema.workflows.id })
+      .from(schema.workflows)
+      .where(and(eq(schema.workflows.id, id), eq(schema.workflows.projectId, projectId)))
+      .limit(1);
+
+    if (!row) {
+      res.status(404).json({ error: 'Ceremony not found' });
+      return;
+    }
+
+    const yamlText = await exportCeremonyAsYaml(id);
+
+    res
+      .status(200)
+      .set('Content-Type', 'text/yaml; charset=utf-8')
+      .set('Cache-Control', 'no-cache, no-store, must-revalidate')
+      .send(yamlText);
+  } catch (err) {
+    const status = (err as Error & { status?: number }).status;
+    if (status === 404) {
+      res.status(404).json({ error: 'Ceremony not found' });
+      return;
+    }
+    handleError(res, err);
+  }
+});
+
+// POST /import-yaml — CER-3: upsert ceremony from canonical YAML
+ceremoniesRouter.post('/import-yaml', async (req: Request, res: Response) => {
+  try {
+    const { projectId } = req.params as Record<string, string>;
+    const { yaml } = req.body as { yaml?: string };
+
+    if (typeof yaml !== 'string' || !yaml.trim()) {
+      res.status(400).json({ error: '`yaml` field is required' });
+      return;
+    }
+
+    // Verify project exists (access control: same pattern as neighbor endpoints)
+    const db = getDb();
+    const [project] = await db
+      .select({ id: schema.projects.id })
+      .from(schema.projects)
+      .where(eq(schema.projects.id, projectId))
+      .limit(1);
+
+    if (!project) {
+      res.status(403).json({ error: 'Project not found or access denied' });
+      return;
+    }
+
+    let result: ImportResult;
+    try {
+      result = await importCeremonyFromYaml(yaml, projectId);
+    } catch (parseErr) {
+      const msg = parseErr instanceof Error ? parseErr.message : String(parseErr);
+      // Extract path from message: "Invalid workflow YAML at <path>: <msg>"
+      const pathMatch = msg.match(/^Invalid workflow YAML at ([^:]+): (.+)$/);
+      if (pathMatch) {
+        res.status(400).json({
+          error: { path: pathMatch[1], message: pathMatch[2] },
+        });
+      } else {
+        res.status(400).json({ error: { path: '', message: msg } });
+      }
+      return;
+    }
+
+    res
+      .status(200)
+      .set('Cache-Control', 'no-cache, no-store, must-revalidate')
+      .json(result);
+  } catch (err) {
+    handleError(res, err);
+  }
+});
+
 
 // PATCH /:id — update metadata + (optionally) yaml. New yaml ⇒ new version.
 ceremoniesRouter.patch('/:id', async (req: Request, res: Response) => {
