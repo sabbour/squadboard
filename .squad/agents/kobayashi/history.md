@@ -100,6 +100,25 @@ Three tiers (first match wins):
 
 - **2026-05-15 Wave 7 — Universe Trim (2026-05-15T17:52:56Z)** — Trimmed 4 local universes to 10 chars each (53 → 40 total) per Ahmed's scope preference. Dropped peripheral characters: Office (Phyllis, Ryan, Toby, Creed, Meredith), Simpsons (Wiggum, Skinner, Frink, Milhouse), Parks & Rec (Mark, Jean-Ralphio, Tammy, Mona-Lisa). Seinfeld already at cap. Verified all 9 SDK roles (`lead | developer | tester | prompt-engineer | security | devops | designer | scribe | reviewer`) still covered in each universe via `preferredRoles` union scan; no swap-overrides needed. `tsc --noEmit` clean for `local-universes.ts` (only pre-existing unrelated errors in `conjure-classifier.ts`). No callsites referenced dropped names by string. Commit: `54f2dc5e`. **Companion Wave 7 work:** McManus narrowed non-tech roles from 11 to 7 (removed HR, Legal, Operations, Finance). Both role narrowing and universe trim are paired Ahmed directives for scope reduction on the non-tech surface area. Orchestration log: `.squad/orchestration-log/2026-05-15T17-52-56Z-kobayashi.md`.
 
+- **2026-05-15T22:14:50-07:00 Wave 14, q8 — Scribe as ceremony SDK** — Chose **(a) new package `packages/squadboard-sdk/`** over (b) in-package approach. Rationale: `packages/squadboard/` is a distribution package (coordinator-fragment, postinstall) not a code library. Future agents (Auditor, etc.) will want to compose primitives independently; a separate SDK package keeps the MCP protocol surface clean.
+
+  **Primitives extracted** (all in `packages/squadboard-sdk/src/scribe/primitives.ts`, independently testable):
+  1. `archiveDecisionsBySize(path, opts)` — archive-by-size gate
+  2. `mergeInbox(inboxDir, decisionsPath)` — merge inbox/*.md → decisions.md, dedupe, delete
+  3. `writeOrchestrationLogs(manifest, logsDir, datetime)` — one file per agent
+  4. `writeSessionLog(manifest, logsDir, datetime)` — brief topical summary
+  5. `crossAgentHistoryUpdates(manifest, agentsDir)` — team updates to history.md files
+  6. `summarizeHistoryIfLarge(historyPath, thresholdBytes)` — soft compaction at 15KB
+  7. `commitScribeFiles(paths, message, repoRoot)` — individual `git add -- <path>` per file, commit with -F
+
+  **Archive-gate bug fixed** — Old: archive entries older than 7d/30d. New: walk sections from OLDEST → NEWEST, move to archive until file ≤ `targetBytes` (default 30KB). This guarantees the file cannot stay oversized regardless of how recent the bulk of its content is. The old date-window approach left decisions.md at 74.7KB in Wave 13 (Scribe-4 bug).
+
+  **Ceremony registration** — `BUILT_IN_CEREMONIES` array in `ceremony-translator.ts`. First entry: `scribe-close-out`. Pattern: push to array + implement `invoke(ctx)` that dynamic-imports `@sabbour/squadboard-sdk`. Three trigger flags: `manual` (q9 button), `scheduled` (q7 daemon), `coordinator` (CLI spawn). Public API: `getBuiltInCeremony(id)`, `listBuiltInCeremonies()`, `invokeBuiltInCeremony(id, ctx)`.
+
+  **Workspace note** — SDK is a peer pnpm workspace package (`@sabbour/squadboard-sdk`). Server's ceremony-translator.ts uses a lazy dynamic `import('@sabbour/squadboard-sdk')` so the SDK is only loaded when the ceremony fires. Server tsconfig stays unchanged (no `paths` needed once SDK is built and dist/index.d.ts exists). Build the SDK before building the server.
+
+  **Scribe stays unchanged** — charter.md untouched, squad.agent.md spawn template untouched. Migration to call SDK from coordinator is deferred to a future wave once the daemon (q7, Verbal) proves the contract.
+
 ---
 
 ## Wave 14 — q8 course-correction: SDK mirrors agent spec

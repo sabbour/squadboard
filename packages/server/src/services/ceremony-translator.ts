@@ -1,5 +1,5 @@
 /**
- * services/ceremony-translator.ts — Phase 11
+ * services/ceremony-translator.ts — Phase 11 / Wave 14 (q8)
  *
  * Translates a markdown narrative ceremony into an executable ceremony YAML
  * via a one-shot SquadClient (ACP) session.
@@ -17,6 +17,13 @@
  *
  * Throttle: max 3 translations per ceremony per 60s window. The throttle is
  * in-process; restart resets it.
+ *
+ * Wave 14 (q8) — Built-in ceremony registry:
+ *   BUILT_IN_CEREMONIES defines first-class ceremonies that are always
+ *   available regardless of project YAML. The 'scribe-close-out' ceremony is
+ *   the convergence point for the CLI coordinator, the autonomous daemon (q7),
+ *   and the manual End Wave button (q9). All three paths call the same SDK
+ *   function: squadboard.scribe.closeOut() from @sabbour/squadboard-sdk.
  */
 
 import { validateWorkflowYaml } from './workflow-parser.js';
@@ -101,6 +108,139 @@ export class TranslatorThrottledError extends TranslatorError {
     super(message, false);
     this.name = 'TranslatorThrottledError';
   }
+}
+
+// ---------------------------------------------------------------------------
+// Built-in ceremony registry (Wave 14, q8)
+// ---------------------------------------------------------------------------
+
+/**
+ * Local mirror of the SpawnManifestEntry shape from @sabbour/squadboard-sdk.
+ * Kept in sync by convention — the SDK is the source of truth.
+ */
+export interface CeremonySpawnManifestEntry {
+  name: string;
+  summary: string;
+  commitSha?: string;
+}
+
+/**
+ * Local mirror of the SpawnManifest shape from @sabbour/squadboard-sdk.
+ */
+export interface CeremonySpawnManifest {
+  runId: string;
+  datetime: string;
+  agents: CeremonySpawnManifestEntry[];
+  topic?: string;
+}
+
+/**
+ * Invocation context passed to a built-in ceremony's `invoke` handler.
+ * The daemon, the CLI coordinator, and the manual button all populate this
+ * from their own routing layer before calling `invokeBuiltInCeremony()`.
+ */
+export interface CeremonyInvokeContext {
+  projectId?: string;
+  spawnManifest?: CeremonySpawnManifest;
+  teamRoot?: string;
+  /** Extra options forwarded verbatim to the SDK function. */
+  extra?: Record<string, unknown>;
+}
+
+/** Trigger surface: which caller paths are authorised to fire this ceremony. */
+export interface CeremonyTriggers {
+  /** Fired by the manual "End Wave" button (q9, Wave 15). */
+  manual: boolean;
+  /** Fired by the autonomous daemon on a cron/event cadence (q7). */
+  scheduled: boolean;
+  /** Fired by the CLI coordinator's post-work Scribe spawn. */
+  coordinator: boolean;
+}
+
+/**
+ * A first-class ceremony definition that is always available, regardless of
+ * project YAML. Built-in ceremonies delegate to the @sabbour/squadboard-sdk
+ * library rather than going through the LLM translator.
+ */
+export interface BuiltInCeremony {
+  /** Stable identifier used in API calls and log files. */
+  id: string;
+  /** Human-readable name shown in the UI. */
+  name: string;
+  /** One-sentence description shown in ceremony picker. */
+  description: string;
+  /** The single agent that runs this ceremony (Scribe stays Scribe). */
+  facilitator: string;
+  /** All participants — currently always [facilitator] for Scribe ceremonies. */
+  participants: string[];
+  /** Which caller paths can trigger this ceremony. */
+  triggers: CeremonyTriggers;
+  /** Execute the ceremony and return a result. */
+  invoke: (ctx: CeremonyInvokeContext) => Promise<Record<string, unknown>>;
+}
+
+/**
+ * Registry of first-class ceremonies. Consumers call `getBuiltInCeremony(id)`
+ * to look up a ceremony and `invokeBuiltInCeremony(id, ctx)` to run it.
+ *
+ * To add a new ceremony: push an entry to this array. The daemon, the button,
+ * and the coordinator all discover ceremonies through this registry.
+ */
+const BUILT_IN_CEREMONIES: BuiltInCeremony[] = [
+  {
+    id: 'scribe-close-out',
+    name: 'End-of-Wave Close-Out',
+    description:
+      'Scribe merges inbox decisions, writes orchestration logs, archives decisions.md if oversized, commits .squad/ changes.',
+    facilitator: 'scribe',
+    participants: ['scribe'],
+    triggers: {
+      manual: true,      // "End Wave" button (q9)
+      scheduled: true,   // daemon (q7) fires on cron cadence
+      coordinator: true, // CLI coordinator post-work spawn (existing behaviour)
+    },
+    invoke: async (ctx: CeremonyInvokeContext): Promise<Record<string, unknown>> => {
+      // Lazy-import so the SDK is only loaded when the ceremony runs,
+      // keeping server startup cost zero when Scribe isn't needed.
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const sdk = await import('@sabbour/squadboard-sdk') as any;
+      return sdk.squadboard.scribe.closeOut({
+        projectId: ctx.projectId,
+        spawnManifest: ctx.spawnManifest,
+        teamRoot: ctx.teamRoot,
+        ...(ctx.extra ?? {}),
+      }) as Promise<Record<string, unknown>>;
+    },
+  },
+];
+
+/**
+ * Look up a built-in ceremony by id. Returns undefined if not registered.
+ */
+export function getBuiltInCeremony(id: string): BuiltInCeremony | undefined {
+  return BUILT_IN_CEREMONIES.find((c) => c.id === id);
+}
+
+/**
+ * List all registered built-in ceremonies.
+ * Used by the ceremony picker UI and the daemon's discovery pass.
+ */
+export function listBuiltInCeremonies(): Readonly<BuiltInCeremony[]> {
+  return BUILT_IN_CEREMONIES;
+}
+
+/**
+ * Invoke a built-in ceremony by id. Throws if the ceremony is not found.
+ */
+export async function invokeBuiltInCeremony(
+  id: string,
+  ctx: CeremonyInvokeContext,
+): Promise<Record<string, unknown>> {
+  const ceremony = getBuiltInCeremony(id);
+  if (!ceremony) {
+    throw new TranslatorError(`no built-in ceremony registered with id '${id}'`, false);
+  }
+  return ceremony.invoke(ctx);
 }
 
 // ---------------------------------------------------------------------------

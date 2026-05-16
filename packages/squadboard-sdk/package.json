@@ -1,0 +1,26 @@
+{
+  "name": "@sabbour/squadboard-sdk",
+  "version": "0.1.0",
+  "description": "Library-first SDK for Squadboard ceremonies and agent primitives. Separate from the @sabbour/squadboard MCP distribution package.",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    },
+    "./scribe": {
+      "import": "./dist/scribe/index.js",
+      "types": "./dist/scribe/index.d.ts"
+    }
+  },
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "typescript": "^5.0.0"
+  }
+}
