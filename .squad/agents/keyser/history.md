@@ -153,3 +153,44 @@ Shipped W25 collapsible-nav regression fix. Two bugs:
 **Commit:** f5d03f4f
 
 See `.squad/decisions.md` for full details.
+
+---
+
+## W26 — Four-Bug Batch (commit 53cba6eb)
+
+**Date:** 2026-05-16  
+**Wave:** 26
+
+### Bug 1 (P0) — Routing tab crash
+
+**Root cause (two paths):**
+1. API returning non-array (e.g. `{ error: "..." }` with HTTP 200) → `entries.map is not a function`
+2. `entry.score` arriving as a string from the server → `entry.score.toFixed is not a function`
+
+**Fix pattern:**
+- `RoutingLogTable`: `Array.isArray(entries)` guard; `typeof entry.score === 'number'` check.
+- `Agents.tsx`: Added `RoutingErrorBoundary` class component (React class component for error boundary, matching existing `CheckCardErrorBoundary` in Diagnostics.tsx). Wraps the entire routing tab — future crashes show inline error + Retry instead of crashing the app.
+
+**Lesson:** When the server might return `200 OK` with an error object instead of the typed array, React Query treats it as valid data. Defensive `Array.isArray` in list components is always warranted when `refetchInterval` is active.
+
+### Bug 2 — Action buttons opening side panel
+
+**Root cause:** Footer row (assignee + RunButton) was inside `<div onClick={() => onOpen(issue)}>`. All clicks in the footer propagated to open the detail panel.
+
+**Fix pattern:** Move footer OUTSIDE the clickable-title div. Add `stopPropagation` on footer for defense in depth. Restructure assignee to a Reassign button with inline agent picker dropdown (same dropdown pattern as RunButton). New `useAssignIssue` hook in issues.ts sends `PATCH /api/projects/:id/issues/:id` with `{ assigneeId }`.
+
+**Lesson:** Any interactive element inside an `onClick` wrapper needs `stopPropagation`. Always audit new UI features for accidental nesting inside card click zones.
+
+### Bug 3 — "Investigate in Conjure" dead button
+
+**Fix:** Remove the entire Menu/overflow block from CardDetail panel header. When the only MenuItem in a Menu is dead, remove the whole Menu — don't leave a "..." trigger that does nothing.
+
+**Lesson:** Dead action buttons should be removed immediately, not hidden or disabled. `navigate()` to a route that doesn't work is a silent failure that confuses users.
+
+### Bug 4 — Heartbeat nav scope regression (3rd recurrence)
+
+**Root cause:** `handleNavItemSelect('heartbeat')` hardcoded `/heartbeat` regardless of project context.
+
+**Fix:** `id ? /projects/${id}/heartbeat : /heartbeat` — same pattern used for `diagnostics`. Added matching `includes('/heartbeat')` check in `getSelectedValue` so the nav item highlights correctly when on `/projects/:id/heartbeat`.
+
+**Lesson:** Every new nav item in Layout.tsx must be audited for project-scope preservation. The W22 directive ("no jarring scope changes") applies to ALL nav items, not just the ones explicitly called out. A checklist should be added to Layout.tsx PR reviews: "Does every nav item preserve `/projects/:id/` prefix when in project context?"
