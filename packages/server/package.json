@@ -1,14 +1,35 @@
 {
-  "name": "@sabbour/squadboard-server",
+  "name": "@sabbour/squadboard",
   "version": "0.1.0",
-  "private": true,
+  "description": "Local-first kanban + workflow board for Squad agents — MCP server and CLI",
   "type": "module",
+  "license": "MIT",
   "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "bin": {
+    "squadboard": "./dist/cli/index.js"
+  },
+  "files": [
+    "dist",
+    "coordinator-fragment.md",
+    "scripts/postinstall-coordinator-fragment.mjs",
+    "README.md"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/asabbour/squadboard.git"
+  },
+  "homepage": "https://github.com/asabbour/squadboard#readme",
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
     "dev": "tsx watch src/index.ts",
     "build": "tsc",
     "start": "node dist/index.js",
     "test": "vitest",
+    "prepublishOnly": "pnpm run build",
+    "postinstall": "node scripts/postinstall-coordinator-fragment.mjs",
     "migrate": "tsx src/cli/migrate.ts",
     "migrate:dry": "tsx src/cli/migrate.ts --dry-run",
     "migrate:verify": "tsx src/cli/migrate.ts --verify",
@@ -19,7 +40,6 @@
     "db:studio": "drizzle-kit studio"
   },
   "dependencies": {
-    "@electric-sql/pglite": "^0.4.5",
     "@bradygaster/squad-sdk": "0.9.4",
     "@electric-sql/pglite": "^0.4.5",
     "@modelcontextprotocol/sdk": "^1.29.0",

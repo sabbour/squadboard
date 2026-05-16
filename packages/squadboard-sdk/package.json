@@ -3,6 +3,7 @@
   "version": "0.1.0",
   "description": "Library-first SDK for Squadboard ceremonies and agent primitives. Separate from the @sabbour/squadboard MCP distribution package.",
   "type": "module",
+  "license": "MIT",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {
@@ -19,9 +20,22 @@
       "types": "./dist/bundle/schema.d.ts"
     }
   },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/asabbour/squadboard.git"
+  },
+  "homepage": "https://github.com/asabbour/squadboard#readme",
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
     "build": "tsc",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "prepublishOnly": "pnpm run build"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",

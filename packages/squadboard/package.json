@@ -1,7 +1,8 @@
 {
-  "name": "@sabbour/squadboard",
+  "name": "@sabbour/squadboard-coordinator-fragment",
   "version": "0.1.0",
-  "description": "Squadboard MCP server and CLI integration",
+  "description": "DEPRECATED — coordinator fragment and postinstall are now part of @sabbour/squadboard (packages/server). This package is private.",
+  "private": true,
   "type": "module",
   "scripts": {
     "postinstall": "node scripts/postinstall-coordinator-fragment.mjs"

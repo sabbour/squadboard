@@ -133,3 +133,47 @@ Received course-correction from Ahmed: `squadboard.scribe.closeOut()` SDK must i
 
 This is the "Scribe stays one agent" principle: one source of truth for algorithm, multiple callers.
 
+---
+
+## Wave 18 Update (2026-05-15T22:42:29.855-07:00)
+
+**Run:** kobayashi-w18  
+**Model:** claude-sonnet-4.6  
+**Tasks:** P1 — npm publish setup; P2 — Squad coordinator awareness (upstream PR + fallback patcher)
+
+### P1 — Package publishing
+
+**packages/server → `@sabbour/squadboard@0.1.0`:**
+- Renamed from `@sabbour/squadboard-server`, removed `private: true`
+- Added: `bin: { squadboard: "./dist/cli/index.js" }`, `files`, `publishConfig`, `repository`, `homepage`, `license`, `prepublishOnly`, `postinstall`
+- Fixed: duplicate `@electric-sql/pglite` dependency removed
+- Created: `src/cli/index.ts` — CLI dispatcher (mcp, start, --help, --version)
+- Absorbed coordinator-fragment.md + postinstall-coordinator-fragment.mjs from packages/squadboard (packages/squadboard marked private as @sabbour/squadboard-coordinator-fragment)
+
+**packages/squadboard-sdk → `@sabbour/squadboard-sdk@0.1.0`:**
+- Added: `files`, `publishConfig`, `repository`, `homepage`, `license`, `prepublishOnly`
+
+**Root package.json:** renamed to `@sabbour/squadboard-monorepo`, marked private (prevents pnpm workspace name conflict).
+
+**Builds:** both clean. Dry-run pack outputs verified (no .ts source, no node_modules, correct file lists).
+
+**Publish status:** BLOCKED — npm token in ~/.npmrc returns 401. Todos filed: `p1-publish-mcp-auth-needed` and `p1-publish-needs-human-trigger`. Commands ready: `pnpm publish --access public --no-git-checks` in each package dir.
+
+### P2 — Squad coordinator awareness
+
+**Path A (upstream PR) — FILED:**
+- Forked `bradygaster/squad` as `sabbour/squad` (fork already existed)
+- Branch: `feat/extension-fragments` → PR https://github.com/bradygaster/squad/pull/1124
+- Added `### Extension Fragments` section to `squad.agent.md`: scan dirs, YAML front matter shape, loading rules, anti-patterns, Source of Truth table entry
+- Added `docs/plugins/squad-coordinator-extensions.md`: full plugin-author guide
+- Correct repo confirmed as `bradygaster/squad` (not `squad-duck`)
+
+**Path B (fallback patcher) — SHIPPED:**
+- `packages/server/scripts/install-squad-extension.js` — patches `.github/agents/squad.agent.md` with `<!-- SQUADBOARD_EXTENSION_START/END -->` sentinels
+- Idempotent (upgrade-aware), `remove` command strips block
+- q5-extension-fallback-patcher: DONE
+
+**Extension fragment content:** Squadboard MCP tools + github_* tools (W18 Hockney) + ceremony API. Note: github_* documented but arriving same wave; patch bump to 0.1.1 once Hockney lands.
+
+**Decision doc:** `.squad/decisions/inbox/kobayashi-w18-npm-publish-squad-aware.md`
+

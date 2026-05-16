@@ -1,9 +1,9 @@
 {
-  "name": "@sabbour/squadboard",
+  "name": "@sabbour/squadboard-monorepo",
   "version": "0.1.0",
   "description": "Local-first kanban + workflow board for Squad agents",
   "license": "MIT",
-  "private": false,
+  "private": true,
   "type": "module",
   "scripts": {
     "build": "pnpm -r build",
