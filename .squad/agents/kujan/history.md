@@ -100,3 +100,22 @@ Completed the Wave 10 E1 gate sweep (Steps 1–8) on commit `c9c2c44c`.
 **Router mounting discipline:** Any router that is `import`ed but missing an `app.use()` mount silently falls through to the SPA fallback (`res.sendFile('index.html')`). Tests will see `SyntaxError: Unexpected token '<'` when parsing the HTML response as JSON. Always grep `index.ts` for unmatched imports after adding a new router file.
 
 **Column seeding:** Fresh projects from `POST /api/squad/create` have zero `column_meta` rows. `GET /api/projects/:id/columns` auto-seeds 5 default columns via `seedDefaults()`. Always call this in test setup before creating issues, or issue creation will fail with "Column does not exist for this project".
+
+**Fluent v9 controlled inputs in headless Playwright:** `<Input value={...} onChange={(_, d) => setState(d.value)} />` does not reliably respond to Playwright `fill()` in WSL/headless Chromium. The controlled input's React state never updates, leaving the submit button disabled. Solution: use `createProjectViaApi()` (API-direct pattern already established by tests 07–09) for any test that only needs the project ID — reserve UI-based `createProject()` for tests that specifically test the project creation flow itself.
+
+**`label[for="role-{id}"]` click testing for M3:** After the `<Field>` → `<fieldset>` fix, `page.locator('label[for="role-developer"]').click()` directly tests the htmlFor binding. Use `page.locator('#role-{id}').isChecked()` to assert the toggled state. This pattern is more reliable than `getByLabel()` with emoji-prefixed strings.
+
+**Fixture strict-mode ambiguity:** After the templates feature landed, `getByRole('button', { name: 'Create' })` matched both "Create from template" and "Create new". Fixed to `getByRole('button', { name: 'Create new' })`. When adding UI features that share label prefixes, always check all existing test fixtures for ambiguity.
+
+### 2026-05-15 — Wave 11C M4: Cast-Team E2E regression suite + fixture helper
+
+Wrote end-to-end regression suite (`packages/e2e/tests/10-cast-team.spec.ts`, 7.8 KB) covering M1/M2/M3 Cast-Team modal crash fixes:
+
+1. **Cast a Team button visible** (smoke test) — Hire Team button renders on agents page
+2. **Modal opens without crashing** (M2 regression) — no "Unexpected token '<'" in browser console; modal heading + ≥3 role labels visible
+3. **Non-Lead role label toggle isolated** (M3 regression) — `label[for="role-developer"]` click flips Developer only; Lead unchanged; repeated for PM and Marketing roles
+4. **Form submission calls /hire-team/propose** (M1 regression) — POST returns HTTP 200 + `content-type: application/json`; member list rendered; no parse errors
+
+**Execution:** 4 passed in 9.9s using 1 worker.
+
+**Fixture helper:** Added `createProjectViaApi()` to `packages/e2e/tests/fixtures.ts` — direct API call to `POST /api/squad/create` returns `projectId`. The existing `createProject()` UI-based helper is unreliable in WSL/headless Chromium (Fluent v9 controlled inputs don't respond to Playwright `fill()` in headless mode). Tests 07–09 already adopted API pattern; test 10 standardizes on it. Created button selector also fixed from `getByRole('button', { name: 'Create' })` to `getByRole('button', { name: 'Create new' })` to disambiguate post-Templates feature.

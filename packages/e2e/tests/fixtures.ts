@@ -5,6 +5,37 @@
  * journeys so individual spec files stay concise.
  */
 import type { Page } from '@playwright/test'
+import { request } from '@playwright/test'
+
+const API_BASE = 'http://localhost:3000'
+
+/**
+ * Create a new project directly via the REST API.
+ *
+ * Preferred over `createProject` on WSL/headless environments where the
+ * Fluent-UI controlled inputs are unreliable with Playwright's fill().
+ * Returns the project ID.
+ */
+export async function createProjectViaApi(name: string): Promise<string> {
+  const ctx = await request.newContext({ baseURL: API_BASE })
+  const stamp = Date.now()
+  const parentPath = `/tmp/squadboard-e2e-api-${stamp}`
+  const fs = await import('node:fs/promises')
+  await fs.mkdir(parentPath, { recursive: true })
+
+  const res = await ctx.post('/api/squad/create', {
+    data: { parentPath, projectName: name },
+  })
+  if (!res.ok()) {
+    throw new Error(`createProjectViaApi: POST /api/squad/create returned ${res.status()}`)
+  }
+  const env = (await res.json()) as { ok: boolean; data: { projectId: string } }
+  if (!env.ok || !env.data?.projectId) {
+    throw new Error(`createProjectViaApi: unexpected response: ${JSON.stringify(env)}`)
+  }
+  await ctx.dispose()
+  return env.data.projectId
+}
 
 /**
  * Create a new project via the "Create new" tab on the ProjectPicker.
@@ -25,8 +56,8 @@ export async function createProject(page: Page, name: string): Promise<string> {
     await page.getByRole('button', { name: /Discover/i }).click()
   }
 
-  // Switch to the "Create new" tab
-  await page.getByRole('button', { name: 'Create' }).click()
+  // Switch to the "Create new" tab (use exact: false to avoid ambiguity with "Create from template")
+  await page.getByRole('button', { name: 'Create new' }).click()
 
   // Fill in parent directory (a unique temp path per test run)
   const parentPath = `/tmp/squadboard-e2e-${Date.now()}`
