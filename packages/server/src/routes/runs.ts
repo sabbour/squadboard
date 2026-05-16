@@ -15,6 +15,9 @@ import {
   pollWorkflowRun,
   GitOpsError,
 } from '../services/github-git-ops.js';
+import { isCoordinatorDispatchEnabled } from '../config/coordinator-env.js';
+import { dispatchViaCoordinator } from '../coordinator/index.js';
+import type { CoordinatorInput } from '../coordinator/index.js';
 
 /** Sanitize a branch name — reject any shell-unsafe characters */
 function sanitizeBranchName(name: string): string {
@@ -59,34 +62,257 @@ export const issueRunsRouter = Router({ mergeParams: true });
 issueRunsRouter.post('/', async (req: Request, res: Response) => {
   try {
     const { issueId } = req.params as Record<string, string>;
-    const { agentId, workspaceStrategy } = req.body as {
-      agentId: string;
+    const { agentId, model, workspaceStrategy } = req.body as {
+      agentId?: string;
+      model?: string;
       workspaceStrategy?: 'scratch' | 'dir' | 'worktree';
     };
 
-    if (!agentId) {
-      res.status(400).json({ error: '`agentId` is required' });
-      return;
-    }
-
     const db = getDb();
 
-    // Wave 10 B9: defense-in-depth — refuse to dispatch a run against a
-    // disabled or retired agent. UI pickers already filter to active, but
-    // direct API callers (MCP, scripts, curl, tests) must hit the same
-    // gate so a run can never start with a non-active agent.
-    const [agentRow] = await db
-      .select({ id: schema.agents.id, name: schema.agents.name, status: schema.agents.status })
-      .from(schema.agents)
-      .where(eq(schema.agents.id, agentId))
-      .limit(1);
-    if (!agentRow) {
-      res.status(404).json({ error: 'Agent not found' });
+    // ---------------------------------------------------------------------------
+    // Path A: explicit agentId provided — existing behavior (unchanged)
+    // ---------------------------------------------------------------------------
+    if (agentId) {
+      if (model) {
+        // agentId wins; model is ignored when both are supplied
+        console.warn(`[runs] POST ignoring 'model' field because 'agentId' was also supplied (agentId=${agentId})`);
+      }
+
+      // Wave 10 B9: defense-in-depth — refuse to dispatch a run against a
+      // disabled or retired agent. UI pickers already filter to active, but
+      // direct API callers (MCP, scripts, curl, tests) must hit the same
+      // gate so a run can never start with a non-active agent.
+      const [agentRow] = await db
+        .select({ id: schema.agents.id, name: schema.agents.name, status: schema.agents.status })
+        .from(schema.agents)
+        .where(eq(schema.agents.id, agentId))
+        .limit(1);
+      if (!agentRow) {
+        res.status(404).json({ error: 'Agent not found' });
+        return;
+      }
+      if (agentRow.status !== 'active') {
+        res.status(422).json({
+          error: `Agent "${agentRow.name}" is ${agentRow.status} — re-enable it before running.`,
+        });
+        return;
+      }
+
+      const [run] = await db
+        .insert(schema.issueRuns)
+        .values({
+          issueId,
+          agentId,
+          status: 'pending',
+          workspaceStrategy: workspaceStrategy ?? 'scratch',
+        })
+        .returning();
+
+      // Resolve projectId for WS fan-out
+      const [issueRow] = await db
+        .select({ projectId: schema.issues.projectId })
+        .from(schema.issues)
+        .where(eq(schema.issues.id, issueId))
+        .limit(1);
+
+      if (issueRow) {
+        eventBus.emitRunEvent('run.started', issueRow.projectId, { run });
+      }
+
+      res.status(201).json(run);
       return;
     }
-    if (agentRow.status !== 'active') {
-      res.status(422).json({
-        error: `Agent "${agentRow.name}" is ${agentRow.status} — re-enable it before running.`,
+
+    // ---------------------------------------------------------------------------
+    // Path B: no agentId — delegate to coordinator
+    // ---------------------------------------------------------------------------
+
+    if (!isCoordinatorDispatchEnabled()) {
+      res.status(400).json({
+        error:
+          'agentId is required when coordinator dispatch is disabled. ' +
+          'Set COORDINATOR_DISPATCH_ENABLED=true or provide agentId explicitly.',
+      });
+      return;
+    }
+
+    // Fetch issue + project context for coordinator input
+    const [issueRow] = await db
+      .select({
+        id: schema.issues.id,
+        projectId: schema.issues.projectId,
+        title: schema.issues.title,
+        body: schema.issues.body,
+        status: schema.issues.status,
+        createdAt: schema.issues.createdAt,
+      })
+      .from(schema.issues)
+      .where(eq(schema.issues.id, issueId))
+      .limit(1);
+
+    if (!issueRow) {
+      res.status(404).json({ error: 'Issue not found' });
+      return;
+    }
+
+    const { projectId } = issueRow;
+
+    const [projectRow] = await db
+      .select({ id: schema.projects.id, name: schema.projects.name, description: schema.projects.description })
+      .from(schema.projects)
+      .where(eq(schema.projects.id, projectId))
+      .limit(1);
+
+    if (!projectRow) {
+      res.status(404).json({ error: 'Project not found' });
+      return;
+    }
+
+    // Fetch labels for the issue: issueLabels has (issueId, labelId); labels has (id, name)
+    const issueLabelRows = await db
+      .select({ labelId: schema.issueLabels.labelId })
+      .from(schema.issueLabels)
+      .where(eq(schema.issueLabels.issueId, issueId));
+    const resolvedLabels: string[] = [];
+    for (const { labelId } of issueLabelRows) {
+      const [lRow] = await db
+        .select({ name: schema.labels.name })
+        .from(schema.labels)
+        .where(eq(schema.labels.id, labelId))
+        .limit(1);
+      if (lRow) resolvedLabels.push(lRow.name);
+    }
+
+    // Fetch active agents for this project
+    const agentRows = await db
+      .select({
+        id: schema.agents.id,
+        name: schema.agents.name,
+        role: schema.agents.role,
+        charterHash: schema.agents.charterHash,
+        charterContent: schema.agents.charterContent,
+        status: schema.agents.status,
+      })
+      .from(schema.agents)
+      .where(and(eq(schema.agents.projectId, projectId), eq(schema.agents.status, 'active')));
+
+    // Determine which agents are currently busy (running a run)
+    const busyRunRows = await db
+      .select({ agentId: schema.issueRuns.agentId })
+      .from(schema.issueRuns)
+      .where(eq(schema.issueRuns.status, 'running'));
+    const busyAgentIds = new Set(busyRunRows.map((r: { agentId: string }) => r.agentId));
+
+    const candidateAgents: CoordinatorInput['candidateAgents'] = agentRows.map((a: {
+      id: string; name: string; role: string; charterHash: string | null; charterContent: string; status: string;
+    }) => ({
+      name: a.name,
+      role: a.role,
+      charterHash: a.charterHash ?? '',
+      charterContent: a.charterContent,
+      capabilities: [],  // capabilities derived from charter at dispatch time by coordinator LLM
+      available: !busyAgentIds.has(a.id),
+    }));
+
+    // Fetch recent completed runs for context (last 5 terminal runs for this issue)
+    const recentRunRows = await db
+      .select({
+        issueId: schema.issueRuns.issueId,
+        agentId: schema.issueRuns.agentId,
+        status: schema.issueRuns.status,
+        startedAt: schema.issueRuns.startedAt,
+        completedAt: schema.issueRuns.completedAt,
+      })
+      .from(schema.issueRuns)
+      .where(eq(schema.issueRuns.issueId, issueId))
+      .orderBy(asc(schema.issueRuns.createdAt))
+      .limit(5);
+
+    // Resolve agent names for recent runs
+    const recentAgentIds = [...new Set(recentRunRows.map((r: { agentId: string }) => r.agentId))];
+    const agentNameMap = new Map<string, string>();
+    for (const id of recentAgentIds) {
+      const a = agentRows.find((ar: { id: string; name: string }) => ar.id === id);
+      if (a) agentNameMap.set(id, a.name);
+    }
+
+    function mapRunOutcome(status: string): 'success' | 'failed' | 'abandoned' {
+      if (status === 'completed') return 'success';
+      if (status === 'failed') return 'failed';
+      return 'abandoned';
+    }
+
+    const recentRuns: CoordinatorInput['recentRuns'] = recentRunRows
+      .filter((r: { status: string }) => ['completed', 'failed', 'cancelled'].includes(r.status))
+      .map((r: { issueId: string; agentId: string; status: string; startedAt: Date | null; completedAt: Date | null }) => ({
+        issueId: r.issueId,
+        agentName: agentNameMap.get(r.agentId) ?? r.agentId,
+        outcome: mapRunOutcome(r.status),
+        durationMs:
+          r.startedAt && r.completedAt
+            ? new Date(r.completedAt).getTime() - new Date(r.startedAt).getTime()
+            : 0,
+      }));
+
+    const coordinatorInput: CoordinatorInput = {
+      issue: {
+        id: issueRow.id,
+        title: issueRow.title,
+        body: issueRow.body ?? null,
+        labels: resolvedLabels,
+        column: issueRow.status,
+        parentId: null,
+        priority: null,
+        createdAt: issueRow.createdAt.toISOString(),
+      },
+      candidateAgents,
+      project: {
+        id: projectRow.id,
+        name: projectRow.name,
+        rules: projectRow.description ?? '',
+      },
+      recentRuns,
+    };
+
+    let dispatchResult;
+    try {
+      dispatchResult = await dispatchViaCoordinator(coordinatorInput, {
+        ...(model ? { model } : {}),
+      });
+    } catch (coordinatorErr) {
+      console.error('[runs] coordinator dispatch error:', coordinatorErr);
+      res.status(503).json({
+        error: 'Coordinator dispatch failed — try again or provide agentId explicitly.',
+        detail: coordinatorErr instanceof Error ? coordinatorErr.message : String(coordinatorErr),
+      });
+      return;
+    }
+
+    const { decision } = dispatchResult;
+
+    if (decision.kind === 'skip') {
+      res.status(422).json({ error: 'Coordinator skipped this issue', reason: decision.reason });
+      return;
+    }
+
+    if (decision.kind === 'ambiguous') {
+      res.status(409).json({
+        error: 'Coordinator could not determine a single agent — please pick one',
+        candidates: decision.suggestedAgents,
+        question: decision.question,
+      });
+      return;
+    }
+
+    // decision.kind === 'dispatch'
+    const decidedAgentName = decision.agent;
+    const decidedAgent = agentRows.find(
+      (a: { name: string; id: string }) => a.name === decidedAgentName,
+    );
+    if (!decidedAgent) {
+      res.status(503).json({
+        error: `Coordinator decided on agent "${decidedAgentName}" but no active agent with that name exists in this project`,
       });
       return;
     }
@@ -95,24 +321,15 @@ issueRunsRouter.post('/', async (req: Request, res: Response) => {
       .insert(schema.issueRuns)
       .values({
         issueId,
-        agentId,
+        agentId: decidedAgent.id,
         status: 'pending',
         workspaceStrategy: workspaceStrategy ?? 'scratch',
       })
       .returning();
 
-    // Resolve projectId for WS fan-out
-    const [issueRow] = await db
-      .select({ projectId: schema.issues.projectId })
-      .from(schema.issues)
-      .where(eq(schema.issues.id, issueId))
-      .limit(1);
-
-    if (issueRow) {
-      eventBus.emitRunEvent('run.started', issueRow.projectId, { run });
-    }
-
-    res.status(201).json(run);
+    eventBus.emitRunEvent('run.started', projectId, { run });
+    res.status(201).json({ ...run, _coordinatorDecision: decision });
+    return;
   } catch (err) {
     handleError(res, err);
   }
