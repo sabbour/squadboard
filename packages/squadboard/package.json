@@ -1,0 +1,9 @@
+{
+  "name": "@sabbour/squadboard",
+  "version": "0.1.0",
+  "description": "Squadboard MCP server and CLI integration",
+  "type": "module",
+  "scripts": {
+    "postinstall": "node scripts/postinstall-coordinator-fragment.mjs"
+  }
+}
