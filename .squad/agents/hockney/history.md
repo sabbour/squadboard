@@ -82,3 +82,13 @@ echo "T1=$T1  T2=$T2"
 ```
 
 - **2026-05-15 Wave 11B — M1 (Hire-team server routes) — IN-FLIGHT:** Dispatched to fix missing POST handlers for `/api/projects/:projectId/agents/hire-team/propose` and `/hire-team/confirm`. Root cause: Express SPA catch-all returned index.html instead of JSON, client `apiFetch` threw "Unexpected token '<'". M1 adds route handlers, returns proper JSON errors. Sequenced first in Stream M to unblock M2+M3 (client-side fixes) and M4 (e2e regression test).
+
+### Wave 11B — M1 M4 Landing (2026-05-15)
+
+**Completed:** Added two missing POST routes in `packages/server/src/routes/agents.ts`:
+- `POST /api/projects/:projectId/agents/hire-team/propose` → `{ ok: true, data: { members: CastedMember[] } }`
+- `POST /api/projects/:projectId/agents/hire-team/confirm` → `{ ok: true, data: { created: Agent[], errors: [...] } }`
+
+**Context:** Cast-Team modal crash root cause. When routes are `import`ed but missing an `app.use()` mount, Express silently falls through to SPA fallback (`res.sendFile('index.html')`). Client calls `JSON.parse('<!doctype...')` → "Unexpected token '<'" with zero context.
+
+**Learning:** Router mounting discipline — grep `index.ts` for unmatched imports after adding any new router file. Add route-mount audit to squad DoD. The SPA catch-all is a feature trap; unimplemented routes should ideally throw 404 or register a default 404 handler instead of silently serving HTML.

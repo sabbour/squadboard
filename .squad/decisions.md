@@ -2641,3 +2641,202 @@ Extended the coordinator playbook and dogfood playbook to document **close-out s
 
 Docs-and-playbook-only. No follow-up PRs or code changes required.
 
+
+---
+
+# Decision: F1 — Restore Templates nav link
+
+**By:** Fenster (UX Designer)  
+**Date:** 2026-05-15T17:29:06-07:00  
+**Task:** f1-templates-nav
+
+## What was missing
+
+The Templates page (`packages/client/src/pages/Templates.tsx`) existed and the route was registered in App.tsx at `projects/:id/ceremonies/templates`, but there was no nav entry in the sidebar — Ahmed couldn't find it.
+
+## Decision
+
+**Icon:** `DocumentBulletList24Regular` — a document with a bullet list is the canonical representation of workflow templates in Fluent 2. Added as a new import alongside existing icon imports.
+
+**Label:** `"Templates"` — all existing nav items use short single-word labels (Dashboard, Board, Flow, Agents, Skills, Tools, Ceremonies, Costs) or a two-word compound noun (MCP Servers). "Templates" is short and unambiguous.
+
+**Segment:** `ceremonies/templates` — the route is nested under ceremonies (`projects/:id/ceremonies/templates`). Using the full sub-path as the segment means `handleNavItemSelect` correctly navigates to `/projects/:id/ceremonies/templates`. The segment-length sort in `getSelectedValue()` ensures the Templates item is highlighted (length 20) when on the templates page, not the Ceremonies item (length 9).
+
+**Position:** OPERATIONS group, between Ceremonies and Costs. Templates are workflow artefacts tied to the ceremonies/ritual concept — logical sibling of Ceremonies. Placed immediately after it so the visual grouping is clear.
+
+## Change surface
+
+Single file: `packages/client/src/components/Layout.tsx`
+
+1. Added `DocumentBulletList24Regular` to the `@fluentui/react-icons` import block.
+2. Inserted one nav item object into the OPERATIONS group's `items` array.
+
+No routing changes needed — the route already exists in App.tsx.
+
+---
+
+# Decision: hire-team/propose + hire-team/confirm response shapes
+
+**By:** Hockney  
+**Date:** 2026-05-15T17:29:06-07:00  
+**Task:** m1-hire-team-routes
+
+## Context
+
+The Cast-Team modal (`HireTeamModal.tsx`) was crashing with "Unexpected token '<'" because
+Express's SPA catch-all was returning `index.html` for two unimplemented POST routes:
+- `POST /api/projects/:projectId/agents/hire-team/propose`
+- `POST /api/projects/:projectId/agents/hire-team/confirm`
+
+## Decisions
+
+### 1. Propose response shape
+
+Chose `{ ok: true, data: { members: CastedMember[] } }` matching the client's
+`HireTeamProposeResult` interface (`packages/client/src/api/agents.ts:228`). The
+`CastedMember` type is passed through as-is from `castTeam()` in `casting-engine.ts` — 
+no additional mapping needed because `enrich()` already stamps `agentName`, `suggestedRoleId`,
+`suggestedRoleTitle`, and `extendedRole` onto each member.
+
+### 2. Confirm response shape
+
+Chose `{ ok: true, data: { created: Agent[], errors: { agentName: string; error: string }[] } }`
+matching `HireTeamConfirmResult` in `packages/client/src/api/agents.ts:233`. The modal destructures
+`result.created.length` and `result.errors.map(e => ...)` — so returning the full DB row array
+in `created` (not just a count) is the correct interpretation of the client interface.
+
+### 3. Error strategy for confirm
+
+Per-member errors are collected and returned in the envelope rather than aborting or throwing 500.
+This lets the modal render partial results (e.g. "3 of 5 hired; 2 already existed"). Same pattern
+used by the image-attachment route which collects per-file errors.
+
+### 4. Charter + Persona for confirmed members
+
+`writeCharter()` writes the standard role charter; then `buildPersonaSection(member)` appends the
+character's personality/backstory as a `## Persona` section. This gives the casted agent richer
+context than a vanilla hire while reusing existing helpers (no new code paths).
+
+### 5. Extended role mapping
+
+The route does NOT manually call `EXTENDED_ROLE_TO_BASE_ROLE` — `castTeam()` already does that
+internally via `resolveBaseRole()`. Callers pass raw role strings; the casting engine handles all
+normalisation.
+
+## Alternatives considered
+
+- **Zod validation:** Not yet used anywhere in `agents.ts`; added tight runtime checks inline to stay
+  consistent with the file's existing style (matches `formulate` and `team/formulate` handlers).
+- **Separate confirm helper:** Considered extracting shared agent-create logic into a helper, but the
+  POST `/` handler is short enough that inlining a minimal subset (minus KEBAB_RE validation on the
+  incoming agentName) is cleaner for now. Future refactor welcome.
+
+---
+
+# Decision: M2 apiFetch Content-Type Guard + M3 Cast-Team Label-Toggle Fix
+
+**Date:** 2026-05-15  
+**Agent:** Keyser (Frontend)  
+**Commit:** c7dde255
+
+---
+
+## M2 — apiFetch Content-Type Guard
+
+**Problem:** When Express serves `index.html` for a missing API route, `JSON.parse('<!doctype...')` throws cryptic "Unexpected token '<'" with no context.
+
+**Decision:** Check `content-type` header on **both** error and success paths in `apiFetch`:
+
+- **Error path (`!res.ok`):** Read body, check `content-type`. If not `application/json`, throw a diagnostic message including the status, actual content-type, and first 200 chars of the body. If it is JSON, throw the existing `API ${status}: ${body}` message.
+- **Success path (after `res.text()`):** Same guard — if content-type is not `application/json`, throw the same friendly error before calling `JSON.parse`.
+
+**Effect:** HTML-200 and HTML-4xx/5xx responses both produce human-readable errors pointing at the missing endpoint or server restart need.
+
+---
+
+## M3 — HireTeamModal Checkbox Label-Toggle Bug
+
+**Problem:** Clicking any role label (Developer, PM, Marketing, etc.) checked/unchecked the **Lead** checkbox only.
+
+**Root cause:** `<Field label="Required roles (optional)" hint="...">` wraps all 16 `<Checkbox>` siblings. Fluent's `<Field>` generates a single `htmlFor` pointing at its first form child (`lead`). The OS routes all label clicks to that single input.
+
+**Decision:**
+1. **Replace `<Field>` with `<fieldset>` + `<legend>`** — semantically correct for a group of checkboxes, no single `htmlFor` binding. Styled to match Fluent2 Field typography (`font-size: 14px`, `font-weight: 400`, `color: colorNeutralForeground1`). Hint text rendered as a `<span>` below the checkboxes.
+2. **Add explicit `id={`role-${r.id}`}` to each `<Checkbox>`** — makes each label↔input binding unambiguous even if Fluent's internal `useId()` collides under concurrent renders.
+3. **Add `import.meta.env.DEV` uniqueness invariant** after `ROLE_OPTIONS` — throws during development if any two roles share the same `id`, preventing the bug from being reintroduced.
+
+**Note:** Used `import.meta.env.DEV` instead of `process.env.NODE_ENV` — the client is a Vite app and doesn't have `@types/node`; `process` is not in scope.
+
+---
+
+# Verification Report: M4 — Cast-a-Team E2E Regression
+
+**By:** Kujan (Verifier)  
+**Date:** 2026-05-15T17:45:00-07:00  
+**Task:** m4-cast-team-e2e  
+**Status:** ✅ PASSED — 4/4 tests green
+
+---
+
+## What M1/M2/M3 Fixed
+
+### M1 (Hockney, commit 8967ac72)
+Added two missing POST routes in `packages/server/src/routes/agents.ts`:
+- `POST /api/projects/:projectId/agents/hire-team/propose` → `{ ok: true, data: { members: CastedMember[] } }`
+- `POST /api/projects/:projectId/agents/hire-team/confirm` → `{ ok: true, data: { created: Agent[], errors: [...] } }`
+
+Before M1, Express's SPA catch-all served `index.html` for both routes, causing `JSON.parse('<!doctype...')` → "Unexpected token '<'" crash on the client.
+
+### M2 (Keyser, commit c7dde255)
+Added Content-Type guard in `packages/client/src/api/client.ts` (`apiFetch`):
+- Both success and error paths check `content-type` before calling `JSON.parse`
+- If not `application/json`, throws a human-readable diagnostic (status, actual content-type, first 200 chars) instead of a cryptic parse error
+
+### M3 (Keyser, commit c7dde255)
+Fixed `HireTeamModal.tsx` checkbox label-toggle bug:
+- Root cause: `<Field>` wraps all 16 `<Checkbox>` siblings and emits a single `htmlFor` pointing at `role-lead`; every label click routed to Lead
+- Fix: replaced `<Field>` with `<fieldset>`/`<legend>` (semantically correct for checkbox groups) + added explicit `id={`role-${r.id}`}` to every `<Checkbox>`
+- Added DEV-only invariant to throw if any two roles share the same id
+
+---
+
+## Regression Test: `packages/e2e/tests/10-cast-team.spec.ts`
+
+Four sub-tests in `test.describe('Cast-a-Team modal — M1/M2/M3 regression suite')`:
+
+| # | Test | Regression guarded |
+|---|------|--------------------|
+| 1 | "Cast a Team button is visible on the agents page" | Smoke — ensures the Hire Team trigger button renders |
+| 2 | "Opening Cast a Team modal shows role checkboxes without crashing" | M2: no "Unexpected token" in DOM; modal heading + ≥3 role labels visible |
+| 3 | "Clicking a non-Lead role label toggles only that role (M3 regression)" | M3: `label[for="role-developer"]` click flips Developer only; Lead unchanged; repeated for PM |
+| 4 | "Submitting the form calls /hire-team/propose and surfaces a member list (M1 regression)" | M1: `/hire-team/propose` returns HTTP 200 + `content-type: application/json`; M2: no "Unexpected token" error |
+
+---
+
+## Playwright Run Output
+
+```
+Running 4 tests using 1 worker
+
+  ✓  1 › Cast a Team button is visible on the agents page (1.9s)
+  ✓  2 › Opening Cast a Team modal shows role checkboxes without crashing (2.0s)
+  ✓  3 › Clicking a non-Lead role label toggles only that role (M3 regression) (2.4s)
+  ✓  4 › Submitting the form calls /hire-team/propose and surfaces a member list (M1 regression) (2.5s)
+
+  4 passed (9.9s)
+```
+
+---
+
+## Side Fix: fixtures.ts
+
+Added `createProjectViaApi()` helper to `packages/e2e/tests/fixtures.ts`. The existing UI-based `createProject()` function is unreliable in this WSL/headless Chromium environment (Fluent v9 controlled inputs don't reliably respond to Playwright `fill()` in headless mode). Tests 07–09 had already adopted the API-based pattern; `10-cast-team.spec.ts` follows the same pattern. The `createProject()` UI-based helper is preserved for contexts where it does work.
+
+---
+
+## Gate Decision
+
+**PASS** — M1, M2, and M3 regressions are all covered and green. The Cast-a-Team flow is protected against:
+1. Missing server routes (HTML-instead-of-JSON crash)
+2. Client-side JSON parse errors surfacing as cryptic "Unexpected token '<'" messages
+3. Label-click routing all clicks to Lead checkbox (wrong `htmlFor` binding)
