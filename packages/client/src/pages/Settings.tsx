@@ -19,7 +19,6 @@ import {
   Dropdown,
   Option,
   Field,
-  Spinner,
   Subtitle2,
   Caption1,
   Body1,
@@ -48,6 +47,7 @@ import {
   DatabaseArrowRight20Regular,
   Branch20Regular,
 } from '@fluentui/react-icons'
+import { PageLoading, SectionLoading } from '../components/loading/index.tsx'
 
 type Section = 'general' | 'mcp' | 'budget' | 'reviews' | 'portability' | 'backup' | 'github'
 
@@ -273,7 +273,7 @@ function DefaultModelSection({
         Resolution chain: <em>session → agent → project → built-in fallback</em>.
       </Caption1>
       {isLoading ? (
-        <Spinner size="tiny" label="Loading models…" />
+        <SectionLoading label="Loading models…" size="tiny" />
       ) : (
         <Field>
           <Dropdown
@@ -579,11 +579,7 @@ export default function Settings() {
   const [activeSection, setActiveSection] = useState<Section>('general')
 
   if (isLoading) {
-    return (
-      <div style={{ padding: '32px' }}>
-        <Body1 style={{ color: tokens.colorNeutralForeground3 }}>Loading…</Body1>
-      </div>
-    )
+    return <PageLoading label="Loading settings…" />
   }
 
   if (isError || !project) {

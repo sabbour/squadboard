@@ -73,3 +73,43 @@ export function useDeleteProject() {
     onSuccess: () => void queryClient.invalidateQueries({ queryKey: ['projects'] }),
   })
 }
+
+// ---------------------------------------------------------------------------
+// O1 — Wave 20: project setup suggestion
+// ---------------------------------------------------------------------------
+
+export interface ProjectSuggestionTeamMember {
+  name: string
+  role: string
+}
+
+export interface ProjectSuggestionCeremony {
+  name: string
+  cadence: string
+}
+
+export interface ProjectSuggestionColumn {
+  slug: string
+  label: string
+}
+
+export interface ProjectSuggestion {
+  bundleId: string
+  bundleName: string
+  description: string
+  team: ProjectSuggestionTeamMember[]
+  ceremonies: ProjectSuggestionCeremony[]
+  columns: ProjectSuggestionColumn[]
+  skills: string[]
+  matchedKeywords: string[]
+}
+
+export function useSuggestProjectSetup() {
+  return useMutation<ProjectSuggestion, Error, { description: string }>({
+    mutationFn: (input) =>
+      apiFetch<ProjectSuggestion>('/api/projects/suggest', {
+        method: 'POST',
+        body: JSON.stringify(input),
+      }),
+  })
+}

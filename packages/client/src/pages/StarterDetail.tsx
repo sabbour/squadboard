@@ -8,7 +8,6 @@ import {
   Caption1,
   Button,
   Tag,
-  Spinner,
   MessageBar,
   MessageBarTitle,
   MessageBarBody,
@@ -35,6 +34,7 @@ import {
   Calendar20Regular,
 } from '@fluentui/react-icons'
 import { useStarter, useUseStarter } from '../api/starters.ts'
+import { PageLoading } from '../components/loading/index.tsx'
 
 export default function StarterDetail() {
   const navigate = useNavigate()
@@ -44,11 +44,7 @@ export default function StarterDetail() {
   const [projectName, setProjectName] = useState('')
 
   if (isLoading) {
-    return (
-      <div style={{ padding: '40px', textAlign: 'center' }}>
-        <Spinner size="medium" label="Loading starter…" />
-      </div>
-    )
+    return <PageLoading label="Loading starter…" />
   }
 
   if (isError || !data) {

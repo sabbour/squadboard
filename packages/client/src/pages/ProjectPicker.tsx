@@ -6,8 +6,10 @@ import {
   Title3,
   Body1,
   Caption1,
+  Badge,
   Field,
   Input,
+  Textarea,
   Dialog,
   DialogSurface,
   DialogBody,
@@ -17,8 +19,9 @@ import {
   Spinner,
   tokens,
 } from '@fluentui/react-components'
-import { Folder20Regular, DocumentCopy20Regular, ArrowSync20Regular } from '@fluentui/react-icons'
-import { useProjects } from '../api/projects.ts'
+import { Folder20Regular, DocumentCopy20Regular, ArrowSync20Regular, Beaker20Regular } from '@fluentui/react-icons'
+import { useProjects, useSuggestProjectSetup } from '../api/projects.ts'
+import type { ProjectSuggestion } from '../api/projects.ts'
 import { useDiscoverSquad, useRegisterSquad, useInitSquad, useCreateSquad } from '../api/squad.ts'
 import type { SquadDirectory } from '../api/squad.ts'
 import {
@@ -355,9 +358,9 @@ function DiscoveryModal({
   onClose: () => void
   onCreated: (id: string) => void
 }) {
-  type ModalTab = 'discover' | 'connect' | 'create'
+  type ModalTab = 'discover' | 'connect' | 'create' | 'suggest'
   const [activeTab, setActiveTab] = useState<ModalTab>('discover')
-  const tabLabels: Record<ModalTab, string> = { discover: 'Discover', connect: 'Connect existing', create: 'Create new' }
+  const tabLabels: Record<ModalTab, string> = { discover: 'Discover', connect: 'Connect existing', create: 'Create new', suggest: '✨ Suggest setup' }
 
   // Wave 10 C2: form state lifted up so the dialog can render a single
   // right-aligned DialogActions row whose primary button changes by tab.
@@ -370,6 +373,9 @@ function DiscoveryModal({
   const [createParent, setCreateParent] = useState('')
   const [createName, setCreateName] = useState('')
   const createSquad = useCreateSquad()
+
+  // Suggest tab state (O1 Wave 20)
+  const applyBuiltinTemplate = useApplyBuiltinProjectTemplate()
 
   // Default the Create tab parent path to the server's home directory the
   // first time it's mounted so the user doesn't have to type the prefix.
@@ -459,7 +465,7 @@ function DiscoveryModal({
                 marginBottom: tokens.spacingVerticalM,
               }}
             >
-              {(['discover', 'connect', 'create'] as const).map((tab) => {
+              {(['discover', 'connect', 'create', 'suggest'] as const).map((tab) => {
                 const isActive = activeTab === tab
                 return (
                   <button
@@ -505,6 +511,18 @@ function DiscoveryModal({
                   errorMsg={createError}
                   preview={createPreview}
                   onSubmit={handleCreate}
+                />
+              )}
+              {activeTab === 'suggest' && (
+                <SuggestTab
+                  onCustomize={(suggestion) => {
+                    setCreateName(suggestion.bundleName)
+                    setActiveTab('create')
+                  }}
+                  onApplied={(id) => onCreated(id)}
+                  applyBuiltinTemplate={applyBuiltinTemplate}
+                  createParent={createParent}
+                  setCreateParent={setCreateParent}
                 />
               )}
             </div>
@@ -735,6 +753,252 @@ function CreateTab({
           <Caption1 style={{ color: tokens.colorPaletteRedForeground1 }}>{errorMsg}</Caption1>
         )}
       </div>
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// SuggestTab — O1 Wave 20: "Suggest setup" third entry point
+// ---------------------------------------------------------------------------
+function SuggestTab({
+  onCustomize,
+  onApplied,
+  applyBuiltinTemplate,
+  createParent,
+  setCreateParent,
+}: {
+  onCustomize: (suggestion: ProjectSuggestion) => void
+  onApplied: (id: string) => void
+  applyBuiltinTemplate: ReturnType<typeof useApplyBuiltinProjectTemplate>
+  createParent: string
+  setCreateParent: (v: string) => void
+}) {
+  const [description, setDescription] = useState('')
+  const suggest = useSuggestProjectSetup()
+
+  const [applyName, setApplyName] = useState('')
+  const [applyPath, setApplyPath] = useState(createParent)
+  const [showApplyForm, setShowApplyForm] = useState(false)
+
+  const suggestion = suggest.data
+
+  function handleSuggest() {
+    const trimmed = description.trim()
+    if (!trimmed) return
+    suggest.mutate({ description: trimmed })
+  }
+
+  function handleApply() {
+    if (!suggestion || !applyName.trim() || !applyPath.trim()) return
+    applyBuiltinTemplate.mutate(
+      { bundleId: suggestion.bundleId, name: applyName.trim(), squadPath: applyPath.trim() },
+      { onSuccess: (res) => onApplied(res.id) },
+    )
+  }
+
+  // Preview panel colors
+  const sectionStyle: React.CSSProperties = {
+    marginBottom: tokens.spacingVerticalM,
+  }
+  const headingStyle: React.CSSProperties = {
+    fontSize: '11px',
+    fontWeight: Number(tokens.fontWeightSemibold),
+    color: tokens.colorNeutralForeground3,
+    textTransform: 'uppercase',
+    letterSpacing: '0.05em',
+    marginBottom: tokens.spacingVerticalXS,
+  }
+  const chipRowStyle: React.CSSProperties = {
+    display: 'flex',
+    flexWrap: 'wrap',
+    gap: tokens.spacingHorizontalXS,
+  }
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: tokens.spacingVerticalM }}>
+      <Body1 style={{ display: 'block', color: tokens.colorNeutralForeground3 }}>
+        Describe what you're building and we'll recommend a team, ceremonies, and board setup.
+      </Body1>
+
+      <Field label="Project description">
+        <Textarea
+          value={description}
+          onChange={(_, d) => setDescription(d.value)}
+          placeholder="e.g. I'm building a CLI in Rust that helps developers manage…"
+          rows={3}
+          aria-label="Describe your project to get a suggested setup"
+        />
+      </Field>
+
+      <Button
+        appearance="primary"
+        icon={suggest.isPending ? <Spinner size="tiny" /> : <Beaker20Regular />}
+        disabled={!description.trim() || suggest.isPending}
+        onClick={handleSuggest}
+      >
+        {suggest.isPending ? 'Suggesting…' : 'Suggest setup'}
+      </Button>
+
+      {suggest.error && (
+        <Caption1 style={{ color: tokens.colorPaletteRedForeground1 }}>
+          {suggest.error.message}
+        </Caption1>
+      )}
+
+      {suggestion && !showApplyForm && (
+        <div
+          aria-live="polite"
+          style={{
+            border: `1px solid ${tokens.colorNeutralStroke2}`,
+            borderRadius: tokens.borderRadiusMedium,
+            padding: tokens.spacingVerticalM,
+            background: tokens.colorNeutralBackground2,
+            display: 'flex',
+            flexDirection: 'column',
+            gap: tokens.spacingVerticalS,
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: tokens.spacingHorizontalS }}>
+            <span style={{ fontWeight: Number(tokens.fontWeightSemibold), fontSize: '14px' }}>
+              {suggestion.bundleName}
+            </span>
+            {suggestion.matchedKeywords.length > 0 && (
+              <div style={chipRowStyle}>
+                {suggestion.matchedKeywords.slice(0, 4).map((kw) => (
+                  <Badge key={kw} appearance="tint" color="informative" size="small">{kw}</Badge>
+                ))}
+              </div>
+            )}
+          </div>
+          <Caption1 style={{ color: tokens.colorNeutralForeground3 }}>{suggestion.description}</Caption1>
+
+          {/* Recommended team */}
+          <div style={sectionStyle}>
+            <div style={headingStyle}>Team</div>
+            <div style={chipRowStyle}>
+              {suggestion.team.map((m) => (
+                <Badge key={m.name} appearance="outline" size="small">{m.name} · {m.role}</Badge>
+              ))}
+            </div>
+          </div>
+
+          {/* Recommended ceremonies */}
+          <div style={sectionStyle}>
+            <div style={headingStyle}>Ceremonies</div>
+            <div style={chipRowStyle}>
+              {suggestion.ceremonies.map((c) => (
+                <Badge key={c.name} appearance="outline" size="small">{c.name} ({c.cadence})</Badge>
+              ))}
+            </div>
+          </div>
+
+          {/* Kanban columns */}
+          <div style={sectionStyle}>
+            <div style={headingStyle}>Board columns</div>
+            <div style={chipRowStyle}>
+              {suggestion.columns.map((col, i) => (
+                <Badge key={col.slug} appearance="filled" color="subtle" size="small">
+                  {i + 1}. {col.label}
+                </Badge>
+              ))}
+            </div>
+          </div>
+
+          {/* Skills */}
+          {suggestion.skills.length > 0 && (
+            <div style={sectionStyle}>
+              <div style={headingStyle}>Starter skills</div>
+              <div style={chipRowStyle}>
+                {suggestion.skills.map((s) => (
+                  <Badge key={s} appearance="tint" color="success" size="small">{s}</Badge>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Actions */}
+          <div style={{ display: 'flex', gap: tokens.spacingHorizontalS, marginTop: tokens.spacingVerticalXS }}>
+            <Button
+              appearance="primary"
+              size="small"
+              onClick={() => {
+                setApplyName(suggestion.bundleName)
+                setApplyPath(createParent)
+                setShowApplyForm(true)
+              }}
+            >
+              Apply suggestion
+            </Button>
+            <Button
+              appearance="outline"
+              size="small"
+              onClick={() => onCustomize(suggestion)}
+            >
+              Customize
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {/* Apply form — shown after user clicks "Apply suggestion" */}
+      {suggestion && showApplyForm && (
+        <div
+          style={{
+            border: `1px solid ${tokens.colorBrandStroke1}`,
+            borderRadius: tokens.borderRadiusMedium,
+            padding: tokens.spacingVerticalM,
+            background: tokens.colorNeutralBackground2,
+            display: 'flex',
+            flexDirection: 'column',
+            gap: tokens.spacingVerticalS,
+          }}
+        >
+          <Body1 style={{ display: 'block', fontWeight: Number(tokens.fontWeightSemibold) }}>
+            Apply "{suggestion.bundleName}"
+          </Body1>
+
+          <Field label="Project name" required>
+            <Input
+              value={applyName}
+              onChange={(_, d) => setApplyName(d.value)}
+              placeholder="my-project"
+            />
+          </Field>
+
+          <Field label="Parent directory" required hint="Where to create the .squad/ scaffold.">
+            <Input
+              value={applyPath}
+              onChange={(_, d) => {
+                setApplyPath(d.value)
+                setCreateParent(d.value)
+              }}
+              placeholder="/absolute/path/to/parent"
+              input={{ style: { fontFamily: tokens.fontFamilyMonospace } }}
+            />
+          </Field>
+
+          {applyBuiltinTemplate.error && (
+            <Caption1 style={{ color: tokens.colorPaletteRedForeground1 }}>
+              {applyBuiltinTemplate.error.message}
+            </Caption1>
+          )}
+
+          <div style={{ display: 'flex', gap: tokens.spacingHorizontalS }}>
+            <Button
+              appearance="primary"
+              size="small"
+              disabled={!applyName.trim() || !applyPath.trim() || applyBuiltinTemplate.isPending}
+              icon={applyBuiltinTemplate.isPending ? <Spinner size="tiny" /> : undefined}
+              onClick={handleApply}
+            >
+              {applyBuiltinTemplate.isPending ? 'Creating…' : 'Create project'}
+            </Button>
+            <Button appearance="outline" size="small" onClick={() => setShowApplyForm(false)}>
+              Back
+            </Button>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

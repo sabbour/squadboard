@@ -57,7 +57,6 @@ import {
   RadioGroup,
   Input,
   Textarea,
-  Spinner,
   MessageBar,
   MessageBarBody,
   Switch,
@@ -101,6 +100,7 @@ import {
 import PageHeader from '../components/layout/PageHeader.tsx'
 import FormulatePanel from '../components/formulate/FormulatePanel.tsx'
 import { safeAbsoluteTime } from '../utils/dates.ts'
+import { SectionLoading } from '../components/loading/index.tsx'
 
 // ---------------------------------------------------------------------------
 // Phase 16: the single source of truth for editor state is now the
@@ -463,7 +463,7 @@ export default function CeremonyEditor() {
   }, [generateFromProse])
 
   if (!isNew && isLoading) {
-    return <div style={{ padding: 32 }}><Spinner label="Loading ceremony…" /></div>
+    return <SectionLoading label="Loading ceremony…" />
   }
 
   return (

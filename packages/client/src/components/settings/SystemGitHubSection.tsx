@@ -34,6 +34,7 @@ import {
   ShieldCheckmark20Regular,
 } from '@fluentui/react-icons'
 import { apiFetch } from '../../api/client.ts'
+import { SectionLoading } from '../loading/index.tsx'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -250,7 +251,7 @@ export function SystemGitHubSection() {
 
   // ── Loading state ──────────────────────────────────────────────────────────
   if (isLoading) {
-    return <Spinner size="small" label="Checking gh CLI status…" />
+    return <SectionLoading label="Checking gh CLI status…" size="small" />
   }
 
   if (isError || !data) {

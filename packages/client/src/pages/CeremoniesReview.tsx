@@ -21,13 +21,13 @@ import {
   Body1,
   Button,
   Badge,
-  Spinner,
   MessageBar,
   MessageBarBody,
   MessageBarTitle,
   Card,
   CardHeader,
 } from '@fluentui/react-components'
+import { SectionLoading } from '../components/loading/index.tsx'
 import {
   CheckmarkCircle20Regular,
   Edit20Regular,
@@ -83,7 +83,7 @@ export default function CeremoniesReview() {
       />
 
       {draftsLoading ? (
-        <div style={{ padding: 32 }}><Spinner label="Loading drafts…" /></div>
+        <SectionLoading label="Loading drafts…" />
       ) : isError ? (
         <div style={{ padding: 32, color: 'var(--danger)' }}>Failed to load drafts.</div>
       ) : !drafts || drafts.length === 0 ? (
@@ -233,7 +233,7 @@ function DraftReview({
   const narrativeQuery = useCeremony(projectId, parentNarrativeId ?? '')
 
   if (isLoading || !detail) {
-    return <Spinner label="Loading draft…" />
+    return <SectionLoading label="Loading draft…" />
   }
 
   const isNarrative = detail.ceremony.kind === 'narrative'

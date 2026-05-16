@@ -31,6 +31,7 @@ import {
   Dismiss20Regular,
   PersonCircle24Regular,
 } from '@fluentui/react-icons'
+import { SectionLoading } from '../loading/index.tsx'
 
 interface HireTeamModalProps {
   projectId: string
@@ -202,7 +203,7 @@ export default function HireTeamModal({ projectId, onClose }: HireTeamModalProps
                 </p>
 
                 <Field label="Universe">
-                  {universesLoading && <Spinner size="tiny" label="Loading universes…" />}
+                  {universesLoading && <SectionLoading label="Loading universes…" size="tiny" />}
                   {!universesLoading && universes && (
                     <div style={{ display: 'grid', gap: '8px', gridTemplateColumns: '1fr 1fr' }}>
                       {universes.map((u) => {

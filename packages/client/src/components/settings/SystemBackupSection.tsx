@@ -42,6 +42,7 @@ import {
   Warning20Regular,
 } from '@fluentui/react-icons'
 import { apiFetch } from '../../api/client.ts'
+import { SectionLoading } from '../loading/index.tsx'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -404,7 +405,7 @@ export function SystemBackupSection() {
           </Button>
         </div>
 
-        {isLoading && <Spinner size="tiny" label="Loading backups…" />}
+        {isLoading && <SectionLoading label="Loading backups…" size="tiny" />}
         {isError && (
           <Caption1 style={{ color: tokens.colorPaletteRedForeground1 }}>
             Failed to load backup list.
