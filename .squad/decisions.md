@@ -2163,3 +2163,236 @@ Injecting project metadata (active agents, open issues, project description) int
 | Kobayashi | Wire `assistant.thinking.start` server-side emission from run dispatcher if needed |
 | Kobayashi | J5 — Project meta context injection into consult/live sessions |
 | Verbal (future) | J3 — SSE fallback transport |
+
+
+# Keyser W20 — Formulate Add Project + Stream K Loading Components
+
+**Date**: 2026-05-16T00:11:44-07:00
+**Wave**: 20
+**Author**: Keyser (UI/UX specialist)
+
+---
+
+## O1 — Suggest Setup: keyword→bundle mapping
+
+The `POST /api/projects/suggest` endpoint uses a deterministic keyword-scanning
+stub. Verbal can replace the body with an LLM call later without changing the
+response shape.
+
+### Keyword priority order (first match wins)
+
+| Keywords (any of these in description) | → bundleId |
+|---|---|
+| rust, cargo, crate, npm, pypi, pip, gem, nuget, library, sdk, package, cli, command-line, module | `library-or-sdk-project` |
+| writing, blog, content, article, newsletter, editorial, copywriting, post, publication | `content-writing-project` |
+| research, spike, analysis, explore, investigation, data, ml, machine learning, ai, experiment, python, jupyter, notebook | `research-spike` |
+| ops, devops, infra, infrastructure, incident, runbook, sre, monitoring, cloud, kubernetes, k8s, docker, ci/cd, deployment | `ops-runbook-project` |
+| bug, test, qa, quality, bash, regression, testing, validation | `bug-bash-project` |
+| node, express, react, next, typescript, javascript, web, api, http, rest, graphql, app, application, backend, frontend, go, golang, java, kotlin, swift, c#, dotnet, php, ruby, rails | `default-software-project` |
+| *(fallback)* | `default-software-project` |
+
+### Response shape (`ProjectSuggestion`)
+
+```typescript
+{
+  bundleId: string           // e.g. "library-or-sdk-project"
+  bundleName: string         // e.g. "Library / SDK Project"
+  description: string
+  team: Array<{ name: string; role: string }>
+  ceremonies: Array<{ name: string; cadence: string }>
+  columns: Array<{ slug: string; label: string }>
+  skills: string[]
+  matchedKeywords: string[]  // keywords that triggered the match
+}
+```
+
+### UX flow in "Add Project" modal
+
+New "✨ Suggest setup" tab added as a 3rd entry point (Discover, Connect, Create, Suggest).
+
+1. User types free-text description → clicks **Suggest setup**
+2. Preview panel appears: bundleName, matched keywords (as info badges), team chips,
+   ceremony chips, column sequence chips, starter skills
+3. **Apply suggestion** → shows inline apply form (name + squadPath) → calls
+   `POST /api/templates/builtin-projects/{bundleId}/apply` (existing code path)
+   → navigates into new project on success
+4. **Customize** → switches to "Create new" tab with project name pre-populated
+
+---
+
+## K2 — Loading components extraction
+
+Split `packages/client/src/components/loading/index.tsx` monolith into:
+
+| File | Purpose | aria semantics |
+|---|---|---|
+| `PageLoading.tsx` | Full-viewport centered spinner | `aria-busy="true"` + `aria-label` on wrapper div |
+| `SectionLoading.tsx` | Card/panel-sized, min-height 120px | `role="status"` + `aria-busy="true"` + `aria-label` |
+| `InlineLoading.tsx` | Inline, no positioning chrome | `role="status"` + `aria-busy="true"` on `<span>` |
+
+`index.tsx` now barrel-exports from all three (backward-compat: existing imports unchanged).
+
+---
+
+## K3 — Spinner audit sweep
+
+**Total replacements: 8 across 7 files**
+
+| File | Line | From | To |
+|---|---|---|---|
+| `pages/CeremoniesReview.tsx` | 86 | `<div style={{padding:32}}><Spinner label="Loading drafts…"/></div>` | `<SectionLoading label="Loading drafts…" />` |
+| `pages/CeremoniesReview.tsx` | 236 | `<Spinner label="Loading draft…" />` | `<SectionLoading label="Loading draft…" />` |
+| `pages/StarterDetail.tsx` | 46–50 | `<div style={{padding:40,textAlign:'center'}}><Spinner size="medium" label="Loading starter…"/></div>` | `<PageLoading label="Loading starter…" />` |
+| `pages/CeremonyEditor.tsx` | 466 | `<div style={{padding:32}}><Spinner label="Loading ceremony…"/></div>` | `<SectionLoading label="Loading ceremony…" />` |
+| `pages/Settings.tsx` | 583–588 | `<div style={{padding:'32px'}}><Body1>Loading…</Body1></div>` | `<PageLoading label="Loading settings…" />` |
+| `pages/Settings.tsx` | 275–276 | `<Spinner size="tiny" label="Loading models…" />` | `<SectionLoading label="Loading models…" size="tiny" />` |
+| `components/settings/SystemGitHubSection.tsx` | 253 | `<Spinner size="small" label="Checking gh CLI status…" />` | `<SectionLoading label="Checking gh CLI status…" size="small" />` |
+| `components/settings/SystemBackupSection.tsx` | 407 | `<Spinner size="tiny" label="Loading backups…" />` | `<SectionLoading label="Loading backups…" size="tiny" />` |
+| `components/agents/HireTeamModal.tsx` | 205 | `<Spinner size="tiny" label="Loading universes…" />` | `<SectionLoading label="Loading universes…" size="tiny" />` |
+
+**Estimated coverage**: ~80% of labeled/section-level spinner patterns.
+
+### Pages/components intentionally skipped (document for K7)
+
+| File | Pattern | Reason skipped |
+|---|---|---|
+| `pages/ProjectPicker.tsx:66,181` | `<Body1>Loading projects…</Body1>` | Text-only (no Spinner), not a visual regression |
+| `pages/Tools.tsx:149` | `<Body1 style...>Loading…</Body1>` | Text-only placeholder |
+| `pages/Board.tsx` | `isLoading` only | No Spinner component, board uses column skeleton (K7 candidate) |
+| `pages/Inbox.tsx:85` | No visible Spinner, just conditional content | Text-only |
+| `pages/Diagnostics.tsx:191` | `isLoading && (...)` | No Spinner — plain conditional, fine as-is |
+| `pages/LiveSession.tsx:130` | `<Spinner size="tiny" />` (activity indicator) | Mid-stream activity indicator, not a loading gate |
+| `components/settings/SystemBackupSection.tsx:270,294,364` | `<Spinner size="tiny" />` in button `icon={}` | Action-in-flight indicator; InlineLoading would work but no semantic gain |
+| `components/settings/SystemGitHubSection.tsx:191,301` | `<Spinner size="tiny" />` in button `icon={}` | Same — action indicator |
+| `components/agents/HireTeamModal.tsx:423,437` | `<Spinner size="tiny" />` in button `icon={}` | Action indicator |
+| `components/board/ColumnSettingsPanel.tsx:409` | `<Caption1>Loading…</Caption1>` | Text-only, no Spinner |
+| `components/board/CommentList.tsx:193` | `isLoading` guard | No actual Spinner rendered |
+| `components/agents/AgentCapabilities.tsx:83,138,193` | `<Caption1>Loading…</Caption1>` | Text-only |
+| `components/runs/RunHistory.tsx:28` | `<p>Loading runs…</p>` | Small inline component, text-only |
+| `components/settings/ReviewPolicySection.tsx:104` | `isLoading` guard | No Spinner, returns null |
+| `components/routing/RoutingStatsPanel.tsx` | `isLoading` prop | No Spinner, caller-controlled |
+| `components/routing/RoutingLogTable.tsx` | `isLoading` prop | Same |
+| `components/reviews/ReviewPolicyPicker.tsx:113` | `if (isLoading)` returns null | No Spinner |
+
+---
+
+## UX questions for Ahmed
+
+1. **Suggest tab position**: Currently "✨ Suggest setup" is the 4th tab. Should it be promoted to 2nd (before "Connect existing") to make it more prominent as a new-user entry point?
+2. **Apply path default**: The apply form inherits `createParent` from the Create tab. First-time users without a home path will see an empty field. Should the suggest endpoint also return a recommended project name (e.g. slug derived from first keyword)?
+3. **LLM integration**: The suggest stub is purely keyword-based. When Verbal wires in the LLM, the response shape is already defined — but should we stream the suggestion token-by-token (skeleton → populated) or keep the current single-shot fetch?
+4. **Kanban custom columns for suggestion**: The "Apply suggestion" path calls `useApplyBuiltinProjectTemplate` which uses the built-in bundle's column set. If a user has edited columns on an existing matching project, Apply will overwrite them. Acceptable for new project creation (always creates new project), but worth noting.
+5. **K3 button icon spinners (K7)**: ~12 occurrences of `<Spinner size="tiny" />` inside button `icon={}` props are action indicators (save/refresh/propose). Should K7 introduce an `<ActionLoading />` InlineLoading variant styled specifically for button icons, or leave as-is?
+
+
+# Kobayashi — Wave 20 SDK + Dedupe Decision Record
+
+**Agent**: Kobayashi (SDK / packaging / distribution)  
+**Wave**: 20  
+**Datetime**: 2026-05-16T00:11:44-07:00  
+**Branch**: keyser/w17-settings-backup-github
+
+---
+
+## 1. Spec Drift Detection — Step 8 HEALTH REPORT
+
+### Method
+Ran: `rg "^##? Step 8" .github/agents/squad.agent.md`  
+**Result**: `NOT_FOUND`
+
+### What the spec had (before this wave)
+Line 946 of `.github/agents/squad.agent.md` (in the Scribe spawn prompt):
+```
+8. HEALTH REPORT: Log decisions.md before/after size, inbox count processed, history files summarized.
+```
+This is a minimal "log" instruction — no artifact write, no file path, no structured content.
+
+### Decision: Path B (upstream drift)
+The spec does NOT have step 8 as a proper artifact-write section. Drift is on the upstream side. Action taken:
+1. **Updated `.github/agents/squad.agent.md`** — step 8 rewritten with full HEALTH REPORT artifact spec (path: `.squad/health/YYYY-MM-DD/wave-{N}-{session}.md`, 6 content sections a–f, returns `healthReportPath`).
+2. **Mirrored into SDK** as `packages/squadboard-sdk/src/scribe/steps/step-8-health-report.ts`.
+3. **Updated orchestrator** `close-out.ts` — added `healthReport` option and `healthReportPath` to result.
+4. **Added Vitest test** `src/scribe/__tests__/step-8.test.ts` — 12 tests, all pass.
+
+**Upstream PR note**: Out of scope per task (don't touch PR #1124). Local `squad.agent.md` updated only.
+
+---
+
+## 2. Files Shipped
+
+### SDK
+| File | Status |
+|------|--------|
+| `packages/squadboard-sdk/src/scribe/steps/step-8-health-report.ts` | NEW — `writeHealthReport()` primitive |
+| `packages/squadboard-sdk/src/scribe/__tests__/step-8.test.ts` | NEW — 12 Vitest tests (24 total incl. dist) |
+| `packages/squadboard-sdk/src/scribe/close-out.ts` | MODIFIED — integrates step 8 |
+| `packages/squadboard-sdk/src/scribe/index.ts` | MODIFIED — exports `writeHealthReport` + new types |
+| `packages/squadboard-sdk/tsconfig.json` | MODIFIED — excludes `__tests__` from TS build |
+| `packages/squadboard-sdk/package.json` | MODIFIED — adds `vitest ^4.1.6` devDep + `test` script |
+
+### Server
+| File | Status |
+|------|--------|
+| `packages/server/src/cli/dedupe-cards.ts` | NEW — `squadboard cards dedupe` CLI |
+| `packages/server/src/routes/system.ts` | MODIFIED — adds `POST /api/system/dedupe` endpoint |
+| `packages/server/src/db/schema.ts` | MODIFIED — adds `archivedAt`, `archivedReason` to issues |
+| `packages/server/src/db/index.ts` | MODIFIED — Wave 20 migration for `archived_at`, `archived_reason` |
+
+### Spec
+| File | Status |
+|------|--------|
+| `.github/agents/squad.agent.md` | MODIFIED — step 8 full HEALTH REPORT artifact spec |
+
+---
+
+## 3. Dedupe Report
+
+**Command**: `npx tsx src/cli/dedupe-cards.ts --dry-run --project-id <foo-uuid>`
+
+**Live state** (confirmed via `GET /api/system/db-counts`):
+```json
+{
+  "issues": 0,
+  "projects": 1
+}
+```
+
+**Dry-run result**:
+```json
+{
+  "dryRun": true,
+  "projects": {},
+  "groups": []
+}
+```
+
+**Reason**: PGlite cluster has 0 issues — the legacy Postgres → PGlite migration (tracked by `migrate.ts`) has not yet run to completion for the `issues` table (verify CLI shows: source=225, dest=0). No duplicates exist in the PGlite target.  
+
+**No real dedupe executed** because there is nothing to dedupe.
+
+**CLI design verified**: When server is running (holds PGlite exclusively), the CLI detects it via `GET /api/health` and delegates to `POST /api/system/dedupe`. When server is not running, CLI boots PGlite directly. Both paths are idempotent.
+
+Per-project report: `{ kept: N, archived: M }` (N=0, M=0 for all projects in live system).
+
+---
+
+## 4. Build / Test Results
+
+- `pnpm build` (SDK): ✅ clean
+- `pnpm test` (SDK): ✅ 24/24 tests pass (12 source + 12 dist)
+- `pnpm exec tsc --noEmit` (server): ✅ no errors in my files (1 pre-existing error in `github-git-ops.ts` from Keyser's w17 work, not my lane)
+- `pnpm run test` (server `src/__tests__/`): ✅ 4/4 pass
+
+---
+
+## 5. Schema Changes
+
+Added to `issues` table (Wave 20 migration, idempotent `IF NOT EXISTS`):
+- `archived_at TIMESTAMPTZ` — when soft-deleted by dedupe
+- `archived_reason TEXT` — e.g. `'dedupe:bulk-port-vs-seed-backlog'`
+
+---
+
+## 6. Upstream PR
+
+Not filed — `bradygaster/squad` PR is out of scope per Wave 20 brief (don't touch PR #1124). The local `squad.agent.md` has been updated as the canonical source; upstream sync is deferred.
