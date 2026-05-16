@@ -1278,6 +1278,22 @@ async function bootstrapSchema(): Promise<void> {
       ADD COLUMN IF NOT EXISTS description TEXT;
   `);
 
+  // Wave 28 — JIS-T1: issue_run_events append-only event log.
+  await _pool.query(`
+    CREATE TABLE IF NOT EXISTS issue_run_events (
+      id          BIGSERIAL   PRIMARY KEY,
+      run_id      UUID        NOT NULL REFERENCES issue_runs(id) ON DELETE CASCADE,
+      seq         INTEGER     NOT NULL,
+      event_type  TEXT        NOT NULL,
+      payload     JSONB       NOT NULL DEFAULT '{}'::jsonb,
+      created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      CONSTRAINT  issue_run_events_run_seq_uniq UNIQUE (run_id, seq)
+    );
+
+    CREATE INDEX IF NOT EXISTS issue_run_events_run_created_idx
+      ON issue_run_events (run_id, created_at);
+  `);
+
   console.log('[db] schema bootstrapped');
 }
 

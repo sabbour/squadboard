@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import type { Request, Response } from 'express';
-import { eq, and } from 'drizzle-orm';
+import { eq, and, gte, asc, sql } from 'drizzle-orm';
 import { getDb, schema } from '../db/index.js';
 import { eventBus } from '../realtime/event-bus.js';
 import {
@@ -128,6 +128,75 @@ issueRunsRouter.get('/', async (req: Request, res: Response) => {
       .where(eq(schema.issueRuns.issueId, issueId))
       .orderBy(schema.issueRuns.createdAt);
     res.json(rows);
+  } catch (err) {
+    handleError(res, err);
+  }
+});
+
+// ---------------------------------------------------------------------------
+// JIS-T6: Events query endpoint
+// GET /:runId/events?limit=50&offset=0&since_seq=N
+// ---------------------------------------------------------------------------
+
+const MAX_EVENT_LIMIT = 500;
+
+issueRunsRouter.get('/:runId/events', async (req: Request, res: Response) => {
+  try {
+    const { issueId, runId } = req.params as Record<string, string>;
+    const db = getDb();
+
+    // Validate that the run belongs to this issue
+    const [runRow] = await db
+      .select({ id: schema.issueRuns.id })
+      .from(schema.issueRuns)
+      .where(and(eq(schema.issueRuns.id, runId), eq(schema.issueRuns.issueId, issueId)))
+      .limit(1);
+
+    if (!runRow) {
+      res.status(404).json({ error: 'Run not found for this issue' });
+      return;
+    }
+
+    // Parse query params
+    const rawLimit  = parseInt((req.query as Record<string, string>).limit  ?? '50',  10);
+    const rawOffset = parseInt((req.query as Record<string, string>).offset ?? '0',   10);
+    const rawSince  = (req.query as Record<string, string>).since_seq;
+
+    const limit  = Math.min(isNaN(rawLimit)  ? 50  : Math.max(1, rawLimit),  MAX_EVENT_LIMIT);
+    const offset = isNaN(rawOffset) ? 0 : Math.max(0, rawOffset);
+
+    // Build the base where clause
+    const sinceSeq = rawSince !== undefined ? parseInt(rawSince, 10) : NaN;
+    const useSince = !isNaN(sinceSeq); // since_seq wins if both provided
+
+    // Total count for this run
+    const [countRow] = await db
+      .select({ total: sql<number>`count(*)::int` })
+      .from(schema.issueRunEvents)
+      .where(eq(schema.issueRunEvents.runId, runId));
+    const total = countRow?.total ?? 0;
+
+    // Fetch events
+    const eventsQuery = db
+      .select()
+      .from(schema.issueRunEvents)
+      .where(
+        useSince
+          ? and(eq(schema.issueRunEvents.runId, runId), gte(schema.issueRunEvents.seq, sinceSeq))
+          : eq(schema.issueRunEvents.runId, runId),
+      )
+      .orderBy(asc(schema.issueRunEvents.seq))
+      .limit(limit);
+
+    const events = useSince
+      ? await eventsQuery
+      : await eventsQuery.offset(offset);
+
+    // nextSeq: the seq after the last returned event (for cursor-based polling)
+    const lastEvent = events[events.length - 1];
+    const nextSeq   = lastEvent ? lastEvent.seq + 1 : (useSince ? sinceSeq : offset + events.length);
+
+    res.json({ events, total, nextSeq });
   } catch (err) {
     handleError(res, err);
   }

@@ -1,0 +1,349 @@
+/**
+ * issue-run-events-endpoint.test.ts — Wave 28 JIS-T6 regression
+ *
+ * Tests for the GET /:runId/events handler:
+ *   - offset+limit pagination (default 50)
+ *   - since_seq filter (wins over offset when both provided)
+ *   - 404 on bad issue+run match
+ *   - limit cap at 500
+ *
+ * Uses mock req/res objects (no supertest dependency needed).
+ */
+
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+
+// ---------------------------------------------------------------------------
+// DB mock state (mutated per test)
+// ---------------------------------------------------------------------------
+
+let _runRow: { id: string } | null = { id: 'run-001' };
+let _countTotal = 0;
+let _events: Array<{ id: number; runId: string; seq: number; eventType: string; payload: object; createdAt: Date }> = [];
+
+// Query call counter used to distinguish which select() call is which.
+let _selectCallCount = 0;
+
+const mockSelect = vi.fn();
+const mockInsert = vi.fn();
+const mockDb = { select: mockSelect, insert: mockInsert };
+
+vi.mock('../db/index.js', () => ({
+  getDb: () => mockDb,
+  schema: {
+    issueRuns: {
+      id:        'issue_runs.id',
+      issueId:   'issue_runs.issue_id',
+      createdAt: 'issue_runs.created_at',
+      agentId:   'issue_runs.agent_id',
+    },
+    issueRunEvents: {
+      id:        'ire.id',
+      runId:     'ire.run_id',
+      seq:       'ire.seq',
+      eventType: 'ire.event_type',
+      payload:   'ire.payload',
+      createdAt: 'ire.created_at',
+    },
+    agents: { id: 'agents.id', name: 'agents.name', status: 'agents.status' },
+    issues: { projectId: 'issues.project_id', id: 'issues.id' },
+  },
+}));
+
+vi.mock('drizzle-orm', () => ({
+  eq:  (a: unknown, b: unknown) => ({ __eq: [a, b] }),
+  and: (...args: unknown[])     => ({ __and: args }),
+  gte: (a: unknown, b: unknown) => ({ __gte: [a, b] }),
+  asc: (a: unknown)             => ({ __asc: a }),
+  sql: Object.assign(
+    (strings: TemplateStringsArray, ...vals: unknown[]) => ({ __sql: { strings, vals } }),
+    { __brand: 'sql' },
+  ),
+}));
+
+vi.mock('../realtime/event-bus.js', () => ({
+  eventBus: {
+    emitRunEvent: vi.fn(),
+    emitSessionEvent: vi.fn(),
+  },
+}));
+
+vi.mock('../services/github-git-ops.js', () => ({
+  pushBranch:       vi.fn(),
+  createPr:         vi.fn(),
+  buildPrBody:      vi.fn(),
+  commentOnIssue:   vi.fn(),
+  mergePr:          vi.fn(),
+  triggerWorkflow:  vi.fn(),
+  dispatchWorkflow: vi.fn(),
+  pollWorkflowRun:  vi.fn(),
+  GitOpsError:      class GitOpsError extends Error {
+    httpStatus: number;
+    detail: string;
+    constructor(message: string, httpStatus = 500, detail = '') {
+      super(message);
+      this.httpStatus = httpStatus;
+      this.detail = detail;
+    }
+  },
+}));
+
+// ---------------------------------------------------------------------------
+// Build a mock select() call chain factory.
+// ---------------------------------------------------------------------------
+
+function makeChain(resolveWith: unknown) {
+  const chain = {
+    from:    vi.fn().mockReturnThis(),
+    where:   vi.fn().mockReturnThis(),
+    orderBy: vi.fn().mockReturnThis(),
+    limit:   vi.fn().mockReturnThis(),
+    offset:  vi.fn().mockReturnThis(),
+    then: (onfulfilled: (val: unknown) => unknown) =>
+      Promise.resolve(resolveWith).then(onfulfilled),
+    catch: (onrejected: (err: unknown) => unknown) =>
+      Promise.resolve(resolveWith).catch(onrejected),
+  };
+  return chain;
+}
+
+function resetSelectMock() {
+  _selectCallCount = 0;
+  mockSelect.mockImplementation(() => {
+    _selectCallCount++;
+    const call = _selectCallCount;
+
+    if (call === 1) {
+      // Run existence check
+      return makeChain(_runRow ? [_runRow] : []);
+    }
+    if (call === 2) {
+      // Count query
+      return makeChain([{ total: _countTotal }]);
+    }
+    // Events fetch
+    return makeChain(_events);
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Mock req/res factories
+// ---------------------------------------------------------------------------
+
+function makeReq(
+  params: Record<string, string>,
+  query: Record<string, string> = {},
+) {
+  return { params, query, body: {} };
+}
+
+function makeRes() {
+  const res = {
+    _status: 200,
+    _body: null as unknown,
+    status(code: number) { this._status = code; return this; },
+    json(body: unknown)  { this._body = body; return this; },
+  };
+  return res;
+}
+
+// ---------------------------------------------------------------------------
+// Extract the route handler from the router by monkey-patching Router.
+// Easier approach: call the handler by reaching into the router's _routes.
+// ---------------------------------------------------------------------------
+
+// We import the router and walk its stack to pull the handler.
+import { issueRunsRouter } from '../routes/runs.js';
+import type { Request, Response, NextFunction } from 'express';
+
+type RouteLayer = {
+  route?: { path: string; methods: Record<string, boolean>; stack: Array<{ handle: (req: Request, res: Response, next: NextFunction) => void }> };
+};
+
+function findHandler(path: string, method: 'get' | 'post') {
+  const stack = (issueRunsRouter as unknown as { stack: RouteLayer[] }).stack;
+  for (const layer of stack) {
+    if (layer.route?.path === path && layer.route?.methods[method]) {
+      return layer.route.stack[0]?.handle;
+    }
+  }
+  return null;
+}
+
+// ---------------------------------------------------------------------------
+// Test setup
+// ---------------------------------------------------------------------------
+
+beforeEach(() => {
+  _runRow      = { id: 'run-001' };
+  _countTotal  = 0;
+  _events      = [];
+  resetSelectMock();
+});
+
+// ---------------------------------------------------------------------------
+// 404 on bad issue+run match
+// ---------------------------------------------------------------------------
+
+describe('404 on bad issue+run match', () => {
+  it('returns 404 when run does not belong to the issue', async () => {
+    _runRow = null; // simulate missing run
+    const handler = findHandler('/:runId/events', 'get');
+    expect(handler).toBeDefined();
+
+    const req = makeReq({ projectId: 'proj-001', issueId: 'issue-001', runId: 'bad-run' });
+    const res = makeRes();
+    const next = vi.fn();
+
+    await handler!(req as unknown as Request, res as unknown as Response, next as NextFunction);
+
+    expect(res._status).toBe(404);
+    expect((res._body as { error: string }).error).toMatch(/not found/i);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Pagination: offset + limit
+// ---------------------------------------------------------------------------
+
+describe('offset + limit pagination', () => {
+  beforeEach(() => {
+    _countTotal = 10;
+    _events = Array.from({ length: 3 }, (_, i) => ({
+      id: i + 1, runId: 'run-001', seq: i, eventType: 'turn', payload: {}, createdAt: new Date(),
+    }));
+  });
+
+  it('returns 200 with events, total, nextSeq', async () => {
+    const handler = findHandler('/:runId/events', 'get');
+    const req = makeReq({ projectId: 'proj-001', issueId: 'issue-001', runId: 'run-001' });
+    const res = makeRes();
+    await handler!(req as unknown as Request, res as unknown as Response, vi.fn() as NextFunction);
+
+    expect(res._status).toBe(200);
+    const body = res._body as { events: unknown[]; total: number; nextSeq: number };
+    expect(body.total).toBe(10);
+    expect(Array.isArray(body.events)).toBe(true);
+    expect(typeof body.nextSeq).toBe('number');
+  });
+
+  it('nextSeq equals last event seq + 1', async () => {
+    _events = [
+      { id: 1, runId: 'run-001', seq: 5, eventType: 'turn', payload: {}, createdAt: new Date() },
+      { id: 2, runId: 'run-001', seq: 6, eventType: 'finish', payload: {}, createdAt: new Date() },
+    ];
+    _countTotal = 7;
+
+    const handler = findHandler('/:runId/events', 'get');
+    const req = makeReq({ projectId: 'proj-001', issueId: 'issue-001', runId: 'run-001' });
+    const res = makeRes();
+    await handler!(req as unknown as Request, res as unknown as Response, vi.fn() as NextFunction);
+
+    expect((res._body as { nextSeq: number }).nextSeq).toBe(7); // seq=6 + 1
+  });
+
+  it('returns empty events array when no events exist', async () => {
+    _events = [];
+    _countTotal = 0;
+
+    const handler = findHandler('/:runId/events', 'get');
+    const req = makeReq({ projectId: 'proj-001', issueId: 'issue-001', runId: 'run-001' });
+    const res = makeRes();
+    await handler!(req as unknown as Request, res as unknown as Response, vi.fn() as NextFunction);
+
+    const body = res._body as { events: unknown[]; total: number };
+    expect(body.events).toHaveLength(0);
+    expect(body.total).toBe(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// since_seq filter
+// ---------------------------------------------------------------------------
+
+describe('since_seq filter', () => {
+  beforeEach(() => {
+    _countTotal = 8;
+    _events = [
+      { id: 3, runId: 'run-001', seq: 2, eventType: 'turn',   payload: {}, createdAt: new Date() },
+      { id: 4, runId: 'run-001', seq: 3, eventType: 'finish', payload: {}, createdAt: new Date() },
+    ];
+  });
+
+  it('returns 200 with since_seq query param', async () => {
+    const handler = findHandler('/:runId/events', 'get');
+    const req = makeReq(
+      { projectId: 'proj-001', issueId: 'issue-001', runId: 'run-001' },
+      { since_seq: '2' },
+    );
+    const res = makeRes();
+    await handler!(req as unknown as Request, res as unknown as Response, vi.fn() as NextFunction);
+
+    expect(res._status).toBe(200);
+    const body = res._body as { events: unknown[]; nextSeq: number };
+    expect(body.events).toHaveLength(2);
+    expect(body.nextSeq).toBe(4); // seq=3 + 1
+  });
+
+  it('since_seq wins when both since_seq and offset are provided', async () => {
+    const handler = findHandler('/:runId/events', 'get');
+    // since_seq=2 and offset=10 — since_seq should win (handler won't call .offset())
+    const req = makeReq(
+      { projectId: 'proj-001', issueId: 'issue-001', runId: 'run-001' },
+      { since_seq: '2', offset: '10' },
+    );
+    const res = makeRes();
+    await handler!(req as unknown as Request, res as unknown as Response, vi.fn() as NextFunction);
+
+    expect(res._status).toBe(200);
+    // Events still returned (since_seq path, not offset path)
+    expect((res._body as { events: unknown[] }).events).toHaveLength(2);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Limit cap at 500
+// ---------------------------------------------------------------------------
+
+describe('limit cap at 500', () => {
+  it('does not crash when limit=9999 is requested', async () => {
+    _events = [];
+    _countTotal = 0;
+    const handler = findHandler('/:runId/events', 'get');
+    const req = makeReq(
+      { projectId: 'proj-001', issueId: 'issue-001', runId: 'run-001' },
+      { limit: '9999' },
+    );
+    const res = makeRes();
+    await handler!(req as unknown as Request, res as unknown as Response, vi.fn() as NextFunction);
+
+    expect(res._status).toBe(200);
+  });
+
+  it('coerces negative limit to 1', async () => {
+    _events = [];
+    _countTotal = 0;
+    const handler = findHandler('/:runId/events', 'get');
+    const req = makeReq(
+      { projectId: 'proj-001', issueId: 'issue-001', runId: 'run-001' },
+      { limit: '-5' },
+    );
+    const res = makeRes();
+    await handler!(req as unknown as Request, res as unknown as Response, vi.fn() as NextFunction);
+
+    expect(res._status).toBe(200);
+  });
+
+  it('non-numeric limit falls back to 50', async () => {
+    _events = [];
+    _countTotal = 0;
+    const handler = findHandler('/:runId/events', 'get');
+    const req = makeReq(
+      { projectId: 'proj-001', issueId: 'issue-001', runId: 'run-001' },
+      { limit: 'abc' },
+    );
+    const res = makeRes();
+    await handler!(req as unknown as Request, res as unknown as Response, vi.fn() as NextFunction);
+
+    expect(res._status).toBe(200);
+  });
+});

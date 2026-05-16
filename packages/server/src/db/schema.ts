@@ -1,4 +1,4 @@
-import { pgTable, uuid, text, timestamp, integer, boolean, pgEnum, primaryKey, numeric, jsonb, uniqueIndex, customType } from 'drizzle-orm/pg-core';
+import { pgTable, uuid, text, timestamp, integer, boolean, pgEnum, primaryKey, numeric, jsonb, uniqueIndex, index, bigserial, customType } from 'drizzle-orm/pg-core';
 
 // Bytea custom type — stores binary data (images, blobs) in PostgreSQL BYTEA columns.
 // The pg driver delivers bytea columns as Node.js Buffer objects, so no conversion needed.
@@ -1111,3 +1111,31 @@ export type NewGhCardSideEffect = typeof ghCardSideEffects.$inferInsert;
 // payloads into the next agent invocation prompt. Persisted as:
 //   { events: Array<{ eventType, action, payload, receivedAt }> }
 // The field name used at runtime is issue_runs.external_gh_context (snake_case).
+
+// ---------------------------------------------------------------------------
+// Wave 28 — JIS-T1: issue_run_events — append-only event log for in-flight runs
+// ---------------------------------------------------------------------------
+
+/**
+ * Mirrors live_session_events for issue_run telemetry.
+ * Each row is one emitted event during a running issue_run.
+ * event_type values: start | turn | token | tool_call | tool_result | metric | finish | error | steered
+ */
+export const issueRunEvents = pgTable(
+  'issue_run_events',
+  {
+    id:        bigserial('id', { mode: 'number' }).primaryKey(),
+    runId:     uuid('run_id').notNull().references(() => issueRuns.id, { onDelete: 'cascade' }),
+    seq:       integer('seq').notNull(),
+    eventType: text('event_type').notNull(),
+    payload:   jsonb('payload').notNull().default('{}'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    runSeqUniq:    uniqueIndex('issue_run_events_run_seq_uniq').on(t.runId, t.seq),
+    runCreatedIdx: index('issue_run_events_run_created_idx').on(t.runId, t.createdAt),
+  }),
+);
+
+export type IssueRunEvent    = typeof issueRunEvents.$inferSelect;
+export type NewIssueRunEvent = typeof issueRunEvents.$inferInsert;
