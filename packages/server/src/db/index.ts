@@ -8,6 +8,7 @@ import {
   createPoolAdapter,
   type PoolLike,
 } from './pglite.js';
+import { initMigrationLog, applyMigrations } from './migrations.js';
 
 // ─── Drizzle DB type ─────────────────────────────────────────────────────────
 // Both drizzle-orm/pglite and drizzle-orm/node-postgres extend PgDatabase and
@@ -46,6 +47,18 @@ export async function initDb(connectionOrSentinel: string): Promise<void> {
     _pool = wrapPgPool(pgPool);
   }
 
+  // Initialize migration log table first
+  if (!_pool) throw new Error('Pool not initialised');
+  await initMigrationLog(_pool);
+
+  // Apply migrations unless SKIP_BOOTSTRAP_DDL is set
+  if (process.env.SKIP_BOOTSTRAP_DDL !== '1') {
+    await applyMigrations(_pool, { dryRun: process.env.MIGRATIONS_DRY_RUN === '1' });
+  } else {
+    console.log('[db] Skipping bootstrap DDL (SKIP_BOOTSTRAP_DDL=1)');
+  }
+
+  // Run remaining bootstrap (inline tables, seeds, etc.)
   await bootstrapSchema();
 }
 

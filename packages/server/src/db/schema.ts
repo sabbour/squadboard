@@ -1145,3 +1145,20 @@ export const issueRunEvents = pgTable(
 
 export type IssueRunEvent    = typeof issueRunEvents.$inferSelect;
 export type NewIssueRunEvent = typeof issueRunEvents.$inferInsert;
+
+// ---------------------------------------------------------------------------
+// Migration system table (Wave 28 I9: Migration safety with rollback)
+// ---------------------------------------------------------------------------
+
+export const migrationLog = pgTable(
+  '_migration_log',
+  {
+    version:   integer('version').primaryKey(),
+    filename:  text('filename').notNull(),
+    checksum:  text('checksum').notNull(),
+    appliedAt: timestamp('applied_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+);
+
+export type MigrationLogRow  = typeof migrationLog.$inferSelect;
+export type NewMigrationLog  = typeof migrationLog.$inferInsert;
