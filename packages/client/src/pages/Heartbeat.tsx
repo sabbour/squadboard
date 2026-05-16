@@ -8,6 +8,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { Title2, Body1, Caption1, Badge, tokens } from '@fluentui/react-components'
 import PageHeader from '../components/layout/PageHeader.tsx'
+import { SweepTimeline } from '../components/heartbeat/SweepTimeline.tsx'
 
 interface SweepStatus {
   id:         string
@@ -223,6 +224,11 @@ export default function Heartbeat() {
           <Caption1 style={{ color: snap?.lastError ? tokens.colorPaletteRedForeground1 : tokens.colorNeutralForeground3 }}>
             {snap?.lastError ?? '—'}
           </Caption1>
+        </SectionCard>
+
+        {/* Section d — Sweep Animation Timeline (W25) */}
+        <SectionCard title="Sweep Activity Timeline">
+          <SweepTimeline windowSizeMs={60_000} compact={false} />
         </SectionCard>
 
       </div>

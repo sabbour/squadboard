@@ -66,6 +66,10 @@ export interface WsEventMap {
   // Stream J — Chat polish: agent thinking indicator
   'assistant.thinking.start': { sessionId: string; agentName?: string | null }
   'assistant.thinking.stop':  { sessionId: string }
+  // W25 — Sweep timeline animation. Fired server-side on every heartbeat
+  // sweep completion (success + error) and fanned out to '__global__'
+  // subscribers (Heartbeat + Now pages).
+  'sweep.tick': { sweepName: string; timestamp: string; agentsActivated: string[]; durationMs: number; status: 'success' | 'error' | 'skip' }
   // Connection control (sent by server)
   connected: { serverId: string }
   error: { message: string }

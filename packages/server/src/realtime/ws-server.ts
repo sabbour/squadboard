@@ -214,6 +214,17 @@ export function initWebSocketServer(httpServer: HttpServer): WebSocketServer {
   // Subscribe to the in-process event bus
   eventBus.on('event', onBusEvent);
 
+  // W25: fan-out sweep.tick heartbeat events to global subscribers so the
+  // Heartbeat + Now pages can animate the sweep timeline. Other heartbeat
+  // event types (sweep.completed / sweep.error) remain server-only and are
+  // not forwarded over WS to avoid duplicating data the page polls for.
+  eventBus.onHeartbeat((evt) => {
+    if (evt.type !== 'sweep.tick') return;
+    for (const client of globalClients) {
+      send(client.ws, 'sweep.tick', evt.payload);
+    }
+  });
+
   wss.on('error', (err) => {
     console.error('[ws] server error:', err);
   });

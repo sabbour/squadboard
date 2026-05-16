@@ -43,6 +43,7 @@ import {
 import { Eye24Regular, Open16Regular, Bot20Regular, Clipboard20Regular, Settings20Regular } from '@fluentui/react-icons'
 import PageHeader from '../components/layout/PageHeader.tsx'
 import { PageLoading } from '../components/loading/index.tsx'
+import { SweepTimeline } from '../components/heartbeat/SweepTimeline.tsx'
 import { useNowFeed, type NowLiveSession, type NowIssueRun, type NowWorkflowRun } from '../api/activity.ts'
 import { useProjects, type Project } from '../api/projects.ts'
 import { apiFetch } from '../api/client.ts'
@@ -1028,6 +1029,17 @@ export default function Now() {
         {scopeProjectId === ALL_PROJECTS && projectRollups.length > 0 && (
           <ProjectMiniGrid rollups={projectRollups} />
         )}
+
+        {/* W25: Compact Sweep Activity timeline — live pulses on heartbeat ticks */}
+        <section className={styles.card}>
+          <div className={styles.cardHeader}>
+            <Subtitle2>Sweep Activity</Subtitle2>
+            <Caption1 className={styles.muted}>last 60s</Caption1>
+          </div>
+          <div style={{ padding: `${tokens.spacingVerticalS} ${tokens.spacingHorizontalL}` }}>
+            <SweepTimeline windowSizeMs={60_000} compact={true} />
+          </div>
+        </section>
       </div>
     </div>
   )

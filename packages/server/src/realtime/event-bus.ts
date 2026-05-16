@@ -69,10 +69,15 @@ export type FanOutEventType = 'fan_out.parallel_spawn';
 /**
  * Phase 3 Heartbeat: sweep lifecycle telemetry emitted by engine/heartbeat.ts.
  * Payload is scoped to `__heartbeat__` (server-wide, not project-scoped).
+ *
+ * W25 addition: `sweep.tick` is a per-sweep-completion event used by the
+ * Sweep Timeline animation on the Heartbeat + Now pages. It fires on BOTH
+ * success and error outcomes and is fanned out to `__global__` WS clients.
  */
 export type HeartbeatEventType =
   | 'heartbeat.sweep.completed'
-  | 'heartbeat.sweep.error';
+  | 'heartbeat.sweep.error'
+  | 'sweep.tick';
 
 /**
  * Phase 17: Ask / Consult mode events. Routed to a per-consult room
