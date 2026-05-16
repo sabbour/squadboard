@@ -638,3 +638,241 @@ Upstream Squad supports `@copilot` as a roster member that picks up GitHub issue
 60. The chat-bubble surface is extracted into a reusable `components/chat/ChatBubble.tsx` so future chat surfaces inherit identity + markdown + thinking treatment.
 
 
+
+---
+
+## Stream K — Unified page-loading experience  (Keyser + Fenster)
+
+**Source:** Ahmed directive (2026-05-15): *"unify the page loading experience to function like the ceremonies loading experience (with indicator)."* Append-only — lower priority, parked behind Wave 10 close-out.
+
+**Problem (verified in code, 2026-05-15):**
+
+There is **no shared page-loading component**. Every page rolls its own — and even a single page sometimes uses 2-3 different patterns. Concrete inconsistencies found:
+
+| Page | Pattern | Issue |
+|------|---------|-------|
+| `pages/Costs.tsx:12-14` | `<div style={{padding:'32px',color:'var(--text-muted)'}}>Loading project…</div>` | **Plain text — no spinner at all** |
+| `pages/Settings.tsx:101-103` | `<Caption1 style={...}>Loading budget…</Caption1>` | Inline caption text, no indicator |
+| `pages/Settings.tsx:269-271` | `<Spinner size="tiny" label="Loading models…" />` | Inline tiny spinner |
+| `pages/Settings.tsx:575-577` | Padded centered div with content | Different layout |
+| `pages/Now.tsx:503-504` | `<Spinner size="extra-small" label="Loading…" />` | Generic "Loading…" — no context |
+| `pages/CeremoniesReview.tsx:65-66` | `<div style={{padding:32}}>Loading project…</div>` | Plain text |
+| `pages/CeremoniesReview.tsx:85-86` | `<div style={{padding:32}}><Spinner label="Loading drafts…"/></div>` | Padded spinner |
+| `pages/CeremoniesReview.tsx:235-236` | bare `<Spinner label="Loading draft…" />` | No padding/centering |
+| `pages/CeremonyList.tsx:104-131` | Centered flex `<Spinner label="Loading ceremonies…"/>` | **Closest to "canonical"** |
+| `pages/StarterDetail.tsx:46-48` | Padded centered text-only div | No spinner |
+| `pages/Templates.tsx:230, 576` | `<div className={styles.center}>...` | CSS-class centered (different mechanism) |
+
+**~20 pages** consume `isLoading`/`isPending` from React Query but only a subset render an indicator on the initial-load critical path; the rest either flash empty UI or show plain text.
+
+The "ceremonies loading experience" Ahmed referenced is `CeremonyList.tsx`'s pattern — a centered Spinner with a contextual label — but `CeremoniesReview` itself drifts from it. So "unify with the ceremonies pattern" means **codify the CeremonyList pattern as a shared component AND fix CeremoniesReview to match**.
+
+---
+
+- **K1. Decide the canonical loading patterns (3 levels).** Fenster + Keyser align on:
+  - **`<PageLoading label="…" />`** — full page critical-path: centered Spinner (size: medium), contextual label, ≥120 px vertical breathing room. Used when the page can't render anything yet (e.g., project shell still loading).
+  - **`<SectionLoading label="…" />`** — within a populated page header, when one section's data is still arriving (e.g., agents list under a tab while project header is rendered). Spinner `size="extra-small"` inline with label.
+  - **`<InlineLoading />`** — single-line, inside a button or table cell (already used as `Spinner size="tiny"` in places — formalise the wrapper).
+  - **Top-level navigation progress bar** — optional thin Fluent2 ProgressBar across the top during route transition (parallel to the page rendering). Fenster owns the visual call.
+
+  Document in `packages/client/src/components/loading/README.md` with copy-paste examples + screenshots.
+
+- **K2. Extract shared components.** Create:
+  - `packages/client/src/components/loading/PageLoading.tsx`
+  - `packages/client/src/components/loading/SectionLoading.tsx`
+  - `packages/client/src/components/loading/InlineLoading.tsx`
+  - All wrap Fluent2 `Spinner` with consistent size/label/layout tokens. Accept `label` (required for full-page, optional inline), optional `subtle` flag for low-emphasis variants.
+  - **Accessibility:** `role="status"` + `aria-live="polite"` so screen readers announce; respect `prefers-reduced-motion` (Fluent's Spinner already does, verify).
+  - **Anti-flash:** delay rendering by ~150 ms (configurable) so a sub-100 ms hot-cache fetch doesn't flash a spinner. Match React Suspense's behaviour.
+
+- **K3. Audit + replace ad-hoc loading patterns.** Sweep all 20 pages identified above. Replace each `if (isLoading) return <div>…</div>` / `<Spinner …/>` block with the right shared component:
+  - `Costs.tsx` → `<PageLoading label="Loading costs…" />`
+  - `Settings.tsx` × 3 sites → `PageLoading` for the top-level, `SectionLoading` for the embedded model-list / budget-line spinners.
+  - `Now.tsx` → `<SectionLoading label="Loading now…" />` (it's inside a populated layout).
+  - `CeremoniesReview.tsx` × 3 sites → harmonise to `PageLoading` for project-shell, `SectionLoading` for drafts list, `SectionLoading` for draft detail.
+  - `CeremonyList.tsx` → swap the bespoke flex container for `<PageLoading label="Loading ceremonies…" />`. (This is the page Ahmed used as the reference — adopting the component is the seal.)
+  - `StarterDetail.tsx`, `Templates.tsx` → `PageLoading`.
+  - `Inbox.tsx`, `Board.tsx`, `Dashboard.tsx`, `Diagnostics.tsx`, `Skills.tsx`, `Tools.tsx`, `McpServers.tsx`, `Agents.tsx`, `LiveSession.tsx`, `ProjectFlow.tsx`, `ProjectPicker.tsx`, `CeremonyEditor.tsx`, `Consult.tsx` — confirm each currently renders something on initial load; where they flash empty, add `PageLoading`. Where they show a partial header, add `SectionLoading` for the data-dependent section.
+
+- **K4. Route-transition progress bar (optional, decided in K1).** If Fenster greenlights, add a thin Fluent2 `ProgressBar` mounted at the layout level that animates during React Router navigation (`useNavigation` from react-router-dom v6.4+ if available, otherwise a manual mount-state ref). Subtle, top-of-viewport, reduced-motion aware.
+
+- **K5. Storybook-equivalent reference + docs.** No Storybook in repo; instead add a `/__loading-gallery` dev-only route (gated by `import.meta.env.DEV`) that renders all three loading components side-by-side with all label variants, plus the route progress bar. Redfoot writes a one-paragraph "Loading patterns" section in the client README pointing at the gallery + the components dir.
+
+- **K6. E2E + RTL coverage.**
+  - Vitest/RTL: each component renders `role="status"` with the provided label; the 150 ms anti-flash delay is honoured (assert via `vi.useFakeTimers`).
+  - Playwright e2e: navigate to `/projects/:id/ceremonies` with throttled network — assert the canonical loading state appears within 200 ms and is replaced by content. Repeat for Costs (verifies the worst pre-fix offender is now consistent).
+
+**Sequencing inside Stream K:**
+- K1 (alignment) is sync, blocks K2.
+- K2 (extract) blocks K3.
+- K3 (audit + replace) is fan-out by page — multiple agents in parallel once K2 lands.
+- K4 (route progress) is independent of K3, parallel after K1.
+- K5 (gallery + docs) parallel with K3.
+- K6 (tests) lands as part of K2/K3 commits, not separately.
+
+**Owners:** Fenster owns K1 visual call; Keyser owns K2/K3/K4; Redfoot owns K5 docs; Kujan covers K6.
+
+**Acceptance for Stream K:**
+61. A single shared `<PageLoading>` component is used across every page that gates initial render on data; its appearance matches the ceremonies-page indicator (centered Spinner with contextual label).
+62. No `if (isLoading) return <div>…</div>` plain-text branches remain in `packages/client/src/pages/`.
+63. `<SectionLoading>` and `<InlineLoading>` exist for the inline-spinner cases and replace the bespoke `<Spinner size="tiny|extra-small">` usages where context is "this section is loading inside a rendered page."
+64. The 150 ms anti-flash delay is observed (no spinner flash for sub-150 ms hot-cache fetches).
+65. Loading states announce via `role="status"` + `aria-live="polite"`; reduced-motion preference is respected.
+66. (If K4 lands) a thin top-of-viewport ProgressBar animates during route transitions and is dismissable for low-emphasis surfaces.
+67. The dev-only `/__loading-gallery` route renders every loading variant; client README has a "Loading patterns" section pointing at it.
+68. RTL + Playwright coverage prove the canonical pattern lands on `/projects/:id/ceremonies` and `/projects/:id/costs` (the two extremes — best-case and worst-case before the sweep).
+
+---
+
+## Stream L (appended) — Package squadboard as an Electron desktop app  (LOWER PRIORITY)
+
+**Source:** Ahmed directive (2026-05-15): *"Package as an electron app. Look at https://github.com/jmanuelcorral/squadcenter for installation instructions, we should probably have something similar."* Append-only — lower priority, parked behind Wave 10 close-out and Streams F/G/H/I/J/K.
+
+### Reference architecture — squadcenter (jmanuelcorral)
+
+A desktop mission-control for Copilot+Squad sessions; same audience as squadboard, complementary surface. We adopt its packaging + distribution patterns wholesale (proven, multi-channel, signed where it matters).
+
+- **Stack:** Electron 35 + React 19 + TypeScript 5.8 + Vite 6 + Tailwind v4 + xterm.js + node-pty + React Router v7 (HashRouter) + Lucide + Playwright e2e.
+- **Layout:** `electron/` (main + preload + IPC + services) || `src/` (renderer) || `shared/types.ts` || `e2e/`.
+- **Build:** `vite-plugin-electron` compiles main + renderer in one Vite pipeline.
+- **IPC:** `contextBridge` in preload; renderer calls via `window.electronAPI.*` (23 channels).
+- **Distribution channels live today:** npm (`squad-center` global), Chocolatey, winget (pending Microsoft acceptance), apt repo on GitHub Pages with GPG-signed metadata, and direct GitHub Releases (Setup.exe / .dmg / .AppImage / .deb).
+- **Roster (their team):** Neo / Morpheus / Trinity / Tank — gives a sense of how lightweight the app team is for an Electron wrapper.
+
+### Squadboard's relevant existing shape (what Electron has to wrap)
+
+- **Server (Express + Drizzle ORM)** under `packages/server/` — long-lived Node process; owns HTTP + WebSocket + MCP stdio/HTTP transports.
+- **Client (React + Vite)** under `packages/client/` — built to static assets; today served by Vite dev or by the Express server in prod.
+- **CLI** under `packages/cli/` — thin launcher + helpers; entry point users install via `npx`.
+- **Embedded Postgres** (`packages/server/src/db/postgres.ts`): `embedded-postgres` package starts a real PG cluster on `~/.squadboard/data` at port 54321. Per-platform binaries are downloaded by `embedded-postgres` at install time. **This is the hardest packaging problem** — these are real native binaries, not pure-JS, and must survive `app.asar` packing.
+- **MCP servers spawned as child processes** via stdio. Same constraint: real Node child processes.
+- **WebSocket** for live updates (board, runs, consult streams).
+
+### Items
+
+- **L1. Architecture decision (sync, blocking everything else).** McManus + Hockney pick between three models, document tradeoffs, write up as `.squad/decisions.md` entry:
+
+  - **Option A — Server in main process.** Express + Drizzle + WS imported into the Electron main process. Simplest IPC story (everything lives in the same Node runtime). Risk: any server crash takes down the whole app; harder to keep CLI / headless deployments parity-feasible.
+  - **Option B — Server as a child process supervised by main.** `electron/main.ts` spawns the existing `packages/server/dist/index.js` as a `child_process` (or `utilityProcess` in Electron 22+). Renderer talks to `http://localhost:<port>` exactly like dev today. Crash isolation; near-zero refactor; matches squadcenter's external-process discipline (their node-pty sessions are out-of-process by design). **Recommended.**
+  - **Option C — Server in a hidden BrowserWindow.** Cute but generally fragile; rejected.
+
+  The decision also fixes: which Node version Electron carries (must be ≥ Squadboard server's min), how to ship `embedded-postgres` binaries (`extraResources` + `asarUnpack` either way), and whether the headless server build target is preserved (yes — for cloud / shared-instance deployments).
+
+- **L2. Repo layout — add `electron/` workspace package.** New `packages/electron/` with:
+  - `electron/main.ts` — app lifecycle, single-instance lock, server child supervisor, window mgmt, tray, deep-link handler.
+  - `electron/preload.ts` — `contextBridge` exposes `window.squadboardAPI.*` (settings, port discovery, restart-server, open-data-dir, check-for-updates).
+  - `electron/ipc/` — channel handlers grouped by domain (`server.ts`, `updater.ts`, `system.ts`).
+  - `electron/services/server-supervisor.ts` — fork the server, capture stdout/stderr to a rotating log, restart on crash with backoff, surface health to renderer.
+  - `electron/services/data-dir.ts` — resolve the user data dir (`app.getPath('userData')` cross-platform; honour `--data-dir=…` CLI arg for dev/test).
+  - `electron/services/postgres-paths.ts` — resolve unpacked `embedded-postgres` binary paths in production (asar-aware) so initdb/postgres binaries can actually exec.
+  - `vite.electron.config.ts` — uses `vite-plugin-electron` to build main + preload alongside the renderer.
+
+- **L3. Renderer integration — keep the existing client, no fork.** `packages/client/` builds unchanged. Electron loads it via `loadFile(...)` in production, `loadURL('http://localhost:5173')` in dev. Switch React Router to HashRouter (or keep BrowserRouter with `file://` base) — squadcenter chose HashRouter; do the same for cleanest deep-link semantics. Renderer continues to talk to `http://localhost:<server-port>` for all data — nothing in `pages/` or `api/` should change.
+
+- **L4. Bundle embedded Postgres correctly.** This is the highest-risk item:
+  - Resolve which `embedded-postgres` per-OS package(s) ship per build target (Win x64, mac x64, mac arm64, linux x64, linux arm64). Verify each via `optionalDependencies`.
+  - Configure `electron-builder` `extraResources` + `asarUnpack` so the PG binaries land at known paths inside `resources/app.asar.unpacked/...`.
+  - Wrap the existing `startEmbeddedPostgres()` to consult `process.resourcesPath` when running under Electron (`process.versions.electron` truthy) and pass the unpacked paths.
+  - Verify: cold-start on a clean machine for each platform spins up Postgres without touching the user's system Postgres / PATH.
+  - Port allocation: pick a free port near 54321 (collision-aware) instead of hard-coding; persist across restarts.
+
+- **L5. MCP child process compatibility under Electron.** MCP servers (today launched as `npx tsx ...`) need a real Node binary on PATH. Options: ship a Node runtime inside `extraResources`, or document that users must have Node installed (squadcenter chose the latter for `node-pty`). Pick whichever maintains a one-click install promise; lean toward bundling Node for non-developer audiences.
+
+- **L6. First-run experience.**
+  - Splash window during server startup (subscribes to L2's supervisor health stream); reuse Stream K's `<PageLoading label="Starting Squadboard…" />` shape so the loading idiom is consistent.
+  - First-run wizard: choose data dir (default = userData), opt-in to telemetry (none by default, just a toggle for future), discover existing `.squad/` projects in `~/Documents` / `~/dev` (best effort), seed the curated Squad Apps from Stream F4 if installed.
+  - Project picker on subsequent launches.
+
+- **L7. Packaging via electron-builder.**
+  - `electron-builder.yml` targets: Windows NSIS (.exe), macOS DMG (.dmg) for x64 + arm64, Linux AppImage + .deb (and .rpm if cheap).
+  - App ID: `dev.squadboard.app` (configurable). Author / maintainer fields properly populated.
+  - Per-platform icons (.ico, .icns, png set).
+  - Auto-update channel: `latest.yml` published to GitHub Releases.
+
+- **L8. Auto-update via electron-updater.**
+  - Use `electron-updater` with the `github` provider against `bradygaster/squadboard` releases.
+  - User-visible update flow: silent check on launch + every 4 h → notification when an update is available → "Restart to update" affordance in tray + Settings.
+  - Optional pre-release channel for power users.
+
+- **L9. Code-signing & notarization.** Document but do not implement until certs are procured:
+  - **macOS:** Apple Developer ID + notarization (`@electron/notarize` in afterSign hook).
+  - **Windows:** EV cert (preferred for SmartScreen) or standard cert with reputation; signed via electron-builder `signtool` config or Azure Key Vault signing.
+  - **Linux:** GPG-signed apt repo metadata; AppImage embedded signature.
+  - Until certs land, ship unsigned with clear "developer build — expect Gatekeeper / SmartScreen warnings" docs.
+
+- **L10. Distribution channels (squadcenter parity).** Ship in stages so the first release isn't blocked on registry approvals:
+  - **Stage 1 (release-1):** GitHub Releases only — direct downloads of .exe / .dmg / .AppImage / .deb.
+  - **Stage 2:** npm global — `@sabbour/squadboard` package wraps the existing CLI to also offer `squadboard app launch` that resolves to the installed Electron app (or downloads it on first run if absent).
+  - **Stage 3:** Chocolatey package (community-maintained at first; promotion to verified later).
+  - **Stage 4:** winget submission (Microsoft review queue can take weeks).
+  - **Stage 5:** apt repo on GitHub Pages (GPG-signed, `deb https://bradygaster.github.io/squadboard-apt stable main`).
+
+- **L11. Tray + window state + deep-links.**
+  - Tray icon with quick-open / quick-quit / open-current-project / current-status (server up/down, run count).
+  - Persist window bounds + zoom + dark-mode preference per OS conventions.
+  - Register `squadboard://` URL handler so links from external tools (GitHub PR comments, MCP push notifications, blog posts) can open a specific board / card / consult session.
+
+- **L12. CLI ↔ App handoff.** Existing `npx squadboard ...` CLI should learn:
+  - `squadboard app install` — download + install the matching Electron build for the current OS via auto-detection.
+  - `squadboard app launch` — open the installed app pointed at the current project.
+  - `squadboard app status` — is the desktop app running, on which port.
+  - Server-only mode is preserved: `squadboard serve` continues to start a headless server (for cloud / shared deployments / CI). The Electron app simply wraps this same server in a desktop chrome.
+
+- **L13. E2E coverage against built binary.** Mirror squadcenter's pattern: Playwright e2e launches the packaged Electron app (per platform in CI) and exercises the smoke path (window opens → server up → projects page renders → can open a board → can run an issue). One test target per OS in GitHub Actions matrix.
+
+- **L14. Docs + screenshots.**
+  - `docs/desktop-app.md` — architecture, install instructions, troubleshooting (port collision, data dir migration, log locations).
+  - Update root `README.md` Quickstart with desktop-app section ("Get the app" tier above the dev-mode `pnpm dev` tier).
+  - Mirror squadcenter's `INSTALLATION.md` style — per-channel, copy-pasteable commands.
+  - Auto-generated screenshot suite via Playwright (renders board, consult, ceremonies, flow).
+
+### Sequencing inside Stream L
+
+- **L1 first** (architecture decision). Sync-blocking — every other item depends on the model picked.
+- **L2 + L3** in parallel after L1 (electron scaffold + renderer integration).
+- **L4 + L5** are the risky bits; spike L4 EARLY (Postgres-in-asar) before committing to a release date — it can sink the whole stream if the binaries don't unpack cleanly across platforms.
+- **L6** depends on L2/L4 working enough to boot.
+- **L7 + L8 + L9** are deployment plumbing; can ship in parallel after L2 lands a buildable shell.
+- **L10** is staged — only Stage 1 (GitHub Releases) is on the critical path; later stages are post-release follow-ups.
+- **L11 + L12** are "polish" — defer until L1-L7 deliver a usable v0.
+- **L13** lands alongside L7 (CI matrix needs the built binary).
+- **L14** continuous — small docs PRs as items land.
+
+### Owners
+
+- **Hockney** — Electron main process + server supervisor + Postgres bundling (L1, L2, L4, L5, L11) — knows the server internals best.
+- **Keyser** — renderer integration + first-run wizard + tray UX + Stream-K loading reuse (L3, L6).
+- **McManus** — architecture review (L1) + auto-updater + signing strategy (L8, L9). Owns the publish/release ceremony.
+- **Redfoot** — install docs across all channels + README refresh + screenshot suite (L10, L14). Mirrors `INSTALLATION.md` from squadcenter.
+- **Kujan** — packaged-binary e2e in CI matrix (L13) + smoke tests on each new channel.
+- **Kobayashi** — CLI ↔ App handoff shape (L12).
+
+### Cross-stream dependencies
+
+- **Stream K (page loading)** — L6's splash + first-run wizard reuse `<PageLoading>` so the desktop start-up feels native to the rest of the app. Stream K should ship first or in parallel.
+- **Stream F (Squad Apps)** — L6's first-run wizard offers to seed the 5 curated Squad Apps. Coordination on the install API needed.
+- **Stream I (reliability)** — L8 auto-update interacts with I1 backup (always backup before updating) and I9 migration safety (rollback path for the desktop app).
+- **Stream G (GitHub integration)** — L10 Stage 1 distribution writes to `bradygaster/squadboard` Releases; later, `squadboard://` deep-links from GH webhooks (G6) become useful surface.
+
+### Risks & open questions
+
+- **Embedded Postgres in `app.asar`** — by far the biggest risk. Spike early (L4 first usable artifact). If unworkable for some platform, fall back to "bring your own Postgres" config for that OS only, with a clear UX path.
+- **Code-signing certs** — McManus needs to procure Apple Developer + Windows EV cert before L9 ships. Without these, the experience on first-launch is rough.
+- **App ID ownership** — `dev.squadboard.app` (or whatever) needs to be reserved consistently across stores. Confirm with project owner before any packaged binary ships publicly.
+- **Headless / cloud parity** — must NOT regress. The existing `pnpm --filter server start` story stays as the supported path for non-desktop deployments. L1's decision must preserve this.
+- **Update channel split** — do we want a "stable" + "beta" channel from day one, or only stable? Recommend stable-only at v0; add beta when there's a real cohort.
+
+### Acceptance for Stream L
+
+69. The architecture-decision document (L1) is recorded in `.squad/decisions.md` (or sidecar) with the chosen model + rationale + rejected alternatives.
+70. `pnpm --filter @sabbour/squadboard-electron build:dev` produces a dev Electron app that boots the server, opens the renderer, and lets the user open a project.
+71. `pnpm --filter @sabbour/squadboard-electron dist` produces signed-or-unsigned installers for Win NSIS + macOS DMG (x64 + arm64) + Linux AppImage + .deb.
+72. Embedded Postgres starts cleanly inside the packaged app on all four target platforms, with the data dir defaulting to `app.getPath('userData')`.
+73. Auto-update via `electron-updater` against GitHub Releases works end-to-end on at least one platform (mac OR win) with manual verification screenshot.
+74. Tray icon + single-instance lock + window-bounds persistence + `squadboard://` deep-link handler all work on at least Windows + macOS.
+75. CLI gains `squadboard app install / launch / status` subcommands; `squadboard serve` continues to work standalone for headless deployments.
+76. A Playwright e2e in CI launches the packaged Electron binary on at least one OS and asserts the smoke path (window → projects → open board → render).
+77. Distribution Stage 1 (GitHub Releases with .exe / .dmg / .AppImage / .deb attachments) is published from the release workflow on every tagged release.
+78. Docs include `docs/desktop-app.md` (architecture + troubleshooting) and an updated root README with desktop-install instructions per-OS, mirroring squadcenter's `INSTALLATION.md` style.
+79. The first-run experience reuses Stream K's `<PageLoading>` for the splash and follows the Fluent2 idiom for the project picker / setup wizard.
+80. The desktop app does NOT regress headless / CLI usage — `squadboard serve` continues to start a usable server for cloud or shared-instance deployments.

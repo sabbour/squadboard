@@ -2,6 +2,7 @@ import { useParams } from 'react-router'
 import { useProject } from '../api/projects.ts'
 import CostDashboard from '../components/costs/CostDashboard.tsx'
 import PageHeader from '../components/layout/PageHeader.tsx'
+import { PageLoading } from '../components/loading/index.tsx'
 
 export default function Costs() {
   const { id } = useParams<{ id: string }>()
@@ -10,7 +11,7 @@ export default function Costs() {
   const { data: project, isLoading, isError } = useProject(projectId)
 
   if (isLoading) {
-    return <div style={{ padding: '32px', color: 'var(--text-muted)' }}>Loading project…</div>
+    return <PageLoading label="Loading costs…" />
   }
 
   if (isError || !project) {
