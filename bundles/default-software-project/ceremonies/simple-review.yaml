@@ -1,0 +1,15 @@
+name: Simple Review
+steps:
+  - type: route
+    label: Route to reviewer
+    agent: "{{ assignee }}"
+  - type: agent_run
+    label: Agent reviews the work
+    agent: "{{ assignee }}"
+    prompt: "Review the attached work. Check for correctness, style, and test coverage. Leave clear feedback."
+    timeout: 30m
+  - type: approve
+    label: Human approval gate
+    approvers: []
+    timeout: 2h
+    timeoutAction: notify

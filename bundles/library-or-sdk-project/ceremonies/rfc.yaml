@@ -1,0 +1,19 @@
+name: API RFC
+steps:
+  - type: agent_run
+    label: Draft API RFC
+    agent: Lead
+    prompt: "Draft an API RFC for this change. Include: motivation, proposed API surface (signatures, types, defaults), alternatives considered, semver impact (patch/minor/major), and open questions."
+    timeout: 60m
+  - type: approve
+    label: Team API review
+    approvers: [Implementer, Docs, Tester]
+    request_changes_policy: majority
+    timeout: 48h
+    timeoutAction: escalate
+    fallbackReviewer: Lead
+  - type: agent_run
+    label: Incorporate feedback and mark accepted
+    agent: Lead
+    prompt: "Incorporate review feedback. Mark RFC accepted, summarise the final API decision, and update the issue with the resolved design."
+    timeout: 30m

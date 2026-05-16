@@ -1,0 +1,17 @@
+name: Spike Close-out
+steps:
+  - type: agent_run
+    label: Researcher writes finding summary
+    agent: Researcher
+    prompt: "Write a structured finding summary for this research question. Include: context, what was investigated, key findings (with evidence), open questions, and a recommended next step (build / defer / reject / continue investigating)."
+    timeout: 45m
+  - type: agent_run
+    label: Reviewer stress-tests findings
+    agent: Reviewer
+    prompt: "Review the finding summary. Check: Are the conclusions supported by evidence? Are there alternative explanations? What assumptions are load-bearing? Identify any gaps and note whether the recommended next step is sound."
+    timeout: 30m
+  - type: approve
+    label: Spike close approval
+    approvers: []
+    timeout: 24h
+    timeoutAction: notify

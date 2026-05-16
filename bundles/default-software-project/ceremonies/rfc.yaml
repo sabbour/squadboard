@@ -1,0 +1,19 @@
+name: RFC
+steps:
+  - type: agent_run
+    label: Draft RFC
+    agent: Lead
+    prompt: "Draft a Request for Comments document for this proposal. Include: motivation, proposed solution, alternatives considered, and open questions."
+    timeout: 60m
+  - type: approve
+    label: Team review
+    approvers: [Backend, Frontend, Tester]
+    request_changes_policy: majority
+    timeout: 48h
+    timeoutAction: escalate
+    fallbackReviewer: Lead
+  - type: agent_run
+    label: Land the RFC
+    agent: Lead
+    prompt: "Incorporate review feedback into the RFC. Mark it accepted and summarise the decision for the team."
+    timeout: 30m

@@ -1,0 +1,22 @@
+name: Version Bump and Release Notes
+steps:
+  - type: agent_run
+    label: Determine semver bump
+    agent: Lead
+    prompt: "Review all changes in this release. Determine the correct semver bump (patch/minor/major). Justify based on breaking-change policy."
+    timeout: 20m
+  - type: agent_run
+    label: Draft changelog entry
+    agent: Docs
+    prompt: "Write the CHANGELOG entry for this release. Follow Keep a Changelog format. Group by Added/Changed/Deprecated/Removed/Fixed/Security. Link to relevant issues."
+    timeout: 30m
+  - type: agent_run
+    label: Write migration guide if needed
+    agent: Docs
+    prompt: "If this is a major or breaking-minor release, write a migration guide covering every breaking change. If no breaking changes, write 'No migration required.'"
+    timeout: 30m
+  - type: approve
+    label: Release approval
+    approvers: []
+    timeout: 4h
+    timeoutAction: notify

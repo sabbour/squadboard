@@ -1,0 +1,12 @@
+name: Finding Summary
+steps:
+  - type: agent_run
+    label: Synthesise all spike findings
+    agent: Researcher
+    prompt: "Synthesise findings from all closed spikes in this project. Identify themes, conflicting results, and open questions that span multiple spikes. Write an executive summary suitable for a decision-maker who hasn't read the individual spikes."
+    timeout: 60m
+  - type: approve
+    label: Summary approval
+    approvers: [Reviewer]
+    timeout: 24h
+    timeoutAction: notify

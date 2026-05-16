@@ -1,0 +1,137 @@
+{
+  "$schema": "https://squadboard.dev/schemas/squadapp/v1/squadapp.json",
+  "schemaVersion": 1,
+  "appId": "ops-runbook-project",
+  "version": "1.0.0",
+  "name": "Ops / Incident Runbook",
+  "displayName": "Ops / Incident Runbook",
+  "description": "Incident response pipeline: alerts / triaging / mitigating / resolved / postmortem kanban. Team: on-call and escalation leads. Ceremonies: incident open, postmortem.",
+  "kind": "project-template",
+  "author": "Squadboard team",
+  "license": "MIT",
+  "homepage": "https://github.com/sabbour/squadboard",
+  "tags": [
+    "ops",
+    "runbook",
+    "incident",
+    "oncall"
+  ],
+  "requires": {
+    "squadboard": ">=0.1.0"
+  },
+  "project": {
+    "name": "Ops / Incident Runbook",
+    "description": "Incident tracking and postmortem management.",
+    "icon": "🚨"
+  },
+  "kanban": {
+    "columns": [
+      {
+        "slug": "alerts",
+        "label": "Alerts",
+        "order": 0
+      },
+      {
+        "slug": "triaging",
+        "label": "Triaging",
+        "order": 1
+      },
+      {
+        "slug": "mitigating",
+        "label": "Mitigating",
+        "order": 2,
+        "wip_limit": 3
+      },
+      {
+        "slug": "resolved",
+        "label": "Resolved",
+        "order": 3
+      },
+      {
+        "slug": "postmortem",
+        "label": "Postmortem",
+        "order": 4
+      }
+    ],
+    "defaultColumn": "alerts"
+  },
+  "team": [
+    {
+      "name": "OnCall",
+      "role": "On-Call Lead",
+      "persistent": true,
+      "charterPath": "agents/OnCall/charter.md"
+    },
+    {
+      "name": "Escalation",
+      "role": "Escalation Lead",
+      "persistent": true,
+      "charterPath": "agents/Escalation/charter.md"
+    }
+  ],
+  "ceremonies": [
+    {
+      "id": "bug-fix",
+      "name": "Incident Open",
+      "scope": "task",
+      "trigger": {
+        "kind": "on_issue_entry",
+        "config": {
+          "column": "triaging"
+        }
+      },
+      "workflowPath": "ceremonies/bug-fix.yaml"
+    },
+    {
+      "id": "spike",
+      "name": "Postmortem",
+      "scope": "task",
+      "trigger": {
+        "kind": "on_issue_entry",
+        "config": {
+          "column": "postmortem"
+        }
+      },
+      "workflowPath": "ceremonies/spike.yaml"
+    }
+  ],
+  "skills": [
+    {
+      "key": "timeline-builder",
+      "name": "Incident Timeline Builder",
+      "description": "Structured incident timeline: timestamped events, detection, impact windows, mitigation steps, resolution.",
+      "category": "ops"
+    }
+  ],
+  "routing": [
+    {
+      "label": "sev1",
+      "agent": "Escalation"
+    },
+    {
+      "label": "sev2",
+      "agent": "Escalation"
+    },
+    {
+      "label": "incident",
+      "agent": "OnCall"
+    },
+    {
+      "label": "postmortem-action",
+      "agent": "OnCall"
+    }
+  ],
+  "artifacts": {
+    "agents": [
+      "agents/OnCall/charter.md",
+      "agents/Escalation/charter.md"
+    ],
+    "ceremonies": [
+      "ceremonies/bug-fix.yaml",
+      "ceremonies/spike.yaml"
+    ],
+    "skills": [
+      "skills/timeline-builder/SKILL.md"
+    ]
+  }
+}

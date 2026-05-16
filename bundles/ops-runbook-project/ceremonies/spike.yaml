@@ -1,0 +1,17 @@
+name: Postmortem
+steps:
+  - type: agent_run
+    label: Escalation builds blameless timeline
+    agent: Escalation
+    prompt: "Build a blameless postmortem for this incident. Include: timeline (with timestamps), root cause (5 whys), contributing factors, detection gap (why did we not detect sooner?), response effectiveness, customer impact, and at least 3 action items with owners and due dates. Blameless means: identify system failures, not people failures."
+    timeout: 60m
+  - type: approve
+    label: Postmortem review
+    approvers: [OnCall]
+    timeout: 48h
+    timeoutAction: notify
+  - type: agent_run
+    label: File action items
+    agent: Escalation
+    prompt: "Convert each postmortem action item into a separate issue in this project. Each issue must have: description, owner, due date, and label 'postmortem-action'. Summarise the postmortem in the parent issue."
+    timeout: 20m

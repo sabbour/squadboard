@@ -1,0 +1,17 @@
+name: Incident Open
+steps:
+  - type: agent_run
+    label: OnCall declares and classifies incident
+    agent: OnCall
+    prompt: "Classify this incident: severity (SEV1 total outage / SEV2 major degradation / SEV3 minor impact / SEV4 no user impact), impacted services, impacted users (estimate), and initial hypothesis. Open the incident channel and page if SEV1/SEV2."
+    timeout: 15m
+  - type: agent_run
+    label: OnCall applies runbook mitigations
+    agent: OnCall
+    prompt: "Apply the relevant runbook steps for this incident type. Document each action taken and its outcome. If no runbook exists, improvise and document your actions for later runbook creation. Update status every 15 minutes."
+    timeout: 120m
+  - type: agent_run
+    label: OnCall writes resolution summary
+    agent: OnCall
+    prompt: "Write the resolution summary: what was the root cause, what mitigated it, when was full recovery, and what is the customer impact statement. Notify stakeholders."
+    timeout: 20m

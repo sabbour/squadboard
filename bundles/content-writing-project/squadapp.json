@@ -1,0 +1,152 @@
+{
+  "$schema": "https://squadboard.dev/schemas/squadapp/v1/squadapp.json",
+  "schemaVersion": 1,
+  "appId": "content-writing-project",
+  "version": "1.0.0",
+  "name": "Content Writing Project",
+  "displayName": "Content Writing Project",
+  "description": "Non-technical content pipeline: pitches / outlines / drafting / review / published kanban. Team: editor, two writers, reviewer. Ceremonies: outline review, draft review, publish.",
+  "kind": "project-template",
+  "author": "Squadboard team",
+  "license": "MIT",
+  "homepage": "https://github.com/sabbour/squadboard",
+  "tags": [
+    "content",
+    "writing",
+    "editorial"
+  ],
+  "requires": {
+    "squadboard": ">=0.1.0"
+  },
+  "project": {
+    "name": "Content Writing Project",
+    "description": "A content pipeline for articles, posts, scripts, or any long-form writing.",
+    "icon": "✍️"
+  },
+  "kanban": {
+    "columns": [
+      {
+        "slug": "pitches",
+        "label": "Pitches",
+        "order": 0
+      },
+      {
+        "slug": "outlines",
+        "label": "Outlines",
+        "order": 1
+      },
+      {
+        "slug": "drafting",
+        "label": "Drafting",
+        "order": 2,
+        "wip_limit": 4
+      },
+      {
+        "slug": "review",
+        "label": "Review",
+        "order": 3
+      },
+      {
+        "slug": "published",
+        "label": "Published",
+        "order": 4
+      }
+    ],
+    "defaultColumn": "pitches"
+  },
+  "team": [
+    {
+      "name": "Editor",
+      "role": "Editor-in-Chief",
+      "persistent": true,
+      "charterPath": "agents/Editor/charter.md"
+    },
+    {
+      "name": "Writer1",
+      "role": "Writer",
+      "persistent": true,
+      "charterPath": "agents/Writer1/charter.md"
+    },
+    {
+      "name": "Writer2",
+      "role": "Writer",
+      "persistent": true,
+      "charterPath": "agents/Writer2/charter.md"
+    },
+    {
+      "name": "Reviewer",
+      "role": "Content Reviewer",
+      "persistent": true,
+      "charterPath": "agents/Reviewer/charter.md"
+    }
+  ],
+  "ceremonies": [
+    {
+      "id": "simple-review",
+      "name": "Outline Review",
+      "scope": "task",
+      "trigger": {
+        "kind": "on_issue_entry",
+        "config": {
+          "column": "outlines"
+        }
+      },
+      "workflowPath": "ceremonies/simple-review.yaml"
+    },
+    {
+      "id": "bug-fix",
+      "name": "Draft Review",
+      "scope": "task",
+      "trigger": {
+        "kind": "on_issue_entry",
+        "config": {
+          "column": "review"
+        }
+      },
+      "workflowPath": "ceremonies/bug-fix.yaml"
+    },
+    {
+      "id": "spike",
+      "name": "Publish",
+      "scope": "task",
+      "trigger": {
+        "kind": "manual"
+      },
+      "workflowPath": "ceremonies/spike.yaml"
+    }
+  ],
+  "skills": [
+    {
+      "key": "tone-check",
+      "name": "Tone Check",
+      "description": "Audience-fit assessment: formal vs conversational, technical depth calibration, reading level awareness.",
+      "category": "content"
+    }
+  ],
+  "routing": [
+    {
+      "label": "pitch",
+      "agent": "Editor"
+    },
+    {
+      "label": "draft",
+      "agent": "Reviewer"
+    }
+  ],
+  "artifacts": {
+    "agents": [
+      "agents/Editor/charter.md",
+      "agents/Writer1/charter.md",
+      "agents/Writer2/charter.md",
+      "agents/Reviewer/charter.md"
+    ],
+    "ceremonies": [
+      "ceremonies/simple-review.yaml",
+      "ceremonies/bug-fix.yaml",
+      "ceremonies/spike.yaml"
+    ],
+    "skills": [
+      "skills/tone-check/SKILL.md"
+    ]
+  }
+}

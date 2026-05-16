@@ -1,0 +1,20 @@
+name: Bug Fix Loop
+steps:
+  - type: agent_run
+    label: Triage lead assigns severity and fixer
+    agent: TriageLead
+    prompt: "Classify this bug: severity (P0 crash / P1 major / P2 minor / P3 cosmetic), component, and assign to a fixer. Write repro steps if not already present."
+    timeout: 20m
+  - type: route
+    label: Route to assigned fixer
+    agent: "{{ assignee }}"
+  - type: agent_run
+    label: Fixer implements the fix
+    agent: "{{ assignee }}"
+    prompt: "Implement a targeted fix for this bug. Write a regression test that would have caught it. Commit message format: fix(<component>): <what and why>."
+    timeout: 60m
+  - type: agent_run
+    label: Triage lead verifies the fix
+    agent: TriageLead
+    prompt: "Verify the fix using the repro steps. Confirm the regression test passes. Mark as Verified Fixed or reopen with notes."
+    timeout: 20m

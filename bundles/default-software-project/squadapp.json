@@ -1,0 +1,171 @@
+{
+  "$schema": "https://squadboard.dev/schemas/squadapp/v1/squadapp.json",
+  "schemaVersion": 1,
+  "appId": "default-software-project",
+  "version": "1.0.0",
+  "name": "Default Software Project",
+  "displayName": "Default Software Project",
+  "description": "A balanced starter for software teams: 5-column kanban, 4 role-skeleton agents, 3 essential ceremonies, and routing rules covering the most common issue flows. Agents are cast as generic role skeletons — Init Mode will re-cast them with project-specific names and charters when applied.",
+  "kind": "project-template",
+  "author": "Squadboard team",
+  "license": "MIT",
+  "homepage": "https://github.com/sabbour/squadboard",
+  "tags": [
+    "software",
+    "kanban",
+    "generic",
+    "starter"
+  ],
+  "requires": {
+    "squadboard": ">=0.1.0"
+  },
+  "project": {
+    "name": "Default Software Project",
+    "description": "A software project managed by Squadboard.",
+    "icon": "🚀"
+  },
+  "kanban": {
+    "columns": [
+      {
+        "slug": "inbox",
+        "label": "Inbox",
+        "order": 0
+      },
+      {
+        "slug": "triaged",
+        "label": "Triaged",
+        "order": 1
+      },
+      {
+        "slug": "in-progress",
+        "label": "In Progress",
+        "order": 2,
+        "wip_limit": 3
+      },
+      {
+        "slug": "review",
+        "label": "Review",
+        "order": 3
+      },
+      {
+        "slug": "done",
+        "label": "Done",
+        "order": 4
+      }
+    ],
+    "defaultColumn": "inbox"
+  },
+  "team": [
+    {
+      "name": "Lead",
+      "role": "Lead Architect",
+      "persistent": true,
+      "charterPath": "agents/Lead/charter.md"
+    },
+    {
+      "name": "Backend",
+      "role": "Backend Engineer",
+      "persistent": true,
+      "charterPath": "agents/Backend/charter.md"
+    },
+    {
+      "name": "Frontend",
+      "role": "Frontend Engineer",
+      "persistent": true,
+      "charterPath": "agents/Frontend/charter.md"
+    },
+    {
+      "name": "Tester",
+      "role": "QA Engineer",
+      "persistent": true,
+      "charterPath": "agents/Tester/charter.md"
+    }
+  ],
+  "ceremonies": [
+    {
+      "id": "simple-review",
+      "name": "Simple Review",
+      "scope": "task",
+      "trigger": {
+        "kind": "on_issue_entry",
+        "config": {
+          "column": "review"
+        }
+      },
+      "workflowPath": "ceremonies/simple-review.yaml"
+    },
+    {
+      "id": "bug-fix",
+      "name": "Bug Fix",
+      "scope": "task",
+      "trigger": {
+        "kind": "on_issue_entry",
+        "config": {
+          "label": "bug"
+        }
+      },
+      "workflowPath": "ceremonies/bug-fix.yaml"
+    },
+    {
+      "id": "rfc",
+      "name": "RFC",
+      "scope": "project",
+      "trigger": {
+        "kind": "on_issue_entry",
+        "config": {
+          "label": "rfc"
+        }
+      },
+      "workflowPath": "ceremonies/rfc.yaml"
+    }
+  ],
+  "skills": [
+    {
+      "key": "git-workflow",
+      "name": "Git Workflow",
+      "description": "Standard branch-based git workflow: feature branches, atomic commits, PR discipline.",
+      "category": "engineering"
+    },
+    {
+      "key": "tdd-loop",
+      "name": "TDD Loop",
+      "description": "Test-driven development: red → green → refactor cycle with explicit test-first discipline.",
+      "category": "engineering"
+    }
+  ],
+  "routing": [
+    {
+      "label": "bug",
+      "agent": "Tester"
+    },
+    {
+      "label": "feature",
+      "agent": "Lead"
+    },
+    {
+      "label": "frontend",
+      "agent": "Frontend"
+    },
+    {
+      "label": "backend",
+      "agent": "Backend"
+    }
+  ],
+  "artifacts": {
+    "agents": [
+      "agents/Lead/charter.md",
+      "agents/Backend/charter.md",
+      "agents/Frontend/charter.md",
+      "agents/Tester/charter.md"
+    ],
+    "ceremonies": [
+      "ceremonies/simple-review.yaml",
+      "ceremonies/bug-fix.yaml",
+      "ceremonies/rfc.yaml"
+    ],
+    "skills": [
+      "skills/git-workflow/SKILL.md",
+      "skills/tdd-loop/SKILL.md"
+    ]
+  }
+}

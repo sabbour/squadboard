@@ -1,0 +1,17 @@
+name: Outline Review
+steps:
+  - type: agent_run
+    label: Writer builds outline
+    agent: "{{ assignee }}"
+    prompt: "Build a detailed outline for this piece. Include: working title, target audience, key message, section headings with 2-3 bullet points each, estimated word count, and sources to consult."
+    timeout: 30m
+  - type: agent_run
+    label: Editor reviews outline
+    agent: Editor
+    prompt: "Review the outline. Check: Does the structure serve the key message? Is the scope right for the format? Does the target audience framing hold? Approve or return with structural notes."
+    timeout: 20m
+  - type: approve
+    label: Outline approved
+    approvers: [Editor]
+    timeout: 24h
+    timeoutAction: notify

@@ -1,0 +1,22 @@
+name: Draft Review
+steps:
+  - type: agent_run
+    label: Reviewer proofs the draft
+    agent: Reviewer
+    prompt: "Proof this draft. Check: factual accuracy (flag unverified claims), grammar and spelling, consistency with project style guide, tone fit for target audience, and readability. Leave specific, line-level feedback."
+    timeout: 30m
+  - type: agent_run
+    label: Writer addresses feedback
+    agent: "{{ assignee }}"
+    prompt: "Address all reviewer feedback. For each point: apply the fix, or explain in a comment why you disagree. Produce a revised draft."
+    timeout: 30m
+  - type: agent_run
+    label: Editor final sign-off
+    agent: Editor
+    prompt: "Give this piece a final editorial read. Check overall narrative arc, headline, opening hook, and closing call-to-action. Approve for publication or return with final notes."
+    timeout: 20m
+  - type: approve
+    label: Ready to publish
+    approvers: [Editor]
+    timeout: 24h
+    timeoutAction: notify

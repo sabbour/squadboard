@@ -1,0 +1,121 @@
+{
+  "$schema": "https://squadboard.dev/schemas/squadapp/v1/squadapp.json",
+  "schemaVersion": 1,
+  "appId": "research-spike",
+  "version": "1.0.0",
+  "name": "Research Spike",
+  "displayName": "Research Spike",
+  "description": "Exploration-first project: questions / investigating / findings / closed kanban. Team: researcher and reviewer. Ceremonies: spike close and finding summary.",
+  "kind": "project-template",
+  "author": "Squadboard team",
+  "license": "MIT",
+  "homepage": "https://github.com/sabbour/squadboard",
+  "tags": [
+    "research",
+    "spike",
+    "time-boxed",
+    "discovery"
+  ],
+  "requires": {
+    "squadboard": ">=0.1.0"
+  },
+  "project": {
+    "name": "Research Spike",
+    "description": "A time-boxed research spike to explore a question or technical area.",
+    "icon": "🔬"
+  },
+  "kanban": {
+    "columns": [
+      {
+        "slug": "questions",
+        "label": "Questions",
+        "order": 0
+      },
+      {
+        "slug": "investigating",
+        "label": "Investigating",
+        "order": 1,
+        "wip_limit": 3
+      },
+      {
+        "slug": "findings",
+        "label": "Findings",
+        "order": 2
+      },
+      {
+        "slug": "closed",
+        "label": "Closed",
+        "order": 3
+      }
+    ],
+    "defaultColumn": "questions"
+  },
+  "team": [
+    {
+      "name": "Researcher",
+      "role": "Lead Researcher",
+      "persistent": true,
+      "charterPath": "agents/Researcher/charter.md"
+    },
+    {
+      "name": "Reviewer",
+      "role": "Findings Reviewer",
+      "persistent": true,
+      "charterPath": "agents/Reviewer/charter.md"
+    }
+  ],
+  "ceremonies": [
+    {
+      "id": "spike",
+      "name": "Spike Close-out",
+      "scope": "task",
+      "trigger": {
+        "kind": "on_issue_entry",
+        "config": {
+          "column": "findings"
+        }
+      },
+      "workflowPath": "ceremonies/spike.yaml"
+    },
+    {
+      "id": "simple-review",
+      "name": "Finding Summary",
+      "scope": "project",
+      "trigger": {
+        "kind": "manual"
+      },
+      "workflowPath": "ceremonies/simple-review.yaml"
+    }
+  ],
+  "skills": [
+    {
+      "key": "literature-review",
+      "name": "Literature Review",
+      "description": "Structured research: source evaluation, claim/evidence separation, uncertainty tagging.",
+      "category": "research"
+    }
+  ],
+  "routing": [
+    {
+      "label": "question",
+      "agent": "Researcher"
+    },
+    {
+      "label": "finding",
+      "agent": "Reviewer"
+    }
+  ],
+  "artifacts": {
+    "agents": [
+      "agents/Researcher/charter.md",
+      "agents/Reviewer/charter.md"
+    ],
+    "ceremonies": [
+      "ceremonies/spike.yaml",
+      "ceremonies/simple-review.yaml"
+    ],
+    "skills": [
+      "skills/literature-review/SKILL.md"
+    ]
+  }
+}

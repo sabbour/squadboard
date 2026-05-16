@@ -1,0 +1,24 @@
+name: Bug Fix
+steps:
+  - type: route
+    label: Triage to Tester
+    agent: Tester
+  - type: agent_run
+    label: Reproduce the bug
+    agent: Tester
+    prompt: "Reproduce the bug described in this issue. Document exact repro steps, environment, and observed vs expected behavior."
+    timeout: 30m
+  - type: route
+    label: Route to Backend or Frontend for fix
+    agent: Lead
+    prompt: "Determine whether this bug is backend or frontend and route accordingly."
+  - type: agent_run
+    label: Implement the fix
+    agent: "{{ assignee }}"
+    prompt: "Fix the bug. Write a regression test. Document what changed and why."
+    timeout: 60m
+  - type: agent_run
+    label: Verify the fix
+    agent: Tester
+    prompt: "Verify the fix resolves the original repro. Confirm regression test passes."
+    timeout: 20m

@@ -1,0 +1,12 @@
+name: Batch Close
+steps:
+  - type: agent_run
+    label: Summarise verified-fixed bugs
+    agent: TriageLead
+    prompt: "Summarise all bugs in the Verified Fixed column: count by severity, list any patterns or root cause clusters, and recommend which ones to ship in the next release vs defer."
+    timeout: 30m
+  - type: approve
+    label: Ship approval
+    approvers: []
+    timeout: 2h
+    timeoutAction: notify

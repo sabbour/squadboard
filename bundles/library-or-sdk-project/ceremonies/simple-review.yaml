@@ -1,0 +1,12 @@
+name: Implementation Review
+steps:
+  - type: agent_run
+    label: Review implementation
+    agent: Lead
+    prompt: "Review the implementation. Check: public API matches the accepted RFC, internal design is sound, test coverage is adequate, no implementation details leak through the public surface."
+    timeout: 30m
+  - type: approve
+    label: Merge gate
+    approvers: []
+    timeout: 2h
+    timeoutAction: notify

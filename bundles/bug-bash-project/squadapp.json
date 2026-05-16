@@ -1,0 +1,135 @@
+{
+  "$schema": "https://squadboard.dev/schemas/squadapp/v1/squadapp.json",
+  "schemaVersion": 1,
+  "appId": "bug-bash-project",
+  "version": "1.0.0",
+  "name": "Bug Bash Project",
+  "displayName": "Bug Bash Project",
+  "description": "Focused on cleaning a bug backlog fast: triage / verified / in-fix / verified-fixed kanban. Team: a triage lead and three fixers. Ceremonies: bug-fix loop and batch-close.",
+  "kind": "project-template",
+  "author": "Squadboard team",
+  "license": "MIT",
+  "homepage": "https://github.com/sabbour/squadboard",
+  "tags": [
+    "bug-bash",
+    "event",
+    "testing",
+    "qa"
+  ],
+  "requires": {
+    "squadboard": ">=0.1.0"
+  },
+  "project": {
+    "name": "Bug Bash",
+    "description": "A time-boxed bug bash to clear a backlog of defects.",
+    "icon": "🐛"
+  },
+  "kanban": {
+    "columns": [
+      {
+        "slug": "triage",
+        "label": "Triage",
+        "order": 0
+      },
+      {
+        "slug": "verified",
+        "label": "Verified",
+        "order": 1
+      },
+      {
+        "slug": "in-fix",
+        "label": "In Fix",
+        "order": 2,
+        "wip_limit": 5
+      },
+      {
+        "slug": "verified-fixed",
+        "label": "Verified Fixed",
+        "order": 3
+      }
+    ],
+    "defaultColumn": "triage"
+  },
+  "team": [
+    {
+      "name": "TriageLead",
+      "role": "Triage Lead",
+      "persistent": true,
+      "charterPath": "agents/TriageLead/charter.md"
+    },
+    {
+      "name": "Fixer1",
+      "role": "Bug Fixer",
+      "persistent": true,
+      "charterPath": "agents/Fixer1/charter.md"
+    },
+    {
+      "name": "Fixer2",
+      "role": "Bug Fixer",
+      "persistent": true,
+      "charterPath": "agents/Fixer2/charter.md"
+    },
+    {
+      "name": "Fixer3",
+      "role": "Bug Fixer",
+      "persistent": true,
+      "charterPath": "agents/Fixer3/charter.md"
+    }
+  ],
+  "ceremonies": [
+    {
+      "id": "bug-fix",
+      "name": "Bug Fix Loop",
+      "scope": "task",
+      "trigger": {
+        "kind": "on_issue_entry",
+        "config": {
+          "column": "verified"
+        }
+      },
+      "workflowPath": "ceremonies/bug-fix.yaml"
+    },
+    {
+      "id": "simple-review",
+      "name": "Batch Close",
+      "scope": "project",
+      "trigger": {
+        "kind": "manual"
+      },
+      "workflowPath": "ceremonies/simple-review.yaml"
+    }
+  ],
+  "skills": [
+    {
+      "key": "repro-steps",
+      "name": "Repro Step Authoring",
+      "description": "Structured reproduction steps: environment, preconditions, exact actions, observed vs expected behavior.",
+      "category": "quality"
+    }
+  ],
+  "routing": [
+    {
+      "label": "p0",
+      "agent": "TriageLead"
+    },
+    {
+      "label": "bug",
+      "agent": "TriageLead"
+    }
+  ],
+  "artifacts": {
+    "agents": [
+      "agents/TriageLead/charter.md",
+      "agents/Fixer1/charter.md",
+      "agents/Fixer2/charter.md",
+      "agents/Fixer3/charter.md"
+    ],
+    "ceremonies": [
+      "ceremonies/bug-fix.yaml",
+      "ceremonies/simple-review.yaml"
+    ],
+    "skills": [
+      "skills/repro-steps/SKILL.md"
+    ]
+  }
+}

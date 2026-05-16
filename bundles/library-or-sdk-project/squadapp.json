@@ -1,0 +1,167 @@
+{
+  "$schema": "https://squadboard.dev/schemas/squadapp/v1/squadapp.json",
+  "schemaVersion": 1,
+  "appId": "library-or-sdk-project",
+  "version": "1.0.0",
+  "name": "Library / SDK Project",
+  "displayName": "Library / SDK Project",
+  "description": "Kanban for npm / PyPI library development: triage through release. Ceremonies cover API RFC, version bump, and release notes. Team includes a lead, implementer, docs writer, and tester.",
+  "kind": "project-template",
+  "author": "Squadboard team",
+  "license": "MIT",
+  "homepage": "https://github.com/sabbour/squadboard",
+  "tags": [
+    "library",
+    "sdk",
+    "oss",
+    "release"
+  ],
+  "requires": {
+    "squadboard": ">=0.1.0"
+  },
+  "project": {
+    "name": "Library / SDK Project",
+    "description": "An open-source library or SDK managed through Squadboard.",
+    "icon": "📦"
+  },
+  "kanban": {
+    "columns": [
+      {
+        "slug": "triage",
+        "label": "Triage",
+        "order": 0
+      },
+      {
+        "slug": "api-design",
+        "label": "API Design",
+        "order": 1
+      },
+      {
+        "slug": "impl",
+        "label": "Impl",
+        "order": 2,
+        "wip_limit": 3
+      },
+      {
+        "slug": "docs",
+        "label": "Docs",
+        "order": 3
+      },
+      {
+        "slug": "release",
+        "label": "Release",
+        "order": 4
+      }
+    ],
+    "defaultColumn": "triage"
+  },
+  "team": [
+    {
+      "name": "Lead",
+      "role": "Library Lead",
+      "persistent": true,
+      "charterPath": "agents/Lead/charter.md"
+    },
+    {
+      "name": "Implementer",
+      "role": "Core Implementer",
+      "persistent": true,
+      "charterPath": "agents/Implementer/charter.md"
+    },
+    {
+      "name": "Docs",
+      "role": "Documentation Writer",
+      "persistent": true,
+      "charterPath": "agents/Docs/charter.md"
+    },
+    {
+      "name": "Tester",
+      "role": "QA / Compatibility Tester",
+      "persistent": true,
+      "charterPath": "agents/Tester/charter.md"
+    }
+  ],
+  "ceremonies": [
+    {
+      "id": "rfc",
+      "name": "API RFC",
+      "scope": "project",
+      "trigger": {
+        "kind": "on_issue_entry",
+        "config": {
+          "column": "api-design"
+        }
+      },
+      "workflowPath": "ceremonies/rfc.yaml"
+    },
+    {
+      "id": "simple-review",
+      "name": "Implementation Review",
+      "scope": "task",
+      "trigger": {
+        "kind": "on_issue_entry",
+        "config": {
+          "column": "docs"
+        }
+      },
+      "workflowPath": "ceremonies/simple-review.yaml"
+    },
+    {
+      "id": "spike",
+      "name": "Version Bump & Release Notes",
+      "scope": "project",
+      "trigger": {
+        "kind": "on_issue_entry",
+        "config": {
+          "column": "release"
+        }
+      },
+      "workflowPath": "ceremonies/spike.yaml"
+    }
+  ],
+  "skills": [
+    {
+      "key": "semver",
+      "name": "Semver Discipline",
+      "description": "Strict semantic versioning: patch for fixes, minor for backwards-compatible additions, major for breaking changes.",
+      "category": "release"
+    },
+    {
+      "key": "changelog",
+      "name": "Changelog Authoring",
+      "description": "Keep a Changelog format: Added / Changed / Deprecated / Removed / Fixed / Security sections, user-facing language.",
+      "category": "release"
+    }
+  ],
+  "routing": [
+    {
+      "label": "breaking-change",
+      "agent": "Lead"
+    },
+    {
+      "label": "docs",
+      "agent": "Docs"
+    },
+    {
+      "label": "bug",
+      "agent": "Tester"
+    }
+  ],
+  "artifacts": {
+    "agents": [
+      "agents/Lead/charter.md",
+      "agents/Implementer/charter.md",
+      "agents/Docs/charter.md",
+      "agents/Tester/charter.md"
+    ],
+    "ceremonies": [
+      "ceremonies/rfc.yaml",
+      "ceremonies/simple-review.yaml",
+      "ceremonies/spike.yaml"
+    ],
+    "skills": [
+      "skills/semver/SKILL.md",
+      "skills/changelog/SKILL.md"
+    ]
+  }
+}
