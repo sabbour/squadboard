@@ -37,6 +37,12 @@ import {
   commentOnIssue,
   triggerWorkflow,
   mergePr,
+  dispatchWorkflow,
+  pollWorkflowRun,
+  listWorkflows,
+  getDefaultBranch,
+  listBranches,
+  whoAmI,
   GitOpsError,
 } from '../services/github-git-ops.js';
 
@@ -357,6 +363,91 @@ export const TOOLS = [
         },
       },
       required: ['runId'],
+    },
+  },
+  // ── Stream G Wave 21: G1.1 + G1.2 tools ──────────────────────────────────
+  {
+    name: 'github_dispatch_workflow',
+    description:
+      'Dispatch a GitHub Actions workflow_dispatch event for a specific owner/repo. ' +
+      'Returns the workflow run ID and URL once the run is queued. ' +
+      'Use github_poll_workflow_run to wait for completion.',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        owner: { type: 'string', description: 'GitHub org or user that owns the repo.' },
+        repo:  { type: 'string', description: 'Repository name (without owner prefix).' },
+        workflow_file: { type: 'string', description: 'Workflow filename, e.g. "deploy.yml". No path separators.' },
+        ref:   { type: 'string', description: 'Git ref (branch name, tag, or SHA) to run the workflow on.' },
+        inputs: {
+          type: 'object',
+          additionalProperties: { type: 'string' },
+          description: 'Optional key-value pairs passed as workflow_dispatch inputs.',
+        },
+      },
+      required: ['owner', 'repo', 'workflow_file', 'ref'],
+    },
+  },
+  {
+    name: 'github_poll_workflow_run',
+    description:
+      'Poll a GitHub Actions workflow run until it completes or times out. ' +
+      'Polls every 5 seconds (with backoff). Returns the final status and conclusion.',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        owner:   { type: 'string', description: 'GitHub org or user.' },
+        repo:    { type: 'string', description: 'Repository name.' },
+        run_id:  { type: 'string', description: 'Numeric workflow run ID (from github_dispatch_workflow).' },
+        timeoutMs: { type: 'number', description: 'Max wait time in ms. Default 120000 (2 min).' },
+      },
+      required: ['owner', 'repo', 'run_id'],
+    },
+  },
+  {
+    name: 'github_list_workflows',
+    description: 'List all GitHub Actions workflows defined in a repository.',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        owner: { type: 'string', description: 'GitHub org or user.' },
+        repo:  { type: 'string', description: 'Repository name.' },
+      },
+      required: ['owner', 'repo'],
+    },
+  },
+  {
+    name: 'github_get_default_branch',
+    description: 'Get the default branch of a GitHub repository.',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        owner: { type: 'string', description: 'GitHub org or user.' },
+        repo:  { type: 'string', description: 'Repository name.' },
+      },
+      required: ['owner', 'repo'],
+    },
+  },
+  {
+    name: 'github_list_branches',
+    description: 'List branches in a GitHub repository. Optionally filter by a name prefix (e.g. "feature/").',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        owner: { type: 'string', description: 'GitHub org or user.' },
+        repo:  { type: 'string', description: 'Repository name.' },
+        head:  { type: 'string', description: 'Optional branch name prefix to filter by.' },
+      },
+      required: ['owner', 'repo'],
+    },
+  },
+  {
+    name: 'github_whoami',
+    description: 'Return the authenticated GitHub CLI user, protocol, and token scopes (gh auth status).',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {},
+      required: [],
     },
   },
 ];
@@ -1168,6 +1259,81 @@ async function handleGithubMergePr(args: ToolArgs): Promise<unknown> {
   }
 }
 
+// ── G1.1 handlers ────────────────────────────────────────────────────────────
+
+async function handleGithubDispatchWorkflow(args: ToolArgs): Promise<unknown> {
+  const { owner, repo, workflow_file, ref, inputs } = args as {
+    owner?: string; repo?: string; workflow_file?: string; ref?: string;
+    inputs?: Record<string, string>;
+  };
+  if (!owner) return { error: 'missing_owner', hint: 'Pass owner.' };
+  if (!repo)  return { error: 'missing_repo',  hint: 'Pass repo.' };
+  if (!workflow_file) return { error: 'missing_workflow_file', hint: 'Pass workflow_file.' };
+  if (!ref)   return { error: 'missing_ref',   hint: 'Pass ref.' };
+  try {
+    return await dispatchWorkflow({ owner, repo, workflow_file, ref, inputs });
+  } catch (err) {
+    return gitOpsErrorToResult(err);
+  }
+}
+
+async function handleGithubPollWorkflowRun(args: ToolArgs): Promise<unknown> {
+  const { owner, repo, run_id, timeoutMs } = args as {
+    owner?: string; repo?: string; run_id?: string; timeoutMs?: number;
+  };
+  if (!owner)  return { error: 'missing_owner',  hint: 'Pass owner.' };
+  if (!repo)   return { error: 'missing_repo',   hint: 'Pass repo.' };
+  if (!run_id) return { error: 'missing_run_id', hint: 'Pass run_id.' };
+  try {
+    return await pollWorkflowRun({ owner, repo, run_id, timeoutMs });
+  } catch (err) {
+    return gitOpsErrorToResult(err);
+  }
+}
+
+// ── G1.2 handlers ────────────────────────────────────────────────────────────
+
+async function handleGithubListWorkflows(args: ToolArgs): Promise<unknown> {
+  const { owner, repo } = args as { owner?: string; repo?: string };
+  if (!owner) return { error: 'missing_owner', hint: 'Pass owner.' };
+  if (!repo)  return { error: 'missing_repo',  hint: 'Pass repo.' };
+  try {
+    return await listWorkflows({ owner, repo });
+  } catch (err) {
+    return gitOpsErrorToResult(err);
+  }
+}
+
+async function handleGithubGetDefaultBranch(args: ToolArgs): Promise<unknown> {
+  const { owner, repo } = args as { owner?: string; repo?: string };
+  if (!owner) return { error: 'missing_owner', hint: 'Pass owner.' };
+  if (!repo)  return { error: 'missing_repo',  hint: 'Pass repo.' };
+  try {
+    return await getDefaultBranch({ owner, repo });
+  } catch (err) {
+    return gitOpsErrorToResult(err);
+  }
+}
+
+async function handleGithubListBranches(args: ToolArgs): Promise<unknown> {
+  const { owner, repo, head } = args as { owner?: string; repo?: string; head?: string };
+  if (!owner) return { error: 'missing_owner', hint: 'Pass owner.' };
+  if (!repo)  return { error: 'missing_repo',  hint: 'Pass repo.' };
+  try {
+    return await listBranches({ owner, repo, head });
+  } catch (err) {
+    return gitOpsErrorToResult(err);
+  }
+}
+
+async function handleGithubWhoAmI(): Promise<unknown> {
+  try {
+    return await whoAmI();
+  } catch (err) {
+    return gitOpsErrorToResult(err);
+  }
+}
+
 // ---------------------------------------------------------------------------
 // MCP server bootstrap
 // ---------------------------------------------------------------------------
@@ -1237,6 +1403,26 @@ export function createMcpServer(): Server {
           break;
         case 'github_merge_pr':
           result = await handleGithubMergePr(toolArgs as ToolArgs);
+          break;
+        // ── G1.1: dispatch + poll ─────────────────────────────────────────
+        case 'github_dispatch_workflow':
+          result = await handleGithubDispatchWorkflow(toolArgs as ToolArgs);
+          break;
+        case 'github_poll_workflow_run':
+          result = await handleGithubPollWorkflowRun(toolArgs as ToolArgs);
+          break;
+        // ── G1.2: introspection ───────────────────────────────────────────
+        case 'github_list_workflows':
+          result = await handleGithubListWorkflows(toolArgs as ToolArgs);
+          break;
+        case 'github_get_default_branch':
+          result = await handleGithubGetDefaultBranch(toolArgs as ToolArgs);
+          break;
+        case 'github_list_branches':
+          result = await handleGithubListBranches(toolArgs as ToolArgs);
+          break;
+        case 'github_whoami':
+          result = await handleGithubWhoAmI();
           break;
         default:
           return {

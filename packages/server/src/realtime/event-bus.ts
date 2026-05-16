@@ -122,7 +122,8 @@ export type GitEventType =
   | 'git.pr.created'
   | 'git.comment.posted'
   | 'git.pr.merged'
-  | 'git.workflow.dispatched';
+  | 'git.workflow.dispatched'
+  | 'git.workflow.polled';
 
 /**
  * Wave 20 — G4.2: Copilot-specific events.

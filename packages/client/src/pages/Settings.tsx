@@ -14,6 +14,7 @@ import { McpConfigPanel } from '../components/settings/McpConfigPanel.tsx'
 import { ReviewPolicySection } from '../components/settings/ReviewPolicySection.tsx'
 import { SystemBackupSection } from '../components/settings/SystemBackupSection.tsx'
 import { SystemGitHubSection } from '../components/settings/SystemGitHubSection.tsx'
+import { GitHubActivityFeed } from '../components/GitHubActivityFeed.tsx'
 import PageHeader from '../components/layout/PageHeader.tsx'
 import { useUserPrefs } from '../utils/userPrefs.ts'
 import {
@@ -768,6 +769,11 @@ export default function Settings() {
                 sub="Authentication status, required permissions, branch convention, and connectivity tests."
               />
               <SystemGitHubSection />
+              <SectionHeader
+                title="GitHub Activity"
+                sub="Recent GitHub events (pushes, PRs, issues, workflow runs) linked to this project."
+              />
+              <GitHubActivityFeed projectId={projectId} />
             </>
           )}
         </div>

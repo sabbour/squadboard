@@ -1,9 +1,17 @@
 /**
- * services/github-git-ops.ts — Stream G Phase 2B
+ * services/github-git-ops.ts — Stream G (Wave 21 close)
  *
  * Core git/gh-CLI operations extracted from routes/runs.ts so that both
  * the HTTP route handlers (Express) and the MCP tool handlers can call the
  * same logic without duplication.
+ *
+ * Wave 21 additions (G1.1 + G1.2):
+ *   dispatchWorkflow      — typed wrapper around triggerWorkflow with explicit owner/repo
+ *   pollWorkflowRun       — poll gh run view until complete or timeout
+ *   listWorkflows         — list workflows in a repo
+ *   getDefaultBranch      — resolve repo default branch via gh api
+ *   listBranches          — list branches (with optional prefix filter)
+ *   whoAmI                — gh auth status parsed to JSON
  *
  * Each function returns a typed result object on success; throws a typed
  * GitOpsError on validation or execution failure. Callers convert to their
@@ -44,7 +52,9 @@ export type GitOpsErrorCode =
   | 'pr_merge_failed'
   | 'comment_failed'
   | 'workflow_trigger_failed'
-  | 'workflow_run_not_found';
+  | 'workflow_run_not_found'
+  | 'workflow_poll_timeout'
+  | 'introspection_failed';
 
 export class GitOpsError extends Error {
   constructor(
@@ -629,4 +639,321 @@ export async function assignToCopilot(
   }
 
   return { mode: 'issue_assign', issueNumber: ghIssueNumber };
+}
+
+// ---------------------------------------------------------------------------
+// G1.1 — dispatchWorkflow (typed wrapper around triggerWorkflow)
+// ---------------------------------------------------------------------------
+
+export interface DispatchWorkflowOptions {
+  owner: string;
+  repo: string;
+  /** Workflow filename, e.g. "deploy.yml". No path separators. */
+  workflow_file: string;
+  ref: string;
+  inputs?: Record<string, string>;
+}
+
+export interface DispatchWorkflowResult {
+  workflowRunId: string;
+  runUrl: string;
+  owner: string;
+  repo: string;
+  workflow_file: string;
+  ref: string;
+}
+
+/**
+ * Dispatch a workflow_dispatch event and return the resulting run ID + URL.
+ * Validates owner/repo/workflow_file before shelling out.
+ */
+export async function dispatchWorkflow(opts: DispatchWorkflowOptions): Promise<DispatchWorkflowResult> {
+  const { owner, repo, workflow_file, ref, inputs } = opts;
+
+  if (!owner || typeof owner !== 'string') {
+    throw new GitOpsError('workflow_trigger_failed', '`owner` is required.', 400);
+  }
+  if (!repo || typeof repo !== 'string') {
+    throw new GitOpsError('workflow_trigger_failed', '`repo` is required.', 400);
+  }
+
+  const result = await triggerWorkflow({ workflowFile: workflow_file, ref, inputs, owner, repo });
+  return { ...result, owner, repo, workflow_file, ref };
+}
+
+// ---------------------------------------------------------------------------
+// G1.1 — pollWorkflowRun
+// ---------------------------------------------------------------------------
+
+export interface PollWorkflowRunOptions {
+  owner: string;
+  repo: string;
+  run_id: string | number;
+  /** Max total wait time in ms. Default 120 000 (2 min). */
+  timeoutMs?: number;
+}
+
+export interface WorkflowRunStatus {
+  run_id: string;
+  status: string;           // queued | in_progress | completed | ...
+  conclusion: string | null; // success | failure | cancelled | skipped | null
+  url: string;
+  name: string;
+  headBranch: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/**
+ * Polls `gh run view <run_id> --repo owner/repo --json ...` every 5 seconds
+ * (with exponential backoff capped at 15 s) until the run reaches a terminal
+ * state (completed) or the timeout elapses.
+ *
+ * Returns the final run status on success; throws GitOpsError on timeout.
+ */
+export async function pollWorkflowRun(opts: PollWorkflowRunOptions): Promise<WorkflowRunStatus> {
+  const { owner, repo, run_id, timeoutMs = 120_000 } = opts;
+
+  if (!owner || !repo) {
+    throw new GitOpsError('workflow_run_not_found', '`owner` and `repo` are required.', 400);
+  }
+  if (!run_id) {
+    throw new GitOpsError('workflow_run_not_found', '`run_id` is required.', 400);
+  }
+
+  const viewArgs = [
+    'run', 'view', String(run_id),
+    '--repo', `${owner}/${repo}`,
+    '--json', 'databaseId,status,conclusion,url,name,headBranch,createdAt,updatedAt',
+  ];
+
+  const deadline = Date.now() + timeoutMs;
+  let backoffMs = 5_000;
+
+  while (Date.now() < deadline) {
+    let raw: string;
+    try {
+      const { stdout } = await execFileAsync(GH_BIN(), viewArgs, { timeout: GIT_TIMEOUT_MS });
+      raw = String(stdout).trim();
+    } catch (e: unknown) {
+      const msg = (e as { stderr?: string }).stderr ?? String(e);
+      throw new GitOpsError('workflow_run_not_found', `gh run view failed: ${msg}`, 500);
+    }
+
+    const data = JSON.parse(raw) as {
+      databaseId: number;
+      status: string;
+      conclusion: string | null;
+      url: string;
+      name: string;
+      headBranch: string;
+      createdAt: string;
+      updatedAt: string;
+    };
+
+    const result: WorkflowRunStatus = {
+      run_id: String(data.databaseId),
+      status: data.status,
+      conclusion: data.conclusion,
+      url: data.url,
+      name: data.name,
+      headBranch: data.headBranch,
+      createdAt: data.createdAt,
+      updatedAt: data.updatedAt,
+    };
+
+    if (data.status === 'completed') {
+      return result;
+    }
+
+    // Wait with capped backoff before next poll
+    const remaining = deadline - Date.now();
+    const waitMs = Math.min(backoffMs, remaining, 15_000);
+    if (waitMs <= 0) break;
+    await new Promise<void>((resolve) => setTimeout(resolve, waitMs));
+    backoffMs = Math.min(backoffMs * 1.5, 15_000);
+  }
+
+  throw new GitOpsError(
+    'workflow_poll_timeout',
+    `Workflow run ${run_id} did not complete within ${Math.round(timeoutMs / 1000)}s.`,
+    500,
+  );
+}
+
+// ---------------------------------------------------------------------------
+// G1.2 — listWorkflows
+// ---------------------------------------------------------------------------
+
+export interface WorkflowInfo {
+  id: number;
+  name: string;
+  path: string;
+  state: string;
+}
+
+export interface ListWorkflowsOptions {
+  owner: string;
+  repo: string;
+}
+
+/** List all workflows defined in the repo. */
+export async function listWorkflows(opts: ListWorkflowsOptions): Promise<WorkflowInfo[]> {
+  const { owner, repo } = opts;
+  if (!owner || !repo) {
+    throw new GitOpsError('introspection_failed', '`owner` and `repo` are required.', 400);
+  }
+
+  let raw: string;
+  try {
+    const { stdout } = await execFileAsync(
+      GH_BIN(),
+      ['workflow', 'list', '--repo', `${owner}/${repo}`, '--json', 'id,name,path,state', '--limit', '100'],
+      { timeout: GIT_TIMEOUT_MS },
+    );
+    raw = String(stdout).trim();
+  } catch (e: unknown) {
+    const msg = (e as { stderr?: string }).stderr ?? String(e);
+    throw new GitOpsError('introspection_failed', `gh workflow list failed: ${msg}`, 500);
+  }
+
+  return JSON.parse(raw) as WorkflowInfo[];
+}
+
+// ---------------------------------------------------------------------------
+// G1.2 — getDefaultBranch
+// ---------------------------------------------------------------------------
+
+export interface GetDefaultBranchOptions {
+  owner: string;
+  repo: string;
+}
+
+export interface GetDefaultBranchResult {
+  owner: string;
+  repo: string;
+  defaultBranch: string;
+}
+
+/** Resolve the default branch of a repository via the GitHub API. */
+export async function getDefaultBranch(opts: GetDefaultBranchOptions): Promise<GetDefaultBranchResult> {
+  const { owner, repo } = opts;
+  if (!owner || !repo) {
+    throw new GitOpsError('introspection_failed', '`owner` and `repo` are required.', 400);
+  }
+
+  let raw: string;
+  try {
+    const { stdout } = await execFileAsync(
+      GH_BIN(),
+      ['api', `repos/${owner}/${repo}`, '--jq', '.default_branch'],
+      { timeout: GIT_TIMEOUT_MS },
+    );
+    raw = String(stdout).trim();
+  } catch (e: unknown) {
+    const msg = (e as { stderr?: string }).stderr ?? String(e);
+    throw new GitOpsError('introspection_failed', `gh api repos failed: ${msg}`, 500);
+  }
+
+  if (!raw) {
+    throw new GitOpsError('introspection_failed', `Could not resolve default branch for ${owner}/${repo}.`, 500);
+  }
+
+  return { owner, repo, defaultBranch: raw };
+}
+
+// ---------------------------------------------------------------------------
+// G1.2 — listBranches
+// ---------------------------------------------------------------------------
+
+export interface ListBranchesOptions {
+  owner: string;
+  repo: string;
+  /** Optional prefix / pattern to filter branches (e.g. "feature/"). */
+  head?: string;
+}
+
+export interface BranchInfo {
+  name: string;
+  sha: string;
+}
+
+/** List branches in a repository, optionally filtered by a name prefix. */
+export async function listBranches(opts: ListBranchesOptions): Promise<BranchInfo[]> {
+  const { owner, repo, head } = opts;
+  if (!owner || !repo) {
+    throw new GitOpsError('introspection_failed', '`owner` and `repo` are required.', 400);
+  }
+
+  // Use the matching-refs API when a prefix is supplied; fall back to /branches otherwise.
+  const apiPath = head
+    ? `repos/${owner}/${repo}/git/matching-refs/heads/${encodeURIComponent(head)}`
+    : `repos/${owner}/${repo}/branches?per_page=100`;
+
+  let raw: string;
+  try {
+    const jqExpr = head
+      ? '[.[] | {name: (.ref | ltrimstr("refs/heads/")), sha: .object.sha}]'
+      : '[.[] | {name: .name, sha: .commit.sha}]';
+    const { stdout } = await execFileAsync(
+      GH_BIN(),
+      ['api', apiPath, '--jq', jqExpr],
+      { timeout: GIT_TIMEOUT_MS },
+    );
+    raw = String(stdout).trim();
+  } catch (e: unknown) {
+    const msg = (e as { stderr?: string }).stderr ?? String(e);
+    throw new GitOpsError('introspection_failed', `gh api branches failed: ${msg}`, 500);
+  }
+
+  return JSON.parse(raw) as BranchInfo[];
+}
+
+// ---------------------------------------------------------------------------
+// G1.2 — whoAmI
+// ---------------------------------------------------------------------------
+
+export interface WhoAmIResult {
+  username: string | null;
+  protocol: string | null;
+  authenticated: boolean;
+  scopes: string[];
+  raw: string;
+}
+
+/** Wrapper around `gh auth status` that returns a structured JSON result. */
+export async function whoAmI(): Promise<WhoAmIResult> {
+  let raw = '';
+  let authenticated = false;
+
+  try {
+    const { stdout, stderr } = await execFileAsync(
+      GH_BIN(),
+      ['auth', 'status', '--hostname', 'github.com'],
+      { timeout: GIT_TIMEOUT_MS },
+    ).catch((e: { stdout?: string; stderr?: string }) => ({
+      stdout: e.stdout ?? '',
+      stderr: e.stderr ?? '',
+    }));
+    raw = (stdout + stderr).trim();
+    authenticated = /Logged in/i.test(raw);
+  } catch (e: unknown) {
+    raw = String(e);
+  }
+
+  // Parse username from: "✓ Logged in to github.com account <user> (...)
+  const usernameMatch = raw.match(/account\s+(\S+)\s+\(/);
+  const username = usernameMatch ? (usernameMatch[1] ?? null) : null;
+
+  // Parse protocol
+  const protocolMatch = raw.match(/Git operations protocol:\s*(\S+)/);
+  const protocol = protocolMatch ? (protocolMatch[1] ?? null) : null;
+
+  // Parse scopes: "Token scopes: 'repo', 'read:org', ..."
+  const scopesMatch = raw.match(/Token scopes?:\s*(.+)/);
+  const scopes: string[] = scopesMatch
+    ? (scopesMatch[1] ?? '').split(',').map((s) => s.trim().replace(/^'|'$/g, ''))
+    : [];
+
+  return { username, protocol, authenticated, scopes, raw };
 }
