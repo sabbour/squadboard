@@ -152,3 +152,45 @@ Redfoot delivered the generic "extension fragments" mechanism in Q4. Now it need
 
 This is a cross-repo effort. PR should be authored and submitted by you (or coordinated with upstream maintainer if they take the draft). Q4's postinstall approach is a stopgap; Q3 PR is the canonical long-term design.
 
+
+---
+
+## 2026-05-15T22:42 — Wave 15: Universal Project Bundle
+
+**Task:** 3rd-escalation delivery of Ahmed's "deploy entire project configs as a single artifact" ask.
+
+**Deliverables shipped:**
+
+1. **SDK schema** — `packages/squadboard-sdk/src/bundle/schema.ts`
+   - `SquadboardBundle` type covering all sections: manifest, project, kanban, team, ceremonies, workflows, skills, tools, mcpServers, routing, agents.
+   - All types exported from SDK root (`@sabbour/squadboard-sdk`) and sub-path (`@sabbour/squadboard-sdk/bundle`).
+   - `ApplyResult` type defined here, shared by both loader and CLI.
+   - Also added `./bundle` to SDK package.json exports map.
+
+2. **Loader** — `packages/server/src/services/bundle-loader.ts`
+   - `applyBundle(bundle, opts): Promise<ExtendedApplyResult>` — applies all sections idempotently.
+   - `loadBundle(pathOrUrl)` — loads from filesystem path or HTTP(S) URL.
+   - Skip-with-warning default; `overwriteExisting` flag for full replace.
+   - Ceremonies/workflows use the correct two-table pattern (`workflows` + `workflowVersions`).
+   - Designed for Hockney W16 downstream: call `applyBundle(bundle, { projectId })` for template restore.
+
+3. **CLI** — `packages/server/src/cli/bundle.ts`
+   - `squadboard bundle apply <path-or-url> [--dry-run] [--overwrite] [--project-id <uuid>] [--json]`
+   - Supports both filesystem paths and HTTPS URLs.
+   - Human-readable and machine-readable (--json) output modes.
+
+4. **Reference bundle** — `bundles/default-software-project/`
+   - `squad-bundle.json` — 5-column kanban, 4 agents (Lead/Backend/Frontend/Tester), 3 ceremonies (Simple Review, Bug Fix, RFC), 2 skills (git-workflow, tdd-loop), 5 routing rules.
+   - `README.md` — smoke test procedure + bundle format reference + customisation guide.
+
+**Architecture decisions:**
+- Format: hybrid (JSON root + optional split files for >4KB bodies).
+- Schema home: SDK package (shared between server and future client-side code).
+- Loader home: server services (DB access needed).
+- Idempotency: skip-with-warning by default, opt-in overwrite.
+
+**TypeScript status:** Clean (zero new errors).
+
+**Closes:** `w15-universal-project-bundle`, `f5-unified-import-export`
+
+**Decision doc:** `.squad/decisions/inbox/mcmanus-universal-project-bundle.md`

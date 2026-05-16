@@ -15,4 +15,5 @@ export declare const squadboard: {
     scribe: typeof scribe;
 };
 export type { CloseOutOptions, CloseOutResult, SpawnManifest, SpawnManifestEntry } from './scribe/index.js';
+export type { SquadboardBundle, ApplyResult, BundleManifest, BundleProject, BundleKanban, BundleKanbanColumn, BundleTeamMember, BundleCeremony, BundleCeremonyTrigger, BundleCeremonyTriggerKind, BundleWorkflow, BundleSkill, BundleTool, BundleMcpServer, BundleRoutingRule, BundleAgent, BundleWorkflowStep, BundleWorkflowRouteStep, BundleWorkflowAgentRunStep, BundleWorkflowApproveStep, BundleWorkflowFanOutStep, BundleWorkflowHandoffStep, } from './bundle/schema.js';
 //# sourceMappingURL=index.d.ts.map

@@ -13,6 +13,10 @@
     "./scribe": {
       "import": "./dist/scribe/index.js",
       "types": "./dist/scribe/index.d.ts"
+    },
+    "./bundle": {
+      "import": "./dist/bundle/schema.js",
+      "types": "./dist/bundle/schema.d.ts"
     }
   },
   "scripts": {

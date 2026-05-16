@@ -1,0 +1,149 @@
+{
+  "manifest": {
+    "bundleId": "default-software-project",
+    "name": "Default Software Project",
+    "version": "1.0.0",
+    "description": "A balanced starter for software teams: 5-column kanban, 4 role-skeleton agents, 3 essential ceremonies, and routing rules covering the most common issue flows. Agents are cast as generic role skeletons — Init Mode will re-cast them with project-specific names and charters when applied.",
+    "author": "Squadboard Team",
+    "license": "MIT",
+    "schemaVersion": 1
+  },
+
+  "project": {
+    "name": "Default Software Project",
+    "description": "A software project managed by Squadboard.",
+    "icon": "🚀"
+  },
+
+  "kanban": {
+    "columns": [
+      { "slug": "inbox",       "label": "Inbox",       "order": 0 },
+      { "slug": "triaged",     "label": "Triaged",     "order": 1 },
+      { "slug": "in-progress", "label": "In Progress", "order": 2, "wip_limit": 3 },
+      { "slug": "review",      "label": "Review",      "order": 3 },
+      { "slug": "done",        "label": "Done",        "order": 4 }
+    ],
+    "defaultColumn": "inbox"
+  },
+
+  "team": [
+    {
+      "name": "Lead",
+      "role": "Lead Architect",
+      "persistent": true,
+      "charter": "# Lead\n\n## Role\nLead Architect — owns architecture decisions, reviews, and technical direction.\n\n## Expertise\n- System design\n- Code review\n- Architecture decisions\n- Cross-team coordination\n\n## Style\nDirect and focused. Decides fast, revisits when the data says so.\n"
+    },
+    {
+      "name": "Backend",
+      "role": "Backend Engineer",
+      "persistent": true,
+      "charter": "# Backend\n\n## Role\nBackend Engineer — owns server-side logic, database, and API contracts.\n\n## Expertise\n- API design\n- Database schema\n- Server-side services\n- Performance\n\n## Style\nThorough and systematic. Ships working code with tests.\n"
+    },
+    {
+      "name": "Frontend",
+      "role": "Frontend Engineer",
+      "persistent": true,
+      "charter": "# Frontend\n\n## Role\nFrontend Engineer — owns client-side UI, component library, and user experience.\n\n## Expertise\n- React / component design\n- Accessibility\n- State management\n- CSS / design systems\n\n## Style\nUser-first. Ships polished, accessible interfaces.\n"
+    },
+    {
+      "name": "Tester",
+      "role": "QA Engineer",
+      "persistent": true,
+      "charter": "# Tester\n\n## Role\nQA Engineer — owns test coverage, bug reproduction, and quality gates.\n\n## Expertise\n- Test planning\n- Bug reproduction\n- Regression suites\n- End-to-end testing\n\n## Style\nSceptical by design. Finds the edge cases before users do.\n"
+    }
+  ],
+
+  "ceremonies": [
+    {
+      "id": "simple-review",
+      "name": "Simple Review",
+      "scope": "task",
+      "trigger": {
+        "kind": "on_issue_entry",
+        "config": { "column": "review" }
+      },
+      "workflowYaml": "name: Simple Review\nsteps:\n  - type: route\n    label: Route to reviewer\n    agent: \"{{ assignee }}\"\n  - type: agent_run\n    label: Agent reviews the work\n    agent: \"{{ assignee }}\"\n    prompt: \"Review the attached work. Check for correctness, style, and test coverage. Leave clear feedback.\"\n    timeout: 30m\n  - type: approve\n    label: Human approval gate\n    approvers: []\n    timeout: 2h\n    timeoutAction: notify\n"
+    },
+    {
+      "id": "bug-fix",
+      "name": "Bug Fix",
+      "scope": "task",
+      "trigger": {
+        "kind": "on_issue_entry",
+        "config": { "label": "bug" }
+      },
+      "workflowYaml": "name: Bug Fix\nsteps:\n  - type: route\n    label: Triage to Tester\n    agent: Tester\n  - type: agent_run\n    label: Reproduce the bug\n    agent: Tester\n    prompt: \"Reproduce the bug described in this issue. Document exact repro steps, environment, and observed vs expected behavior.\"\n    timeout: 30m\n  - type: route\n    label: Route to Backend or Frontend for fix\n    agent: Lead\n    prompt: \"Determine whether this bug is backend or frontend and route accordingly.\"\n  - type: agent_run\n    label: Implement the fix\n    agent: \"{{ assignee }}\"\n    prompt: \"Fix the bug. Write a regression test. Document what changed and why.\"\n    timeout: 60m\n  - type: agent_run\n    label: Verify the fix\n    agent: Tester\n    prompt: \"Verify the fix resolves the original repro. Confirm regression test passes.\"\n    timeout: 20m\n"
+    },
+    {
+      "id": "rfc",
+      "name": "RFC",
+      "scope": "project",
+      "trigger": {
+        "kind": "on_issue_entry",
+        "config": { "label": "rfc" }
+      },
+      "workflowYaml": "name: RFC\nsteps:\n  - type: agent_run\n    label: Draft RFC\n    agent: Lead\n    prompt: \"Draft a Request for Comments document for this proposal. Include: motivation, proposed solution, alternatives considered, and open questions.\"\n    timeout: 60m\n  - type: approve\n    label: Team review\n    approvers: [Backend, Frontend, Tester]\n    request_changes_policy: majority\n    timeout: 48h\n    timeoutAction: escalate\n    fallbackReviewer: Lead\n  - type: agent_run\n    label: Land the RFC\n    agent: Lead\n    prompt: \"Incorporate review feedback into the RFC. Mark it accepted and summarise the decision for the team.\"\n    timeout: 30m\n"
+    }
+  ],
+
+  "workflows": [],
+
+  "skills": [
+    {
+      "key": "git-workflow",
+      "name": "Git Workflow",
+      "description": "Standard branch-based git workflow: feature branches, atomic commits, PR discipline.",
+      "category": "engineering",
+      "promptAddendum": "## Git Workflow\n\nFollow this discipline for all code changes:\n\n1. **Branch naming**: `<type>/<short-description>` — e.g. `fix/login-crash`, `feat/kanban-reorder`.\n2. **Atomic commits**: Each commit is a single logical change. Commit message: `<type>: <what and why>` (≤72 chars).\n3. **Co-authored-by trailer**: Always include `Co-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>` on agent-authored commits.\n4. **PR checklist before merge**: tests pass, no TODO/FIXME left behind, docs updated if public API changed.\n5. **Never force-push shared branches.** Only force-push personal branches after explicit agreement.\n"
+    },
+    {
+      "key": "tdd-loop",
+      "name": "TDD Loop",
+      "description": "Test-driven development: red → green → refactor cycle with explicit test-first discipline.",
+      "category": "engineering",
+      "promptAddendum": "## TDD Loop\n\nFollow the red-green-refactor cycle:\n\n1. **Red**: Write a failing test that describes the behaviour you're about to implement. Do not write implementation code yet.\n2. **Green**: Write the minimal implementation to make the test pass. Resist the urge to over-engineer.\n3. **Refactor**: Clean up the code — extract duplication, improve names, simplify logic — while keeping the test green.\n4. **Repeat** for each new behaviour.\n\nRules:\n- Test files live alongside source files or in a `__tests__/` sibling folder.\n- Test names describe intent, not implementation: `'creates an issue in the backlog column'` not `'calls insertRow()'`.\n- Edge cases (empty input, null, concurrent access) get their own test.\n- Integration tests are separate from unit tests; don't conflate them.\n"
+    }
+  ],
+
+  "tools": [],
+
+  "mcpServers": [],
+
+  "routing": [
+    {
+      "pattern": "bug",
+      "matchType": "label",
+      "agentName": "Tester",
+      "priority": 10,
+      "rawRule": "| bug | Tester | Bugs go to Tester for triage and reproduction. |"
+    },
+    {
+      "pattern": "feature",
+      "matchType": "label",
+      "agentName": "Lead",
+      "priority": 20,
+      "rawRule": "| feature | Lead | Feature requests route to Lead for scoping and assignment. |"
+    },
+    {
+      "pattern": "frontend",
+      "matchType": "label",
+      "agentName": "Frontend",
+      "priority": 30,
+      "rawRule": "| frontend | Frontend | Frontend-labelled issues go directly to Frontend. |"
+    },
+    {
+      "pattern": "backend",
+      "matchType": "label",
+      "agentName": "Backend",
+      "priority": 40,
+      "rawRule": "| backend | Backend | Backend-labelled issues go directly to Backend. |"
+    },
+    {
+      "pattern": "catchall",
+      "matchType": "catchall",
+      "agentName": "Lead",
+      "priority": 99,
+      "rawRule": "| * | Lead | Unmatched issues route to Lead for triage. |"
+    }
+  ]
+}

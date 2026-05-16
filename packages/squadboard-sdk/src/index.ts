@@ -17,3 +17,29 @@ export const squadboard = { scribe };
 
 // Re-export types for library consumers.
 export type { CloseOutOptions, CloseOutResult, SpawnManifest, SpawnManifestEntry } from './scribe/index.js';
+
+// Bundle schema — portable project configuration artifact.
+export type {
+  SquadboardBundle,
+  ApplyResult,
+  BundleManifest,
+  BundleProject,
+  BundleKanban,
+  BundleKanbanColumn,
+  BundleTeamMember,
+  BundleCeremony,
+  BundleCeremonyTrigger,
+  BundleCeremonyTriggerKind,
+  BundleWorkflow,
+  BundleSkill,
+  BundleTool,
+  BundleMcpServer,
+  BundleRoutingRule,
+  BundleAgent,
+  BundleWorkflowStep,
+  BundleWorkflowRouteStep,
+  BundleWorkflowAgentRunStep,
+  BundleWorkflowApproveStep,
+  BundleWorkflowFanOutStep,
+  BundleWorkflowHandoffStep,
+} from './bundle/schema.js';
