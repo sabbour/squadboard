@@ -61,6 +61,7 @@ export const agents = pgTable('agents', {
   model: text('model'),
   status: agentStatusEnum('status').notNull().default('active'),
   charterPath: text('charter_path').notNull(),
+  charterContent: text('charter_content').notNull().default(''),
   historyPath: text('history_path'),
   charterHash: text('charter_hash'),
   // Wave 20 — G4.1: 'squad' = normal Squad agent, 'copilot' = virtual @copilot dispatcher

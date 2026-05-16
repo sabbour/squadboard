@@ -9,6 +9,7 @@ import {
   type PoolLike,
 } from './pglite.js';
 import { initMigrationLog, applyMigrations } from './migrations.js';
+import { ensureCharterBackfill } from '../services/charter-backfill.js';
 
 // ─── Drizzle DB type ─────────────────────────────────────────────────────────
 // Both drizzle-orm/pglite and drizzle-orm/node-postgres extend PgDatabase and
@@ -60,6 +61,12 @@ export async function initDb(connectionOrSentinel: string): Promise<void> {
 
   // Run remaining bootstrap (inline tables, seeds, etc.)
   await bootstrapSchema();
+
+  // W29 MC-5: Backfill charter_content column (runs once per process)
+  if (process.env.SQUADBOARD_CHARTER_BACKFILL !== '0') {
+    const squadRoot = process.cwd();
+    await ensureCharterBackfill(squadRoot);
+  }
 }
 
 /** Wrap a real pg.Pool in the PoolLike interface used by getPool() callers. */
