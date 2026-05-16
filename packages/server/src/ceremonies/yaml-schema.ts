@@ -6,9 +6,81 @@
  *  - `event` is required when type=github-event, rejected otherwise
  *  - `schedule` is required when type=cron, rejected otherwise
  *  - .strict() on metadata and spec objects rejects unknown keys
+ *
+ * CER-5 (W29): Extended github-event trigger filters with prSize, reviewState,
+ * milestone, author, branch, and draft fields.
  */
 
 import { z } from 'zod';
+
+// ---------------------------------------------------------------------------
+// CER-5: Github event filter sub-schemas
+// ---------------------------------------------------------------------------
+
+export const prSizeSchema = z
+  .object({
+    min: z.number().int().nonnegative().optional(),
+    max: z.number().int().positive().optional(),
+  })
+  .strict()
+  .refine((v) => v.min === undefined || v.max === undefined || v.min <= v.max, {
+    message: 'prSize.min must be <= prSize.max',
+  })
+  .optional();
+
+export const reviewStateSchema = z
+  .object({
+    in: z
+      .array(z.enum(['approved', 'changes_requested', 'commented', 'dismissed']))
+      .min(1),
+  })
+  .strict()
+  .optional();
+
+export const milestoneSchema = z
+  .object({
+    in: z.array(z.string()).min(1).optional(),
+    ids: z.array(z.number().int().positive()).min(1).optional(),
+  })
+  .strict()
+  .refine((v) => !(v.in && v.ids), {
+    message: 'milestone: specify in OR ids, not both',
+  })
+  .optional();
+
+export const authorSchema = z
+  .object({
+    in: z.array(z.string().min(1)).min(1),
+  })
+  .strict()
+  .optional();
+
+export const branchSchema = z
+  .object({
+    in: z.array(z.string().min(1)).min(1),
+  })
+  .strict()
+  .optional();
+
+export const draftSchema = z
+  .object({
+    equals: z.boolean(),
+  })
+  .strict()
+  .optional();
+
+export const githubEventFiltersSchema = z
+  .object({
+    labels: z.array(z.string()).optional(),
+    paths: z.array(z.string()).optional(),
+    prSize: prSizeSchema,
+    reviewState: reviewStateSchema,
+    milestone: milestoneSchema,
+    author: authorSchema,
+    branch: branchSchema,
+    draft: draftSchema,
+  })
+  .strict();
 
 // ---------------------------------------------------------------------------
 // Trigger sub-schemas (discriminated union on `type`)
@@ -20,13 +92,7 @@ const githubEventTriggerSchema = z
   .object({
     type: z.literal('github-event'),
     event: z.string().min(1, 'event is required for github-event triggers'),
-    filters: z
-      .object({
-        labels: z.array(z.string()).optional(),
-        paths: z.array(z.string()).optional(),
-      })
-      .catchall(z.unknown())
-      .optional(),
+    filters: githubEventFiltersSchema.optional(),
   })
   .strict();
 
