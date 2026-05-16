@@ -3404,3 +3404,54 @@ The `mcpServers` and `seedIssues` sections are also defined inline in `squadapp.
 | SF-3 | `artifacts` manifest listing | No `artifacts` section is defined in the schema. I added it as an additional property to document all included files. Useful for `--dry-run` output. Recommend formalising in a minor schema update. |
 | SF-4 | Agent directory naming | Spec says `team/<AgentName>.json`; many apps may want `agents/` as the top-level directory. Recommend adding `agents/` as an alternative per-file discovery path with the same semantics as `team/`. |
 | SF-5 | Ajv strict format validation | The schema uses `"format": "uri"` on `homepage`. Ajv v8 (used in this repo) throws on unknown formats without `strict: false`. Recommend either (a) removing the `format` keyword and using a regex pattern, or (b) documenting that `ajv-formats` is a peer dependency of the squad-apps validator. |
+
+---
+
+# 2026-05-16T09:38:00Z: W24 User Directives — Keyser Implementation
+
+**Author:** Ahmed (via Copilot) & Keyser  
+**Date:** 2026-05-16  
+**Status:** Delivered / Green Build
+
+## Item 1 — Conjure→Consult Top-Bar Swap + Remove Consult from Left Nav
+
+**Commits:** 6cd1ae15, 55b4383f  
+**Tag:** w24-ux-conjure-consult-swap
+
+### What Changed
+
+- **Top-bar button:** Conjure wand (Wand20Regular) replaced with Consult (ChatHelp20Regular), navigates to `/consult/new`
+- **Left nav:** Consult entry removed; route still exists
+- **`handleNavItemSelect`:** Consult case removed
+- **Imports:** ChatHelp24Regular removed, ChatHelp20Regular added
+
+### What Stayed Same
+
+- ConjureModal, ConjureContext, Board.tsx FAB — all untouched
+- Keyboard shortcuts (c, ?, Ctrl+K) still open ConjureModal
+- `/consult/new` route still exists and reachable
+
+## Item 2 — Collapsible Left Navigation
+
+**Commits:** 6cd1ae15  
+**Tag:** w24-ux-collapsible-nav
+
+### What Changed
+
+- **Toggle button:** ChevronDoubleLeft/Right at top of NavDrawerBody
+- **localStorage:** `squadboard.nav.collapsed` persists state
+- **CSS:** navDrawerCollapsed class (56px width), width transition 200ms ease
+- **Collapsed rendering:**
+  - NavItem children null (icon-only)
+  - Tooltips on hover
+  - NavSectionHeader elements hidden
+  - Logo hidden (overflows 56px)
+
+### Caveats
+
+- Section headers absent in collapsed state (expected)
+- Logo hidden; no compact variant exists
+
+## Build Status
+
+✓ Green (tsc + vite, 7.05s, zero type errors)

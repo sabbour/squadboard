@@ -275,10 +275,44 @@ This wave's Keyser-w22 correctly quoted 3 spec lines verbatim in the close-out d
 
 ---
 
+## W24 Close-Out
+
+**Date:** 2026-05-16  
+**Status:** Completed
+
+### Summary
+
+Keyser delivered W24 UX feature set: Conjure↔Consult re-swap + collapsible left navigation. Multiple commits (6cd1ae15, 55b4383f, 0f6315f9). Self-committed with proper co-author attribution. Build verified green before commit.
+
+### Lineage
+
+- **Todo 1:** w24-ux-conjure-consult-swap (Commit: 6cd1ae15)
+  - Top-bar button: Conjure wand → Consult (ChatHelp icon)
+  - Left-nav Consult entry removed
+  - Route `/consult/new` still exists via top-bar button
+
+- **Todo 2:** w24-ux-collapsible-nav (Commit: 6cd1ae15)
+  - Collapse/expand toggle for left sidebar
+  - Icons-only when collapsed (56–64px width)
+  - Persists to localStorage (`squadboard.nav.collapsed`)
+  - Smooth CSS transition (200ms ease)
+  - Tooltips on icons when collapsed
+  - Section headers hidden when collapsed
+
+### Build Status
+
+✓ Green (tsc + vite, 7.05s, zero type errors)
+
+### Pattern
+
+No orphan-completion. Keyser self-committed with proper workflow.
+
+---
+
 ## Compaction Note
 
 This history file exceeds 15KB. Older waves (W1–W20) are archived in `.squad/decisions.md`.
-Current focus: W21–W23. For earlier context, search `.squad/decisions.md` by wave number.
+Current focus: W21–W24. For earlier context, search `.squad/decisions.md` by wave number.
 
 ---
 

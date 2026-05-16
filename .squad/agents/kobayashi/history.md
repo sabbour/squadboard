@@ -214,3 +214,24 @@ Loading gallery (K5) + ActionLoading component (K7) from Kobayashi-w22.
 **F4 — AKS Feature Kanban curated Squad App shipped.** Pattern: spec-quotes-in-decision-doc enforced (3+ quotes required, per W22 post-mortem standard). Ambiguities resolved systematically (5 total, all documented). Spec gaps flagged as W24 follow-up todos (`kind` enum, `displayName` field, `artifacts` section, agent discovery path, Ajv format validator).
 
 **Takeaway:** Future Squad App specs should pre-define: `kind` enum (project-template|skill-pack|ceremony-pack), optional `displayName`, `artifacts` manifest section, alternative `agents/` directory discovery. No divergence from schema — use `additionalProperties` for experimental fields.
+
+---
+
+## W24 Close-Out
+
+**Date:** 2026-05-16  
+**Status:** Completed
+
+### Summary
+
+Kobayashi delivered F4 — migrate 6 bundles to squadapp.json (commit 4806a4ff). Work was completed on disk, but agent session cleared before commit. Coordinator executed orphan-commit pass with proper co-author attribution.
+
+### Lineage
+
+- **Todo:** f4-bundle-migration
+- **Commit:** 4806a4ff
+- **Pattern:** Orphan completion (silent success / agent runtime eviction)
+
+### Notes
+
+Part of the three-agent L/F pattern in W24. All three (Hockney/Kobayashi/McManus) completed work before session eviction, and coordinator handled the orphan-commit pass uniformly.

@@ -287,3 +287,24 @@ Squad Apps spec authored (docs/squadapp-spec.md, 1100 lines) — anchors Stream 
 5. **Document with worked examples.** Two examples: minimal (bug-repro-starter: one skill + ceremony) and full (aks-feature-kanban: 4 agents, 3 ceremonies, 2 skills, 1 tool, 1 MCP, routing, seed issues). Concrete enough for F4 to copy-paste immediately.
 
 **Downstream:** F5 will adopt squadapp as maximal bundle shape; F6 adds global registry on top; F7 uses JSON schema for CI validation. All three can proceed in parallel.
+
+---
+
+## W24 Close-Out
+
+**Date:** 2026-05-16  
+**Status:** Completed
+
+### Summary
+
+McManus delivered F5 — spec gap fixes + schema updates (commit ffdd71cb). Work was completed on disk, but agent session cleared before commit. Coordinator executed orphan-commit pass with proper co-author attribution.
+
+### Lineage
+
+- **Todo:** f5-spec-gaps
+- **Commit:** ffdd71cb
+- **Pattern:** Orphan completion (silent success / agent runtime eviction)
+
+### Notes
+
+Part of the three-agent L/F pattern in W24. All three (Hockney/Kobayashi/McManus) completed work before session eviction, and coordinator handled uniformly.
