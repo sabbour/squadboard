@@ -788,11 +788,14 @@ async function acceptProposeIssue(
   const body = typeof payload.body === 'string' ? payload.body : '';
   const columnSlug = typeof payload.columnSlug === 'string' ? payload.columnSlug : 'backlog';
   const issuesService = await import('../services/issues.js');
-  const created = await issuesService.createIssue(projectId, {
+  const createdResult = await issuesService.createIssue({
+    projectId,
     title,
     body,
     status: columnSlug as 'backlog' | 'todo' | 'in_progress' | 'in_review' | 'done',
+    createdBy: 'user',
   });
+  const created = createdResult.issue!;
   return { kind: 'issue', issueId: created.id, projectId, url: `/projects/${projectId}/board` };
 }
 
@@ -1034,11 +1037,14 @@ export async function promoteConsult(input: PromoteConsultInput): Promise<Promot
     const body = summary
       ? `${finalBody}\n\n---\n\n<details><summary>Original consult transcript</summary>\n\n${transcriptMd}\n\n</details>`
       : transcriptMd;
-    const created = await issuesService.createIssue(projectId, {
+    const createdResult = await issuesService.createIssue({
+      projectId,
       title: finalTitle,
       body,
       status: (input.columnSlug as 'backlog' | 'todo' | 'in_progress' | 'in_review' | 'done') ?? 'backlog',
+      createdBy: 'user',
     });
+    const created = createdResult.issue!;
     return {
       kind: 'issue',
       summarised,

@@ -1,0 +1,36 @@
+#!/usr/bin/env bash
+# bin/squad-bulk-import — Wave 13 / N8 bulk-import helper
+#
+# Imports a JSON file of tasks/todos onto a Squadboard project board as inert
+# cards (status: backlog | done only — never activates workflow engine).
+#
+# Usage:
+#   squad-bulk-import --project-id <uuid> --file <path.json> [flags]
+#
+# Required:
+#   --project-id <uuid>      Target project UUID
+#   --file <path>            JSON file: Array<{id, title, description, status}>
+#
+# Optional:
+#   --status-map <map>       Comma-separated source:target pairs
+#                            (default: done:done,pending:backlog,in_progress:backlog,blocked:backlog)
+#   --key-prefix <str>       Prepended to each row's id to form the idempotency key (default: '')
+#   --dry-run                Preview plan without inserting
+#   --body-footer <tmpl>     Footer appended to each body (default: ported-from notice)
+#   --created-by <str>       Provenance tag (default: bulk-import)
+#   --json                   Machine-readable JSON output
+#
+# Environment:
+#   DATABASE_URL             Postgres connection string (optional — falls back to embedded)
+#
+# Examples:
+#   squad-bulk-import --project-id 7a9cc07a-... --file /path/to/todos.json --dry-run
+#   squad-bulk-import --project-id 7a9cc07a-... --file /path/to/todos.json --key-prefix "proj-"
+#   squad-bulk-import --project-id 7a9cc07a-... --file /path/to/todos.json --json
+
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+
+exec npx --yes tsx "$REPO_ROOT/packages/server/src/cli/bulk-import.ts" "$@"

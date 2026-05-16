@@ -64,7 +64,25 @@ router.post('/', async (req: Request, res: Response) => {
       assigneeId?: string;
       labels?: string[];
     };
-    const created = await issuesService.createIssue(projectId, { title, body, status: status ?? column, assigneeId });
+
+    const effectiveStatus = status ?? column;
+
+    // HTTP path validates column exists before delegating (MCP/CLI skip this).
+    if (effectiveStatus) {
+      await issuesService.assertColumnExists(projectId, effectiveStatus);
+    }
+
+    const result = await issuesService.createIssue({
+      projectId,
+      title,
+      body,
+      status: effectiveStatus as 'backlog' | 'todo' | 'in_progress' | 'in_review' | 'done' | undefined,
+      assigneeId: assigneeId ?? null,
+      labels: labels ?? [],
+      createdBy: 'user',
+    });
+
+    const created = result.issue!;
 
     // Tier 1 auto-routing: resolve a rule and create an issue_run (Invariant 1)
     let autoRoutedTo: string | null = null;

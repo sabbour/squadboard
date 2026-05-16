@@ -982,6 +982,13 @@ async function bootstrapSchema(): Promise<void> {
       WHERE claimed_by IS NOT NULL;
   `);
 
+  // Wave 13 — Bulk-import: provenance + done-timestamp on issues.
+  await _pool.query(`
+    ALTER TABLE issues
+      ADD COLUMN IF NOT EXISTS completed_at  TIMESTAMPTZ,
+      ADD COLUMN IF NOT EXISTS created_by    TEXT NOT NULL DEFAULT 'user';
+  `);
+
   await seedSystemReviewPolicyPresets();
 
   console.log('[db] schema bootstrapped');

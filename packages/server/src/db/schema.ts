@@ -87,6 +87,10 @@ export const issues = pgTable('issues', {
   githubIssueNumber: integer('github_issue_number'),  // linked GitHub issue number
   githubIssueUrl: text('github_issue_url'),            // html_url of the GitHub issue
   githubNodeId: text('github_node_id'),                // GitHub GraphQL node_id
+  /** Wave 13: set when status='done' (bulk-import or explicit done transition). */
+  completedAt: timestamp('completed_at', { withTimezone: true }),
+  /** Wave 13: provenance tag — 'user' | 'cli' | 'mcp' | 'bulk-import'. */
+  createdBy: text('created_by').notNull().default('user'),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 });

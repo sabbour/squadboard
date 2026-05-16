@@ -196,11 +196,14 @@ export async function publishInboxItem(
   const title = (item.formulatedTitle ?? item.originalDraft).trim().slice(0, 200);
   const body = item.formulatedBody ?? '';
 
-  const issue = await issuesService.createIssue(input.projectId, {
+  const issueResult = await issuesService.createIssue({
+    projectId: input.projectId,
     title,
     body,
-    status: column,
+    status: column as 'backlog' | 'todo' | 'in_progress' | 'in_review' | 'done',
+    createdBy: 'user',
   });
+  const issue = issueResult.issue!;
 
   // Best-effort: attach suggested labels by name (only if a matching label
   // exists in the target project — silent skip on miss).

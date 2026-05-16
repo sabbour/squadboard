@@ -139,73 +139,128 @@ export async function getIssue(projectId: string, id: string) {
   };
 }
 
-export async function createIssue(projectId: string, data: {
+/**
+ * Unified issue-creation handler. One handler, three adapters (MCP / HTTP / CLI).
+ *
+ * Idempotency: when `idempotencyKey` is provided the check matches on
+ * `projectId + title == '[key] title'` — no time window. Without a key, a
+ * 60-second soft dedup guards against runaway fan-out retries on the HTTP path.
+ *
+ * Column validation is the caller's responsibility (HTTP route calls
+ * assertColumnExists before delegating here; MCP + CLI use inert statuses
+ * that must pre-exist, or 'backlog' which always exists).
+ */
+export async function createIssue(input: {
+  projectId: string;
   title: string;
   body?: string;
-  status?: ColumnStatus;
-  assigneeId?: string;
-  /** Optional caller-supplied idempotency key (reserved for future 24-h dedup window). */
+  status?: 'backlog' | 'todo' | 'in_progress' | 'in_review' | 'done';
+  position?: number;
+  archived?: boolean;
+  completedAt?: Date | null;
+  assigneeId?: string | null;
+  labels?: string[];           // label IDs
   idempotencyKey?: string;
-}) {
+  createdBy?: string;          // 'user' | 'cli' | 'mcp' | 'bulk-import'
+}): Promise<{ created: boolean; id: string; issue?: typeof schema.issues.$inferSelect; idempotencyKey?: string }> {
   const db = getDb();
-  const { issues } = schema;
+  const { issues, issueLabels } = schema;
 
-  if (!data.title?.trim()) {
+  if (!input.title?.trim()) {
     throw Object.assign(new Error('`title` is required'), { status: 400 });
   }
 
-  const title = data.title.trim();
-  // Default to the project's is_default column; fall back to position-0 then 'backlog'.
-  const status: ColumnStatus = data.status ?? await getDefaultColumnId(projectId);
-  // Validate the target column exists in this project's column_meta.
-  await assertColumnExists(projectId, status);
+  const rawTitle = input.title.trim();
+  const insertTitle = input.idempotencyKey
+    ? `[${input.idempotencyKey}] ${rawTitle}`
+    : rawTitle;
 
-  // Dedup guard: return any non-archived issue with the same (projectId, title)
-  // created in the last 60 seconds instead of inserting a duplicate. This is a
-  // soft guard against runaway fan-out retries — it does NOT replace a unique index.
-  const sixtySecondsAgo = new Date(Date.now() - 60_000);
-  const [recent] = await db
-    .select()
-    .from(issues)
-    .where(
-      and(
-        eq(issues.projectId, projectId),
-        eq(issues.title, title),
-        eq(issues.archived, 0),
-        sql`${issues.createdAt} >= ${sixtySecondsAgo}`,
-      ),
-    )
-    .limit(1);
+  // Key-based idempotency: exact title-prefix match, no time window.
+  if (input.idempotencyKey) {
+    const [existing] = await db
+      .select()
+      .from(issues)
+      .where(
+        and(
+          eq(issues.projectId, input.projectId),
+          eq(issues.title, insertTitle),
+        ),
+      )
+      .limit(1);
 
-  if (recent) {
-    console.warn(
-      `[createIssue] dedup hit — returning existing issue ${recent.id} ` +
-      `(title="${title}", project=${projectId}). Possible duplicate caller.`,
-    );
-    return recent;
+    if (existing) {
+      return { created: false, id: existing.id, idempotencyKey: input.idempotencyKey };
+    }
+  } else {
+    // Soft 60-second dedup guard for callers without an explicit key.
+    const sixtySecondsAgo = new Date(Date.now() - 60_000);
+    const [recent] = await db
+      .select()
+      .from(issues)
+      .where(
+        and(
+          eq(issues.projectId, input.projectId),
+          eq(issues.title, insertTitle),
+          eq(issues.archived, 0),
+          sql`${issues.createdAt} >= ${sixtySecondsAgo}`,
+        ),
+      )
+      .limit(1);
+
+    if (recent) {
+      console.warn(
+        `[createIssue] dedup hit — returning existing issue ${recent.id} ` +
+        `(title="${insertTitle}", project=${input.projectId}). Possible duplicate caller.`,
+      );
+      return { created: false, id: recent.id, issue: recent };
+    }
   }
 
-  // Find max position in target column
-  const [maxRow] = await db
-    .select({ maxPos: sql<number>`COALESCE(MAX(${issues.position}), -1)` })
-    .from(issues)
-    .where(and(eq(issues.projectId, projectId), eq(issues.status, status), eq(issues.archived, 0)));
+  const status = input.status ?? 'backlog';
 
-  const position = (maxRow?.maxPos ?? -1) + 1;
+  // Compute position: explicit > max+1 in target column.
+  let position: number;
+  if (input.position !== undefined) {
+    position = input.position;
+  } else {
+    const [maxRow] = await db
+      .select({ maxPos: sql<number>`COALESCE(MAX(${issues.position}), -1)` })
+      .from(issues)
+      .where(and(eq(issues.projectId, input.projectId), eq(issues.status, status), eq(issues.archived, 0)));
+    position = (maxRow?.maxPos ?? -1) + 1;
+  }
+
+  // completedAt: set when status='done' explicitly or caller supplies it.
+  const completedAt =
+    input.completedAt !== undefined
+      ? input.completedAt
+      : status === 'done'
+        ? new Date()
+        : null;
 
   const [created] = await db
     .insert(issues)
     .values({
-      projectId,
-      title,
-      body: data.body ?? '',
+      projectId: input.projectId,
+      title: insertTitle,
+      body: input.body ?? '',
       status,
-      assigneeId: data.assigneeId ?? null,
+      assigneeId: input.assigneeId ?? null,
       position,
+      archived: input.archived ? 1 : 0,
+      completedAt: completedAt ?? undefined,
+      createdBy: input.createdBy ?? 'user',
     })
     .returning();
 
-  return created;
+  // Insert label associations if provided.
+  if (input.labels && input.labels.length > 0) {
+    await db.insert(issueLabels).values(
+      input.labels.map((labelId) => ({ issueId: created.id, labelId })),
+    );
+  }
+
+  return { created: true, id: created.id, issue: created, idempotencyKey: input.idempotencyKey };
 }
 
 export async function updateIssue(projectId: string, id: string, data: {

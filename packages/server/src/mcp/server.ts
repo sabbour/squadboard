@@ -30,6 +30,7 @@ import { handleSlashCommand } from './slash-handler.js';
 import { classifyAndDraft, type ConjureIntent } from '../services/conjure-classifier.js';
 import * as inboxService from '../services/inbox.js';
 import { resolveSquadDir } from '../services/diagnostics.js';
+import { createIssue as createIssueService } from '../services/issues.js';
 
 // ---------------------------------------------------------------------------
 // Tool definitions
@@ -343,7 +344,6 @@ async function handleListIssues(args: ToolArgs, extra: Extra): Promise<unknown> 
 }
 
 async function handleCreateIssue(args: ToolArgs, extra: Extra): Promise<unknown> {
-  const db = getDb();
   const {
     title,
     body = '',
@@ -359,38 +359,16 @@ async function handleCreateIssue(args: ToolArgs, extra: Extra): Promise<unknown>
     return { error: 'missing_project_id', hint: 'Pass projectId in args, or set the x-project-id header.' };
   }
 
-  if (idempotencyKey) {
-    const existing = await db
-      .select({ id: issues.id })
-      .from(issues)
-      .where(
-        and(
-          eq(issues.projectId, projectId),
-          eq(issues.title, `[${idempotencyKey}] ${title}`),
-        ),
-      )
-      .limit(1);
-
-    if (existing.length > 0) {
-      return { created: false, id: existing[0].id, idempotencyKey };
-    }
-  }
-
-  const insertTitle = idempotencyKey ? `[${idempotencyKey}] ${title}` : title;
-
-  const [created] = await db
-    .insert(issues)
-    .values({
-      projectId,
-      title: insertTitle,
-      body: body as string,
-      status: 'backlog',
-      position: 0,
-      archived: 0,
-    })
-    .returning({ id: issues.id, title: issues.title, status: issues.status, createdAt: issues.createdAt });
-
-  return { created: true, id: created.id, issue: created, idempotencyKey };
+  return createIssueService({
+    projectId,
+    title,
+    body,
+    status: 'backlog',
+    position: 0,
+    archived: false,
+    idempotencyKey,
+    createdBy: 'mcp',
+  });
 }
 
 async function handleUpdateIssue(args: ToolArgs): Promise<unknown> {
