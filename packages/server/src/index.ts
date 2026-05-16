@@ -74,6 +74,11 @@ import { maybeAutoStartDaemon } from './daemon/auto-start.js';
 // Wave 20 — Stream G Phase 3: @copilot routes + watcher
 import { copilotRouter } from './routes/copilot.js';
 import { startCopilotWatcher, stopCopilotWatcher } from './services/copilot-watcher.js';
+import {
+  formatUnhandledRejection,
+  formatUncaughtException,
+  gracefulTeardown,
+} from './process-handlers.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -370,6 +375,73 @@ async function main(): Promise<void> {
 
   process.on('SIGINT', () => gracefulShutdown('SIGINT'));
   process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+
+  // W30 M3: Add unhandledRejection handler to prevent silent server crashes.
+  // Node 18+ kills the process on unhandled rejection — we intercept to log and teardown gracefully.
+  process.on('unhandledRejection', (reason: unknown, promise: Promise<unknown>) => {
+    const logMsg = formatUnhandledRejection(reason, promise);
+    console.error(logMsg);
+
+    // Attempt graceful teardown with a 5-second hard timeout
+    gracefulTeardown(
+      async () => {
+        heartbeat.stop();
+        stopAllSyncLoops();
+        stopCopilotWatcher();
+
+        const pglite = getPglite();
+        if (pglite) {
+          try {
+            await pglite.exec('CHECKPOINT');
+          } catch (cpErr) {
+            console.warn('[squadboard] unhandledRejection.CHECKPOINT failed (non-fatal):', cpErr);
+          }
+        }
+        await closeDb();
+      },
+      5000,
+      () => {
+        console.warn('[squadboard] unhandledRejection teardown timeout — force exiting');
+      },
+    )
+      .catch(() => {}) // Should not throw, but catch just in case
+      .finally(() => {
+        process.exit(1);
+      });
+  });
+
+  // W30 M3: Add uncaughtException handler to prevent silent server crashes.
+  process.on('uncaughtException', (err: Error) => {
+    const logMsg = formatUncaughtException(err);
+    console.error(logMsg);
+
+    // Attempt graceful teardown with a 5-second hard timeout
+    gracefulTeardown(
+      async () => {
+        heartbeat.stop();
+        stopAllSyncLoops();
+        stopCopilotWatcher();
+
+        const pglite = getPglite();
+        if (pglite) {
+          try {
+            await pglite.exec('CHECKPOINT');
+          } catch (cpErr) {
+            console.warn('[squadboard] uncaughtException.CHECKPOINT failed (non-fatal):', cpErr);
+          }
+        }
+        await closeDb();
+      },
+      5000,
+      () => {
+        console.warn('[squadboard] uncaughtException teardown timeout — force exiting');
+      },
+    )
+      .catch(() => {}) // Should not throw, but catch just in case
+      .finally(() => {
+        process.exit(1);
+      });
+  });
 }
 
 main().catch((err: unknown) => {
