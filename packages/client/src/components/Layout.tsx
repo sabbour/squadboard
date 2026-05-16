@@ -83,6 +83,13 @@ const useStyles = makeStyles({
     paddingTop: tokens.spacingVerticalXS,
     paddingBottom: tokens.spacingVerticalXS,
   },
+  navCollapseToggleExpanded: {
+    justifyContent: 'flex-end',
+    paddingInlineEnd: tokens.spacingHorizontalS,
+  },
+  navLabelHidden: {
+    display: 'none',
+  },
   topBar: {
     display: 'flex',
     alignItems: 'center',
@@ -377,7 +384,7 @@ function LayoutInner() {
 
         <NavDrawerBody>
           {/* Collapse / expand toggle */}
-          <div className={styles.navCollapseToggle}>
+          <div className={mergeClasses(styles.navCollapseToggle, !navCollapsed && styles.navCollapseToggleExpanded)}>
             <Button
               appearance="subtle"
               icon={navCollapsed ? <ChevronDoubleRightRegular /> : <ChevronDoubleLeftRegular />}
@@ -388,7 +395,9 @@ function LayoutInner() {
 
           {navCollapsed ? (
             <Tooltip content="Projects" relationship="label" positioning="after" hideDelay={0}>
-              <NavItem icon={<Home24Regular />} value="projects" />
+              <NavItem icon={<Home24Regular />} value="projects">
+                <span className={styles.navLabelHidden}>Projects</span>
+              </NavItem>
             </Tooltip>
           ) : (
             <NavItem icon={<Home24Regular />} value="projects">Projects</NavItem>
@@ -396,7 +405,9 @@ function LayoutInner() {
 
           {navCollapsed ? (
             <Tooltip content="Now" relationship="label" positioning="after" hideDelay={0}>
-              <NavItem icon={<Eye24Regular />} value="now" />
+              <NavItem icon={<Eye24Regular />} value="now">
+                <span className={styles.navLabelHidden}>Now</span>
+              </NavItem>
             </Tooltip>
           ) : (
             <NavItem icon={<Eye24Regular />} value="now">Now</NavItem>
@@ -410,7 +421,9 @@ function LayoutInner() {
                   {group.items.map((item) => (
                     navCollapsed ? (
                       <Tooltip key={item.segment} content={item.label} relationship="label" positioning="after" hideDelay={0}>
-                        <NavItem icon={item.icon} value={item.segment} />
+                        <NavItem icon={item.icon} value={item.segment}>
+                          <span className={styles.navLabelHidden}>{item.label}</span>
+                        </NavItem>
                       </Tooltip>
                     ) : (
                       <NavItem key={item.segment} icon={item.icon} value={item.segment}>
@@ -434,7 +447,9 @@ function LayoutInner() {
 
           {navCollapsed ? (
             <Tooltip content="Diagnostics" relationship="label" positioning="after" hideDelay={0}>
-              <NavItem icon={<HeartPulse24Regular />} value="diagnostics" />
+              <NavItem icon={<HeartPulse24Regular />} value="diagnostics">
+                <span className={styles.navLabelHidden}>Diagnostics</span>
+              </NavItem>
             </Tooltip>
           ) : (
             <NavItem icon={<HeartPulse24Regular />} value="diagnostics">Diagnostics</NavItem>
@@ -442,7 +457,9 @@ function LayoutInner() {
 
           {navCollapsed ? (
             <Tooltip content="Heartbeat" relationship="label" positioning="after" hideDelay={0}>
-              <NavItem icon={<Heart24Regular />} value="heartbeat" />
+              <NavItem icon={<Heart24Regular />} value="heartbeat">
+                <span className={styles.navLabelHidden}>Heartbeat</span>
+              </NavItem>
             </Tooltip>
           ) : (
             <NavItem icon={<Heart24Regular />} value="heartbeat">Heartbeat</NavItem>
@@ -453,7 +470,9 @@ function LayoutInner() {
           <NavDrawerFooter>
             {navCollapsed ? (
               <Tooltip content="Settings" relationship="label" positioning="after" hideDelay={0}>
-                <NavItem icon={<Settings24Regular />} value="settings" />
+                <NavItem icon={<Settings24Regular />} value="settings">
+                  <span className={styles.navLabelHidden}>Settings</span>
+                </NavItem>
               </Tooltip>
             ) : (
               <NavItem icon={<Settings24Regular />} value="settings">Settings</NavItem>
