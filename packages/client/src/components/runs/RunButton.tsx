@@ -190,25 +190,27 @@ export default function RunButton({ projectId, issueId, onRunStarted }: RunButto
       )}
 
       <button
+        data-testid="task-run-button"
         onClick={handleRun}
         disabled={startRun.isPending || activeAgents.length === 0}
         title={activeAgents.length === 0 ? 'No active agents' : undefined}
         style={{
-          background: 'rgba(56,139,253,0.15)',
+          background: startRun.isPending ? 'rgba(56,139,253,0.08)' : 'rgba(56,139,253,0.15)',
           border: '1px solid rgba(56,139,253,0.4)',
           color: '#58a6ff',
           borderRadius: '4px',
           padding: '2px 8px',
           fontSize: '11px',
           fontWeight: 500,
-          cursor: activeAgents.length === 0 ? 'not-allowed' : 'pointer',
+          cursor: (startRun.isPending || activeAgents.length === 0) ? 'not-allowed' : 'pointer',
           display: 'flex',
           alignItems: 'center',
           gap: '4px',
-          opacity: activeAgents.length === 0 ? 0.5 : 1,
+          opacity: (startRun.isPending || activeAgents.length === 0) ? 0.5 : 1,
+          transition: 'opacity 0.15s, background 0.15s',
         }}
       >
-        ▶ Run
+        {startRun.isPending ? 'Starting…' : '▶ Run'}
       </button>
     </div>
   )

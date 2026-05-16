@@ -194,3 +194,35 @@ See `.squad/decisions.md` for full details.
 **Fix:** `id ? /projects/${id}/heartbeat : /heartbeat` — same pattern used for `diagnostics`. Added matching `includes('/heartbeat')` check in `getSelectedValue` so the nav item highlights correctly when on `/projects/:id/heartbeat`.
 
 **Lesson:** Every new nav item in Layout.tsx must be audited for project-scope preservation. The W22 directive ("no jarring scope changes") applies to ALL nav items, not just the ones explicitly called out. A checklist should be added to Layout.tsx PR reviews: "Does every nav item preserve `/projects/:id/` prefix when in project context?"
+
+---
+
+## W26 — Run Button Regression Fix (post-batch-1)
+
+**Date:** 2026-05-16  
+**Wave:** 26
+
+### Root Cause
+
+The W26 four-bug batch (commit `53cba6eb`) correctly moved the RunButton outside the `onClick→onOpen` title wrapper. The click handler itself was NOT dropped — `startRun.mutate` fires when Run is clicked. The regression was a **visual feedback gap**:
+
+- **Before W26:** Clicking Run also triggered `onOpen(issue)` (panel opened as incidental side-effect), giving Brady immediate visual confirmation.
+- **After W26:** The footer's `stopPropagation` correctly blocks the panel open, but the button's `style` only responded to `activeAgents.length === 0`, NOT to `startRun.isPending`. The button became `disabled` while looking identical — Brady saw nothing happen and concluded "Run is broken."
+
+Confirmed: click IS firing, API call IS being made. No downstream dispatch/heartbeat issue.
+
+### Fix
+
+`RunButton.tsx`:
+- `data-testid="task-run-button"` added.
+- `cursor` and `opacity` styles now include `startRun.isPending` in the condition.
+- Button text changes to `Starting…` while pending (was `▶ Run` even when disabled).
+- Background dims slightly while pending for visual affordance.
+
+### Test Infrastructure Added
+
+No test runner existed in `packages/client`. Added vitest + @testing-library/react + jsdom + @testing-library/user-event. 3 tests written and passing for RunButton.
+
+### Lesson
+
+When visual feedback depends on an incidental side-effect of a bug (panel opening because Run was inside the onOpen wrapper), fixing the bug removes that feedback. Always audit every interactive element for its OWN visual confirmation path — don't rely on ambient side-effects to signal state changes.
