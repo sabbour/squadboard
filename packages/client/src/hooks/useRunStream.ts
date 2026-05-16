@@ -38,6 +38,7 @@ export interface RunStreamResult {
   lastSeq: number
   error: Error | null
   steer: (message: string) => Promise<void>
+  retry: () => void
 }
 
 // ─── Constants ───────────────────────────────────────────────────────────────
@@ -72,6 +73,7 @@ export function useRunStream(
   const lastSeqRef = useRef(0)
   const statusRef = useRef<RunStatus>('idle')
   const mountedRef = useRef(true)
+  const reconnectFailuresRef = useRef(0)
 
   function applyStatus(s: RunStatus) {
     statusRef.current = s
@@ -104,6 +106,16 @@ export function useRunStream(
     },
     [runId, projectId, issueId],
   )
+
+  // ── retry ─────────────────────────────────────────────────────────────────
+
+  const retry = useCallback(() => {
+    if (!runId) return
+    reconnectFailuresRef.current = 0
+    setError(null)
+    applyStatus('reconnecting')
+    wsClient.connect(projectId)
+  }, [runId, projectId])
 
   // ── Main effect ───────────────────────────────────────────────────────────
 
@@ -202,13 +214,27 @@ export function useRunStream(
       handlers.push({ type, fn })
     }
 
-    // ── WS reconnect catch-up (seam for T10) ─────────────────────────────
+    // ── WS reconnect catch-up with 3-strike failure cap ───────────────────
+
+    const MAX_RECONNECT_FAILURES = 3
 
     const unsubState = wsClient.onStateChange((state) => {
       if (!mountedRef.current) return
 
       if (state === 'reconnecting') {
-        if (statusRef.current === 'live') applyStatus('reconnecting')
+        if (statusRef.current === 'live') {
+          // First failure — transition to reconnecting
+          reconnectFailuresRef.current = 1
+          applyStatus('reconnecting')
+        } else if (statusRef.current === 'reconnecting') {
+          // Subsequent failure — socket opened and closed again
+          reconnectFailuresRef.current++
+          if (reconnectFailuresRef.current >= MAX_RECONNECT_FAILURES) {
+            setError(new Error(`Connection lost after ${MAX_RECONNECT_FAILURES} reconnect attempts`))
+            applyStatus('error')
+          }
+          // else stay in 'reconnecting' — banner already showing
+        }
         return
       }
 
@@ -227,11 +253,17 @@ export function useRunStream(
               lastSeqRef.current = data.nextSeq
               setLastSeq(data.nextSeq)
             }
+            // Successful replay — reset failure counter
+            reconnectFailuresRef.current = 0
             applyStatus(resolveStatusFromEvents(data.events, 'live'))
           })
           .catch(() => {
-            // Best effort; stay in 'live' to avoid confusing the user
-            if (mountedRef.current) applyStatus('live')
+            // GET replay failed — WS is connected but we couldn't fetch catch-up events.
+            // Stay in 'reconnecting' so the banner remains visible; the WS connection
+            // is still live and future events will arrive via the socket.
+            if (mountedRef.current && statusRef.current === 'reconnecting') {
+              applyStatus('reconnecting')
+            }
           })
       }
     })
@@ -246,5 +278,5 @@ export function useRunStream(
     }
   }, [runId, projectId, issueId, fetchEvents])
 
-  return { events, status, lastSeq, error, steer }
+  return { events, status, lastSeq, error, steer, retry }
 }

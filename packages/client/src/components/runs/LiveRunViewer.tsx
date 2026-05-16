@@ -319,7 +319,7 @@ function SteerBar({
 
 export default function LiveRunViewer() {
   const { projectId = '', issueId = '', runId = '' } = useParams()
-  const { events, status, error, steer } = useRunStream(runId || null, projectId, issueId)
+  const { events, status, error, steer, retry } = useRunStream(runId || null, projectId, issueId)
 
   // Derive metrics from the event log
   const [elapsed, setElapsed] = useState('—')
@@ -458,9 +458,15 @@ export default function LiveRunViewer() {
       )}
 
       {/* Error banner */}
-      {status === 'error' && error && (
+      {status === 'error' && (
         <MessageBar intent="error">
-          <MessageBarBody>{error.message}</MessageBarBody>
+          <MessageBarBody>
+            {error?.message ?? 'An error occurred'}
+            {' '}
+            <Button size="small" appearance="transparent" onClick={retry} style={{ padding: 0, minWidth: 0, textDecoration: 'underline' }}>
+              Retry
+            </Button>
+          </MessageBarBody>
         </MessageBar>
       )}
 

@@ -1,10 +1,12 @@
 import { Draggable } from '@hello-pangea/dnd'
 import { useState, useRef, useEffect, type ReactNode } from 'react'
-import { Body1, tokens } from '@fluentui/react-components'
+import { useNavigate } from 'react-router'
+import { Body1, Button, tokens } from '@fluentui/react-components'
 import {
   CheckmarkCircle20Regular,
   Warning20Regular,
   Branch20Regular,
+  Eye20Regular,
   Merge20Regular,
   Box20Regular,
   Comment20Regular,
@@ -131,6 +133,7 @@ export default function IssueCard({ issue, index, projectId, isSelected, onSelec
   const [hovered, setHovered] = useState(false)
   const [reassignOpen, setReassignOpen] = useState(false)
   const reassignRef = useRef<HTMLDivElement>(null)
+  const navigate = useNavigate()
   const { data: runs } = useIssueRuns(projectId, issue.id)
   const { data: agents } = useActiveAgents(projectId)
   const assignIssue = useAssignIssue(projectId)
@@ -377,6 +380,20 @@ export default function IssueCard({ issue, index, projectId, isSelected, onSelec
                 >
                   <Comment20Regular style={{ verticalAlign: 'middle', marginRight: '3px' }} />{issue.commentCount}
                 </span>
+              )}
+              {activeRun?.status === 'running' && (
+                <Button
+                  size="small"
+                  appearance="subtle"
+                  icon={<Eye20Regular />}
+                  title="Watch live run"
+                  aria-label="Watch live run"
+                  data-testid="watch-run-button"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    navigate(`/projects/${projectId}/issues/${issue.id}/runs/${activeRun.id}/live`)
+                  }}
+                />
               )}
               <RunButton
                 projectId={projectId}

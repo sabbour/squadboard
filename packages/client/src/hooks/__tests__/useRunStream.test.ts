@@ -325,4 +325,136 @@ describe('useRunStream', () => {
       // No React state update after unmount — if this throws it was a real leak
     })
   })
+
+  describe('T10 — WS reconnect replay with 3-failure cap', () => {
+    function setupNoAutoConnect() {
+      // Override mockOnStateChange for this test — don't fire 'connected' immediately
+      mockOnStateChange.mockImplementationOnce((listener: (state: string) => void) => {
+        stateChangeListeners.add(listener)
+        return () => stateChangeListeners.delete(listener)
+      })
+    }
+
+    it('merges replayed events with deduplication on reconnect', async () => {
+      const initialEvent: IssueRunEventRow = {
+        id: 'e1', runId: RUN_ID, seq: 0, eventType: 'issue.run.start',
+        payload: { runId: RUN_ID, seq: 0 }, createdAt: new Date().toISOString(),
+      }
+      const replayEvent: IssueRunEventRow = {
+        id: 'e2', runId: RUN_ID, seq: 1, eventType: 'issue.run.turn',
+        payload: { runId: RUN_ID, seq: 1 }, createdAt: new Date().toISOString(),
+      }
+      setupNoAutoConnect()
+
+      mockApiFetch
+        .mockResolvedValueOnce(makeEventsResponse([initialEvent], 1)) // initial
+        .mockResolvedValueOnce(makeEventsResponse([initialEvent, replayEvent], 2)) // replay includes dup
+
+      const { result } = renderHook(() => useRunStream(RUN_ID, PROJECT_ID, ISSUE_ID))
+      await waitFor(() => expect(result.current.status).toBe('live'))
+      expect(result.current.events).toHaveLength(1)
+
+      act(() => emitStateChange('reconnecting'))
+      act(() => emitStateChange('connected'))
+
+      await waitFor(() => expect(result.current.events).toHaveLength(2))
+      // Dedup: initialEvent not doubled
+      const starts = result.current.events.filter(e => e.eventType === 'issue.run.start')
+      expect(starts).toHaveLength(1)
+    })
+
+    it('tracks lastSeq correctly through replay', async () => {
+      setupNoAutoConnect()
+
+      const event1: IssueRunEventRow = {
+        id: 'e1', runId: RUN_ID, seq: 2, eventType: 'issue.run.turn',
+        payload: { runId: RUN_ID, seq: 2 }, createdAt: new Date().toISOString(),
+      }
+      mockApiFetch
+        .mockResolvedValueOnce(makeEventsResponse([event1], 3)) // initial → lastSeq = 3
+        .mockResolvedValueOnce(makeEventsResponse([], 3))        // replay → no new events
+
+      const { result } = renderHook(() => useRunStream(RUN_ID, PROJECT_ID, ISSUE_ID))
+      await waitFor(() => expect(result.current.lastSeq).toBe(3))
+
+      act(() => emitStateChange('reconnecting'))
+      act(() => emitStateChange('connected'))
+
+      await waitFor(() =>
+        expect(mockApiFetch).toHaveBeenCalledWith(
+          expect.stringContaining('since_seq=3'),
+        ),
+      )
+      expect(result.current.lastSeq).toBe(3)
+    })
+
+    it('transitions to error after 3 consecutive reconnecting events', async () => {
+      setupNoAutoConnect()
+
+      mockApiFetch.mockResolvedValueOnce(makeEventsResponse([], 0)) // initial
+
+      const { result } = renderHook(() => useRunStream(RUN_ID, PROJECT_ID, ISSUE_ID))
+      await waitFor(() => expect(result.current.status).toBe('live'))
+
+      // 3 WS reconnect failures in a row (socket closes 3 times without recovery)
+      act(() => emitStateChange('reconnecting')) // count = 1
+      expect(result.current.status).toBe('reconnecting')
+
+      act(() => emitStateChange('reconnecting')) // count = 2 (socket closed again)
+      expect(result.current.status).toBe('reconnecting')
+
+      act(() => emitStateChange('reconnecting')) // count = 3 → error
+      await waitFor(() => expect(result.current.status).toBe('error'))
+      expect(result.current.error?.message).toMatch(/3 reconnect attempt/)
+    })
+
+    it('retry() resets the failure counter and re-connects', async () => {
+      setupNoAutoConnect()
+
+      mockApiFetch.mockResolvedValueOnce(makeEventsResponse([], 0)) // initial
+
+      const { result } = renderHook(() => useRunStream(RUN_ID, PROJECT_ID, ISSUE_ID))
+      await waitFor(() => expect(result.current.status).toBe('live'))
+
+      // Push to error via 3 reconnect events
+      act(() => emitStateChange('reconnecting'))
+      act(() => emitStateChange('connected'))
+      mockApiFetch.mockResolvedValueOnce(makeEventsResponse([], 0))
+      act(() => emitStateChange('reconnecting'))
+      act(() => emitStateChange('connected'))
+      mockApiFetch.mockResolvedValueOnce(makeEventsResponse([], 0))
+      act(() => emitStateChange('reconnecting'))
+      await waitFor(() => expect(result.current.status).toBe('error'))
+
+      // Retry
+      act(() => result.current.retry())
+
+      expect(mockConnect).toHaveBeenCalledWith(PROJECT_ID)
+      await waitFor(() =>
+        expect(['reconnecting', 'live']).toContain(result.current.status),
+      )
+      expect(result.current.error).toBeNull()
+    })
+
+    it('GET replay failure keeps reconnecting status (socket is still connected)', async () => {
+      setupNoAutoConnect()
+
+      mockApiFetch
+        .mockResolvedValueOnce(makeEventsResponse([], 0))   // initial
+        .mockRejectedValueOnce(new Error('GET failed'))      // replay fails
+
+      const { result } = renderHook(() => useRunStream(RUN_ID, PROJECT_ID, ISSUE_ID))
+      await waitFor(() => expect(result.current.status).toBe('live'))
+
+      // WS reconnect — socket closed
+      act(() => emitStateChange('reconnecting'))
+      expect(result.current.status).toBe('reconnecting')
+
+      // Socket re-opens → trigger catch-up GET that fails
+      act(() => emitStateChange('connected'))
+
+      // Should stay in 'reconnecting' (not error, not live — socket is up but replay failed)
+      await waitFor(() => expect(result.current.status).toBe('reconnecting'))
+    })
+  })
 })
