@@ -92,12 +92,45 @@ export type BundleCeremonyTriggerKind =
   | 'on_issue_entry'
   | 'on_schedule'
   | 'on_event'
-  | 'manual';
+  | 'manual'
+  | 'github';         // Stream G Phase 2B: GitHub webhook event trigger
 
 export interface BundleCeremonyTrigger {
   kind: BundleCeremonyTriggerKind;
   /** Matches the shape of triggerConfig for the given kind. */
   config?: Record<string, unknown>;
+}
+
+/**
+ * GitHub webhook trigger — fires a ceremony when a matching GitHub event arrives.
+ *
+ * @example
+ * ```yaml
+ * triggers:
+ *   - kind: github
+ *     event: pull_request
+ *     action: opened          # optional — omit to match all actions
+ *     filters:
+ *       label: bug            # PR/issue must have this label
+ *       branch: main          # PR base branch or push ref must match
+ *       author_team: maintainers  # GitHub org team membership check (gh api)
+ * ```
+ */
+export interface BundleCeremonyGithubTrigger {
+  kind: 'github';
+  /** GitHub event name: pull_request | push | issues | issue_comment | workflow_run | check_run | pull_request_review | pull_request_review_comment */
+  event: string;
+  /** Optional: narrow by payload.action (e.g. "opened", "completed"). Omit to match all actions. */
+  action?: string;
+  /** Optional field filters applied against the event payload */
+  filters?: {
+    /** Issue or PR must carry this label */
+    label?: string;
+    /** PR base branch or push ref must match this string (exact or glob) */
+    branch?: string;
+    /** Payload author must be a member of this GitHub org team (checks via `gh api`) */
+    author_team?: string;
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -162,7 +195,8 @@ export interface BundleCeremony {
   id: string;
   name: string;
   scope: 'project' | 'board' | 'task';
-  trigger: BundleCeremonyTrigger;
+  /** Discriminated union: standard triggers or GitHub webhook trigger (kind='github'). */
+  trigger: BundleCeremonyTrigger | BundleCeremonyGithubTrigger;
   steps: BundleWorkflowStep[];
   /**
    * Inline YAML workflow body. Preferred format for ceremonies stored in

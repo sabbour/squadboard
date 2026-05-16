@@ -123,6 +123,13 @@ export type GitEventType =
   | 'git.comment.posted'
   | 'git.pr.merged';
 
+/**
+ * GitHub webhook events re-emitted on the internal bus after ingest.
+ * Pattern: `github.<event_type>.<action>` — e.g. `github.pull_request.opened`.
+ * The ceremony dispatcher subscribes and matches against triggerKind='github'.
+ */
+export type GitHubWebhookEventType = `github.${string}`;
+
 export type BusEventType =
   | IssueEventType
   | RunEventType
@@ -135,7 +142,8 @@ export type BusEventType =
   | ConsultEventType
   | HeartbeatEventType
   | FlowEventType
-  | GitEventType;
+  | GitEventType
+  | GitHubWebhookEventType;
 
 export interface BusEvent {
   type: BusEventType;
@@ -264,6 +272,15 @@ class EventBus extends EventEmitter {
   /** Stream G: emit a git push / PR event scoped to a project. */
   emitGitEvent(type: GitEventType, projectId: string, payload: unknown): void {
     const event: BusEvent = { type, projectId, payload };
+    this.emit('event', event);
+  }
+
+  /** Stream G Phase 2B: emit a GitHub webhook event scoped to a project. */
+  emitGithubWebhookEvent(eventType: string, action: string | null, projectId: string, payload: unknown): void {
+    const busType: GitHubWebhookEventType = action
+      ? `github.${eventType}.${action}`
+      : `github.${eventType}`;
+    const event: BusEvent = { type: busType as BusEventType, projectId, payload };
     this.emit('event', event);
   }
 

@@ -31,6 +31,14 @@ import { classifyAndDraft, type ConjureIntent } from '../services/conjure-classi
 import * as inboxService from '../services/inbox.js';
 import { resolveSquadDir } from '../services/diagnostics.js';
 import { createIssue as createIssueService } from '../services/issues.js';
+import {
+  pushBranch,
+  createPr,
+  commentOnIssue,
+  triggerWorkflow,
+  mergePr,
+  GitOpsError,
+} from '../services/github-git-ops.js';
 
 // ---------------------------------------------------------------------------
 // Tool definitions
@@ -260,6 +268,95 @@ export const TOOLS = [
         projectId: { type: 'string', description: 'UUID of the project (optional if x-project-id header set).' },
       },
       required: [],
+    },
+  },
+  // ── Stream G Phase 2B: GitHub tools ───────────────────────────────────────
+  {
+    name: 'github_push_branch',
+    description:
+      'Push the current run\'s worktree branch to GitHub origin. ' +
+      'Call this after the agent has committed changes to the worktree. ' +
+      'Returns the branch URL so you can share or open a PR next.',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        runId: { type: 'string', description: 'UUID of the issue run whose worktree branch to push.' },
+      },
+      required: ['runId'],
+    },
+  },
+  {
+    name: 'github_open_pr',
+    description:
+      'Open a GitHub Pull Request for the current run\'s branch. ' +
+      'Requires a branch push (github_push_branch) first. ' +
+      'Returns prUrl and prNumber for use in comments or status badges.',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        runId: { type: 'string', description: 'UUID of the issue run.' },
+        title: { type: 'string', description: 'PR title (optional — defaults to the issue title).' },
+        body: { type: 'string', description: 'PR body markdown (optional — auto-generated if omitted).' },
+        draft: { type: 'boolean', description: 'Open as a draft PR (default false).' },
+      },
+      required: ['runId'],
+    },
+  },
+  {
+    name: 'github_comment_issue',
+    description:
+      'Post a comment on the linked GitHub issue. ' +
+      'Use this to report progress, paste summaries, or leave a handoff note for human reviewers.',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        runId: { type: 'string', description: 'UUID of the issue run (provides repo context via its workspace).' },
+        issueNumber: { type: 'number', description: 'GitHub issue number to comment on.' },
+        body: { type: 'string', description: 'Comment body in Markdown.' },
+      },
+      required: ['runId', 'issueNumber', 'body'],
+    },
+  },
+  {
+    name: 'github_trigger_workflow',
+    description:
+      'Dispatch a GitHub Actions workflow_dispatch event. ' +
+      'Use this to trigger CI pipelines, deployment workflows, or other automated processes. ' +
+      'Returns the workflow run ID and URL once it is queued.',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        workflowFile: {
+          type: 'string',
+          description: 'Workflow filename, e.g. "deploy.yml" or "ci.yaml". No path separators.',
+        },
+        ref: { type: 'string', description: 'Git ref (branch name, tag, or SHA) to run the workflow on.' },
+        inputs: {
+          type: 'object',
+          additionalProperties: { type: 'string' },
+          description: 'Optional key-value pairs passed as workflow_dispatch inputs.',
+        },
+      },
+      required: ['workflowFile', 'ref'],
+    },
+  },
+  {
+    name: 'github_merge_pr',
+    description:
+      'Merge the open PR associated with this run. ' +
+      'Validates required CI checks first; refuses if checks are failing. ' +
+      'Returns the merge SHA and the PR URL after a successful merge.',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        runId: { type: 'string', description: 'UUID of the issue run whose PR to merge.' },
+        method: {
+          type: 'string',
+          enum: ['squash', 'merge', 'rebase'],
+          description: 'Merge strategy (default "squash").',
+        },
+      },
+      required: ['runId'],
     },
   },
 ];
@@ -975,6 +1072,103 @@ async function handleGetRouting(args: ToolArgs, extra: Extra): Promise<unknown> 
 }
 
 // ---------------------------------------------------------------------------
+// Stream G Phase 2B: GitHub tool handlers
+// ---------------------------------------------------------------------------
+
+function gitOpsErrorToResult(err: unknown): Record<string, unknown> {
+  if (err instanceof GitOpsError) {
+    return { error: err.code, message: err.detail, httpStatus: err.httpStatus };
+  }
+  return { error: 'internal_error', message: err instanceof Error ? err.message : String(err) };
+}
+
+async function handleGithubPushBranch(args: ToolArgs): Promise<unknown> {
+  const { runId } = args as { runId?: string };
+  if (!runId || typeof runId !== 'string') {
+    return { error: 'missing_run_id', hint: 'Pass runId (UUID of the issue run).' };
+  }
+  try {
+    return await pushBranch(runId);
+  } catch (err) {
+    return gitOpsErrorToResult(err);
+  }
+}
+
+async function handleGithubOpenPr(args: ToolArgs): Promise<unknown> {
+  const { runId, title, body, draft } = args as {
+    runId?: string;
+    title?: string;
+    body?: string;
+    draft?: boolean;
+  };
+  if (!runId || typeof runId !== 'string') {
+    return { error: 'missing_run_id', hint: 'Pass runId (UUID of the issue run).' };
+  }
+  try {
+    return await createPr(runId, { title, body, draft });
+  } catch (err) {
+    return gitOpsErrorToResult(err);
+  }
+}
+
+async function handleGithubCommentIssue(args: ToolArgs): Promise<unknown> {
+  const { runId, issueNumber, body } = args as {
+    runId?: string;
+    issueNumber?: unknown;
+    body?: unknown;
+  };
+  if (!runId || typeof runId !== 'string') {
+    return { error: 'missing_run_id', hint: 'Pass runId (UUID of the issue run).' };
+  }
+  if (typeof issueNumber !== 'number' || !Number.isInteger(issueNumber) || issueNumber < 1) {
+    return { error: 'invalid_issue_number', hint: '`issueNumber` must be a positive integer.' };
+  }
+  if (typeof body !== 'string' || !body.trim()) {
+    return { error: 'missing_body', hint: '`body` must be a non-empty string.' };
+  }
+  try {
+    return await commentOnIssue(runId, { issueNumber, body });
+  } catch (err) {
+    return gitOpsErrorToResult(err);
+  }
+}
+
+async function handleGithubTriggerWorkflow(args: ToolArgs): Promise<unknown> {
+  const { workflowFile, ref, inputs } = args as {
+    workflowFile?: string;
+    ref?: string;
+    inputs?: Record<string, string>;
+  };
+  if (!workflowFile || typeof workflowFile !== 'string') {
+    return { error: 'missing_workflow_file', hint: 'Pass workflowFile, e.g. "deploy.yml".' };
+  }
+  if (!ref || typeof ref !== 'string') {
+    return { error: 'missing_ref', hint: 'Pass ref (branch name, tag, or SHA).' };
+  }
+  try {
+    return await triggerWorkflow({ workflowFile, ref, inputs });
+  } catch (err) {
+    return gitOpsErrorToResult(err);
+  }
+}
+
+async function handleGithubMergePr(args: ToolArgs): Promise<unknown> {
+  const { runId, method } = args as { runId?: string; method?: 'squash' | 'merge' | 'rebase' };
+  if (!runId || typeof runId !== 'string') {
+    return { error: 'missing_run_id', hint: 'Pass runId (UUID of the issue run).' };
+  }
+  const validMethods = new Set(['squash', 'merge', 'rebase']);
+  if (method !== undefined && !validMethods.has(method)) {
+    return { error: 'invalid_method', hint: 'method must be "squash", "merge", or "rebase".' };
+  }
+  try {
+    return await mergePr(runId, { method });
+  } catch (err) {
+    return gitOpsErrorToResult(err);
+  }
+}
+
+// ---------------------------------------------------------------------------
 // MCP server bootstrap
 // ---------------------------------------------------------------------------
 
@@ -1027,6 +1221,22 @@ export function createMcpServer(): Server {
           break;
         case 'get_routing':
           result = await handleGetRouting(toolArgs as ToolArgs, extra as Extra);
+          break;
+        // ── Stream G Phase 2B: GitHub tools ──────────────────────────────
+        case 'github_push_branch':
+          result = await handleGithubPushBranch(toolArgs as ToolArgs);
+          break;
+        case 'github_open_pr':
+          result = await handleGithubOpenPr(toolArgs as ToolArgs);
+          break;
+        case 'github_comment_issue':
+          result = await handleGithubCommentIssue(toolArgs as ToolArgs);
+          break;
+        case 'github_trigger_workflow':
+          result = await handleGithubTriggerWorkflow(toolArgs as ToolArgs);
+          break;
+        case 'github_merge_pr':
+          result = await handleGithubMergePr(toolArgs as ToolArgs);
           break;
         default:
           return {

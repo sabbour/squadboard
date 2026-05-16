@@ -37,6 +37,8 @@ import type {
   BundleKanbanColumn,
   BundleCeremony,
   BundleWorkflow,
+  BundleCeremonyTrigger,
+  BundleCeremonyGithubTrigger,
 } from '@sabbour/squadboard-sdk/bundle';
 
 // ---------------------------------------------------------------------------
@@ -318,6 +320,30 @@ async function insertWorkflowWithVersion(
 // Section: ceremonies
 // ---------------------------------------------------------------------------
 
+/**
+ * Normalize a ceremony trigger (either standard or GitHub) into a
+ * `{ kind, config }` pair that can be stored in the `workflows` table.
+ * For GitHub triggers, the sdk-specific fields (event, action, filters)
+ * are collapsed into `config` so the dispatcher can read them back.
+ */
+function normalizeCeremonyTrigger(
+  trigger: BundleCeremonyTrigger | BundleCeremonyGithubTrigger,
+): { kind: string; config: Record<string, unknown> } {
+  if (trigger.kind === 'github') {
+    const gh = trigger as BundleCeremonyGithubTrigger;
+    return {
+      kind: 'github',
+      config: {
+        event: gh.event,
+        ...(gh.action !== undefined ? { action: gh.action } : {}),
+        ...(gh.filters !== undefined ? { filters: gh.filters } : {}),
+      },
+    };
+  }
+  const std = trigger as BundleCeremonyTrigger;
+  return { kind: std.kind, config: std.config ?? {} };
+}
+
 async function applyCeremonies(
   bundle: SquadboardBundle,
   projectId: string,
@@ -364,11 +390,12 @@ async function applyCeremonies(
     if (existingByName.has(key) && opts.overwriteExisting) {
       // Update trigger on the parent row; insert a new version with updated YAML.
       const id = existingByName.get(key)!;
+      const { kind: triggerKind, config: triggerConfig } = normalizeCeremonyTrigger(ceremony.trigger);
       await db
         .update(schema.workflows)
         .set({
-          triggerKind: ceremony.trigger.kind,
-          triggerConfig: ceremony.trigger.config ?? {},
+          triggerKind,
+          triggerConfig: triggerConfig ?? {},
           updatedAt: new Date(),
         })
         .where(eq(schema.workflows.id, id));
@@ -393,12 +420,13 @@ async function applyCeremonies(
       });
       result.applied.push(`ceremony: "${ceremony.name}" updated`);
     } else {
+      const { kind: triggerKind, config: triggerConfig } = normalizeCeremonyTrigger(ceremony.trigger);
       await insertWorkflowWithVersion(db, {
         projectId,
         name: ceremony.name,
         kind: 'ceremony',
-        triggerKind: ceremony.trigger.kind,
-        triggerConfig: ceremony.trigger.config ?? {},
+        triggerKind,
+        triggerConfig: triggerConfig ?? {},
         yamlContent,
       });
       result.applied.push(`ceremony: "${ceremony.name}" created`);

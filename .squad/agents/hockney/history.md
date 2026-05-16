@@ -272,3 +272,50 @@ Not found in this tree or parent directories. Content curated from first princip
 - `/builtin-projects` routes must be declared **before** `/:id` in the Express router — "builtin-projects" would otherwise be treated as an id param.
 - Diagnostics resets the bundle cache on every check run (not just boot) — ensures freshness without restart.
 - `bundleDir` must be passed to `applyBundle()` for any bundle that uses `bodyPath` references to external markdown files.
+
+---
+
+## Stream G Phase 2B — GitHub Integration Layer (Wave 18)
+
+**Completed by:** Hockney
+
+### What was built
+
+**D4 — pg stdio SIGPIPE fix:** Added `SIGPIPE`, `SIGTERM`, `SIGINT` handlers to `mcp/index.ts` that call `closeDb()` before exit. Prevents pg pool connection leaks when Claude Desktop terminates the MCP stdio process.
+
+**D1 — 5 MCP GitHub tools:**
+- `github_push_branch` — push a local branch to remote
+- `github_open_pr` — create a pull request via `gh pr create`
+- `github_comment_issue` — add a comment to an issue or PR
+- `github_trigger_workflow` — fire a `workflow_dispatch` event and return the new run ID
+- `github_merge_pr` — merge a PR via `gh pr merge`
+
+Logic extracted from inline route handlers into `services/github-git-ops.ts`. Both HTTP routes and MCP handlers call the same service functions. `GitOpsError` carries `code`, `detail`, `httpStatus`.
+
+**D2 — Expanded webhook handler:**
+- `POST /api/projects/:id/github/webhook` now handles 8 event types: `pull_request`, `pull_request_review`, `pull_request_review_comment`, `issue_comment`, `issues`, `push`, `workflow_run`, `check_run`
+- HMAC-SHA256 signature validation against per-project `github_webhook_secret`
+- All events persisted to `github_events` table with dedup on `X-GitHub-Delivery`
+- Re-emitted on internal bus as `github.<event>.<action>` via new `emitGithubWebhookEvent()`
+
+**D3 — GitHub ceremony triggers:**
+- New `triggerKind = 'github'` in ceremony dispatcher
+- `triggerConfig.event` + optional `action` + optional `filters` (`label`, `branch`, `author_team`)
+- Idempotency via `ceremony_github_fires(ceremony_slug, delivery_id)` DB unique index
+- `BundleCeremonyGithubTrigger` added to SDK bundle schema
+- `TriggerSource.kind` extended with `'github'`
+
+### New tables (Wave 18 migration)
+- `github_events` — raw GitHub webhook event store
+- `ceremony_github_fires` — dedup table for ceremony/delivery pairs
+
+### Key files
+- `services/github-git-ops.ts` — shared git service (NEW)
+- `routes/github-sync.ts` — expanded webhook handler
+- `realtime/event-bus.ts` — `GitHubWebhookEventType` + `emitGithubWebhookEvent()`
+- `services/ceremony-dispatcher.ts` — `handleGithubEvent()` + GitHub ceremony matching
+- `engine/workflow-runner.ts` — `TriggerSource.kind += 'github'`
+- `packages/squadboard-sdk/src/bundle/schema.ts` — `BundleCeremonyGithubTrigger`
+
+### Decision filed
+`.squad/decisions/inbox/hockney-stream-g-phase2b.md`

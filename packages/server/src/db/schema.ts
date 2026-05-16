@@ -24,6 +24,8 @@ export const projects = pgTable('projects', {
   githubAppId: text('github_app_id'),                  // numeric GitHub App ID as string
   githubAppInstallationId: text('github_app_installation_id'), // installation ID for this repo
   githubAppPrivateKey: text('github_app_private_key'), // PEM private key, plaintext (hacking phase)
+  // Stream G Phase 2B: per-project HMAC secret for X-Hub-Signature-256 webhook validation
+  githubWebhookSecret: text('github_webhook_secret'),
   // Project-level default model used by the auto-model resolution chain
   // (sdk/model-defaults.ts). Null means "use BUILTIN_FALLBACK".
   defaultModel: text('default_model'),
@@ -955,3 +957,48 @@ export const templates = pgTable('templates', {
 
 export type Template    = typeof templates.$inferSelect;
 export type NewTemplate = typeof templates.$inferInsert;
+
+// ---------------------------------------------------------------------------
+// Stream G Phase 2B — GitHub event ingest + ceremony idempotency
+// ---------------------------------------------------------------------------
+
+/**
+ * Persists every inbound GitHub webhook event for audit + replay.
+ * project_id_resolved is set when the event can be matched to a Squadboard
+ * project via the repo owner/name. NULL means unresolved.
+ */
+export const githubEvents = pgTable('github_events', {
+  id:                uuid('id').primaryKey().defaultRandom(),
+  eventType:         text('event_type').notNull(),          // X-GitHub-Event header value
+  action:            text('action'),                         // payload.action (nullable for push/ping)
+  payload:           jsonb('payload').notNull(),
+  deliveryId:        text('delivery_id'),                    // X-GitHub-Delivery — unique per webhook call
+  projectIdResolved: uuid('project_id_resolved'),           // FK to projects(id) (best-effort match)
+  receivedAt:        timestamp('received_at', { withTimezone: true }).notNull().defaultNow(),
+  processedAt:       timestamp('processed_at', { withTimezone: true }),
+  processedOutcome:  text('processed_outcome'),             // 'matched' | 'no_match' | 'error'
+});
+
+export type GithubEvent    = typeof githubEvents.$inferSelect;
+export type NewGithubEvent = typeof githubEvents.$inferInsert;
+
+/**
+ * Idempotency guard for ceremony-trigger fires.
+ * One row per (ceremony_slug, delivery_id) pair prevents double-fire when
+ * GitHub retries a webhook delivery.
+ */
+export const ceremonyGithubFires = pgTable(
+  'ceremony_github_fires',
+  {
+    id:            uuid('id').primaryKey().defaultRandom(),
+    ceremonySlug:  text('ceremony_slug').notNull(),
+    deliveryId:    text('delivery_id').notNull(),
+    firedAt:       timestamp('fired_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    uqCeremonyDelivery: uniqueIndex('ceremony_github_fires_uq').on(t.ceremonySlug, t.deliveryId),
+  }),
+);
+
+export type CeremonyGithubFire    = typeof ceremonyGithubFires.$inferSelect;
+export type NewCeremonyGithubFire = typeof ceremonyGithubFires.$inferInsert;

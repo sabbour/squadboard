@@ -1,17 +1,16 @@
 import { Router } from 'express';
 import type { Request, Response } from 'express';
 import { eq, and } from 'drizzle-orm';
-import { execFile } from 'node:child_process';
-import { promisify } from 'node:util';
 import { getDb, schema } from '../db/index.js';
 import { eventBus } from '../realtime/event-bus.js';
-import { assertSafeWorkspacePath } from '../engine/workspace.js';
-
-const execFileAsync = promisify(execFile);
-
-// Default names that must never be pushed to
-const PROTECTED_BRANCHES = new Set(['main', 'master', 'develop', 'trunk']);
-const GIT_TIMEOUT_MS = 30_000;
+import {
+  pushBranch,
+  createPr,
+  buildPrBody,
+  commentOnIssue,
+  mergePr,
+  GitOpsError,
+} from '../services/github-git-ops.js';
 
 /** Sanitize a branch name — reject any shell-unsafe characters */
 function sanitizeBranchName(name: string): string {
@@ -26,11 +25,6 @@ function sanitizeBranchName(name: string): string {
  * We pipe via stdin (--body-file -) so the body never reaches the shell
  * argument list. This guard is an extra layer against control characters.
  */
-function sanitizeCommentBody(body: string): string {
-  // Strip null bytes and ANSI escape sequences
-  return body.replace(/\x00/g, '').replace(/\x1b\[[0-9;]*m/g, '').trim();
-}
-
 // ---------------------------------------------------------------------------
 // Two routers:
 //   issueRunsRouter  — mounted at /api/projects/:projectId/issues/:issueId/runs
@@ -42,6 +36,10 @@ function sanitizeCommentBody(body: string): string {
 // ---------------------------------------------------------------------------
 
 function handleError(res: Response, err: unknown) {
+  if (err instanceof GitOpsError) {
+    res.status(err.httpStatus).json({ error: err.detail });
+    return;
+  }
   console.error('[runs] error:', err);
   res.status(500).json({ error: 'Internal server error' });
 }
@@ -222,102 +220,9 @@ projectRunsRouter.post('/:runId/cancel', async (req: Request, res: Response) => 
 // ---------------------------------------------------------------------------
 projectRunsRouter.post('/:runId/git/push', async (req: Request, res: Response) => {
   const { runId, projectId } = req.params as Record<string, string>;
-  const db = getDb();
-
   try {
-    const [run] = await db
-      .select()
-      .from(schema.issueRuns)
-      .where(eq(schema.issueRuns.id, runId))
-      .limit(1);
-
-    if (!run) {
-      res.status(404).json({ error: 'Run not found' });
-      return;
-    }
-
-    if (!run.workspacePath) {
-      res.status(422).json({ error: 'Run has no workspace path — only worktree runs can be pushed.' });
-      return;
-    }
-
-    if (run.workspaceStrategy !== 'worktree') {
-      res.status(422).json({ error: `Push is only supported for worktree runs (this run uses strategy "${run.workspaceStrategy}").` });
-      return;
-    }
-
-    // Safety: must be under an allowed workspace root
-    try {
-      assertSafeWorkspacePath(run.workspacePath);
-    } catch (e) {
-      res.status(403).json({ error: String(e) });
-      return;
-    }
-
-    // Determine the current branch
-    let branch: string;
-    try {
-      const { stdout } = await execFileAsync('git', ['rev-parse', '--abbrev-ref', 'HEAD'], {
-        cwd: run.workspacePath,
-        timeout: GIT_TIMEOUT_MS,
-      });
-      branch = stdout.trim();
-    } catch (e) {
-      res.status(500).json({ error: `Could not determine current branch: ${String(e)}` });
-      return;
-    }
-
-    // Sanitize and protect
-    try {
-      sanitizeBranchName(branch);
-    } catch (e) {
-      res.status(422).json({ error: String(e) });
-      return;
-    }
-    if (PROTECTED_BRANCHES.has(branch)) {
-      res.status(422).json({ error: `Refusing to push to protected branch "${branch}".` });
-      return;
-    }
-
-    // Execute git push -u origin <branch>
-    let pushOutput: string;
-    try {
-      const { stdout, stderr } = await execFileAsync(
-        'git',
-        ['push', '-u', 'origin', branch],
-        { cwd: run.workspacePath, timeout: GIT_TIMEOUT_MS },
-      );
-      pushOutput = (stdout + stderr).trim();
-    } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : String(e);
-      const stderr = (e as { stderr?: string }).stderr ?? '';
-      res.status(500).json({ error: 'git push failed', detail: (stderr || msg).trim() });
-      return;
-    }
-
-    // Derive branch URL from remote origin
-    let branchUrl = '';
-    try {
-      const { stdout: remoteUrl } = await execFileAsync('git', ['remote', 'get-url', 'origin'], {
-        cwd: run.workspacePath,
-        timeout: GIT_TIMEOUT_MS,
-      });
-      const remote = remoteUrl.trim().replace(/\.git$/, '').replace(/^git@github\.com:/, 'https://github.com/');
-      branchUrl = `${remote}/tree/${branch}`;
-    } catch {
-      // Non-fatal — URL is a convenience
-    }
-
-    // Fan-out via WebSocket
-    eventBus.emitGitEvent('git.push.complete', projectId, { runId, branch, branchUrl, pushOutput });
-
-    // Persist git fields on the run record for card badge caching
-    await db
-      .update(schema.issueRuns)
-      .set({ gitBranch: branch, gitBranchUrl: branchUrl, updatedAt: new Date() })
-      .where(eq(schema.issueRuns.id, runId));
-
-    res.json({ branch, branchUrl, pushOutput });
+    const result = await pushBranch(runId, projectId);
+    res.json(result);
   } catch (err) {
     handleError(res, err);
   }
@@ -333,143 +238,18 @@ projectRunsRouter.post('/:runId/git/push', async (req: Request, res: Response) =
 // ---------------------------------------------------------------------------
 projectRunsRouter.post('/:runId/git/pr', async (req: Request, res: Response) => {
   const { runId, projectId } = req.params as Record<string, string>;
-  const db = getDb();
-
   try {
-    const [run] = await db
-      .select()
-      .from(schema.issueRuns)
-      .where(eq(schema.issueRuns.id, runId))
-      .limit(1);
-
-    if (!run) {
-      res.status(404).json({ error: 'Run not found' });
-      return;
-    }
-
-    if (!run.workspacePath) {
-      res.status(422).json({ error: 'Run has no workspace path.' });
-      return;
-    }
-
-    if (run.workspaceStrategy !== 'worktree') {
-      res.status(422).json({ error: `PR creation is only supported for worktree runs.` });
-      return;
-    }
-
-    try {
-      assertSafeWorkspacePath(run.workspacePath);
-    } catch (e) {
-      res.status(403).json({ error: String(e) });
-      return;
-    }
-
-    // Validate current branch is not protected
-    let branch: string;
-    try {
-      const { stdout } = await execFileAsync('git', ['rev-parse', '--abbrev-ref', 'HEAD'], {
-        cwd: run.workspacePath,
-        timeout: GIT_TIMEOUT_MS,
-      });
-      branch = stdout.trim();
-    } catch (e) {
-      res.status(500).json({ error: `Could not determine current branch: ${String(e)}` });
-      return;
-    }
-
-    if (PROTECTED_BRANCHES.has(branch)) {
-      res.status(422).json({ error: `Refusing to open a PR from protected branch "${branch}".` });
-      return;
-    }
-
-    const overrideTitle = typeof req.body?.title === 'string' ? req.body.title : undefined;
-    const overrideBody = typeof req.body?.body === 'string' ? req.body.body : undefined;
-    const draft = req.body?.draft === true;
-
-    // Fetch agent + issue for template pre-fill
-    const [agent] = await db.select({ name: schema.agents.name }).from(schema.agents).where(eq(schema.agents.id, run.agentId)).limit(1);
-    const [issue] = await db.select({ title: schema.issues.title }).from(schema.issues).where(eq(schema.issues.id, run.issueId)).limit(1);
-
-    const prTitle = overrideTitle ?? (issue ? `${issue.title}` : `Run ${runId.slice(0, 8)}`);
-    const prBody = overrideBody ?? buildPrBody({
-      agentName: agent?.name ?? 'unknown',
-      runId,
-      branch,
-    });
-
-    const ghArgs = [
-      'pr', 'create',
-      '--title', prTitle,
-      '--body', prBody,
-    ];
-    if (draft) ghArgs.push('--draft');
-
-    let ghOutput: string;
-    try {
-      const { stdout, stderr } = await execFileAsync('gh', ghArgs, {
-        cwd: run.workspacePath,
-        timeout: GIT_TIMEOUT_MS,
-      });
-      ghOutput = (stdout + stderr).trim();
-    } catch (e: unknown) {
-      const stderr = (e as { stderr?: string }).stderr ?? '';
-      const msg = e instanceof Error ? e.message : String(e);
-      res.status(500).json({ error: 'gh pr create failed', detail: (stderr || msg).trim() });
-      return;
-    }
-
-    // gh pr create outputs the PR URL on the last line
-    const lines = ghOutput.split('\n').filter(Boolean);
-    const prUrl = lines[lines.length - 1] ?? '';
-    const prNumberMatch = prUrl.match(/\/pull\/(\d+)$/);
-    const prNumber = prNumberMatch ? parseInt(prNumberMatch[1], 10) : undefined;
-
-    eventBus.emitGitEvent('git.pr.created', projectId, { runId, branch, prUrl, prNumber });
-
-    // Persist PR fields on the run record for card badge caching
-    await db
-      .update(schema.issueRuns)
-      .set({
-        prNumber: prNumber ?? null,
-        prUrl,
-        prState: 'open',
-        updatedAt: new Date(),
-      })
-      .where(eq(schema.issueRuns.id, runId));
-
-    res.json({ prUrl, prNumber });
+    const opts = {
+      title: typeof req.body?.title === 'string' ? req.body.title : undefined,
+      body: typeof req.body?.body === 'string' ? req.body.body : undefined,
+      draft: req.body?.draft === true,
+    };
+    const result = await createPr(runId, opts, projectId);
+    res.json(result);
   } catch (err) {
     handleError(res, err);
   }
 });
-
-/**
- * Build the default PR body from the PR template, pre-filled with run context.
- * Agents can override via the `body` field in the request payload.
- */
-function buildPrBody(ctx: { agentName: string; runId: string; branch: string }): string {
-  return `## Summary
-<!-- What this PR does in one paragraph -->
-
-## Squad Context
-- **Agent:** ${ctx.agentName}
-- **Ceremony / Run:** ad-hoc (run \`${ctx.runId.slice(0, 8)}\`)
-- **Issue:** <!-- Closes #N if applicable -->
-- **Branch:** \`${ctx.branch}\`
-
-## Test Plan
-<!-- How a reviewer can verify -->
-
-## Risk
-- [ ] No risk / cosmetic
-- [ ] Low — UI-only / non-breaking
-- [ ] Medium — touches backend / migrations
-- [ ] High — touches engine loops / multi-pod liveness
-
-## Notes for the next agent
-<!-- Handoff context if a follow-up ceremony picks up -->
-`;
-}
 
 // ---------------------------------------------------------------------------
 // POST /:runId/git/comment — Comment on the linked GitHub issue (G2.3)
@@ -480,22 +260,8 @@ function buildPrBody(ctx: { agentName: string; runId: string; branch: string }):
 // ---------------------------------------------------------------------------
 projectRunsRouter.post('/:runId/git/comment', async (req: Request, res: Response) => {
   const { runId, projectId } = req.params as Record<string, string>;
-  const db = getDb();
-
   try {
-    const [run] = await db
-      .select()
-      .from(schema.issueRuns)
-      .where(eq(schema.issueRuns.id, runId))
-      .limit(1);
-
-    if (!run) {
-      res.status(404).json({ error: 'Run not found' });
-      return;
-    }
-
     const { issueNumber, body } = req.body as { issueNumber?: unknown; body?: unknown };
-
     if (typeof issueNumber !== 'number' || !Number.isInteger(issueNumber) || issueNumber < 1) {
       res.status(400).json({ error: '`issueNumber` must be a positive integer.' });
       return;
@@ -504,36 +270,8 @@ projectRunsRouter.post('/:runId/git/comment', async (req: Request, res: Response
       res.status(400).json({ error: '`body` must be a non-empty string.' });
       return;
     }
-
-    const safeBody = sanitizeCommentBody(body);
-
-    // Use --body-file - and pipe via stdin to keep the body out of argv
-    let ghOutput: string;
-    try {
-      const { stdout } = await execFileAsync(
-        'gh',
-        ['issue', 'comment', String(issueNumber), '--body-file', '-'],
-        {
-          timeout: GIT_TIMEOUT_MS,
-          input: safeBody,
-          // cwd: workspace path if available (for repo context), else undefined (gh falls back to env)
-          ...(run.workspacePath ? { cwd: run.workspacePath } : {}),
-        } as Parameters<typeof execFileAsync>[2] & { input?: string },
-      );
-      ghOutput = String(stdout).trim();
-    } catch (e: unknown) {
-      const stderr = (e as { stderr?: string }).stderr ?? '';
-      const msg = e instanceof Error ? e.message : String(e);
-      res.status(500).json({ error: 'gh issue comment failed', detail: (stderr || msg).trim() });
-      return;
-    }
-
-    // gh issue comment --body-file - outputs the comment URL on stdout
-    const commentUrl = ghOutput.split('\n').filter(Boolean).pop() ?? '';
-
-    eventBus.emitGitEvent('git.comment.posted', projectId, { runId, commentUrl, issueNumber });
-
-    res.json({ commentUrl, issueNumber });
+    const result = await commentOnIssue(runId, { issueNumber, body }, projectId);
+    res.json(result);
   } catch (err) {
     handleError(res, err);
   }
@@ -544,133 +282,17 @@ projectRunsRouter.post('/:runId/git/comment', async (req: Request, res: Response
 // ---------------------------------------------------------------------------
 // Request body: { method?: 'merge' | 'squash' | 'rebase' }  — default 'squash'
 // Response 200: { prUrl, sha, method }
-// Response 409: { error, checks } — CI is failing or PR not ready
+// Response 409: CI failing
 // Response 4xx/5xx: { error }
 // ---------------------------------------------------------------------------
 projectRunsRouter.post('/:runId/git/pr/merge', async (req: Request, res: Response) => {
   const { runId, projectId } = req.params as Record<string, string>;
-  const db = getDb();
-
   try {
-    const [run] = await db
-      .select()
-      .from(schema.issueRuns)
-      .where(eq(schema.issueRuns.id, runId))
-      .limit(1);
-
-    if (!run) {
-      res.status(404).json({ error: 'Run not found' });
-      return;
-    }
-
-    if (!run.workspacePath) {
-      res.status(422).json({ error: 'Run has no workspace path.' });
-      return;
-    }
-
-    try {
-      assertSafeWorkspacePath(run.workspacePath);
-    } catch (e) {
-      res.status(403).json({ error: String(e) });
-      return;
-    }
-
-    // Discover PR number: prefer cached value on the run, else query gh
-    let prNum: number | null = run.prNumber ?? null;
-    let prUrl: string = run.prUrl ?? '';
-
-    if (!prNum) {
-      // Derive from current branch via gh pr view
-      try {
-        const { stdout } = await execFileAsync(
-          'gh', ['pr', 'view', '--json', 'number,url,state'],
-          { cwd: run.workspacePath, timeout: GIT_TIMEOUT_MS },
-        );
-        const view = JSON.parse(stdout.trim()) as { number: number; url: string; state: string };
-        prNum = view.number;
-        prUrl = view.url;
-        // Cache the discovered PR number
-        await db
-          .update(schema.issueRuns)
-          .set({ prNumber: prNum, prUrl, prState: view.state.toLowerCase(), updatedAt: new Date() })
-          .where(eq(schema.issueRuns.id, runId));
-      } catch (e: unknown) {
-        const stderr = (e as { stderr?: string }).stderr ?? '';
-        const msg = e instanceof Error ? e.message : String(e);
-        res.status(422).json({ error: 'Could not determine PR number — has a PR been created for this run?', detail: (stderr || msg).trim() });
-        return;
-      }
-    }
-
-    if (!prNum) {
-      res.status(422).json({ error: 'No PR number found for this run.' });
-      return;
-    }
-
-    // Validate: check required CI checks before merging
-    try {
-      await execFileAsync(
-        'gh', ['pr', 'checks', String(prNum), '--required'],
-        { cwd: run.workspacePath, timeout: GIT_TIMEOUT_MS },
-      );
-    } catch (e: unknown) {
-      const stderr = (e as { stderr?: string }).stderr ?? '';
-      const stdout = (e as { stdout?: string }).stdout ?? '';
-
-      // Update cached CI state to 'failing'
-      await db
-        .update(schema.issueRuns)
-        .set({ ciState: 'failing', gitCacheRefreshedAt: new Date(), updatedAt: new Date() })
-        .where(eq(schema.issueRuns.id, runId));
-
-      res.status(409).json({
-        error: 'Required CI checks are failing or still running — cannot merge.',
-        checks: (stderr || stdout).trim(),
-      });
-      return;
-    }
-
-    // Update CI state to passing
-    await db
-      .update(schema.issueRuns)
-      .set({ ciState: 'passing', gitCacheRefreshedAt: new Date(), updatedAt: new Date() })
-      .where(eq(schema.issueRuns.id, runId));
-
-    // Determine merge method (default: squash)
     const rawMethod = req.body?.method;
-    const mergeMethod: 'merge' | 'squash' | 'rebase' =
+    const method: 'squash' | 'merge' | 'rebase' =
       rawMethod === 'merge' || rawMethod === 'rebase' ? rawMethod : 'squash';
-
-    const mergeFlag = `--${mergeMethod}`;
-
-    let ghMergeOutput: string;
-    try {
-      const { stdout, stderr } = await execFileAsync(
-        'gh', ['pr', 'merge', String(prNum), mergeFlag, '--delete-branch'],
-        { cwd: run.workspacePath, timeout: GIT_TIMEOUT_MS },
-      );
-      ghMergeOutput = (stdout + stderr).trim();
-    } catch (e: unknown) {
-      const stderr = (e as { stderr?: string }).stderr ?? '';
-      const msg = e instanceof Error ? e.message : String(e);
-      // Surface gh's error verbatim (branch protection, auth, etc.)
-      res.status(500).json({ error: 'gh pr merge failed', detail: (stderr || msg).trim() });
-      return;
-    }
-
-    // Extract merge SHA from gh output if available (gh outputs it in some modes)
-    const shaMatch = ghMergeOutput.match(/([0-9a-f]{40})/i);
-    const sha = shaMatch ? shaMatch[1] : '';
-
-    // Update run record: mark PR as merged
-    await db
-      .update(schema.issueRuns)
-      .set({ prState: 'merged', updatedAt: new Date() })
-      .where(eq(schema.issueRuns.id, runId));
-
-    eventBus.emitGitEvent('git.pr.merged', projectId, { runId, prUrl, sha, method: mergeMethod });
-
-    res.json({ prUrl, sha, method: mergeMethod });
+    const result = await mergePr(runId, { method }, projectId);
+    res.json(result);
   } catch (err) {
     handleError(res, err);
   }

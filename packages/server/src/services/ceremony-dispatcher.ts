@@ -15,7 +15,7 @@
 
 import { eq, and, sql } from 'drizzle-orm';
 import { eventBus, type BusEvent, type BusEventType } from '../realtime/event-bus.js';
-import { getDb, schema } from '../db/index.js';
+import { getDb, getPool, schema } from '../db/index.js';
 import { spawnCeremonyRun } from './ceremony-scheduler.js';
 
 // ---------------------------------------------------------------------------
@@ -120,6 +120,166 @@ async function findMatchingCeremonies(
 }
 
 // ---------------------------------------------------------------------------
+// GitHub webhook ceremony matching (D3 — Stream G Phase 2B)
+// ---------------------------------------------------------------------------
+
+interface GithubTriggerConfig {
+  event: string;
+  action?: string;
+  filters?: {
+    label?: string;
+    branch?: string;
+    author_team?: string;
+  };
+}
+
+async function findMatchingGithubCeremonies(
+  projectId: string,
+  ghEvent: string,
+  action: string | null,
+  payload: Record<string, unknown>,
+): Promise<{ id: string; slug: string; triggerConfig: GithubTriggerConfig }[]> {
+  if (!UUID_RE.test(projectId)) return [];
+  const db = getDb();
+
+  const rows = await db
+    .select({
+      id: schema.workflows.id,
+      slug: schema.workflows.slug,
+      triggerConfig: schema.workflows.triggerConfig,
+    })
+    .from(schema.workflows)
+    .where(
+      and(
+        eq(schema.workflows.projectId, projectId),
+        eq(schema.workflows.triggerKind, 'github'),
+        eq(schema.workflows.status, 'active'),
+        sql`${schema.workflows.triggerConfig}->>'event' = ${ghEvent}`,
+      ),
+    );
+
+  // Filter by action (if specified in triggerConfig) and filter fields
+  return rows.filter((row) => {
+    const cfg = (row.triggerConfig ?? {}) as GithubTriggerConfig;
+
+    // Action filter
+    if (cfg.action && cfg.action !== action) return false;
+
+    // Label filter — check payload.label.name or payload.pull_request.labels
+    if (cfg.filters?.label) {
+      const label = cfg.filters.label;
+      const labelsArr = extractLabels(payload);
+      if (!labelsArr.includes(label)) return false;
+    }
+
+    // Branch filter — check payload.pull_request.base.ref or payload.ref
+    if (cfg.filters?.branch) {
+      const branch = cfg.filters.branch;
+      const payloadBranch = extractBranch(payload);
+      if (payloadBranch !== branch) return false;
+    }
+
+    // author_team filter is async (gh api call) — skip here; handled at spawn time
+    return true;
+  }) as { id: string; slug: string; triggerConfig: GithubTriggerConfig }[];
+}
+
+function extractLabels(payload: Record<string, unknown>): string[] {
+  // PR or issue-level labels
+  const names: string[] = [];
+  const tryLabels = (arr: unknown) => {
+    if (Array.isArray(arr)) {
+      for (const l of arr) {
+        if (l && typeof l === 'object' && typeof (l as Record<string, unknown>).name === 'string') {
+          names.push((l as Record<string, unknown>).name as string);
+        }
+      }
+    }
+  };
+  tryLabels((payload.label as Record<string, unknown> | undefined) ? [payload.label] : []);
+  tryLabels((payload.pull_request as Record<string, unknown> | undefined)?.labels);
+  tryLabels((payload.issue as Record<string, unknown> | undefined)?.labels);
+  return names;
+}
+
+function extractBranch(payload: Record<string, unknown>): string | null {
+  const pr = payload.pull_request as Record<string, unknown> | undefined;
+  if (pr?.base && typeof (pr.base as Record<string, unknown>).ref === 'string') {
+    return (pr.base as Record<string, unknown>).ref as string;
+  }
+  if (typeof payload.ref === 'string') {
+    // push event: refs/heads/main -> main
+    return (payload.ref as string).replace(/^refs\/heads\//, '');
+  }
+  return null;
+}
+
+async function handleGithubEvent(
+  projectId: string,
+  ghEvent: string,
+  action: string | null,
+  deliveryId: string | null,
+  payload: Record<string, unknown>,
+): Promise<void> {
+  let matches: { id: string; slug: string; triggerConfig: GithubTriggerConfig }[];
+  try {
+    matches = await findMatchingGithubCeremonies(projectId, ghEvent, action, payload);
+  } catch (err) {
+    console.error(`[ceremony] github dispatcher lookup failed for ${ghEvent}:`, err);
+    return;
+  }
+  if (matches.length === 0) return;
+
+  const pool = getPool();
+
+  for (const m of matches) {
+    // DB idempotency: use ceremony_github_fires(ceremony_slug, delivery_id) unique constraint
+    if (deliveryId) {
+      try {
+        await pool.query(
+          `INSERT INTO ceremony_github_fires (ceremony_slug, delivery_id)
+           VALUES ($1, $2)
+           ON CONFLICT DO NOTHING`,
+          [m.slug, deliveryId],
+        );
+        // Check whether row existed already (affected = 0 means duplicate)
+        const check = await pool.query(
+          `SELECT 1 FROM ceremony_github_fires WHERE ceremony_slug = $1 AND delivery_id = $2`,
+          [m.slug, deliveryId],
+        );
+        if (check.rowCount === 0) {
+          console.debug(`[ceremony] github fire skipped (duplicate delivery): ${m.slug} / ${deliveryId}`);
+          continue;
+        }
+      } catch (err) {
+        console.error(`[ceremony] github fire idempotency check failed for ${m.slug}:`, err);
+        continue;
+      }
+    } else {
+      // No delivery ID — fall back to in-memory dedupe
+      const dedupeKey = `github:${ghEvent}:${action ?? '*'}:${m.id}:${Date.now()}`;
+      if (alreadyFired(dedupeKey)) continue;
+      rememberFire(dedupeKey);
+    }
+
+    try {
+      await spawnCeremonyRun(m.id, {
+        trigger: `github:${ghEvent}${action ? ':' + action : ''}`,
+        triggerSource: {
+          kind: 'github',
+          eventType: ghEvent,
+          action: action ?? undefined,
+          deliveryId: deliveryId ?? undefined,
+          projectId,
+        },
+      });
+    } catch (err) {
+      console.error(`[ceremony] github dispatcher spawn failed (workflow ${m.slug}):`, err);
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Bus listener
 // ---------------------------------------------------------------------------
 
@@ -133,6 +293,20 @@ async function handleEvent(event: BusEvent): Promise<void> {
   // that emitHeartbeatEvent() now emits on the separate 'heartbeat' channel,
   // but this guard is belt-and-suspenders in case of future regressions.
   if (event.type.startsWith('heartbeat.')) return;
+
+  // ── GitHub webhook events (D3) ──────────────────────────────────────────
+  // Pattern: github.<event_type>.<action> or github.<event_type>
+  if (event.type.startsWith('github.')) {
+    const parts = event.type.split('.');
+    // parts[0] = 'github', parts[1] = event_type, parts[2] = action (optional)
+    const ghEvent = parts[1] ?? '';
+    const ghAction = parts[2] ?? null;
+    const outerPayload = event.payload as Record<string, unknown> | null;
+    const innerPayload = (outerPayload?.payload as Record<string, unknown> | undefined) ?? outerPayload ?? {};
+    const deliveryId = typeof outerPayload?.deliveryId === 'string' ? outerPayload.deliveryId : null;
+    await handleGithubEvent(event.projectId, ghEvent, ghAction, deliveryId as string | null, innerPayload);
+    return;
+  }
 
   let matches: { id: string; slug: string }[];
   try {

@@ -65,12 +65,16 @@ async function getProjectIdForWorkflowRun(workflowRunId: string): Promise<string
  * so the UI can show "Manual" / "Schedule" / "Event:issue.created" badges.
  */
 export type TriggerSource = {
-  kind: 'manual' | 'manual_force' | 'on_schedule' | 'on_event' | 'unknown';
+  kind: 'manual' | 'manual_force' | 'on_schedule' | 'on_event' | 'github' | 'unknown';
   detail?: string;
   eventType?: string;
   scheduleId?: string;
   anchorIssueId?: string;
   by?: string;
+  /** GitHub-specific provenance fields (kind='github'). */
+  action?: string;
+  deliveryId?: string;
+  projectId?: string;
 };
 
 export async function createWorkflowRun(

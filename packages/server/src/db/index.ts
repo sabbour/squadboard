@@ -1056,6 +1056,48 @@ async function bootstrapSchema(): Promise<void> {
       ADD COLUMN IF NOT EXISTS git_cache_refreshed_at  TIMESTAMPTZ;
   `);
 
+  // Wave 18 — Stream G Phase 2B: GitHub event ingest + ceremony idempotency.
+  await _pool.query(`
+    -- github_events: raw webhook event log for audit and replay
+    CREATE TABLE IF NOT EXISTS github_events (
+      id                   UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+      event_type           TEXT        NOT NULL,
+      action               TEXT,
+      payload              JSONB       NOT NULL,
+      delivery_id          TEXT,
+      project_id_resolved  UUID        REFERENCES projects(id) ON DELETE SET NULL,
+      received_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      processed_at         TIMESTAMPTZ,
+      processed_outcome    TEXT
+    );
+
+    CREATE INDEX IF NOT EXISTS github_events_event_type_idx
+      ON github_events (event_type, received_at DESC);
+
+    CREATE INDEX IF NOT EXISTS github_events_project_idx
+      ON github_events (project_id_resolved, received_at DESC)
+      WHERE project_id_resolved IS NOT NULL;
+
+    CREATE UNIQUE INDEX IF NOT EXISTS github_events_delivery_id_uq
+      ON github_events (delivery_id)
+      WHERE delivery_id IS NOT NULL;
+
+    -- github_webhook_secret on projects: per-project HMAC secret for X-Hub-Signature-256
+    ALTER TABLE projects
+      ADD COLUMN IF NOT EXISTS github_webhook_secret TEXT;
+
+    -- ceremony_github_fires: idempotency guard — one row per (slug, delivery_id) pair
+    CREATE TABLE IF NOT EXISTS ceremony_github_fires (
+      id             UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+      ceremony_slug  TEXT        NOT NULL,
+      delivery_id    TEXT        NOT NULL,
+      fired_at       TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+
+    CREATE UNIQUE INDEX IF NOT EXISTS ceremony_github_fires_uq
+      ON ceremony_github_fires (ceremony_slug, delivery_id);
+  `);
+
   await seedSystemReviewPolicyPresets();
 
   console.log('[db] schema bootstrapped');
