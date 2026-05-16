@@ -1,5 +1,5 @@
 import fs from 'node:fs/promises';
-import crypto from 'node:crypto';
+import { hashCharterContent } from './charter-identity.js';
 
 export interface CharterMetadata {
   name: string;
@@ -258,10 +258,11 @@ export async function parseCharter(charterPath: string): Promise<CharterMetadata
 }
 
 /**
- * Compute an md5 hash of raw charter content for change detection.
+ * Compute md5 hash of raw charter content for change detection.
+ * Delegates to hashCharterContent from charter-identity.ts.
  */
 export function computeContentHash(content: string | Buffer): string {
-  return crypto.createHash('md5').update(content).digest('hex');
+  return hashCharterContent(content);
 }
 
 /**
