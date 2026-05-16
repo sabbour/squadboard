@@ -66,6 +66,14 @@ const ROLE_OPTIONS: { id: CastingAgentRole; label: string; group: 'tech' | 'non-
   { id: 'research', label: '🔬 Research', group: 'non-tech' },
 ]
 
+if (import.meta.env.DEV) {
+  const ids = ROLE_OPTIONS.map((r) => r.id)
+  const dupes = ids.filter((id, i) => ids.indexOf(id) !== i)
+  if (dupes.length > 0) {
+    throw new Error(`HireTeamModal: ROLE_OPTIONS has duplicate ids: ${dupes.join(', ')}`)
+  }
+}
+
 const ROLE_BADGE_COLOR: Record<
   CastingAgentRole,
   'brand' | 'success' | 'warning' | 'danger' | 'severe' | 'subtle'
@@ -237,7 +245,17 @@ export default function HireTeamModal({ projectId, onClose }: HireTeamModalProps
                   />
                 </Field>
 
-                <Field label="Required roles (optional)" hint="Casting will guarantee these roles are present.">
+                <fieldset style={{ border: 'none', padding: 0, margin: 0 }}>
+                  <legend style={{
+                    fontSize: '14px',
+                    fontWeight: 400,
+                    color: tokens.colorNeutralForeground1,
+                    lineHeight: '20px',
+                    marginBottom: '4px',
+                    padding: 0,
+                  }}>
+                    Required roles (optional)
+                  </legend>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
                     <div>
                       <div style={{ fontSize: '11px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', color: tokens.colorNeutralForeground3, marginBottom: '6px' }}>
@@ -247,6 +265,7 @@ export default function HireTeamModal({ projectId, onClose }: HireTeamModalProps
                         {ROLE_OPTIONS.filter((r) => r.group === 'tech').map((r) => (
                           <Checkbox
                             key={r.id}
+                            id={`role-${r.id}`}
                             label={r.label}
                             checked={requiredRoles.has(r.id)}
                             onChange={() => toggleRole(r.id)}
@@ -262,6 +281,7 @@ export default function HireTeamModal({ projectId, onClose }: HireTeamModalProps
                         {ROLE_OPTIONS.filter((r) => r.group === 'non-tech').map((r) => (
                           <Checkbox
                             key={r.id}
+                            id={`role-${r.id}`}
                             label={r.label}
                             checked={requiredRoles.has(r.id)}
                             onChange={() => toggleRole(r.id)}
@@ -270,7 +290,15 @@ export default function HireTeamModal({ projectId, onClose }: HireTeamModalProps
                       </div>
                     </div>
                   </div>
-                </Field>
+                  <span style={{
+                    fontSize: '12px',
+                    color: tokens.colorNeutralForeground3,
+                    display: 'block',
+                    marginTop: '4px',
+                  }}>
+                    Casting will guarantee these roles are present.
+                  </span>
+                </fieldset>
 
                 {propose.isError && (
                   <p style={{ fontSize: '12px', color: tokens.colorPaletteRedForeground1, margin: 0 }}>
