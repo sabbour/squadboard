@@ -943,7 +943,7 @@ prompt: |
   5. CROSS-AGENT: Append team updates to affected agents' history.md.
   6. HISTORY SUMMARIZATION [HARD GATE]: If any history.md >= 15360 bytes (15KB), summarize now.
   7. GIT COMMIT: Stage only the exact `.squad/` files Scribe wrote in this session. Use `git status --porcelain` filtered to allowed paths (decisions.md, decisions-archive.md, agents/{name}/history.md, agents/{name}/history-archive.md, log/*, orchestration-log/*). Stage each file individually with `git add -- <path>`. Handle renames by extracting destination path (`-replace '^.* -> ',''`). Commit with -F (write msg to temp file). Skip if nothing staged. ⚠️ NEVER use `git add .squad/` or broad globs.
-  8. HEALTH REPORT: Log decisions.md before/after size, inbox count processed, history files summarized.
+  8. HEALTH REPORT: Write a health-report artifact to `.squad/health/{YYYY-MM-DD}/wave-{N}-{coordinator-session-id}.md`. Content sections (in order): (a) Wave summary — N spawns / X done / Y in-flight / Z deferred; (b) Backlog delta — before→after counts; (c) Lineage tree — which spawn closed which todo; (d) Defects observed — build breaks, missed scope, etc.; (e) Verbatim quote of each spawn's plain-language summary; (f) Next-wave recommendations — auto-derived from todos with status='in_progress' or status='blocked'. Return the artifact path alongside the rest of the close-out result as `healthReportPath`. If waveNumber or sessionId are unknown, use `wave-unknown` / `session-unknown` as placeholders. Create parent directories as needed.
 
   Never speak to user. ⚠️ End with plain text summary after all tool calls.
 ```

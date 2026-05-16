@@ -26,6 +26,9 @@ export const projects = pgTable('projects', {
   githubAppPrivateKey: text('github_app_private_key'), // PEM private key, plaintext (hacking phase)
   // Stream G Phase 2B: per-project HMAC secret for X-Hub-Signature-256 webhook validation
   githubWebhookSecret: text('github_webhook_secret'),
+  // Wave 20 — G4.1: workflow file to dispatch when "Assign to @copilot" is triggered.
+  // e.g. 'copilot-coding-agent.yml'. Null → fall back to gh issue assign.
+  copilotWorkflowFile: text('copilot_workflow_file'),
   // Project-level default model used by the auto-model resolution chain
   // (sdk/model-defaults.ts). Null means "use BUILTIN_FALLBACK".
   defaultModel: text('default_model'),
@@ -59,6 +62,8 @@ export const agents = pgTable('agents', {
   charterPath: text('charter_path').notNull(),
   historyPath: text('history_path'),
   charterHash: text('charter_hash'),
+  // Wave 20 — G4.1: 'squad' = normal Squad agent, 'copilot' = virtual @copilot dispatcher
+  agentKind: text('agent_kind').notNull().default('squad'),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 });
@@ -102,6 +107,10 @@ export const issues = pgTable('issues', {
   deliverableLink: text('deliverable_link'),
   deliverableAcceptanceCriteria: text('deliverable_acceptance_criteria'),
   deliverableStatus: text('deliverable_status').notNull().default('not-started'),
+  /** Wave 20 — dedupe: when this issue was soft-deleted by dedupe. */
+  archivedAt: timestamp('archived_at', { withTimezone: true }),
+  /** Wave 20 — dedupe: reason for archival (e.g. 'dedupe:bulk-port-vs-seed-backlog'). */
+  archivedReason: text('archived_reason'),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 });
@@ -228,6 +237,9 @@ export const issueRuns = pgTable('issue_runs', {
   ciState: text('ci_state'),                   // 'passing'|'failing'|'running'|'unknown'
   ciUrl: text('ci_url'),                       // URL to latest CI check run
   gitCacheRefreshedAt: timestamp('git_cache_refreshed_at', { withTimezone: true }), // for 5-min CI TTL
+  // Wave 20 — G4.1: external dispatch reference for copilot runs.
+  // Shape: { owner, repo, workflowRunId?, issueNumber? }
+  externalRef: jsonb('external_ref'),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 });
@@ -1011,3 +1023,41 @@ export const ceremonyGithubFires = pgTable(
 
 export type CeremonyGithubFire    = typeof ceremonyGithubFires.$inferSelect;
 export type NewCeremonyGithubFire = typeof ceremonyGithubFires.$inferInsert;
+
+// ---------------------------------------------------------------------------
+// Wave 20 — G4.3: Copilot auto-assign label rules
+// ---------------------------------------------------------------------------
+
+/**
+ * One rule per (project, label) pair: when a webhook issues.labeled event
+ * arrives with a matching label, Squadboard auto-dispatches to @copilot.
+ */
+export const copilotAutoAssignRules = pgTable('copilot_auto_assign_rules', {
+  id:        uuid('id').primaryKey().defaultRandom(),
+  projectId: uuid('project_id').notNull().references(() => projects.id, { onDelete: 'cascade' }),
+  label:     text('label').notNull(),
+  enabled:   boolean('enabled').notNull().default(true),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+});
+
+/**
+ * Idempotency guard: one row per (rule_id, issue_id) prevents re-dispatch on
+ * duplicate webhook deliveries or re-labeling events for the same issue.
+ */
+export const copilotAutoAssignDispatches = pgTable(
+  'copilot_auto_assign_dispatches',
+  {
+    id:        uuid('id').primaryKey().defaultRandom(),
+    ruleId:    uuid('rule_id').notNull().references(() => copilotAutoAssignRules.id, { onDelete: 'cascade' }),
+    issueId:   uuid('issue_id').notNull().references(() => issues.id, { onDelete: 'cascade' }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    uqRuleIssue: uniqueIndex('copilot_auto_assign_dispatches_uq').on(t.ruleId, t.issueId),
+  }),
+);
+
+export type CopilotAutoAssignRule        = typeof copilotAutoAssignRules.$inferSelect;
+export type NewCopilotAutoAssignRule     = typeof copilotAutoAssignRules.$inferInsert;
+export type CopilotAutoAssignDispatch    = typeof copilotAutoAssignDispatches.$inferSelect;
+export type NewCopilotAutoAssignDispatch = typeof copilotAutoAssignDispatches.$inferInsert;

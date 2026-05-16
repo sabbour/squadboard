@@ -1107,6 +1107,48 @@ async function bootstrapSchema(): Promise<void> {
       ADD COLUMN IF NOT EXISTS deliverable_status TEXT NOT NULL DEFAULT 'not-started';
   `);
 
+  // Wave 20 — Stream G Phase 3: @copilot dispatch, watcher, label rules.
+  await _pool.query(`
+    -- G4.1: virtual agent kind discriminator
+    ALTER TABLE agents
+      ADD COLUMN IF NOT EXISTS agent_kind TEXT NOT NULL DEFAULT 'squad';
+
+    -- G4.1: copilot_workflow_file on projects — which workflow to dispatch
+    ALTER TABLE projects
+      ADD COLUMN IF NOT EXISTS copilot_workflow_file TEXT;
+
+    -- G4.1: external_ref on issue_runs — stores copilot dispatch metadata
+    ALTER TABLE issue_runs
+      ADD COLUMN IF NOT EXISTS external_ref JSONB;
+
+    -- G4.3: auto-assign label rules
+    CREATE TABLE IF NOT EXISTS copilot_auto_assign_rules (
+      id          UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+      project_id  UUID        NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+      label       TEXT        NOT NULL,
+      enabled     BOOLEAN     NOT NULL DEFAULT true,
+      created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+
+    -- G4.3: idempotency guard for auto-assign dispatches
+    CREATE TABLE IF NOT EXISTS copilot_auto_assign_dispatches (
+      id          UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+      rule_id     UUID        NOT NULL REFERENCES copilot_auto_assign_rules(id) ON DELETE CASCADE,
+      issue_id    UUID        NOT NULL REFERENCES issues(id) ON DELETE CASCADE,
+      created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+
+    CREATE UNIQUE INDEX IF NOT EXISTS copilot_auto_assign_dispatches_uq
+      ON copilot_auto_assign_dispatches (rule_id, issue_id);
+  `);
+
+  // Wave 20 — Dedupe: soft-delete tracking columns on issues.
+  await _pool.query(`
+    ALTER TABLE issues
+      ADD COLUMN IF NOT EXISTS archived_at     TIMESTAMPTZ,
+      ADD COLUMN IF NOT EXISTS archived_reason TEXT;
+  `);
+
   await seedSystemReviewPolicyPresets();
 
   console.log('[db] schema bootstrapped');

@@ -279,4 +279,95 @@ router.post('/gh-test', async (req, res) => {
   }
 });
 
+/**
+ * POST /api/system/dedupe
+ * Finds and soft-deletes duplicate issue cards (same title or githubNodeId
+ * per project). Used by the `squadboard cards dedupe` CLI.
+ *
+ * Body: { dryRun?: boolean, projectId?: string }
+ * Returns: { ok, dryRun, projects, groups }
+ */
+router.post('/dedupe', async (req, res) => {
+  const { dryRun = false, projectId } = req.body as { dryRun?: boolean; projectId?: string };
+
+  try {
+    const pool = getPool();
+    const now = new Date().toISOString();
+
+    interface DupRow extends Record<string, unknown> { project_id: string; key_value: string; ids: string; titles: string; created_ats: string }
+
+    // ── Detect by githubNodeId ────────────────────────────────────────────
+    const nodeRows = await pool.query<DupRow>(
+      `SELECT project_id,
+              github_node_id AS key_value,
+              string_agg(id::text, ',' ORDER BY created_at ASC, id ASC) AS ids,
+              string_agg(title, '||' ORDER BY created_at ASC, id ASC) AS titles,
+              string_agg(created_at::text, ',' ORDER BY created_at ASC, id ASC) AS created_ats
+       FROM issues
+       WHERE archived = 0
+         AND github_node_id IS NOT NULL AND github_node_id <> ''
+         ${projectId ? `AND project_id = $1` : ''}
+       GROUP BY project_id, github_node_id HAVING COUNT(*) > 1`,
+      projectId ? [projectId] : [],
+    );
+
+    type Group = { projectId: string; keepId: string; keepTitle: string; archiveIds: string[]; detectionKey: string; keyValue: string };
+    const groups: Group[] = [];
+    const alreadyArchiving = new Set<string>();
+
+    for (const row of nodeRows.rows) {
+      const ids = row.ids.split(',');
+      const titles = row.titles.split('||');
+      groups.push({ projectId: row.project_id, keepId: ids[0], keepTitle: titles[0] ?? '', archiveIds: ids.slice(1), detectionKey: 'githubNodeId', keyValue: row.key_value });
+      ids.slice(1).forEach((id) => alreadyArchiving.add(id));
+    }
+
+    // ── Detect by title ───────────────────────────────────────────────────
+    const titleRows = await pool.query<DupRow>(
+      `SELECT project_id, title AS key_value,
+              string_agg(id::text, ',' ORDER BY created_at ASC, id ASC) AS ids,
+              string_agg(title, '||' ORDER BY created_at ASC, id ASC) AS titles,
+              string_agg(created_at::text, ',' ORDER BY created_at ASC, id ASC) AS created_ats
+       FROM issues
+       WHERE archived = 0
+         ${projectId ? `AND project_id = $1` : ''}
+       GROUP BY project_id, title HAVING COUNT(*) > 1`,
+      projectId ? [projectId] : [],
+    );
+
+    for (const row of titleRows.rows) {
+      const ids = row.ids.split(',');
+      const remaining = ids.filter((id) => !alreadyArchiving.has(id));
+      if (remaining.length <= 1) continue;
+      groups.push({ projectId: row.project_id, keepId: remaining[0], keepTitle: row.key_value, archiveIds: remaining.slice(1), detectionKey: 'title', keyValue: row.key_value });
+      remaining.slice(1).forEach((id) => alreadyArchiving.add(id));
+    }
+
+    // ── Build report ──────────────────────────────────────────────────────
+    const projects: Record<string, { kept: number; archived: number }> = {};
+    for (const g of groups) {
+      if (!projects[g.projectId]) projects[g.projectId] = { kept: 0, archived: 0 };
+      projects[g.projectId]!.kept += 1;
+      projects[g.projectId]!.archived += g.archiveIds.length;
+    }
+
+    // ── Execute (unless dry-run) ──────────────────────────────────────────
+    if (!dryRun) {
+      for (const g of groups) {
+        if (g.archiveIds.length === 0) continue;
+        const idPlaceholders = g.archiveIds.map((_, i) => `$${i + 3}`).join(', ');
+        await pool.query(
+          `UPDATE issues SET archived=1, archived_at=$1::timestamptz, archived_reason=$2, updated_at=$1::timestamptz WHERE id IN (${idPlaceholders})`,
+          [now, 'dedupe:bulk-port-vs-seed-backlog', ...g.archiveIds],
+        );
+      }
+    }
+
+    res.json({ ok: true, dryRun, projects, groups });
+  } catch (err: unknown) {
+    console.error('[system] dedupe error:', err);
+    res.status(500).json({ ok: false, error: (err as Error).message });
+  }
+});
+
 export default router;

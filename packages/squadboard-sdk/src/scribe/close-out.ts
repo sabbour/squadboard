@@ -44,8 +44,20 @@ import {
   commitScribeFiles,
   type SpawnManifest,
 } from './primitives.js';
+import {
+  writeHealthReport,
+  type HealthReportOptions,
+} from './steps/step-8-health-report.js';
 
 export type { SpawnManifest, SpawnManifestEntry } from './primitives.js';
+export type {
+  HealthReportOptions,
+  HealthReportResult,
+  BacklogSnapshot,
+  SpawnLineageEntry,
+  SpawnSummary,
+  NextWaveTodo,
+} from './steps/step-8-health-report.js';
 
 const execFile = promisify(_execFile);
 
@@ -68,6 +80,11 @@ export interface CloseOutOptions {
    * configured; the CLI coordinator and the manual button leave it false.
    */
   push?: boolean;
+  /**
+   * Options for the step-8 HEALTH REPORT artifact.
+   * If omitted, step 8 is skipped (healthReportPath will be null).
+   */
+  healthReport?: Omit<HealthReportOptions, 'teamRoot'>;
 }
 
 export interface CloseOutResult {
@@ -89,6 +106,8 @@ export interface CloseOutResult {
   commitSha: string | null;
   /** Whether a `git push` was attempted and succeeded. */
   pushed: boolean;
+  /** Path to the HEALTH REPORT artifact written in step 8 (null if healthReport opts were not provided). */
+  healthReportPath: string | null;
   /** Any non-fatal errors collected during the run. */
   errors: Array<{ step: string; error: string }>;
 }
@@ -139,6 +158,7 @@ export async function closeOut(opts: CloseOutOptions = {}): Promise<CloseOutResu
     historiesSummarized: [],
     commitSha: null,
     pushed: false,
+    healthReportPath: null,
     errors: [],
   };
 
@@ -251,6 +271,21 @@ export async function closeOut(opts: CloseOutOptions = {}): Promise<CloseOutResu
       result.pushed = true;
     } catch (err) {
       result.errors.push(toError('git-push', err));
+    }
+  }
+
+  // --- Step 8: HEALTH REPORT artifact ---
+  // Mirrors squad.agent.md Scribe task #8.
+  // Written AFTER commit so the commit SHA is available to include in the report.
+  if (opts.healthReport) {
+    try {
+      const hrResult = await writeHealthReport({
+        ...opts.healthReport,
+        teamRoot,
+      });
+      result.healthReportPath = hrResult.path;
+    } catch (err) {
+      result.errors.push(toError('health-report', err));
     }
   }
 
