@@ -31,13 +31,15 @@ import {
   Wrench24Regular,
   PlugConnected24Regular,
   ChatHelp24Regular,
-  ChatHelp20Regular,
+  Wand20Regular,
   Eye24Regular,
   Heart24Regular,
   HeartPulse24Regular,
   DocumentBulletList24Regular,
 } from '@fluentui/react-icons'
 import type { OnNavItemSelectData } from '@fluentui/react-components'
+import { ConjureProvider, useConjure } from '../context/ConjureContext.tsx'
+import ConjureModal from './conjure/ConjureModal.tsx'
 
 const useStyles = makeStyles({
   root: {
@@ -183,10 +185,19 @@ function extractProjectCategory(pathname: string, currentProjectId: string | und
 }
 
 export default function Layout() {
+  return (
+    <ConjureProvider>
+      <LayoutInner />
+    </ConjureProvider>
+  )
+}
+
+function LayoutInner() {
   const { id } = useParams<{ id?: string }>()
   const navigate = useNavigate()
   const location = useLocation()
   const styles = useStyles()
+  const { openConjure, isOpen: conjureOpen, payload: conjurePayload, closeConjure } = useConjure()
 
   const [projectName, setProjectName] = useState<string | null>(null)
   const projectsQuery = useProjects()
@@ -258,10 +269,7 @@ export default function Layout() {
       .catch(() => setProjectName(null))
   }, [id])
 
-  // Wave 10 B2: 'c' (legacy Capture shortcut) and '?' both route into Conjure
-  // — i.e. the Consult /new entry point that owns raw input + classification.
-  // Wave 21 B2: Ctrl/Cmd+K is the additional global Conjure shortcut (replaces
-  // Capture's former Ctrl/Cmd+K binding). 'c' and '?' are kept for ergonomics.
+  // Wave 22: 'c', '?' and Ctrl/Cmd+K all open ConjureModal (NOT navigate to consult/new).
   useEffect(() => {
     function isTypingTarget(target: EventTarget | null): boolean {
       const el = target as HTMLElement | null
@@ -274,22 +282,22 @@ export default function Layout() {
       )
     }
     function onKey(e: KeyboardEvent) {
-      // Ctrl/Cmd+K → Conjure (works even in text fields to match VS Code / browser palette UX)
+      // Ctrl/Cmd+K → Conjure modal (works even in text fields to match VS Code palette UX)
       if ((e.ctrlKey || e.metaKey) && !e.altKey && e.key === 'k') {
         e.preventDefault()
-        void navigate(id ? `/projects/${id}/consult/new` : '/consult/new')
+        openConjure({ projectId: id, projectName })
         return
       }
       if (e.ctrlKey || e.metaKey || e.altKey) return
       if (isTypingTarget(e.target)) return
       if (e.key === 'c' || e.key === '?') {
         e.preventDefault()
-        void navigate(id ? `/projects/${id}/consult/new` : '/consult/new')
+        openConjure({ projectId: id, projectName })
       }
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [id, navigate])
+  }, [id, navigate, openConjure, projectName])
 
   function getSelectedValue(): string {
     if (location.pathname === '/' || location.pathname === '') return 'projects'
@@ -353,7 +361,7 @@ export default function Layout() {
             Now
           </NavItem>
           <NavItem icon={<ChatHelp24Regular />} value="consult">
-            Conjure
+            Consult
           </NavItem>
 
           {id && (
@@ -464,20 +472,29 @@ export default function Layout() {
             >
               Inbox
             </Button>
-            {/* Wave 10 B2: blue "+ Capture" button removed. Conjure is now the
-                single intake surface. W15: renamed nav + button label from
-                "Consult" to "Conjure" so the entry point is visible to users. */}
+            {/* Wave 22: top-bar Conjure button opens ConjureModal (Wand icon per spec).
+                The Consult nav item still navigates to /consult/new as before. */}
             <Button
               appearance="primary"
-              icon={<ChatHelp20Regular />}
-              onClick={() => navigate(id ? `/projects/${id}/consult/new` : '/consult/new')}
-              title="Conjure (press c, ? or Ctrl+K)"
+              icon={<Wand20Regular />}
+              onClick={() => openConjure({ projectId: id, projectName })}
+              title="Conjure anything (c, ? or Ctrl+K)"
             >
               Conjure
             </Button>
           </div>
         </div>
         <Outlet />
+
+        {/* Hoisted ConjureModal — single instance, opened from any entry point */}
+        <ConjureModal
+          isOpen={conjureOpen}
+          onClose={closeConjure}
+          hint={conjurePayload.hint}
+          initialProse={conjurePayload.initialProse}
+          projectId={conjurePayload.projectId ?? id}
+          projectName={conjurePayload.projectName ?? projectName}
+        />
       </main>
     </div>
   )

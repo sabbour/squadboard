@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect } from 'react'
-import { useParams, useSearchParams, useNavigate } from 'react-router'
+import { useParams, useSearchParams } from 'react-router'
 import { useQueryClient } from '@tanstack/react-query'
 import { useProject } from '../api/projects.ts'
 import { useIssues, useBulkAction, type Issue, type ColumnId } from '../api/issues.ts'
@@ -12,13 +12,14 @@ import PresenceBar from '../components/board/PresenceBar.tsx'
 import ConflictToast from '../components/board/ConflictToast.tsx'
 import ColumnSettingsPanel from '../components/board/ColumnSettingsPanel.tsx'
 import { useRealtimeBoard } from '../realtime/useRealtimeBoard.ts'
-import { Settings24Regular, ChatHelp24Regular } from '@fluentui/react-icons'
+import { Settings24Regular, Wand20Regular } from '@fluentui/react-icons'
 import { Subtitle1, Caption1, Body1, tokens } from '@fluentui/react-components'
+import { useConjure } from '../context/ConjureContext.tsx'
 
 export default function Board() {
   const { id } = useParams<{ id: string }>()
   const projectId = id ?? ''
-  const navigate = useNavigate()
+  const { openConjure } = useConjure()
 
   const { data: project, isLoading: projectLoading, isError: projectError } = useProject(projectId)
   const queryClient = useQueryClient()
@@ -247,12 +248,12 @@ export default function Board() {
         />
       )}
 
-      {/* Wave 21 B2: CaptureFab replaced by Conjure FAB — navigates to Consult /new */}
+      {/* Wave 22: FAB opens ConjureModal biased with hint=issue (95% of board captures are issues) */}
       <button
         type="button"
-        aria-label="Conjure (open Consult)"
-        title="Conjure — open Consult (c or Ctrl+K)"
-        onClick={() => void navigate(`/projects/${projectId}/consult/new`)}
+        aria-label="Conjure (create something)"
+        title="Conjure (c or Ctrl+K)"
+        onClick={() => openConjure({ hint: 'issue', projectId })}
         style={{
           position: 'fixed',
           bottom: '24px',
@@ -275,7 +276,7 @@ export default function Board() {
         onMouseUp={(e) => { e.currentTarget.style.transform = 'scale(1)' }}
         onMouseLeave={(e) => { e.currentTarget.style.transform = 'scale(1)' }}
       >
-        <ChatHelp24Regular />
+        <Wand20Regular />
       </button>
 
       {/* Column settings drawer */}
