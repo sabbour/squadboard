@@ -2,6 +2,7 @@ import { Router } from 'express';
 import type { Request, Response } from 'express';
 import { eq } from 'drizzle-orm';
 import { getDb, schema } from '../db/index.js';
+import { createProject } from '../services/project-init.js';
 
 // ---------------------------------------------------------------------------
 // Types for the /suggest endpoint (O1 — Wave 20)
@@ -215,11 +216,7 @@ router.post('/', async (req: Request, res: Response) => {
     return;
   }
 
-  const db = getDb();
-  const [created] = await db
-    .insert(schema.projects)
-    .values({ name, path })
-    .returning();
+  const created = await createProject({ name, path });
 
   res.status(201).json(created);
 });

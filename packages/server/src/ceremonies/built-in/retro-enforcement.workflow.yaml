@@ -1,0 +1,22 @@
+apiVersion: squad.io/v1
+kind: Ceremony
+metadata:
+  name: retro-enforcement
+  displayName: Retrospective + Rule Enforcement
+  description: Retrospective plus a sweep of open issues against active rules in .squad/decisions.md.
+spec:
+  trigger:
+    type: manual
+  steps:
+    - id: retrospective
+      kind: agent-task
+      agent: scribe
+      prompt: Same as retrospective ceremony — read wave summaries, produce retro doc.
+    - id: enforcement-sweep
+      kind: agent-task
+      agent: kujan
+      prompt: |
+        Read .squad/decisions.md for active rules. For each open issue, check
+        whether title/labels/column match a rule that should auto-apply. Emit
+        a report at .squad/orchestration-log/enforcement-{date}.md listing
+        violations + suggested fixes.

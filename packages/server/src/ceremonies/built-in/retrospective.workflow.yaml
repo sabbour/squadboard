@@ -1,0 +1,17 @@
+apiVersion: squad.io/v1
+kind: Ceremony
+metadata:
+  name: retrospective
+  displayName: Wave Retrospective
+  description: Weekly summary of wave outcomes, blockers, and learnings.
+spec:
+  trigger:
+    type: manual
+  steps:
+    - id: collect-waves
+      kind: agent-task
+      agent: scribe
+      prompt: |
+        Read .squad/orchestration-log/wave-*-summary.md for the last 4 waves.
+        Identify themes (what went well, what stalled, recurring blockers).
+        Produce a one-page retrospective in .squad/orchestration-log/retro-{date}.md.

@@ -1,0 +1,28 @@
+apiVersion: squad.io/v1
+kind: Ceremony
+metadata:
+  name: design-review
+  displayName: Design Review
+  description: When a PR touches design.md or design-tagged paths, dispatch a reviewer to summarize impact.
+spec:
+  trigger:
+    type: github-event
+    event: pull_request
+    filters:
+      labels:
+        - design
+      paths:
+        - "**/design.md"
+        - "**/*.design.md"
+        - docs/design/**
+  steps:
+    - id: gather-diff
+      kind: agent-task
+      agent: jude
+      prompt: |
+        Read the PR diff for design-relevant files. Identify what changed, why
+        (per the PR description), and any architectural risks. Produce a 5-line
+        summary suitable for inline PR comment.
+    - id: post-comment
+      kind: notify
+      target: pr-comment
