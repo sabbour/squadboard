@@ -21,11 +21,15 @@ import {
   ReactFlow,
   Background,
   BackgroundVariant,
+  BaseEdge,
   Controls,
+  EdgeLabelRenderer,
   MarkerType,
   Panel,
   ReactFlowProvider,
+  getSmoothStepPath,
   type Edge,
+  type EdgeProps,
   type Node,
   type Connection,
 } from '@xyflow/react'
@@ -51,7 +55,85 @@ import { layoutDag } from '../flow/dagLayout.ts'
 import StepPropertyForm from './StepPropertyForm.tsx'
 import { useActiveAgents } from '../../api/agents.ts'
 
+// ---------------------------------------------------------------------------
+// Smart ceremony edge — hover highlight + tooltip affordance.
+// ---------------------------------------------------------------------------
+
+interface CeremonyEdgeData extends Record<string, unknown> {
+  isChild?: boolean
+}
+
+function SmartCeremonyEdge({
+  id,
+  sourceX,
+  sourceY,
+  targetX,
+  targetY,
+  sourcePosition,
+  targetPosition,
+  style,
+  markerEnd,
+  selected,
+  data,
+}: EdgeProps) {
+  const [hovered, setHovered] = useState(false)
+  const [edgePath, labelX, labelY] = getSmoothStepPath({
+    sourceX,
+    sourceY,
+    sourcePosition,
+    targetX,
+    targetY,
+    targetPosition,
+  })
+  const edgeData = data as CeremonyEdgeData | undefined
+  const isChild = edgeData?.isChild
+  const active = hovered || selected
+
+  // Build an overriding style for the active state, keeping the base style as-is
+  // when inactive (dagre colours stay intact).
+  const activeStyle = active
+    ? { stroke: isChild ? KIND_ACCENT.fan_out : '#58a6ff', strokeWidth: 2.5, cursor: 'pointer' as const }
+    : { cursor: 'pointer' as const }
+
+  return (
+    <>
+      <BaseEdge
+        id={id}
+        path={edgePath}
+        markerEnd={markerEnd}
+        interactionWidth={20}
+        style={{ ...style, ...activeStyle }}
+        onMouseEnter={() => setHovered(true)}
+        onMouseLeave={() => setHovered(false)}
+      />
+      {hovered && !isChild && (
+        <EdgeLabelRenderer>
+          <div
+            style={{
+              position: 'absolute',
+              transform: `translate(-50%, -50%) translate(${labelX}px,${labelY}px)`,
+              background: 'rgba(13, 17, 23, 0.92)',
+              color: '#c9d1d9',
+              padding: '3px 8px',
+              borderRadius: 4,
+              fontSize: 11,
+              pointerEvents: 'none',
+              border: '1px solid #30363d',
+              whiteSpace: 'nowrap',
+              zIndex: 10,
+            }}
+            className="nodrag nopan"
+          >
+            Click to select · Del to remove · drag endpoint to reconnect
+          </div>
+        </EdgeLabelRenderer>
+      )}
+    </>
+  )
+}
+
 const nodeTypes = { ceremony: CeremonyStepNode }
+const edgeTypes = { 'ceremony-smart': SmartCeremonyEdge }
 
 export interface VisualCanvasProps {
   projectId: string
@@ -87,8 +169,11 @@ function buildReactFlowGraph(graph: CeremonyGraph, selectedId: string | null): {
       id: ge.id,
       source: ge.source,
       target: ge.target,
-      type: 'smoothstep',
+      type: 'ceremony-smart',
       animated: isChild,
+      selectable: !isChild,
+      focusable: !isChild,
+      data: { isChild },
       style: {
         stroke: isChild ? KIND_ACCENT.fan_out : '#48515a',
         strokeDasharray: isChild ? '6 4' : undefined,
@@ -173,13 +258,33 @@ function CanvasInner({ projectId, header, steps, onChange, disabled }: VisualCan
   const appendStep = useCallback(
     (kind: StepKind) => {
       if (disabled) return
-      const next = [...topLevelSteps(graph), blankStep(kind)]
+      const currentSteps = topLevelSteps(graph)
+      const newStep = blankStep(kind)
+
+      // Auto-connect: if exactly one top-level node is selected, insert the new
+      // step immediately after it so an edge is implicitly created.
+      if (selectedNodeId) {
+        const selNode = graph.nodes.find((n) => n.id === selectedNodeId && !n.parentId)
+        if (selNode) {
+          const insertIdx = selNode.index + 1
+          const next = [
+            ...currentSteps.slice(0, insertIdx),
+            newStep,
+            ...currentSteps.slice(insertIdx),
+          ]
+          onChange(next)
+          // The new step's stable id is `step-{insertIdx}` after rebuild.
+          setSelectedNodeId(`step-${insertIdx}`)
+          return
+        }
+      }
+
+      // Default: append to end.
+      const next = [...currentSteps, newStep]
       onChange(next)
-      // Select the just-added step on the next render.
-      const newId = `step-${next.length - 1}`
-      setSelectedNodeId(newId)
+      setSelectedNodeId(`step-${next.length - 1}`)
     },
-    [graph, onChange, disabled],
+    [graph, onChange, disabled, selectedNodeId],
   )
 
   const deleteStep = useCallback(
@@ -218,6 +323,40 @@ function CanvasInner({ projectId, header, steps, onChange, disabled }: VisualCan
       onChange(next)
     },
     [graph, onChange, disabled],
+  )
+
+  // Edge delete — move the disconnected target step to the end of the sequence.
+  const onEdgesDelete = useCallback(
+    (deleted: Edge[]) => {
+      if (disabled) return
+      const currentSteps = topLevelSteps(graph)
+      const indicesToMove: number[] = []
+
+      for (const edge of deleted) {
+        const gEdge = graph.edges.find((e) => e.id === edge.id)
+        if (!gEdge || gEdge.kind !== 'sequence') continue
+        const targetNode = graph.nodes.find((n) => n.id === edge.target)
+        if (!targetNode || targetNode.parentId) continue
+        if (!indicesToMove.includes(targetNode.index)) {
+          indicesToMove.push(targetNode.index)
+        }
+      }
+
+      if (indicesToMove.length === 0) return
+
+      const kept = currentSteps.filter((_, i) => !indicesToMove.includes(i))
+      const moved = indicesToMove.map((i) => currentSteps[i])
+      onChange([...kept, ...moved])
+    },
+    [graph, onChange, disabled],
+  )
+
+  // Drag-to-reconnect — delegate to the same reorder logic as onConnect.
+  const onReconnect = useCallback(
+    (_oldEdge: Edge, newConnection: Connection) => {
+      onConnect(newConnection)
+    },
+    [onConnect],
   )
 
   // ---------- Keyboard ----------
@@ -277,8 +416,8 @@ function CanvasInner({ projectId, header, steps, onChange, disabled }: VisualCan
           </Button>
         ))}
         <Caption1 style={{ color: 'var(--text-muted)', marginTop: 8 }}>
-          Drag a node's bottom handle to another node's top handle to reorder.
-          Press <code>Backspace</code> on a selected node to delete.
+          Select a node then click a step to auto-connect. Click an edge · <code>Del</code> to
+          remove. Drag an edge endpoint to reconnect.
         </Caption1>
       </div>
 
@@ -304,6 +443,7 @@ function CanvasInner({ projectId, header, steps, onChange, disabled }: VisualCan
             nodes={nodes}
             edges={edges}
             nodeTypes={nodeTypes}
+            edgeTypes={edgeTypes}
             fitView
             fitViewOptions={{ padding: 0.25 }}
             minZoom={0.25}
@@ -311,12 +451,15 @@ function CanvasInner({ projectId, header, steps, onChange, disabled }: VisualCan
             proOptions={{ hideAttribution: true }}
             nodesDraggable={false}
             nodesConnectable={!disabled}
-            edgesFocusable={false}
+            edgesFocusable={!disabled}
+            edgesReconnectable={!disabled}
             elementsSelectable
             selectNodesOnDrag={false}
             onNodeClick={(_, n) => setSelectedNodeId(n.id)}
             onPaneClick={() => setSelectedNodeId(null)}
             onConnect={onConnect}
+            onReconnect={onReconnect}
+            onEdgesDelete={onEdgesDelete}
             onNodesDelete={(deleted) => {
               for (const d of deleted) deleteStep(d.id)
             }}
