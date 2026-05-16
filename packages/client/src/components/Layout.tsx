@@ -15,6 +15,7 @@ import {
   OptionGroup,
   Tooltip,
   makeStyles,
+  mergeClasses,
   tokens,
 } from '@fluentui/react-components'
 import {
@@ -30,12 +31,13 @@ import {
   BookStar24Regular,
   Wrench24Regular,
   PlugConnected24Regular,
-  ChatHelp24Regular,
-  Wand20Regular,
+  ChatHelp20Regular,
   Eye24Regular,
   Heart24Regular,
   HeartPulse24Regular,
   DocumentBulletList24Regular,
+  ChevronDoubleLeftRegular,
+  ChevronDoubleRightRegular,
 } from '@fluentui/react-icons'
 import type { OnNavItemSelectData } from '@fluentui/react-components'
 import { ConjureProvider, useConjure } from '../context/ConjureContext.tsx'
@@ -63,11 +65,23 @@ const useStyles = makeStyles({
   },
   navDrawer: {
     borderRight: `1px solid ${tokens.colorNeutralStroke1}`,
+    transition: 'width 200ms ease',
     '& nav': {
       display: 'flex',
       flexDirection: 'column',
       height: '100%',
     },
+  },
+  navDrawerCollapsed: {
+    width: '56px',
+    minWidth: '56px',
+    overflow: 'hidden',
+  },
+  navCollapseToggle: {
+    display: 'flex',
+    justifyContent: 'center',
+    paddingTop: tokens.spacingVerticalXS,
+    paddingBottom: tokens.spacingVerticalXS,
   },
   topBar: {
     display: 'flex',
@@ -203,6 +217,16 @@ function LayoutInner() {
   const projectsQuery = useProjects()
   const projects = projectsQuery.data
 
+  const [navCollapsed, setNavCollapsed] = useState(() => localStorage.getItem('squadboard.nav.collapsed') === 'true')
+
+  function toggleNav() {
+    setNavCollapsed(prev => {
+      const next = !prev
+      localStorage.setItem('squadboard.nav.collapsed', String(next))
+      return next
+    })
+  }
+
   // O6: Combobox search text. When it matches the current project name (or is
   // empty), no filtering is applied. When the user types something different,
   // the list filters to matching project names.
@@ -329,9 +353,6 @@ function LayoutInner() {
       void navigate(id ? `/projects/${id}/diagnostics` : '/diagnostics')
     } else if (value === 'heartbeat') {
       void navigate('/heartbeat')
-    } else if (value === 'consult' && !id) {
-      // Cross-project Consult — when no project is selected.
-      void navigate('/consult/new')
     } else if (id) {
       void navigate(`/projects/${id}/${value}`)
     }
@@ -345,34 +366,57 @@ function LayoutInner() {
         size="small"
         selectedValue={getSelectedValue()}
         onNavItemSelect={handleNavItemSelect}
-        className={styles.navDrawer}
+        className={mergeClasses(styles.navDrawer, navCollapsed ? styles.navDrawerCollapsed : undefined)}
       >
-        {/* Logo / wordmark */}
-        <div className={styles.sidebarLogo}>
-          <img src={squadboardLogo} alt="Squadboard" style={{ height: '44px', display: 'block' }} />
-        </div>
+        {/* Logo / wordmark — hidden when collapsed to avoid overflow */}
+        {!navCollapsed && (
+          <div className={styles.sidebarLogo}>
+            <img src={squadboardLogo} alt="Squadboard" style={{ height: '44px', display: 'block' }} />
+          </div>
+        )}
 
         <NavDrawerBody>
-          <NavItem icon={<Home24Regular />} value="projects">
-            Projects
-          </NavItem>
-          {/* Phase 19: Now — cross-project live view */}
-          <NavItem icon={<Eye24Regular />} value="now">
-            Now
-          </NavItem>
-          <NavItem icon={<ChatHelp24Regular />} value="consult">
-            Consult
-          </NavItem>
+          {/* Collapse / expand toggle */}
+          <div className={styles.navCollapseToggle}>
+            <Button
+              appearance="subtle"
+              icon={navCollapsed ? <ChevronDoubleRightRegular /> : <ChevronDoubleLeftRegular />}
+              onClick={toggleNav}
+              title={navCollapsed ? 'Expand navigation' : 'Collapse navigation'}
+            />
+          </div>
+
+          {navCollapsed ? (
+            <Tooltip content="Projects" relationship="label" positioning="after" hideDelay={0}>
+              <NavItem icon={<Home24Regular />} value="projects" />
+            </Tooltip>
+          ) : (
+            <NavItem icon={<Home24Regular />} value="projects">Projects</NavItem>
+          )}
+
+          {navCollapsed ? (
+            <Tooltip content="Now" relationship="label" positioning="after" hideDelay={0}>
+              <NavItem icon={<Eye24Regular />} value="now" />
+            </Tooltip>
+          ) : (
+            <NavItem icon={<Eye24Regular />} value="now">Now</NavItem>
+          )}
 
           {id && (
             <>
               {PROJECT_NAV_GROUPS.map((group) => (
                 <div key={group.heading}>
-                  <NavSectionHeader>{group.heading}</NavSectionHeader>
+                  {!navCollapsed && <NavSectionHeader>{group.heading}</NavSectionHeader>}
                   {group.items.map((item) => (
-                    <NavItem key={item.segment} icon={item.icon} value={item.segment}>
-                      {item.label}
-                    </NavItem>
+                    navCollapsed ? (
+                      <Tooltip key={item.segment} content={item.label} relationship="label" positioning="after" hideDelay={0}>
+                        <NavItem icon={item.icon} value={item.segment} />
+                      </Tooltip>
+                    ) : (
+                      <NavItem key={item.segment} icon={item.icon} value={item.segment}>
+                        {item.label}
+                      </NavItem>
+                    )
                   ))}
                 </div>
               ))}
@@ -386,20 +430,34 @@ function LayoutInner() {
           {/* Phase 3: System / Operations — Diagnostics and Heartbeat.
               Anchored to the bottom of the sidebar so project-scoped categories
               come first. */}
-          <NavSectionHeader>SYSTEM</NavSectionHeader>
-          <NavItem icon={<HeartPulse24Regular />} value="diagnostics">
-            Diagnostics
-          </NavItem>
-          <NavItem icon={<Heart24Regular />} value="heartbeat">
-            Heartbeat
-          </NavItem>
+          {!navCollapsed && <NavSectionHeader>SYSTEM</NavSectionHeader>}
+
+          {navCollapsed ? (
+            <Tooltip content="Diagnostics" relationship="label" positioning="after" hideDelay={0}>
+              <NavItem icon={<HeartPulse24Regular />} value="diagnostics" />
+            </Tooltip>
+          ) : (
+            <NavItem icon={<HeartPulse24Regular />} value="diagnostics">Diagnostics</NavItem>
+          )}
+
+          {navCollapsed ? (
+            <Tooltip content="Heartbeat" relationship="label" positioning="after" hideDelay={0}>
+              <NavItem icon={<Heart24Regular />} value="heartbeat" />
+            </Tooltip>
+          ) : (
+            <NavItem icon={<Heart24Regular />} value="heartbeat">Heartbeat</NavItem>
+          )}
         </NavDrawerBody>
 
         {id && (
           <NavDrawerFooter>
-            <NavItem icon={<Settings24Regular />} value="settings">
-              Settings
-            </NavItem>
+            {navCollapsed ? (
+              <Tooltip content="Settings" relationship="label" positioning="after" hideDelay={0}>
+                <NavItem icon={<Settings24Regular />} value="settings" />
+              </Tooltip>
+            ) : (
+              <NavItem icon={<Settings24Regular />} value="settings">Settings</NavItem>
+            )}
           </NavDrawerFooter>
         )}
       </NavDrawer>
@@ -472,15 +530,13 @@ function LayoutInner() {
             >
               Inbox
             </Button>
-            {/* Wave 22: top-bar Conjure button opens ConjureModal (Wand icon per spec).
-                The Consult nav item still navigates to /consult/new as before. */}
             <Button
               appearance="primary"
-              icon={<Wand20Regular />}
-              onClick={() => openConjure({ projectId: id, projectName })}
-              title="Conjure anything (c, ? or Ctrl+K)"
+              icon={<ChatHelp20Regular />}
+              onClick={() => navigate(id ? `/projects/${id}/consult/new` : '/consult/new')}
+              title="Start a Consult"
             >
-              Conjure
+              Consult
             </Button>
           </div>
         </div>
