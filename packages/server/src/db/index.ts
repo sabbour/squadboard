@@ -961,6 +961,27 @@ async function bootstrapSchema(): Promise<void> {
       ADD COLUMN IF NOT EXISTS cost_model text;
   `);
 
+  // Wave 12 — N2: Double-pickup prevention on inbox_items.
+  //   idempotency_key: caller-supplied dedup token; same key = same row.
+  //   created_by:      provenance tag ('user'|'copilot-cli'|'squadboard-server'|'webhook').
+  //   claimed_by:      opaque worker/session ID that holds the claim lease.
+  //   claim_expires_at: UTC timestamp; NULL or past = unclaimed / lease expired.
+  await _pool.query(`
+    ALTER TABLE inbox_items
+      ADD COLUMN IF NOT EXISTS idempotency_key   TEXT        UNIQUE,
+      ADD COLUMN IF NOT EXISTS created_by        TEXT        NOT NULL DEFAULT 'user',
+      ADD COLUMN IF NOT EXISTS claimed_by        TEXT,
+      ADD COLUMN IF NOT EXISTS claim_expires_at  TIMESTAMPTZ;
+
+    CREATE INDEX IF NOT EXISTS inbox_items_idempotency_idx
+      ON inbox_items (idempotency_key)
+      WHERE idempotency_key IS NOT NULL;
+
+    CREATE INDEX IF NOT EXISTS inbox_items_claim_idx
+      ON inbox_items (claimed_by, claim_expires_at)
+      WHERE claimed_by IS NOT NULL;
+  `);
+
   await seedSystemReviewPolicyPresets();
 
   console.log('[db] schema bootstrapped');

@@ -11,6 +11,12 @@ export default defineConfig({
         changeOrigin: true,
         ws: true,
       },
+      // MCP Streamable HTTP transport — proxy /mcp so the "Test connection"
+      // button works in dev mode (Vite:5173 → Express:3000) without CORS.
+      '/mcp': {
+        target: 'http://localhost:3000',
+        changeOrigin: true,
+      },
     },
   },
   build: {

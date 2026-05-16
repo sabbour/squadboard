@@ -663,6 +663,11 @@ export const inboxItems = pgTable('inbox_items', {
   rationale: text('rationale'),
   status: text('status').notNull().default('captured'),
   publishedIssueId: uuid('published_issue_id').references(() => issues.id, { onDelete: 'set null' }),
+  // Wave 12 — N2: double-pickup prevention.
+  idempotencyKey: text('idempotency_key').unique(),
+  createdBy: text('created_by').notNull().default('user'),
+  claimedBy: text('claimed_by'),
+  claimExpiresAt: timestamp('claim_expires_at', { withTimezone: true }),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 });

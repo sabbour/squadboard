@@ -6,6 +6,7 @@
  * Subscribes to the live WS event bus to refetch on relevant changes.
  */
 import { useEffect, useMemo } from 'react'
+import { useNavigate } from 'react-router'
 import {
   ReactFlow,
   Background,
@@ -15,6 +16,7 @@ import {
   Panel,
   type Edge,
   type Node,
+  type NodeMouseHandler,
 } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
 import { tokens } from '@fluentui/react-components'
@@ -43,11 +45,11 @@ function edgeStyle(kind: FlowEdgeKind): { stroke: string; strokeDasharray?: stri
   }
 }
 
-function buildGraph(flow: IssueFlow): { nodes: Node<StepNodeData>[]; edges: Edge[] } {
+function buildGraph(flow: IssueFlow, projectId: string, issueId: string): { nodes: Node<StepNodeData>[]; edges: Edge[] } {
   const nodes: Node<StepNodeData>[] = flow.stepRuns.map((step) => ({
     id: step.id,
     type: 'step',
-    data: { step },
+    data: { step, projectId, issueId },
     position: { x: 0, y: 0 },
   }))
   const edges: Edge[] = flow.edges.map((e, i) => {
@@ -69,13 +71,22 @@ function buildGraph(flow: IssueFlow): { nodes: Node<StepNodeData>[]; edges: Edge
 }
 
 export default function IssueFlowDag({ projectId, issueId }: IssueFlowDagProps) {
+  const navigate = useNavigate()
   const { data: flow, isLoading, error, refetch } = useIssueFlow(projectId, issueId)
   const queryClient = useQueryClient()
 
   const { nodes, edges } = useMemo(() => {
     if (!flow) return { nodes: [] as Node<StepNodeData>[], edges: [] as Edge[] }
-    return buildGraph(flow)
-  }, [flow])
+    return buildGraph(flow, projectId, issueId)
+  }, [flow, projectId, issueId])
+
+  // N4: Navigate to issue board view when a step node is clicked.
+  const handleNodeClick: NodeMouseHandler<Node<StepNodeData>> = (_event, node) => {
+    const { projectId: pid, issueId: iid } = node.data
+    if (pid && iid) {
+      void navigate(`/projects/${pid}/board?focus=${iid}`)
+    }
+  }
 
   // Live updates: refetch on any event that could change this issue's flow.
   useEffect(() => {
@@ -153,6 +164,7 @@ export default function IssueFlowDag({ projectId, issueId }: IssueFlowDagProps) 
         nodesDraggable={false}
         nodesConnectable={false}
         elementsSelectable
+        onNodeClick={handleNodeClick}
       >
         <Background variant={BackgroundVariant.Dots} gap={16} size={1} color="#30363d" />
         <Controls position="bottom-right" showInteractive={false} />

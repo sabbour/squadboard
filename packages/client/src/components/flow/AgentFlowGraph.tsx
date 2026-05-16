@@ -21,6 +21,8 @@
  */
 
 import { useMemo } from 'react'
+import type React from 'react'
+import { useNavigate } from 'react-router'
 import { tokens } from '@fluentui/react-components'
 import type {
   FlowAgent,
@@ -117,10 +119,13 @@ function fmtClock(iso?: string): string {
 
 export interface AgentFlowGraphProps {
   graph: FlowGraph
+  /** When provided, instance nodes navigate to /projects/{projectId}/agents/{agentId} on click */
+  projectId?: string
   onSelectInstance?: (instance: FlowAgentInstance, agent: FlowAgent) => void
 }
 
-export default function AgentFlowGraph({ graph, onSelectInstance }: AgentFlowGraphProps) {
+export default function AgentFlowGraph({ graph, projectId, onSelectInstance }: AgentFlowGraphProps) {
+  const navigate = useNavigate()
   const { positionedNodes, nodeIndex, width, height } = useMemo(
     () => layoutGraph(graph),
     [graph],
@@ -243,12 +248,29 @@ export default function AgentFlowGraph({ graph, onSelectInstance }: AgentFlowGra
         {/* Instance nodes */}
         {positionedNodes.map(({ agent, instance, x, y }) => {
           const color = STATUS_COLOR[instance.status]
+          const isClickable = Boolean(projectId || onSelectInstance)
+          const handleClick = () => {
+            onSelectInstance?.(instance, agent)
+            if (projectId) {
+              void navigate(`/projects/${projectId}/agents/${agent.agentId}`)
+            }
+          }
+          const handleKeyDown = (e: React.KeyboardEvent<SVGGElement>) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault()
+              handleClick()
+            }
+          }
           return (
             <g
               key={instance.instanceId}
               transform={`translate(${x}, ${y})`}
-              style={{ cursor: onSelectInstance ? 'pointer' : 'default' }}
-              onClick={() => onSelectInstance?.(instance, agent)}
+              style={{ cursor: isClickable ? 'pointer' : 'default' }}
+              role={isClickable ? 'button' : undefined}
+              tabIndex={isClickable ? 0 : undefined}
+              aria-label={`${agent.name} — ${instance.status}`}
+              onClick={isClickable ? handleClick : undefined}
+              onKeyDown={isClickable ? handleKeyDown : undefined}
             >
               <rect
                 width={NODE_WIDTH}
@@ -257,6 +279,18 @@ export default function AgentFlowGraph({ graph, onSelectInstance }: AgentFlowGra
                 fill={tokens.colorNeutralBackground2}
                 stroke={color}
                 strokeWidth={1.5}
+              />
+              {/* Hover highlight overlay — toggled via CSS since SVG has no :hover in makeStyles */}
+              <rect
+                className="node-hover-bg"
+                width={NODE_WIDTH}
+                height={NODE_HEIGHT}
+                rx={6}
+                fill="white"
+                opacity={0}
+                style={{ transition: 'opacity 120ms ease-out' }}
+                onMouseEnter={(e) => { e.currentTarget.setAttribute('opacity', '0.06') }}
+                onMouseLeave={(e) => { e.currentTarget.setAttribute('opacity', '0') }}
               />
               <rect
                 width={4}

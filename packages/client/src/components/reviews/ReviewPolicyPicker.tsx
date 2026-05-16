@@ -1,5 +1,11 @@
 import { useState, useEffect, useMemo } from 'react'
 import {
+  Field,
+  Caption1,
+  Link,
+  tokens,
+} from '@fluentui/react-components'
+import {
   useReviewPolicyPresets,
   type ReviewPolicyPayload,
   type ReviewPolicyPreset,
@@ -7,17 +13,17 @@ import {
   type TimeoutAction,
 } from '../../api/review-policies.ts'
 
-const REQUEST_CHANGES_OPTIONS: { value: RequestChangesPolicy; label: string }[] = [
-  { value: 'first', label: 'first request_changes blocks' },
-  { value: 'majority', label: 'majority blocks' },
-  { value: 'all', label: 'all must approve' },
+const REQUEST_CHANGES_OPTIONS: { value: RequestChangesPolicy; label: string; hint: string }[] = [
+  { value: 'first', label: 'First request_changes blocks', hint: 'A single "request changes" verdict stops the step immediately.' },
+  { value: 'majority', label: 'Majority must request changes to block', hint: 'More than half of the assigned reviewers must request changes before the step is blocked.' },
+  { value: 'all', label: 'All reviewers must approve', hint: 'Every assigned reviewer must approve — one rejection is not enough to block, but approval is unanimous.' },
 ]
 
-const TIMEOUT_ACTION_OPTIONS: { value: TimeoutAction; label: string }[] = [
-  { value: 'notify', label: 'Notify only' },
-  { value: 'auto_approve', label: 'Auto-approve' },
-  { value: 'auto_reject', label: 'Auto-reject' },
-  { value: 'escalate', label: 'Escalate to fallback reviewer' },
+const TIMEOUT_ACTION_OPTIONS: { value: TimeoutAction; label: string; hint: string }[] = [
+  { value: 'notify', label: 'Notify only', hint: 'Send a notification; the step stays pending so a reviewer can still act.' },
+  { value: 'auto_approve', label: 'Auto-approve', hint: 'Automatically approve the step if no reviewer acts by the deadline.' },
+  { value: 'auto_reject', label: 'Auto-reject', hint: 'Automatically reject the step if no reviewer acts by the deadline.' },
+  { value: 'escalate', label: 'Escalate to fallback reviewer', hint: 'Re-assign the review to the fallback reviewer role if the primary reviewer misses the deadline.' },
 ]
 
 export interface ReviewPolicyPickerProps {
@@ -41,14 +47,30 @@ const inputStyle: React.CSSProperties = {
   fontSize: '12px',
   outline: 'none',
   fontFamily: 'inherit',
+  width: '100%',
+  boxSizing: 'border-box',
 }
 
-const labelStyle: React.CSSProperties = {
-  fontSize: '11px',
-  color: 'var(--text-muted)',
-  textTransform: 'uppercase',
-  letterSpacing: '0.05em',
-  fontWeight: 600,
+/** Thin horizontal rule with a text label — separates sub-groups inside the advanced panel. */
+function SubGroupDivider({ label }: { label: string }) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', margin: '4px 0' }}>
+      <Caption1
+        as="span"
+        style={{
+          color: tokens.colorNeutralForeground3,
+          fontWeight: tokens.fontWeightSemibold,
+          textTransform: 'uppercase',
+          letterSpacing: '0.06em',
+          whiteSpace: 'nowrap',
+          fontSize: '10px',
+        }}
+      >
+        {label}
+      </Caption1>
+      <div style={{ flex: 1, height: '1px', background: 'var(--border)' }} />
+    </div>
+  )
 }
 
 export function ReviewPolicyPicker({ projectId, value, onChange, allowClear = true }: ReviewPolicyPickerProps) {
@@ -89,15 +111,19 @@ export function ReviewPolicyPicker({ projectId, value, onChange, allowClear = tr
   }
 
   if (isLoading || !presets) {
-    return <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Loading presets…</div>
+    return <Caption1 style={{ color: tokens.colorNeutralForeground3 }}>Loading presets…</Caption1>
   }
 
   const selectValue = matchingPresetSlug ?? (value == null ? '__clear__' : '__custom__')
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-        <label style={labelStyle}>Preset</label>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+
+      {/* ── Policy preset ──────────────────────────────────────────────── */}
+      <Field
+        label="Policy preset"
+        hint="Choose a named bundle of rules as a starting point. You can fine-tune individual settings below."
+      >
         <select value={selectValue} onChange={(e) => handlePresetChange(e.target.value)} style={inputStyle}>
           {allowClear && <option value="__clear__">Use system default</option>}
           <optgroup label="Built-in presets">
@@ -116,10 +142,11 @@ export function ReviewPolicyPicker({ projectId, value, onChange, allowClear = tr
               ))}
             </optgroup>
           )}
-          <option value="__custom__">Custom (override below)</option>
+          <option value="__custom__">Custom — fine-tune below</option>
         </select>
-      </div>
+      </Field>
 
+      {/* ── Customise toggle ───────────────────────────────────────────── */}
       {value != null && (
         <button
           onClick={() => setShowAdvanced((o) => !o)}
@@ -133,24 +160,31 @@ export function ReviewPolicyPicker({ projectId, value, onChange, allowClear = tr
             alignSelf: 'flex-start',
           }}
         >
-          {showAdvanced ? '▾ Hide details' : '▸ Customise'}
+          {showAdvanced ? '▾ Hide individual settings' : '▸ Customise individual settings'}
         </button>
       )}
 
+      {/* ── Advanced settings panel ────────────────────────────────────── */}
       {value != null && showAdvanced && (
         <div
           style={{
-            display: 'grid',
-            gridTemplateColumns: '1fr 1fr',
-            gap: '12px',
-            padding: '12px',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '14px',
+            padding: '14px 16px',
             background: 'var(--bg)',
             border: '1px solid var(--border)',
             borderRadius: '6px',
           }}
         >
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', gridColumn: '1 / -1' }}>
-            <label style={labelStyle}>Approvers (role names, comma-separated)</label>
+          {/* ══ GROUP 1: Approval rules ══════════════════════════════════ */}
+          <SubGroupDivider label="Approval rules" />
+
+          {/* Who reviews */}
+          <Field
+            label="Who can approve"
+            hint="Role names or agent names, comma-separated. Leave blank to allow any reviewer. Example: lead, qa"
+          >
             <input
               type="text"
               value={approversText}
@@ -163,28 +197,16 @@ export function ReviewPolicyPicker({ projectId, value, onChange, allowClear = tr
                     .filter(Boolean),
                 })
               }
-              placeholder="lead, qa"
+              placeholder="lead, qa — or leave blank for any"
               style={inputStyle}
             />
-          </div>
+          </Field>
 
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-            <label style={labelStyle}>Block policy</label>
-            <select
-              value={value.request_changes_policy ?? 'first'}
-              onChange={(e) => update({ request_changes_policy: e.target.value as RequestChangesPolicy })}
-              style={inputStyle}
-            >
-              {REQUEST_CHANGES_OPTIONS.map((o) => (
-                <option key={o.value} value={o.value}>
-                  {o.label}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-            <label style={labelStyle}>Quorum (n of total)</label>
+          {/* Quorum */}
+          <Field
+            label="Approvals needed (quorum)"
+            hint="Require N out of the assigned reviewers to approve. Leave both boxes empty to require just one approval."
+          >
             <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
               <input
                 type="number"
@@ -199,10 +221,10 @@ export function ReviewPolicyPicker({ projectId, value, onChange, allowClear = tr
                   }
                   update({ quorum: { n, of: value.quorum?.of ?? n } })
                 }}
-                placeholder="—"
-                style={{ ...inputStyle, width: '60px' }}
+                placeholder="N"
+                style={{ ...inputStyle, width: '72px' }}
               />
-              <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>of</span>
+              <Caption1 as="span" style={{ color: tokens.colorNeutralForeground3 }}>of</Caption1>
               <input
                 type="number"
                 min={value.quorum?.n ?? 1}
@@ -213,8 +235,8 @@ export function ReviewPolicyPicker({ projectId, value, onChange, allowClear = tr
                   if (Number.isNaN(of) || !value.quorum) return
                   update({ quorum: { n: value.quorum.n, of } })
                 }}
-                placeholder="—"
-                style={{ ...inputStyle, width: '60px' }}
+                placeholder="total"
+                style={{ ...inputStyle, width: '72px' }}
               />
               {value.quorum && (
                 <button
@@ -225,22 +247,53 @@ export function ReviewPolicyPicker({ projectId, value, onChange, allowClear = tr
                 </button>
               )}
             </div>
-          </div>
+          </Field>
 
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-            <label style={labelStyle}>Exclude author</label>
-            <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', color: 'var(--text)' }}>
+          {/* Exclude author */}
+          <Field
+            label="Exclude author"
+            hint="When on, the person who triggered the workflow cannot approve their own step."
+          >
+            <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px', color: 'var(--text)', cursor: 'pointer' }}>
               <input
                 type="checkbox"
                 checked={value.exclude_author ?? false}
                 onChange={(e) => update({ exclude_author: e.target.checked })}
               />
-              Author of the change cannot review their own
+              Don't allow the author to review their own work
             </label>
-          </div>
+          </Field>
 
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-            <label style={labelStyle}>Timeout</label>
+          {/* Block policy */}
+          <Field
+            label="When someone requests changes"
+            hint="Controls how many change-request verdicts are needed to block the step from proceeding."
+          >
+            <select
+              value={value.request_changes_policy ?? 'first'}
+              onChange={(e) => update({ request_changes_policy: e.target.value as RequestChangesPolicy })}
+              style={inputStyle}
+            >
+              {REQUEST_CHANGES_OPTIONS.map((o) => (
+                <option key={o.value} value={o.value}>
+                  {o.label}
+                </option>
+              ))}
+            </select>
+            {/* Inline contextual hint for the selected option */}
+            <Caption1 style={{ display: 'block', color: tokens.colorNeutralForeground3, marginTop: '4px' }}>
+              {REQUEST_CHANGES_OPTIONS.find((o) => o.value === (value.request_changes_policy ?? 'first'))?.hint}
+            </Caption1>
+          </Field>
+
+          {/* ══ GROUP 2: Timing & escalation ═════════════════════════════ */}
+          <SubGroupDivider label="Timing & escalation" />
+
+          {/* Review deadline */}
+          <Field
+            label="Review deadline"
+            hint="How long to wait for a reviewer before the deadline action fires. Use ISO-8601 duration: 24h, 2d, 1w."
+          >
             <input
               type="text"
               value={value.timeout ?? ''}
@@ -248,10 +301,13 @@ export function ReviewPolicyPicker({ projectId, value, onChange, allowClear = tr
               placeholder="24h"
               style={inputStyle}
             />
-          </div>
+          </Field>
 
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-            <label style={labelStyle}>On timeout</label>
+          {/* When deadline passes */}
+          <Field
+            label="When the deadline passes"
+            hint="What the system does automatically if no reviewer acts before the deadline."
+          >
             <select
               value={value.timeout_action ?? 'notify'}
               onChange={(e) => update({ timeout_action: e.target.value as TimeoutAction })}
@@ -263,11 +319,17 @@ export function ReviewPolicyPicker({ projectId, value, onChange, allowClear = tr
                 </option>
               ))}
             </select>
-          </div>
+            <Caption1 style={{ display: 'block', color: tokens.colorNeutralForeground3, marginTop: '4px' }}>
+              {TIMEOUT_ACTION_OPTIONS.find((o) => o.value === (value.timeout_action ?? 'notify'))?.hint}
+            </Caption1>
+          </Field>
 
+          {/* Escalate to (conditional) */}
           {value.timeout_action === 'escalate' && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', gridColumn: '1 / -1' }}>
-              <label style={labelStyle}>Fallback reviewer (role)</label>
+            <Field
+              label="Escalate to (role)"
+              hint="The role name to reassign the review to when the deadline passes. Example: lead"
+            >
               <input
                 type="text"
                 value={value.fallback_reviewer ?? ''}
@@ -275,8 +337,12 @@ export function ReviewPolicyPicker({ projectId, value, onChange, allowClear = tr
                 placeholder="lead"
                 style={inputStyle}
               />
-            </div>
+            </Field>
           )}
+
+          <Caption1 style={{ display: 'block', color: tokens.colorNeutralForeground3, lineHeight: 1.6 }}>
+            Need help? <Link href="docs/review-policy.md" target="_blank" rel="noopener">Read the policy reference.</Link>
+          </Caption1>
         </div>
       )}
     </div>

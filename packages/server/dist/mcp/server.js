@@ -21,8 +21,8 @@ import { CallToolRequestSchema, ListToolsRequestSchema, } from '@modelcontextpro
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { getDb } from '../db/index.js';
-import { issues, issueRuns, agents, issueLabels, projects } from '../db/schema.js';
-import { eq, and } from 'drizzle-orm';
+import { issues, issueRuns, agents, issueLabels, projects, inboxItems } from '../db/schema.js';
+import { eq, and, ilike, or } from 'drizzle-orm';
 import { handleSlashCommand } from './slash-handler.js';
 import { classifyAndDraft } from '../services/conjure-classifier.js';
 import * as inboxService from '../services/inbox.js';
@@ -195,11 +195,16 @@ export const TOOLS = [
             'intent resolves to a board card (issue), creates the issue immediately. For other ' +
             'intents Conjure returns a draft + routing hint without persisting — surface that to ' +
             'the user so they can confirm. ' +
-            "projectId may be omitted if the request includes an 'x-project-id' header.",
+            "projectId may be omitted if the request includes an 'x-project-id' header. " +
+            "Prefix the prompt with 'done: ' to close an existing card by fuzzy-matching its title.",
         inputSchema: {
             type: 'object',
             properties: {
-                prompt: { type: 'string', description: 'The free-form prose to capture.' },
+                prompt: {
+                    type: 'string',
+                    description: "The free-form prose to capture. Prefix with 'done: ' to close an existing card " +
+                        "(e.g. 'done: Fixed the login bug (sha=abc123)').",
+                },
                 projectId: {
                     type: 'string',
                     description: 'UUID of the project to land the resulting card in. Optional if x-project-id header set OR if the user just wants a draft back.',
@@ -212,6 +217,16 @@ export const TOOLS = [
                 useLlm: {
                     type: 'boolean',
                     description: 'If false, never call the LLM (rule-based only). Defaults to true.',
+                },
+                idempotencyKey: {
+                    type: 'string',
+                    description: 'Optional caller-supplied dedup key. A second call with the same key returns the ' +
+                        'existing card without creating a duplicate.',
+                },
+                createdBy: {
+                    type: 'string',
+                    enum: ['user', 'copilot-cli', 'squadboard-server', 'webhook'],
+                    description: "Provenance tag. Defaults to 'user'.",
                 },
             },
             required: ['prompt'],
@@ -554,15 +569,33 @@ async function handleListInbox(args, extra) {
 }
 async function handleCapture(args, extra) {
     const db = getDb();
-    const { prompt, hint, useLlm } = args;
+    const { prompt, hint, useLlm, idempotencyKey, createdBy } = args;
     const projectId = resolveProjectId(args, extra);
     if (!prompt || typeof prompt !== 'string' || !prompt.trim()) {
         return { error: 'missing_prompt', hint: 'Pass a non-empty `prompt` string.' };
     }
+    const normalizedPrompt = prompt.trim();
+    // ── N1: done: prefix — close out an existing card ────────────────────────
+    const DONE_PREFIX = /^done:\s*/i;
+    if (DONE_PREFIX.test(normalizedPrompt)) {
+        const descriptor = normalizedPrompt.replace(DONE_PREFIX, '').trim();
+        return handleCaptureClose(descriptor, projectId, idempotencyKey);
+    }
+    // ── N2: idempotency dedup on inbox_items ──────────────────────────────────
+    if (idempotencyKey) {
+        const existing = await db
+            .select({ id: inboxItems.id, status: inboxItems.status, publishedIssueId: inboxItems.publishedIssueId })
+            .from(inboxItems)
+            .where(eq(inboxItems.idempotencyKey, idempotencyKey))
+            .limit(1);
+        if (existing.length > 0) {
+            return { action: 'dedup', idempotencyKey, inboxItemId: existing[0].id, status: existing[0].status };
+        }
+    }
     let classification;
     try {
         classification = await classifyAndDraft({
-            prompt,
+            prompt: normalizedPrompt,
             hint: hint ?? null,
             useLlm: useLlm === false ? false : true,
             context: projectId ? { currentProjectId: projectId, currentProjectName: null } : null,
@@ -579,7 +612,7 @@ async function handleCapture(args, extra) {
     // routing hint only — they need a UI confirmation step.
     if (classification.intent === 'issue' && projectId) {
         const draft = classification.draft;
-        const title = (draft.title ?? prompt.slice(0, 80)).trim() || 'Untitled';
+        const title = (draft.title ?? normalizedPrompt.slice(0, 80)).trim() || 'Untitled';
         const body = (draft.body ?? '').toString();
         try {
             const [created] = await db
@@ -598,6 +631,25 @@ async function handleCapture(args, extra) {
                 status: issues.status,
                 createdAt: issues.createdAt,
             });
+            // Persist the inbox_items row for idempotency tracking, linking back to
+            // the created issue.
+            if (idempotencyKey || createdBy) {
+                try {
+                    await db.insert(inboxItems).values({
+                        originalDraft: normalizedPrompt,
+                        formulatedTitle: title,
+                        formulatedBody: body,
+                        status: 'published',
+                        publishedIssueId: created.id,
+                        ...(projectId ? { suggestedProjectId: projectId } : {}),
+                        ...(idempotencyKey ? { idempotencyKey } : {}),
+                        createdBy: createdBy ?? 'copilot-cli',
+                    });
+                }
+                catch {
+                    // idempotency row insertion is best-effort; don't fail the main capture
+                }
+            }
             return {
                 action: 'issue_created',
                 issue: created,
@@ -625,6 +677,135 @@ async function handleCapture(args, extra) {
             ? 'Issue draft ready — pass projectId (or set x-project-id header) to materialize on the board.'
             : `Conjure routed this prompt to "${classification.intent}". Take the draft + routing hint into the matching create flow.`,
         classification,
+    };
+}
+// ── N1: done: close-out helper ──────────────────────────────────────────────
+// Tokenise the descriptor, find the best matching open issue in the project,
+// and move it to 'done'. If no match is found, create a standalone done card.
+async function handleCaptureClose(descriptor, projectId, idempotencyKey) {
+    if (!projectId) {
+        return {
+            error: 'missing_project_id',
+            hint: "Pass projectId (or x-project-id header) when using the 'done:' prefix.",
+        };
+    }
+    // N2 idempotency: if we've already processed this close, return early.
+    const db = getDb();
+    if (idempotencyKey) {
+        const existing = await db
+            .select({ id: inboxItems.id, status: inboxItems.status, publishedIssueId: inboxItems.publishedIssueId })
+            .from(inboxItems)
+            .where(eq(inboxItems.idempotencyKey, idempotencyKey))
+            .limit(1);
+        if (existing.length > 0) {
+            return {
+                action: 'dedup',
+                idempotencyKey,
+                inboxItemId: existing[0].id,
+                linkedIssueId: existing[0].publishedIssueId,
+            };
+        }
+    }
+    // Tokenise: extract words ≥ 3 chars, lower-cased, strip common stop-words.
+    const STOP = new Set([
+        'the', 'and', 'for', 'are', 'but', 'not', 'you', 'all', 'can', 'her',
+        'was', 'one', 'our', 'out', 'day', 'get', 'has', 'him', 'his', 'how',
+        'its', 'let', 'man', 'new', 'now', 'old', 'see', 'two', 'way', 'who',
+        'did', 'with', 'from', 'that', 'this', 'they', 'what', 'when', 'will',
+        'been', 'have', 'into', 'more', 'also', 'than', 'then', 'sha=',
+        'fixed', 'fix', 'done', 'closes', 'resolves', 'implements',
+    ]);
+    const tokens = descriptor
+        .toLowerCase()
+        .replace(/[^a-z0-9\s]/g, ' ')
+        .split(/\s+/)
+        .filter((t) => t.length >= 3 && !STOP.has(t));
+    let matchedIssue = null;
+    if (tokens.length > 0) {
+        // Query open issues in the project. Use a LIKE clause on any token to
+        // narrow the candidate set, then rank by token overlap in JS.
+        const likeConditions = tokens.slice(0, 5).map((t) => ilike(issues.title, `%${t}%`));
+        const candidates = await db
+            .select({ id: issues.id, title: issues.title, status: issues.status })
+            .from(issues)
+            .where(and(eq(issues.projectId, projectId), eq(issues.archived, 0), or(...likeConditions)))
+            .limit(20);
+        // Score: count how many query tokens appear in the candidate title.
+        let bestScore = 0;
+        for (const c of candidates) {
+            const titleLower = c.title.toLowerCase();
+            const score = tokens.filter((t) => titleLower.includes(t)).length;
+            if (score > bestScore) {
+                bestScore = score;
+                matchedIssue = c;
+            }
+        }
+        // Require at least 2 matching tokens to avoid false positives on very short
+        // descriptors (single-token match is too ambiguous).
+        if (bestScore < 2 && tokens.length > 1)
+            matchedIssue = null;
+        // For a 1-token descriptor, require 1 match.
+        if (tokens.length === 1 && bestScore < 1)
+            matchedIssue = null;
+    }
+    if (matchedIssue) {
+        // Move the matched card to done.
+        await db
+            .update(issues)
+            .set({ status: 'done', updatedAt: new Date() })
+            .where(and(eq(issues.id, matchedIssue.id), eq(issues.projectId, projectId)));
+        // Persist idempotency record if key provided.
+        if (idempotencyKey) {
+            try {
+                await db.insert(inboxItems).values({
+                    originalDraft: `done: ${descriptor}`,
+                    formulatedTitle: matchedIssue.title,
+                    status: 'published',
+                    publishedIssueId: matchedIssue.id,
+                    suggestedProjectId: projectId,
+                    idempotencyKey,
+                    createdBy: 'copilot-cli',
+                });
+            }
+            catch { /* best-effort */ }
+        }
+        return {
+            action: 'issue_closed',
+            matchedIssue: { id: matchedIssue.id, title: matchedIssue.title, previousStatus: matchedIssue.status },
+            descriptor,
+        };
+    }
+    // No match — create a standalone done card so the work is visible on the board.
+    const [created] = await db
+        .insert(issues)
+        .values({
+        projectId,
+        title: descriptor.slice(0, 120) || 'Done (no match)',
+        body: `Closed via \`capture done:\` — no matching open card found.\n\nDescriptor: ${descriptor}`,
+        status: 'done',
+        position: 0,
+        archived: 0,
+    })
+        .returning({ id: issues.id, title: issues.title, status: issues.status });
+    if (idempotencyKey) {
+        try {
+            await db.insert(inboxItems).values({
+                originalDraft: `done: ${descriptor}`,
+                formulatedTitle: created.title,
+                status: 'published',
+                publishedIssueId: created.id,
+                suggestedProjectId: projectId,
+                idempotencyKey,
+                createdBy: 'copilot-cli',
+            });
+        }
+        catch { /* best-effort */ }
+    }
+    return {
+        action: 'standalone_done_card_created',
+        issue: created,
+        note: 'No matching open card found — created a standalone done card instead.',
+        descriptor,
     };
 }
 async function handleGetRouting(args, extra) {

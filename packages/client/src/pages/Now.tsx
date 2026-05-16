@@ -11,17 +11,25 @@
  *     drifted from the rest of the app.
  *   - Adds a project-scope filter tab (default "All projects") so you can
  *     drill into a single project without leaving the Now view.
+ *
+ * Wave 12 N3:
+ *   - Added global aggregated dashboard: stat tiles, recent activity feed,
+ *     per-project mini-rollup grid. Cost data fan-out via useQueries.
+ *   - "Done today" count requires a new backend endpoint (follow-up for
+ *     Hockney: GET /api/activity/stats?window=today); showing 0 for now.
+ *   - Cost shown as MTD (month-to-date) — the existing /costs endpoint
+ *     does not expose a daily bucket; daily breakdown is a Hockney follow-up.
  */
 
 import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router'
+import { useQueries } from '@tanstack/react-query'
 import {
   Badge,
   Body1,
   Caption1,
   Subtitle1,
   Subtitle2,
-  Spinner,
   Tab,
   TabList,
   Dropdown,
@@ -34,8 +42,11 @@ import {
 } from '@fluentui/react-components'
 import { Eye24Regular, Open16Regular } from '@fluentui/react-icons'
 import PageHeader from '../components/layout/PageHeader.tsx'
+import { PageLoading } from '../components/loading/index.tsx'
 import { useNowFeed, type NowLiveSession, type NowIssueRun, type NowWorkflowRun } from '../api/activity.ts'
-import { useProjects } from '../api/projects.ts'
+import { useProjects, type Project } from '../api/projects.ts'
+import { apiFetch } from '../api/client.ts'
+import { type ServerCostSummary } from '../api/costs.ts'
 import { safeRelativeTime } from '../utils/dates.ts'
 
 // ---------------------------------------------------------------------------
@@ -150,6 +161,63 @@ const useStyles = makeStyles({
     animationTimingFunction: 'ease-in-out',
     animationIterationCount: 'infinite',
   },
+  // N3: stat tile grid
+  statGrid: {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))',
+    gap: tokens.spacingHorizontalM,
+  },
+  statTile: {
+    background: tokens.colorNeutralBackground1,
+    border: `1px solid ${tokens.colorNeutralStroke2}`,
+    borderRadius: tokens.borderRadiusLarge,
+    boxShadow: tokens.shadow2,
+    padding: `${tokens.spacingVerticalM} ${tokens.spacingHorizontalL}`,
+    display: 'flex',
+    flexDirection: 'column',
+    gap: tokens.spacingVerticalXS,
+  },
+  // N3: two-column live + activity layout
+  liveRow: {
+    display: 'grid',
+    gridTemplateColumns: '1fr 340px',
+    gap: tokens.spacingHorizontalL,
+    alignItems: 'start',
+    '@media (max-width: 900px)': {
+      gridTemplateColumns: '1fr',
+    },
+  },
+  // N3: per-project mini-rollup grid
+  projectGrid: {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))',
+    gap: tokens.spacingHorizontalM,
+  },
+  projectMiniCard: {
+    background: tokens.colorNeutralBackground1,
+    border: `1px solid ${tokens.colorNeutralStroke2}`,
+    borderRadius: tokens.borderRadiusLarge,
+    boxShadow: tokens.shadow2,
+    padding: `${tokens.spacingVerticalM} ${tokens.spacingHorizontalL}`,
+    cursor: 'pointer',
+    ':hover': {
+      background: tokens.colorNeutralBackground1Hover,
+      boxShadow: tokens.shadow4,
+    },
+  },
+  // N3: activity feed row
+  activityRow: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: tokens.spacingHorizontalS,
+    padding: `${tokens.spacingVerticalXS} ${tokens.spacingHorizontalL}`,
+    borderBottom: `1px solid ${tokens.colorNeutralStroke3}`,
+    fontSize: '12px',
+    cursor: 'pointer',
+    ':hover': {
+      background: tokens.colorNeutralBackground1Hover,
+    },
+  },
 })
 
 // ---------------------------------------------------------------------------
@@ -238,6 +306,311 @@ function SectionCard({
       </div>
       {children}
     </section>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// N3: Global stat tiles — top-line numbers across all projects
+// ---------------------------------------------------------------------------
+
+interface StatTileProps {
+  label: string
+  value: string | number
+  sub?: string
+  accent?: string
+}
+
+function StatTile({ label, value, sub, accent }: StatTileProps) {
+  const styles = useStyles()
+  return (
+    <div className={styles.statTile}>
+      <Caption1
+        style={{
+          fontSize: '11px',
+          color: tokens.colorNeutralForeground3,
+          textTransform: 'uppercase',
+          letterSpacing: '0.05em',
+          fontWeight: tokens.fontWeightSemibold,
+        }}
+      >
+        {label}
+      </Caption1>
+      <div
+        style={{
+          fontSize: '28px',
+          fontWeight: tokens.fontWeightBold,
+          color: accent ?? tokens.colorNeutralForeground1,
+          lineHeight: 1.1,
+          fontVariantNumeric: 'tabular-nums',
+        }}
+      >
+        {value}
+      </div>
+      {sub && (
+        <Caption1 style={{ color: tokens.colorNeutralForeground3, fontSize: '11px' }}>
+          {sub}
+        </Caption1>
+      )}
+    </div>
+  )
+}
+
+interface GlobalStatTilesProps {
+  liveSessions: NowLiveSession[]
+  issueRuns: NowIssueRun[]
+  workflowRuns: NowWorkflowRun[]
+  activeProjects: { id: string; name: string }[]
+  costMtdUsd: number
+  costsLoading: boolean
+}
+
+function GlobalStatTiles({
+  liveSessions,
+  issueRuns,
+  workflowRuns,
+  activeProjects,
+  costMtdUsd,
+  costsLoading,
+}: GlobalStatTilesProps) {
+  const styles = useStyles()
+
+  const inFlight = liveSessions.length + issueRuns.filter((r) => r.status === 'running').length
+    + workflowRuns.filter((r) => r.status === 'running').length
+  const queued = issueRuns.filter((r) => r.status === 'pending' || r.status === 'splitting' || r.status === 'waiting_children').length
+
+  // Health: red if any item has failed status, yellow if any are awaiting review, green otherwise
+  const hasFailed = [...liveSessions, ...issueRuns, ...workflowRuns].some((i) =>
+    (i as { status: string }).status === 'failed',
+  )
+  const hasReview = [...issueRuns, ...workflowRuns].some((i) =>
+    (i as { status: string }).status === 'awaiting_review' || (i as { status: string }).status === 'awaiting_human_approve',
+  )
+  const healthLabel = hasFailed ? '🔴 Degraded' : hasReview ? '🟡 Review needed' : '🟢 Healthy'
+  const healthColor = hasFailed
+    ? tokens.colorPaletteRedForeground1
+    : hasReview
+    ? tokens.colorPaletteYellowForeground2
+    : tokens.colorPaletteGreenForeground2
+
+  const costLabel = costsLoading
+    ? '…'
+    : `$${costMtdUsd.toFixed(2)}`
+
+  return (
+    <div>
+      <Subtitle2 style={{ display: 'block', marginBottom: tokens.spacingVerticalS, color: tokens.colorNeutralForeground2 }}>
+        At a glance
+      </Subtitle2>
+      <div className={styles.statGrid}>
+        <StatTile label="In-flight" value={inFlight} sub="active agents + runs" accent={inFlight > 0 ? tokens.colorBrandForeground1 : undefined} />
+        <StatTile label="Queued work" value={queued} sub="pending issue runs" />
+        <StatTile label="Done today" value="—" sub="backend endpoint pending" />
+        <StatTile label="Active projects" value={activeProjects.length} sub="with live activity" />
+        <StatTile label="Cost MTD" value={costLabel} sub="month-to-date · all projects" />
+        <StatTile label="Health" value={healthLabel} accent={healthColor} />
+      </div>
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// N3: Recent activity feed — last 15 events across all projects
+// ---------------------------------------------------------------------------
+
+type ActivityItem = {
+  key: string
+  projectId: string
+  projectName: string
+  label: string
+  kind: 'session' | 'run' | 'workflow'
+  status: string
+  timestamp: string
+  href: string
+}
+
+function buildActivityFeed(
+  liveSessions: NowLiveSession[],
+  issueRuns: NowIssueRun[],
+  workflowRuns: NowWorkflowRun[],
+): ActivityItem[] {
+  const items: ActivityItem[] = [
+    ...liveSessions.map((s): ActivityItem => ({
+      key: `s-${s.id}`,
+      projectId: s.projectId,
+      projectName: s.projectName,
+      label: s.agentName ? `${s.agentName} session` : 'Session',
+      kind: 'session',
+      status: s.status,
+      timestamp: s.lastEventAt,
+      href: `/projects/${s.projectId}/sessions/${s.id}`,
+    })),
+    ...issueRuns.map((r): ActivityItem => ({
+      key: `r-${r.id}`,
+      projectId: r.projectId,
+      projectName: r.projectName,
+      label: r.issueTitle,
+      kind: 'run',
+      status: r.status,
+      timestamp: r.startedAt ?? '',
+      href: `/projects/${r.projectId}/board?focus=${r.issueId}`,
+    })),
+    ...workflowRuns.map((r): ActivityItem => ({
+      key: `w-${r.id}`,
+      projectId: r.projectId,
+      projectName: r.projectName,
+      label: r.workflowName,
+      kind: 'workflow',
+      status: r.status,
+      timestamp: r.startedAt,
+      href: `/projects/${r.projectId}/flow?run=${r.id}`,
+    })),
+  ]
+
+  return items
+    .filter((i) => i.timestamp)
+    .sort((a, b) => b.timestamp.localeCompare(a.timestamp))
+    .slice(0, 15)
+}
+
+const KIND_ICON: Record<ActivityItem['kind'], string> = {
+  session: '🤖',
+  run: '📋',
+  workflow: '⚙️',
+}
+
+function RecentActivityFeed({
+  liveSessions,
+  issueRuns,
+  workflowRuns,
+}: {
+  liveSessions: NowLiveSession[]
+  issueRuns: NowIssueRun[]
+  workflowRuns: NowWorkflowRun[]
+}) {
+  const navigate = useNavigate()
+  const styles = useStyles()
+  const items = useMemo(
+    () => buildActivityFeed(liveSessions, issueRuns, workflowRuns),
+    [liveSessions, issueRuns, workflowRuns],
+  )
+
+  return (
+    <section className={styles.card} style={{ minWidth: 0 }}>
+      <div className={styles.cardHeader}>
+        <Subtitle2>Recent activity</Subtitle2>
+        <Caption1 className={styles.muted}>{items.length} items</Caption1>
+      </div>
+      {items.length === 0 ? (
+        <div style={{ padding: `${tokens.spacingVerticalL} ${tokens.spacingHorizontalL}`, textAlign: 'center', color: tokens.colorNeutralForeground3, fontSize: '13px', fontStyle: 'italic' }}>
+          No recent activity.
+        </div>
+      ) : (
+        items.map((item) => (
+          <div
+            key={item.key}
+            className={styles.activityRow}
+            role="button"
+            tabIndex={0}
+            onClick={() => void navigate(item.href)}
+            onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); void navigate(item.href) } }}
+          >
+            <span style={{ fontSize: '14px' }}>{KIND_ICON[item.kind]}</span>
+            <span
+              style={{
+                flex: 1,
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap',
+                color: tokens.colorNeutralForeground1,
+              }}
+              title={item.label}
+            >
+              {item.label}
+            </span>
+            <span
+              style={{
+                fontSize: '10px',
+                padding: '1px 6px',
+                borderRadius: 999,
+                background: tokens.colorNeutralBackground3,
+                color: tokens.colorNeutralForeground3,
+                flexShrink: 0,
+              }}
+            >
+              {item.projectName}
+            </span>
+            <span style={{ color: tokens.colorNeutralForeground3, flexShrink: 0, fontSize: '11px' }}>
+              {safeRelativeTime(item.timestamp)}
+            </span>
+          </div>
+        ))
+      )}
+    </section>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// N3: Per-project mini-rollup grid
+// ---------------------------------------------------------------------------
+
+interface ProjectMiniRollup {
+  project: Project
+  agents: number
+  queued: number
+  lastActivity: string
+}
+
+function ProjectMiniGrid({ rollups }: { rollups: ProjectMiniRollup[] }) {
+  const navigate = useNavigate()
+  const styles = useStyles()
+
+  if (rollups.length === 0) return null
+
+  return (
+    <div>
+      <Subtitle2 style={{ display: 'block', marginBottom: tokens.spacingVerticalS, color: tokens.colorNeutralForeground2 }}>
+        Active projects
+      </Subtitle2>
+      <div className={styles.projectGrid}>
+        {rollups.map(({ project, agents, queued, lastActivity }) => (
+          <div
+            key={project.id}
+            className={styles.projectMiniCard}
+            role="button"
+            tabIndex={0}
+            onClick={() => void navigate(`/projects/${project.id}/dashboard`)}
+            onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); void navigate(`/projects/${project.id}/dashboard`) } }}
+          >
+            <div
+              style={{
+                fontWeight: tokens.fontWeightSemibold,
+                color: tokens.colorNeutralForeground1,
+                fontSize: '13px',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap',
+                marginBottom: tokens.spacingVerticalXS,
+              }}
+            >
+              {project.name}
+            </div>
+            <div style={{ display: 'flex', gap: tokens.spacingHorizontalM, fontSize: '12px', color: tokens.colorNeutralForeground2, flexWrap: 'wrap' }}>
+              <span>
+                <span style={{ color: tokens.colorBrandForeground1, fontWeight: tokens.fontWeightSemibold }}>{agents}</span>
+                {' '}active
+              </span>
+              <span>
+                <span style={{ fontWeight: tokens.fontWeightSemibold }}>{queued}</span>
+                {' '}queued
+              </span>
+            </div>
+            <Caption1 style={{ color: tokens.colorNeutralForeground3, fontSize: '11px', marginTop: tokens.spacingVerticalXS }}>
+              {lastActivity ? safeRelativeTime(lastActivity) : 'no recent activity'}
+            </Caption1>
+          </div>
+        ))}
+      </div>
+    </div>
   )
 }
 
@@ -465,6 +838,40 @@ export default function Now() {
       .sort((a, b) => a.name.localeCompare(b.name))
   }, [liveSessions, issueRuns, workflowRuns])
 
+  // N3: fan-out cost queries per project using useQueries.
+  // Uses the all-projects list (not just active) so Cost MTD is total,
+  // not just projects that happen to have a live item right now.
+  const allProjects = projectsQuery.data ?? []
+  const costResults = useQueries({
+    queries: allProjects.map((p) => ({
+      queryKey: ['costs', p.id, 'summary', 'default'] as const,
+      queryFn: () => apiFetch<ServerCostSummary>(`/api/projects/${p.id}/costs`),
+      enabled: Boolean(p.id),
+      staleTime: 60_000,
+      retry: false,
+    })),
+  })
+  const costsLoading = costResults.some((r) => r.isLoading)
+  const costMtdUsd = costResults.reduce((sum, r) => sum + (r.data?.mtd.totalCostUsd ?? 0), 0)
+
+  // N3: per-project mini-rollups (only projects with live activity).
+  const projectRollups = useMemo((): ProjectMiniRollup[] => {
+    const allP = projectsQuery.data ?? []
+    return activeProjects.map(({ id, name }) => {
+      const project = allP.find((p) => p.id === id) ?? { id, name, squadPath: '', defaultModel: null, createdAt: '' }
+      const agents = liveSessions.filter((s) => s.projectId === id).length
+        + issueRuns.filter((r) => r.projectId === id && r.status === 'running').length
+      const queued = issueRuns.filter((r) => r.projectId === id && r.status === 'pending').length
+      const timestamps = [
+        ...liveSessions.filter((s) => s.projectId === id).map((s) => s.lastEventAt),
+        ...issueRuns.filter((r) => r.projectId === id).map((r) => r.startedAt ?? ''),
+        ...workflowRuns.filter((r) => r.projectId === id).map((r) => r.startedAt),
+      ].filter(Boolean)
+      const lastActivity = timestamps.sort().at(-1) ?? ''
+      return { project, agents, queued, lastActivity }
+    })
+  }, [activeProjects, liveSessions, issueRuns, workflowRuns, projectsQuery.data])
+
   // Apply scope filter to the three feeds.
   const filteredLive = useMemo(
     () => scopeProjectId === ALL_PROJECTS ? liveSessions : liveSessions.filter((s) => s.projectId === scopeProjectId),
@@ -491,6 +898,23 @@ export default function Now() {
        ?? projectsQuery.data?.find((p) => p.id === scopeProjectId)?.name
        ?? scopeProjectId)
 
+  if (isLoading) {
+    return (
+      <PageLoading
+        header={
+          <PageHeader
+            eyebrow="GLOBAL · ACROSS ALL PROJECTS"
+            icon={<Eye24Regular />}
+            title="Now"
+            description="Live activity across every project."
+            size="large"
+          />
+        }
+        label="Loading live activity…"
+      />
+    )
+  }
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0 }}>
       <PageHeader
@@ -500,9 +924,7 @@ export default function Now() {
         description="Live activity across every project."
         size="large"
         actions={
-          isLoading ? (
-            <Spinner size="extra-small" label="Loading…" />
-          ) : error ? (
+          error ? (
             <Caption1 style={{ color: tokens.colorPaletteRedForeground1 }}>Failed to load</Caption1>
           ) : (
             <Caption1 style={{ color: tokens.colorNeutralForeground3 }}>
@@ -513,6 +935,18 @@ export default function Now() {
       />
 
       <div className={styles.body}>
+        {/* N3: Stat tiles — always visible regardless of scope filter */}
+        {scopeProjectId === ALL_PROJECTS && (
+          <GlobalStatTiles
+            liveSessions={liveSessions}
+            issueRuns={issueRuns}
+            workflowRuns={workflowRuns}
+            activeProjects={activeProjects}
+            costMtdUsd={costMtdUsd}
+            costsLoading={costsLoading}
+          />
+        )}
+
         {/* Scope toolbar — primary tab for "All projects", secondary tabs
             for any project with at least one active item. When more than 4
             projects are active, fall back to a Dropdown to keep the toolbar
@@ -574,9 +1008,24 @@ export default function Now() {
           </div>
         )}
 
-        <LiveSessionsSection sessions={filteredLive} />
-        <IssueRunsSection runs={filteredIssues} />
-        <WorkflowRunsSection runs={filteredWorkflows} />
+        {/* N3: Two-column row: live panels (left) + recent activity feed (right) */}
+        <div className={styles.liveRow}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: tokens.spacingVerticalL, minWidth: 0 }}>
+            <LiveSessionsSection sessions={filteredLive} />
+            <IssueRunsSection runs={filteredIssues} />
+            <WorkflowRunsSection runs={filteredWorkflows} />
+          </div>
+          <RecentActivityFeed
+            liveSessions={filteredLive}
+            issueRuns={filteredIssues}
+            workflowRuns={filteredWorkflows}
+          />
+        </div>
+
+        {/* N3: Per-project mini-rollup (only in All Projects scope) */}
+        {scopeProjectId === ALL_PROJECTS && projectRollups.length > 0 && (
+          <ProjectMiniGrid rollups={projectRollups} />
+        )}
       </div>
     </div>
   )

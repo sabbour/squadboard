@@ -107,7 +107,7 @@ export default function ProjectFlow() {
                 Failed to load agent flow: {String(agentError)}
               </div>
             )}
-            {agentGraph && <AgentFlowGraph graph={agentGraph} />}
+            {agentGraph && <AgentFlowGraph graph={agentGraph} projectId={projectId} />}
           </>
         ) : (
           <>

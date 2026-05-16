@@ -7,10 +7,14 @@
  *   POST   /api/inbox/:id/formulate   call LLM to fill formulated*
  *   PATCH  /api/inbox/:id             user edits to formulated fields
  *   POST   /api/inbox/:id/publish     create issue, status=published
+ *   POST   /api/inbox/:id/claim       Wave 12 N2 — acquire/extend a 5-min claim lease
  *   DELETE /api/inbox/:id             status=discarded (soft delete)
  */
 import { Router } from 'express';
 import * as inboxService from '../services/inbox.js';
+import { getDb } from '../db/index.js';
+import { inboxItems } from '../db/schema.js';
+import { eq, and, or, isNull, lt } from 'drizzle-orm';
 const router = Router();
 function handleError(res, err) {
     const status = err?.status;
@@ -125,6 +129,56 @@ router.delete('/:id', async (req, res) => {
         const id = req.params.id;
         const updated = await inboxService.discardInboxItem(id);
         res.json(updated);
+    }
+    catch (err) {
+        handleError(res, err);
+    }
+});
+// POST /api/inbox/:id/claim
+// Wave 12 N2 — Claim/lease a 5-minute TTL on an inbox item.
+// Body: { claimedBy: string } — opaque worker/session ID.
+// Idempotent for the same claimedBy; extends the lease if already held.
+// Returns 409 if claimed by a different worker and lease is still active.
+router.post('/:id/claim', async (req, res) => {
+    try {
+        const id = req.params.id;
+        const { claimedBy } = req.body;
+        if (!claimedBy || typeof claimedBy !== 'string') {
+            res.status(400).json({ error: '`claimedBy` (string) is required' });
+            return;
+        }
+        const db = getDb();
+        const LEASE_MS = 5 * 60 * 1000; // 5 minutes
+        const claimExpiresAt = new Date(Date.now() + LEASE_MS);
+        const now = new Date();
+        // Atomic conditional update: win the claim only when:
+        //   claimed_by IS NULL                  — unclaimed
+        //   OR claim_expires_at < now()         — lease expired
+        //   OR claimed_by = :claimedBy          — same worker extending its lease
+        const result = await db
+            .update(inboxItems)
+            .set({ claimedBy, claimExpiresAt, updatedAt: now })
+            .where(and(eq(inboxItems.id, id), or(isNull(inboxItems.claimedBy), lt(inboxItems.claimExpiresAt, now), eq(inboxItems.claimedBy, claimedBy))))
+            .returning({ id: inboxItems.id, claimedBy: inboxItems.claimedBy, claimExpiresAt: inboxItems.claimExpiresAt });
+        if (result.length === 0) {
+            // Either the item doesn't exist or another worker holds a valid lease.
+            const current = await db
+                .select({ id: inboxItems.id, claimedBy: inboxItems.claimedBy, claimExpiresAt: inboxItems.claimExpiresAt })
+                .from(inboxItems)
+                .where(eq(inboxItems.id, id))
+                .limit(1);
+            if (current.length === 0) {
+                res.status(404).json({ error: 'inbox item not found' });
+                return;
+            }
+            res.status(409).json({
+                error: 'already_claimed',
+                claimedBy: current[0].claimedBy,
+                claimExpiresAt: current[0].claimExpiresAt,
+            });
+            return;
+        }
+        res.json({ ok: true, ...result[0] });
     }
     catch (err) {
         handleError(res, err);

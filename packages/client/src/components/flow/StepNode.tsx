@@ -6,6 +6,10 @@
  *  - subtle accent colour and an icon glyph per kind
  *  - status-driven border + status badge (pending/running/completed/failed/...)
  *  - optional pulse animation while running
+ *
+ * Wave 12 N4: nodes are clickable — navigation is handled by IssueFlowDag's
+ * onNodeClick callback which reads projectId/issueId from node data.
+ * The node div carries cursor:pointer + hover elevation to signal interactivity.
  */
 import { Handle, Position } from '@xyflow/react'
 import { tokens } from '@fluentui/react-components'
@@ -13,6 +17,10 @@ import { type FlowStepRun } from '../../api/flow.ts'
 
 export interface StepNodeData extends Record<string, unknown> {
   step: FlowStepRun
+  /** Provided by IssueFlowDag to enable click-navigation */
+  projectId?: string
+  /** Provided by IssueFlowDag to enable click-navigation */
+  issueId?: string
 }
 
 const KIND_ICON: Record<string, string> = {
@@ -78,11 +86,14 @@ export default function StepNode({ data }: { data: StepNodeData }) {
   const colors = statusColors(step.status, step.kind)
   const icon = KIND_ICON[step.kind] ?? '•'
   const kindLabel = KIND_LABEL[step.kind] ?? step.kind
+  const isClickable = Boolean(data.projectId)
 
   return (
     <>
       <Handle type="target" position={Position.Top} style={{ background: '#48515a' }} />
       <div
+        role={isClickable ? 'button' : undefined}
+        tabIndex={isClickable ? 0 : undefined}
         style={{
           width: 220,
           minHeight: 86,
@@ -98,9 +109,20 @@ export default function StepNode({ data }: { data: StepNodeData }) {
           boxShadow: colors.pulse
             ? `0 0 0 4px ${colors.border}33`
             : '0 1px 3px rgba(0, 0, 0, 0.25)',
-          transition: 'box-shadow 200ms ease-out',
+          transition: 'box-shadow 200ms ease-out, transform 120ms ease-out',
           animation: colors.pulse ? 'sb-flow-pulse 1.6s ease-in-out infinite' : undefined,
+          cursor: isClickable ? 'pointer' : 'default',
         }}
+        onMouseEnter={isClickable ? (e) => {
+          const el = e.currentTarget
+          el.style.boxShadow = `0 4px 12px rgba(0, 0, 0, 0.4), 0 0 0 1px ${colors.border}`
+          el.style.transform = 'translateY(-1px)'
+        } : undefined}
+        onMouseLeave={isClickable ? (e) => {
+          const el = e.currentTarget
+          el.style.boxShadow = colors.pulse ? `0 0 0 4px ${colors.border}33` : '0 1px 3px rgba(0, 0, 0, 0.25)'
+          el.style.transform = ''
+        } : undefined}
       >
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <span style={{ fontSize: 11, color: tokens.colorNeutralForeground3, textTransform: 'uppercase', letterSpacing: '0.04em' }}>

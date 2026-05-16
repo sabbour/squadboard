@@ -8,7 +8,13 @@
  *
  * Reuses the same icon glyphs and accent colours used by the Phase 12
  * read-only DAG node so the visual style is consistent across the app.
+ *
+ * Wave 12 N4: Added projectId + ceremonyId to data type. When both are
+ * present the node is clickable and navigates to the ceremony editor.
+ * VisualCanvas (editor) omits these so selection behavior is unchanged.
  */
+import type React from 'react'
+import { useNavigate } from 'react-router'
 import { Handle, Position, type NodeProps } from '@xyflow/react'
 import { tokens } from '@fluentui/react-components'
 import type { CeremonyStep, StepKind } from '../../../services/ceremony-graph.ts'
@@ -41,6 +47,10 @@ export interface CeremonyStepNodeData extends Record<string, unknown> {
   step: CeremonyStep
   selected?: boolean
   isChild?: boolean
+  /** When provided the node is clickable and navigates to the ceremony editor */
+  projectId?: string
+  /** When provided (with projectId) the node is clickable */
+  ceremonyId?: string
 }
 
 function summary(step: CeremonyStep): string {
@@ -66,6 +76,7 @@ function summary(step: CeremonyStep): string {
 }
 
 export default function CeremonyStepNode(props: NodeProps) {
+  const navigate = useNavigate()
   const data = props.data as CeremonyStepNodeData
   const step = data.step
   const accent = KIND_ACCENT[step.kind]
@@ -73,11 +84,31 @@ export default function CeremonyStepNode(props: NodeProps) {
   const kindLabel = KIND_LABEL[step.kind]
   const sel = props.selected ?? data.selected ?? false
   const child = data.isChild ?? false
+  const isClickable = Boolean(data.projectId && data.ceremonyId)
+
+  const handleClick = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (!isClickable) return
+    // Don't fire if the click was on an interactive child element
+    if (e.target !== e.currentTarget && (e.target as HTMLElement).closest('button, a, input, select, textarea')) return
+    void navigate(`/projects/${data.projectId}/ceremonies/${data.ceremonyId}`)
+  }
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
+    if (!isClickable) return
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault()
+      void navigate(`/projects/${data.projectId}/ceremonies/${data.ceremonyId}`)
+    }
+  }
 
   return (
     <>
       <Handle type="target" position={Position.Top} style={{ background: '#48515a' }} />
       <div
+        role={isClickable ? 'button' : undefined}
+        tabIndex={isClickable ? 0 : undefined}
+        onClick={isClickable ? handleClick : undefined}
+        onKeyDown={isClickable ? handleKeyDown : undefined}
         style={{
           width: 220,
           minHeight: child ? 64 : 84,
@@ -92,6 +123,8 @@ export default function CeremonyStepNode(props: NodeProps) {
           gap: 4,
           boxShadow: sel ? `0 0 0 4px ${accent}33` : '0 1px 3px rgba(0, 0, 0, 0.25)',
           opacity: child ? 0.92 : 1,
+          cursor: isClickable ? 'pointer' : 'default',
+          transition: 'box-shadow 200ms ease-out',
         }}
       >
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>

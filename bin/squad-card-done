@@ -1,0 +1,150 @@
+#!/usr/bin/env bash
+# bin/squad-card-done — Wave 12 N1 helper
+#
+# Marks a Squadboard card as done via the MCP `capture done:` path.
+# Works without MCP wiring — hits the REST API directly.
+#
+# Usage:
+#   squad-card-done <issue-id-or-title-fragment> [<sha>]
+#   squad-card-done "Fix login bug" abc123
+#
+# Environment:
+#   SQUADBOARD_URL         Base URL of the running server (default: http://localhost:3000)
+#   SQUADBOARD_PROJECT_ID  Project UUID (required unless set as default)
+#
+# Examples:
+#   squad-card-done "Fix the login redirect"
+#   squad-card-done "Fix the login redirect" "$(git rev-parse --short HEAD)"
+#   SQUADBOARD_PROJECT_ID=7a9cc07a-... squad-card-done "CSRF token refresh" "abc123"
+
+set -euo pipefail
+
+SQUADBOARD_URL="${SQUADBOARD_URL:-http://localhost:3000}"
+PROJECT_ID="${SQUADBOARD_PROJECT_ID:-}"
+
+if [[ $# -lt 1 ]]; then
+  echo "Usage: squad-card-done <title-fragment> [<sha>]" >&2
+  echo "  SQUADBOARD_PROJECT_ID must be set in env." >&2
+  exit 1
+fi
+
+FRAGMENT="$1"
+SHA="${2:-}"
+
+if [[ -z "$PROJECT_ID" ]]; then
+  # Try to get it from the server's self-registered project (the foo project).
+  PROJECT_ID=$(curl -s "${SQUADBOARD_URL}/api/projects" \
+    | python3 -c "import sys,json; ps=json.load(sys.stdin); print(next((p['id'] for p in ps if p.get('path','').endswith('/foo')), ''))" 2>/dev/null || echo "")
+  if [[ -z "$PROJECT_ID" ]]; then
+    echo "Error: SQUADBOARD_PROJECT_ID is not set and could not be auto-detected." >&2
+    echo "Set it in env: export SQUADBOARD_PROJECT_ID=<uuid>" >&2
+    exit 1
+  fi
+  echo "Auto-detected project: $PROJECT_ID"
+fi
+
+DESCRIPTOR="$FRAGMENT"
+if [[ -n "$SHA" ]]; then
+  DESCRIPTOR="$FRAGMENT (sha=$SHA)"
+fi
+
+PROMPT="done: $DESCRIPTOR"
+IDEM_KEY="done-${PROJECT_ID:0:8}-$(echo "$DESCRIPTOR" | md5sum | cut -c1-8)"
+
+echo "Sending: capture '${PROMPT}' to project ${PROJECT_ID}"
+
+RESULT=$(curl -s -X POST "${SQUADBOARD_URL}/mcp" \
+  -H "Content-Type: application/json" \
+  -H "Accept: application/json, text/event-stream" \
+  -H "x-project-id: ${PROJECT_ID}" \
+  -d "$(python3 -c "
+import json, sys
+print(json.dumps({
+  'jsonrpc': '2.0',
+  'id': 1,
+  'method': 'initialize',
+  'params': {
+    'protocolVersion': '2024-11-05',
+    'capabilities': {},
+    'clientInfo': {'name': 'squad-card-done', 'version': '1'}
+  }
+}))"
+)
+
+# Extract session ID from SSE response
+SESSION_ID=$(echo "$RESULT" | grep -oP '"Mcp-Session-Id":\s*"\K[^"]+' 2>/dev/null || \
+  curl -si "${SQUADBOARD_URL}/mcp" \
+    -X POST \
+    -H "Content-Type: application/json" \
+    -H "Accept: application/json, text/event-stream" \
+    -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"squad-card-done","version":"1"}}}' \
+    2>&1 | grep -i "mcp-session-id:" | head -1 | awk '{print $2}' | tr -d $'\r' || echo "")
+
+if [[ -z "$SESSION_ID" ]]; then
+  # Fallback: use the REST API capture endpoint directly (simpler for scripts)
+  echo "MCP session init skipped — falling back to REST capture endpoint."
+  RESULT=$(curl -s -X POST "${SQUADBOARD_URL}/api/inbox" \
+    -H "Content-Type: application/json" \
+    -d "$(python3 -c "
+import json
+print(json.dumps({
+  'originalDraft': 'done: ${DESCRIPTOR}',
+  'suggestedProjectId': '${PROJECT_ID}'
+}))")")
+  echo "REST result: $RESULT"
+  exit 0
+fi
+
+# Call the capture tool with done: prefix
+TOOL_RESULT=$(curl -s -X POST "${SQUADBOARD_URL}/mcp" \
+  -H "Content-Type: application/json" \
+  -H "Accept: application/json, text/event-stream" \
+  -H "Mcp-Session-Id: ${SESSION_ID}" \
+  -H "x-project-id: ${PROJECT_ID}" \
+  -d "$(python3 -c "
+import json
+print(json.dumps({
+  'jsonrpc': '2.0',
+  'id': 2,
+  'method': 'tools/call',
+  'params': {
+    'name': 'capture',
+    'arguments': {
+      'prompt': 'done: ${DESCRIPTOR}',
+      'projectId': '${PROJECT_ID}',
+      'idempotencyKey': '${IDEM_KEY}',
+      'createdBy': 'copilot-cli'
+    }
+  }
+}))")")
+
+echo "Result: $TOOL_RESULT"
+
+# Parse and pretty-print the action
+ACTION=$(echo "$TOOL_RESULT" | python3 -c "
+import sys, json
+raw = sys.stdin.read()
+# SSE format: lines starting with 'data: '
+for line in raw.splitlines():
+    if line.startswith('data: '):
+        try:
+            d = json.loads(line[6:])
+            result = d.get('result', {})
+            content = result.get('content', [{}])
+            text = content[0].get('text', '{}') if content else '{}'
+            obj = json.loads(text)
+            action = obj.get('action', 'unknown')
+            if action == 'issue_closed':
+                m = obj.get('matchedIssue', {})
+                print(f\"✓ Closed card: {m.get('title','?')} (id={m.get('id','?')})\")
+            elif action == 'standalone_done_card_created':
+                i = obj.get('issue', {})
+                print(f\"✓ Created done card: {i.get('title','?')} (id={i.get('id','?')})\")
+            elif action == 'dedup':
+                print(f\"⚑ Duplicate — already processed (idempotencyKey={obj.get('idempotencyKey','?')})\")
+            else:
+                print(f'Action: {action}')
+                print(json.dumps(obj, indent=2))
+        except Exception as e:
+            pass
+" 2>/dev/null || echo "Done (see raw result above)")

@@ -97,7 +97,10 @@ interface McpConfigPanelProps {
 export function McpConfigPanel({ projectId }: McpConfigPanelProps) {
   const { data: project } = useProject(projectId)
   const serverUrl = `${window.location.protocol}//${window.location.hostname}:3000`
-  const healthUrl = `${serverUrl}/mcp/health`
+  // Use a relative URL so the Vite dev proxy (port 5173 → 3000) forwards the
+  // request without CORS issues. In production everything is on port 3000 so
+  // the relative path resolves to the same origin anyway.
+  const healthUrl = '/mcp/health'
 
   const [health, setHealth] = useState<McpHealth | null>(null)
   const [healthError, setHealthError] = useState<string | null>(null)
