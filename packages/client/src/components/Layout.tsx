@@ -336,6 +336,8 @@ function LayoutInner() {
     if (location.pathname.startsWith('/diagnostics')) return 'diagnostics'
     if (location.pathname.startsWith('/heartbeat')) return 'heartbeat'
     if (id) {
+      // Project-scoped heartbeat: /projects/:id/heartbeat
+      if (location.pathname.includes('/heartbeat')) return 'heartbeat'
       // Match longest segment first so 'consult' isn't shadowed by 'flow' etc.
       const matches = PROJECT_NAV_ITEMS
         .filter((item) => location.pathname.includes(`/${item.segment}`))
@@ -359,7 +361,8 @@ function LayoutInner() {
     } else if (value === 'diagnostics') {
       void navigate(id ? `/projects/${id}/diagnostics` : '/diagnostics')
     } else if (value === 'heartbeat') {
-      void navigate('/heartbeat')
+      // W22 directive: preserve project scope when navigating to Heartbeat
+      void navigate(id ? `/projects/${id}/heartbeat` : '/heartbeat')
     } else if (id) {
       void navigate(`/projects/${id}/${value}`)
     }

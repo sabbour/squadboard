@@ -1,5 +1,5 @@
 import { Draggable } from '@hello-pangea/dnd'
-import { useState, type ReactNode } from 'react'
+import { useState, useRef, useEffect, type ReactNode } from 'react'
 import { Body1, tokens } from '@fluentui/react-components'
 import {
   CheckmarkCircle20Regular,
@@ -8,9 +8,11 @@ import {
   Merge20Regular,
   Box20Regular,
   Comment20Regular,
+  PersonSwap20Regular,
 } from '@fluentui/react-icons'
-import { type Issue } from '../../api/issues.ts'
+import { type Issue, useAssignIssue } from '../../api/issues.ts'
 import { useIssueRuns } from '../../api/runs.ts'
+import { useActiveAgents } from '../../api/agents.ts'
 import LabelBadge from '../LabelBadge.tsx'
 import Avatar from '../Avatar.tsx'
 import RunButton from '../runs/RunButton.tsx'
@@ -127,9 +129,24 @@ const badgeLinkStyle: React.CSSProperties = {
 
 export default function IssueCard({ issue, index, projectId, isSelected, onSelect, onOpen }: IssueCardProps) {
   const [hovered, setHovered] = useState(false)
+  const [reassignOpen, setReassignOpen] = useState(false)
+  const reassignRef = useRef<HTMLDivElement>(null)
   const { data: runs } = useIssueRuns(projectId, issue.id)
+  const { data: agents } = useActiveAgents(projectId)
+  const assignIssue = useAssignIssue(projectId)
   const activeRun = runs?.find((r) => r.status === 'running' || r.status === 'pending')
   const lastRun = runs?.[0]
+
+  // Close reassign dropdown on outside click
+  useEffect(() => {
+    function handleOutside(e: MouseEvent) {
+      if (reassignRef.current && !reassignRef.current.contains(e.target as Node)) {
+        setReassignOpen(false)
+      }
+    }
+    if (reassignOpen) document.addEventListener('mousedown', handleOutside)
+    return () => document.removeEventListener('mousedown', handleOutside)
+  }, [reassignOpen])
 
   return (
     <Draggable draggableId={issue.id} index={index}>
@@ -172,7 +189,7 @@ export default function IssueCard({ issue, index, projectId, isSelected, onSelec
             }}
           />
 
-          {/* Title */}
+          {/* Title + labels + badges — clickable area that opens the detail panel */}
           <div
             onClick={() => onOpen(issue)}
             style={{ cursor: 'pointer', paddingRight: '20px' }}
@@ -223,49 +240,148 @@ export default function IssueCard({ issue, index, projectId, isSelected, onSelec
                 </span>
               </div>
             )}
+          </div>
 
-            {/* Footer: assignee + comment count + run */}
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '6px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                {issue.assignee && (
-                  <Avatar name={issue.assignee.name} avatarUrl={issue.assignee.avatarUrl} size={20} />
-                )}
-                {issue.routingRuleSummary && (
-                  <RoutingBadge ruleSummary={issue.routingRuleSummary} />
-                )}
-                {issue.attachedWorkflowName && (
-                  <WorkflowBadge workflowName={issue.attachedWorkflowName} />
-                )}
-                {activeRun && <RunStatusBadge status={activeRun.status} />}
-                {!activeRun && lastRun?.routingTier && (
-                  <RoutingTierBadge tier={lastRun.routingTier} />
-                )}
-                {!activeRun && lastRun?.status === 'completed' && (
-                  <CostDisplay costUsd={lastRun.costUsd} costTokens={lastRun.costTokens} />
-                )}
-                {!activeRun && lastRun?.status === 'failed' && (
-                  <RunStatusBadge status="failed" />
-                )}
-              </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                {issue.commentCount > 0 && (
-                  <span
+          {/* Footer: assignee + run — outside the onOpen wrapper, clicks stop here */}
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '6px' }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+              {/* Reassign affordance: avatar (or placeholder) opens agent picker */}
+              <div ref={reassignRef} style={{ position: 'relative' }}>
+                <button
+                  title={issue.assignee ? `Reassign (currently ${issue.assignee.name})` : 'Assign agent'}
+                  onClick={(e) => { e.stopPropagation(); setReassignOpen((v) => !v) }}
+                  style={{
+                    background: 'none',
+                    border: reassignOpen ? `1px solid ${tokens.colorBrandBackground}` : '1px solid transparent',
+                    borderRadius: '50%',
+                    padding: '0',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    width: '24px',
+                    height: '24px',
+                    position: 'relative',
+                  }}
+                >
+                  {issue.assignee ? (
+                    <Avatar name={issue.assignee.name} avatarUrl={issue.assignee.avatarUrl} size={20} />
+                  ) : (
+                    <PersonSwap20Regular style={{ color: tokens.colorNeutralForeground3, width: '16px', height: '16px' }} />
+                  )}
+                </button>
+
+                {reassignOpen && (
+                  <div
                     style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '3px',
-                      fontSize: '11px',
-                      color: tokens.colorNeutralForeground2,
+                      position: 'absolute',
+                      bottom: '100%',
+                      left: 0,
+                      marginBottom: '4px',
+                      background: tokens.colorNeutralBackground1,
+                      border: `1px solid ${tokens.colorNeutralStroke1}`,
+                      borderRadius: '6px',
+                      minWidth: '160px',
+                      zIndex: 200,
+                      overflow: 'hidden',
+                      boxShadow: '0 4px 12px rgba(0,0,0,0.5)',
                     }}
                   >
-                    <Comment20Regular style={{ verticalAlign: 'middle', marginRight: '3px' }} />{issue.commentCount}
-                  </span>
+                    {(agents ?? []).length === 0 && (
+                      <div style={{ padding: '8px 12px', fontSize: '12px', color: tokens.colorNeutralForeground3 }}>No active agents</div>
+                    )}
+                    {(agents ?? []).map((agent) => (
+                      <button
+                        key={agent.id}
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          assignIssue.mutate({ issueId: issue.id, assigneeId: agent.id })
+                          setReassignOpen(false)
+                        }}
+                        style={{
+                          display: 'block',
+                          width: '100%',
+                          textAlign: 'left',
+                          background: issue.assignee?.id === agent.id ? 'rgba(56,139,253,0.13)' : 'none',
+                          border: 'none',
+                          color: tokens.colorNeutralForeground1,
+                          padding: '7px 12px',
+                          fontSize: '12px',
+                          cursor: 'pointer',
+                        }}
+                        onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.background = 'rgba(56,139,253,0.13)' }}
+                        onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.background = issue.assignee?.id === agent.id ? 'rgba(56,139,253,0.13)' : 'none' }}
+                      >
+                        {agent.name}
+                      </button>
+                    ))}
+                    {issue.assignee && (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          assignIssue.mutate({ issueId: issue.id, assigneeId: null })
+                          setReassignOpen(false)
+                        }}
+                        style={{
+                          display: 'block',
+                          width: '100%',
+                          textAlign: 'left',
+                          background: 'none',
+                          border: 'none',
+                          borderTop: `1px solid ${tokens.colorNeutralStroke1}`,
+                          color: tokens.colorNeutralForeground3,
+                          padding: '7px 12px',
+                          fontSize: '12px',
+                          cursor: 'pointer',
+                        }}
+                        onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.color = tokens.colorNeutralForeground1 }}
+                        onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.color = tokens.colorNeutralForeground3 }}
+                      >
+                        Unassign
+                      </button>
+                    )}
+                  </div>
                 )}
-                <RunButton
-                  projectId={projectId}
-                  issueId={issue.id}
-                />
               </div>
+
+              {issue.routingRuleSummary && (
+                <RoutingBadge ruleSummary={issue.routingRuleSummary} />
+              )}
+              {issue.attachedWorkflowName && (
+                <WorkflowBadge workflowName={issue.attachedWorkflowName} />
+              )}
+              {activeRun && <RunStatusBadge status={activeRun.status} />}
+              {!activeRun && lastRun?.routingTier && (
+                <RoutingTierBadge tier={lastRun.routingTier} />
+              )}
+              {!activeRun && lastRun?.status === 'completed' && (
+                <CostDisplay costUsd={lastRun.costUsd} costTokens={lastRun.costTokens} />
+              )}
+              {!activeRun && lastRun?.status === 'failed' && (
+                <RunStatusBadge status="failed" />
+              )}
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+              {issue.commentCount > 0 && (
+                <span
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '3px',
+                    fontSize: '11px',
+                    color: tokens.colorNeutralForeground2,
+                  }}
+                >
+                  <Comment20Regular style={{ verticalAlign: 'middle', marginRight: '3px' }} />{issue.commentCount}
+                </span>
+              )}
+              <RunButton
+                projectId={projectId}
+                issueId={issue.id}
+              />
             </div>
           </div>
         </div>

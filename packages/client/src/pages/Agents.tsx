@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react'
+import { useState, useRef, Component, type ReactNode } from 'react'
 import { useParams } from 'react-router'
 import { useAgents, type Agent } from '../api/agents.ts'
 import { useProject } from '../api/projects.ts'
@@ -44,6 +44,36 @@ interface RouteTestResult {
   agentId?: string | null
   score?: number | null
   reasoning?: string | null
+}
+
+// ---------------------------------------------------------------------------
+// Routing tab error boundary — catches render crashes from unexpected API data
+// ---------------------------------------------------------------------------
+interface RoutingErrorBoundaryState { hasError: boolean; message: string }
+class RoutingErrorBoundary extends Component<{ children: ReactNode }, RoutingErrorBoundaryState> {
+  constructor(props: { children: ReactNode }) {
+    super(props)
+    this.state = { hasError: false, message: '' }
+  }
+  static getDerivedStateFromError(err: unknown): RoutingErrorBoundaryState {
+    return { hasError: true, message: err instanceof Error ? err.message : String(err) }
+  }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div style={{ padding: '24px', color: 'var(--danger)', fontSize: '13px', border: '1px solid rgba(248,81,73,0.3)', borderRadius: '6px', background: 'rgba(248,81,73,0.08)' }}>
+          <strong>Routing view error:</strong> {this.state.message}
+          <button
+            onClick={() => this.setState({ hasError: false, message: '' })}
+            style={{ marginLeft: '12px', fontSize: '11px', cursor: 'pointer', background: 'none', border: '1px solid currentColor', borderRadius: '4px', padding: '2px 8px', color: 'inherit' }}
+          >
+            Retry
+          </button>
+        </div>
+      )
+    }
+    return this.props.children
+  }
 }
 
 function TestRoutingPanel({ projectId }: { projectId: string }) {
@@ -529,43 +559,45 @@ export default function Agents() {
         )}
 
         {activeTab === 'routing' && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-            {/* Cast — try the full 3-tier router on a hypothetical issue */}
-            <div>
-              <Caption1 as="p" style={{ display: 'block', color: tokens.colorNeutralForeground3, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: tokens.spacingVerticalM, fontWeight: tokens.fontWeightSemibold }}>
-                Cast Issue
-              </Caption1>
-              <CastPanel
-                projectId={projectId}
-                onUseAgent={(agentId) => {
-                  const agent = agents.find((a) => a.id === agentId)
-                  if (agent) setSelectedAgent(agent)
-                }}
-              />
-            </div>
+          <RoutingErrorBoundary>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+              {/* Cast — try the full 3-tier router on a hypothetical issue */}
+              <div>
+                <Caption1 as="p" style={{ display: 'block', color: tokens.colorNeutralForeground3, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: tokens.spacingVerticalM, fontWeight: tokens.fontWeightSemibold }}>
+                  Cast Issue
+                </Caption1>
+                <CastPanel
+                  projectId={projectId}
+                  onUseAgent={(agentId) => {
+                    const agent = agents.find((a) => a.id === agentId)
+                    if (agent) setSelectedAgent(agent)
+                  }}
+                />
+              </div>
 
-            {/* Stats */}
-            <div>
-              <Caption1 as="p" style={{ display: 'block', color: tokens.colorNeutralForeground3, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: tokens.spacingVerticalM, fontWeight: tokens.fontWeightSemibold }}>
-                Routing Stats
-              </Caption1>
-              {routingStats ? (
-                <RoutingStatsPanel stats={routingStats} isLoading={statsLoading} />
-              ) : statsLoading ? (
-                <RoutingStatsPanel stats={{ tier1Count: 0, tier2Count: 0, tier3Count: 0, triageCount: 0, total: 0 }} isLoading />
-              ) : (
-                <Caption1 style={{ color: tokens.colorNeutralForeground3 }}>No routing data yet.</Caption1>
-              )}
-            </div>
+              {/* Stats */}
+              <div>
+                <Caption1 as="p" style={{ display: 'block', color: tokens.colorNeutralForeground3, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: tokens.spacingVerticalM, fontWeight: tokens.fontWeightSemibold }}>
+                  Routing Stats
+                </Caption1>
+                {routingStats ? (
+                  <RoutingStatsPanel stats={routingStats} isLoading={statsLoading} />
+                ) : statsLoading ? (
+                  <RoutingStatsPanel stats={{ tier1Count: 0, tier2Count: 0, tier3Count: 0, triageCount: 0, total: 0 }} isLoading />
+                ) : (
+                  <Caption1 style={{ color: tokens.colorNeutralForeground3 }}>No routing data yet.</Caption1>
+                )}
+              </div>
 
-            {/* Log */}
-            <div>
-              <Caption1 as="p" style={{ display: 'block', color: tokens.colorNeutralForeground3, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: tokens.spacingVerticalM, fontWeight: tokens.fontWeightSemibold }}>
-                Routing Log
-              </Caption1>
-              <RoutingLogTable entries={routingLog} isLoading={logLoading} />
+              {/* Log */}
+              <div>
+                <Caption1 as="p" style={{ display: 'block', color: tokens.colorNeutralForeground3, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: tokens.spacingVerticalM, fontWeight: tokens.fontWeightSemibold }}>
+                  Routing Log
+                </Caption1>
+                <RoutingLogTable entries={routingLog} isLoading={logLoading} />
+              </div>
             </div>
-          </div>
+          </RoutingErrorBoundary>
         )}
       </div>
 

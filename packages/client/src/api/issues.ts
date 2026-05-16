@@ -77,6 +77,10 @@ export interface BulkActionInput {
   labelId?: string
 }
 
+export interface AssignIssueInput {
+  assigneeId: string | null
+}
+
 export function useIssues(projectId: string, filters?: { search?: string; labelId?: string; assigneeId?: string }) {
   const params = new URLSearchParams()
   if (filters?.labelId) params.set('label', filters.labelId)
@@ -138,6 +142,20 @@ export interface DeliverableUpdateInput {
   deliverableAcceptanceCriteria?: string | null
   deliverableStatus?: 'not-started' | 'in-progress' | 'ready-for-review' | 'accepted' | 'rejected'
   version: number
+}
+
+export function useAssignIssue(projectId: string) {
+  const queryClient = useQueryClient()
+  return useMutation<Issue, Error, { issueId: string } & AssignIssueInput>({
+    mutationFn: ({ issueId, ...input }) =>
+      apiFetch<Issue>(`/api/projects/${projectId}/issues/${issueId}`, {
+        method: 'PATCH',
+        body: JSON.stringify(input),
+      }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['issues', projectId] })
+    },
+  })
 }
 
 export function useUpdateDeliverable(projectId: string) {

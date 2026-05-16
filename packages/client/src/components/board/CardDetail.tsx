@@ -1,15 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
-import { useNavigate } from 'react-router'
 import {
   tokens,
   Body1Strong,
   Caption1,
-  Menu,
-  MenuTrigger,
-  MenuPopover,
-  MenuList,
-  MenuItem,
-  Tooltip,
   Accordion,
   AccordionItem,
   AccordionHeader,
@@ -21,7 +14,7 @@ import {
   Badge,
   Textarea,
 } from '@fluentui/react-components'
-import { MoreHorizontal20Regular, Lightbulb20Regular, Dismiss20Regular, Settings20Regular } from '@fluentui/react-icons'
+import { Dismiss20Regular, Settings20Regular } from '@fluentui/react-icons'
 import { type Issue, useUpdateDeliverable } from '../../api/issues.ts'
 import { useLabels } from '../../api/labels.ts'
 import { useIssueRuns } from '../../api/runs.ts'
@@ -53,7 +46,6 @@ interface CardDetailProps {
 type Tab = 'overview' | 'runs' | 'deliverables' | 'flow'
 
 export default function CardDetail({ projectId, issue, onClose, initialTab }: CardDetailProps) {
-  const navigate = useNavigate()
   const panelRef = useRef<HTMLDivElement>(null)
   const [activeTab, setActiveTab] = useState<Tab>(initialTab ?? 'overview')
   const [showAttachModal, setShowAttachModal] = useState(false)
@@ -141,43 +133,6 @@ export default function CardDetail({ projectId, issue, onClose, initialTab }: Ca
               {COLUMN_LABELS[issue.column] ?? issue.column}
             </Caption1>
             <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-              {/* Overflow menu */}
-              <Menu>
-                <MenuTrigger>
-                  <Tooltip content="More actions" relationship="label">
-                    <button
-                      style={{
-                        background: 'none',
-                        border: 'none',
-                        color: tokens.colorNeutralForeground2,
-                        fontSize: '18px',
-                        cursor: 'pointer',
-                        padding: '2px 6px',
-                        borderRadius: '4px',
-                        display: 'inline-flex',
-                        alignItems: 'center',
-                      }}
-                      onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.color = tokens.colorNeutralForeground1 }}
-                      onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.color = tokens.colorNeutralForeground2 }}
-                    >
-                      <MoreHorizontal20Regular />
-                    </button>
-                  </Tooltip>
-                </MenuTrigger>
-                <MenuPopover>
-                  <MenuList>
-                    <MenuItem
-                      icon={<Lightbulb20Regular />}
-                      onClick={() => {
-                        onClose()
-                        navigate(`/projects/${projectId}/consult/new?prefill=issue:${issue.id}`)
-                      }}
-                    >
-                      Investigate in Conjure
-                    </MenuItem>
-                  </MenuList>
-                </MenuPopover>
-              </Menu>
               <button
                 onClick={onClose}
                 style={{

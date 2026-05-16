@@ -27,7 +27,7 @@ export function RoutingLogTable({ entries, isLoading }: RoutingLogTableProps) {
     )
   }
 
-  if (entries.length === 0) {
+  if (!Array.isArray(entries) || entries.length === 0) {
     return (
       <Body1 style={{ display: 'block', color: tokens.colorNeutralForeground3, padding: '24px', textAlign: 'center' }}>
         No routing events yet — routes will appear here as issues are processed.
@@ -82,7 +82,7 @@ export function RoutingLogTable({ entries, isLoading }: RoutingLogTableProps) {
               </TableCell>
               <TableCell style={{ textAlign: 'right' }}>
                 <TableCellLayout style={{ color: tokens.colorNeutralForeground3, fontFamily: tokens.fontFamilyMonospace, fontSize: '11px' }}>
-                  {entry.score != null ? entry.score.toFixed(2) : <span style={{ color: tokens.colorNeutralForeground3, opacity: 0.6 }}>—</span>}
+                  {typeof entry.score === 'number' ? entry.score.toFixed(2) : entry.score != null ? Number(entry.score).toFixed(2) : <span style={{ color: tokens.colorNeutralForeground3, opacity: 0.6 }}>—</span>}
                 </TableCellLayout>
               </TableCell>
             </TableRow>
