@@ -7,6 +7,7 @@ import { getDb, schema } from '../db/index.js';
 import { parseCharter, writeCharter, computeCharterHash } from '../services/charter-compiler.js';
 import { syncAgentsFromDisk } from '../services/agent-sync.js';
 import { formulateAgentDraft, formulateTeamDraft } from '../services/hire-formulator.js';
+import { castTeam, buildPersonaSection, type CastedMember } from '../services/casting-engine.js';
 
 const router = Router({ mergeParams: true });
 
@@ -200,6 +201,177 @@ router.post('/team/formulate', async (req: Request, res: Response) => {
   } catch (err) {
     const status = (err as Error & { status?: number }).status ?? 500;
     if (status >= 500) console.error('[team/formulate] unhandled:', err);
+    res.status(status).json({
+      ok: false,
+      error: err instanceof Error ? err.message : 'Internal server error',
+    });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// POST /api/projects/:projectId/agents/hire-team/propose
+// Cast a themed team from a universe without persisting.
+// Body: { universe: string, teamSize?: number, requiredRoles?: string[] }
+// Returns: { ok: true, data: { members: CastedMember[] } }
+// ---------------------------------------------------------------------------
+router.post('/hire-team/propose', async (req: Request, res: Response) => {
+  try {
+    const { projectId } = req.params as Record<string, string>;
+    const { universe, teamSize, requiredRoles } = (req.body ?? {}) as {
+      universe?: unknown;
+      teamSize?: unknown;
+      requiredRoles?: unknown;
+    };
+
+    if (!universe || typeof universe !== 'string') {
+      res.status(400).json({ ok: false, error: '`universe` (string) is required' });
+      return;
+    }
+    if (teamSize !== undefined && (typeof teamSize !== 'number' || !Number.isInteger(teamSize) || teamSize < 1)) {
+      res.status(400).json({ ok: false, error: '`teamSize` must be a positive integer' });
+      return;
+    }
+    if (requiredRoles !== undefined && !Array.isArray(requiredRoles)) {
+      res.status(400).json({ ok: false, error: '`requiredRoles` must be an array of strings' });
+      return;
+    }
+    if (Array.isArray(requiredRoles) && !requiredRoles.every((r) => typeof r === 'string')) {
+      res.status(400).json({ ok: false, error: '`requiredRoles` must be an array of strings' });
+      return;
+    }
+
+    // Verify project exists (consistent with other routes in this file)
+    const squadPath = await resolveSquadPath(projectId);
+    if (!squadPath) {
+      res.status(404).json({ ok: false, error: 'Project not found or has no .squad/ path' });
+      return;
+    }
+
+    const members = castTeam({
+      universe: universe as Parameters<typeof castTeam>[0]['universe'],
+      teamSize: typeof teamSize === 'number' ? teamSize : undefined,
+      requiredRoles: Array.isArray(requiredRoles)
+        ? (requiredRoles as Parameters<typeof castTeam>[0]['requiredRoles'])
+        : undefined,
+    });
+
+    res.json({ ok: true, data: { members } });
+  } catch (err) {
+    const status = (err as Error & { status?: number }).status ?? 500;
+    if (status >= 500) console.error('[hire-team/propose] unhandled:', err);
+    res.status(status).json({
+      ok: false,
+      error: err instanceof Error ? err.message : 'Internal server error',
+    });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// POST /api/projects/:projectId/agents/hire-team/confirm
+// Materialise a set of casted members as real agents (files + DB rows).
+// Body: { members: CastedMember[] }
+// Returns: { ok: true, data: { created: Agent[], errors: { agentName, error }[] } }
+// Per-member errors are collected and returned; the handler never throws 500.
+// ---------------------------------------------------------------------------
+router.post('/hire-team/confirm', async (req: Request, res: Response) => {
+  try {
+    const { projectId } = req.params as Record<string, string>;
+    const { members } = (req.body ?? {}) as { members?: unknown };
+
+    if (!Array.isArray(members) || members.length === 0) {
+      res.status(400).json({ ok: false, error: '`members` must be a non-empty array' });
+      return;
+    }
+
+    const squadPath = await resolveSquadPath(projectId);
+    if (!squadPath) {
+      res.status(404).json({ ok: false, error: 'Project not found or has no .squad/ path' });
+      return;
+    }
+
+    const db = getDb();
+    const created: (typeof schema.agents.$inferSelect)[] = [];
+    const errors: { agentName: string; error: string }[] = [];
+
+    for (const rawMember of members) {
+      const member = rawMember as CastedMember;
+      const agentName = member.agentName;
+
+      if (!agentName || !KEBAB_RE.test(agentName)) {
+        errors.push({ agentName: agentName ?? '(unknown)', error: 'Invalid or missing agentName' });
+        continue;
+      }
+
+      const role = member.suggestedRoleId ?? member.role ?? 'developer';
+
+      try {
+        // Collision check (DB)
+        const collision = await db
+          .select()
+          .from(schema.agents)
+          .where(and(eq(schema.agents.projectId, projectId), eq(schema.agents.name, agentName)))
+          .limit(1);
+        if (collision.length > 0) {
+          errors.push({ agentName, error: `Agent "${agentName}" already exists in this project` });
+          continue;
+        }
+
+        const agentDir = path.join(squadPath, 'agents', agentName);
+        const charterPath = path.join(agentDir, 'charter.md');
+        const historyPath = path.join(agentDir, 'history.md');
+
+        // Collision check (disk)
+        const diskCollision = await fs.access(agentDir).then(() => true).catch(() => false);
+        if (diskCollision) {
+          errors.push({ agentName, error: `Agent folder .squad/agents/${agentName} already exists on disk` });
+          continue;
+        }
+
+        await fs.mkdir(agentDir, { recursive: true });
+
+        await writeCharter(charterPath, {
+          name: agentName,
+          role,
+          model: undefined,
+          expertise: [],
+        });
+
+        // Append persona section from the cast member's personality / backstory
+        const persona = buildPersonaSection(member);
+        await fs.appendFile(charterPath, '\n' + persona + '\n', 'utf-8');
+
+        const historyContent = `# ${agentName} — History\n\n## Core Context\n\n- **Role:** ${role}\n- **Joined:** ${new Date().toISOString()}\n\n## Learnings\n\n<!-- Append learnings below -->\n`;
+        await fs.writeFile(historyPath, historyContent, 'utf-8');
+
+        const charterHash = await computeCharterHash(charterPath);
+
+        const [inserted] = await db
+          .insert(schema.agents)
+          .values({
+            projectId,
+            name: agentName,
+            role,
+            model: null,
+            status: 'active',
+            charterPath,
+            historyPath,
+            charterHash,
+          })
+          .returning();
+
+        created.push(inserted);
+      } catch (memberErr) {
+        errors.push({
+          agentName,
+          error: memberErr instanceof Error ? memberErr.message : 'Unexpected error',
+        });
+      }
+    }
+
+    res.json({ ok: true, data: { created, errors } });
+  } catch (err) {
+    const status = (err as Error & { status?: number }).status ?? 500;
+    if (status >= 500) console.error('[hire-team/confirm] unhandled:', err);
     res.status(status).json({
       ok: false,
       error: err instanceof Error ? err.message : 'Internal server error',

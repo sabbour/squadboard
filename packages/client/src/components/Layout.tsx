@@ -37,6 +37,7 @@ import {
   Heart24Regular,
   HeartPulse24Regular,
   ChevronDown16Regular,
+  DocumentBulletList24Regular,
 } from '@fluentui/react-icons'
 import type { OnNavItemSelectData } from '@fluentui/react-components'
 
@@ -133,6 +134,7 @@ const PROJECT_NAV_GROUPS: Array<{ heading: string; items: Array<{ label: string;
     heading: 'OPERATIONS',
     items: [
       { label: 'Ceremonies', segment: 'ceremonies', icon: <ArrowSync24Regular /> },
+      { label: 'Templates', segment: 'ceremonies/templates', icon: <DocumentBulletList24Regular /> },
       { label: 'Costs', segment: 'costs', icon: <Money24Regular /> },
     ],
   },

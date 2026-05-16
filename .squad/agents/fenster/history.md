@@ -8,6 +8,8 @@
 
 ## Learnings
 
+- **2026-05-15 F1 Templates nav:** Compound segments (e.g. `ceremonies/templates`) work in the `PROJECT_NAV_GROUPS` array — `handleNavItemSelect` concatenates the full segment to `/projects/${id}/`, so no route change is needed. `getSelectedValue()` sort-by-length correctly highlights the longer compound segment over its parent. Icon: `DocumentBulletList24Regular`. Label: "Templates". Position: OPERATIONS group, after Ceremonies.
+
 - **2026-05-14 Project Pivot:** Web design project expanded to **Squadboard** — local-first kanban + workflow board for Squad agents. Team augmented from 4 to 10 members. New teammates: Hockney (Backend), Kobayashi (SDK), Kujan (QA), Redfoot (DevRel), plus Ralph (Coordinator) and Scribe (Logger). Verbal re-roled to Real-time/WebSocket Dev. Squadboard PRD adopted as source of truth; ready for Demo 1 work.
 
 - **2026-05-14 Fluent 2 Design Spec:** Full UI audit completed. Found 30+ emoji/text-symbol usages across 55 component files. Produced comprehensive spec at `.squad/agents/fenster/fluent-design-spec.md`. Key findings:

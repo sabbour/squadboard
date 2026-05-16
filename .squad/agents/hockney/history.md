@@ -96,7 +96,24 @@ Keyser's Diagnostics UI work (commit 13c34dca) accidentally swept Hockney's serv
 
 ---
 
-**2026-05-15T08:21:46-07:00 — Task: p6-templates-bug — Fix workload templates page load error**
+**2026-05-15T17:29:06-07:00 — m1-hire-team-routes: Missing propose/confirm routes**
+
+Root cause of Cast-Team modal crash was two completely absent route handlers; Express
+SPA catch-all was returning `index.html`, causing `JSON.parse('<!doctype...')` → crash.
+Key learnings:
+
+- `castTeam()` in `casting-engine.ts` handles all extended-role → base-role mapping internally;
+  route handlers should pass raw strings and let the engine normalise. No need to call
+  `EXTENDED_ROLE_TO_BASE_ROLE` explicitly in the route.
+- `Parameters<typeof fn>[0]['field']` is the right TS idiom to cast a runtime-validated string
+  to a sealed union type without duplicating the union in route code.
+- Append `buildPersonaSection(member)` after `writeCharter()` to give cast agents richer context.
+- Per-member error collection (vs. 500-abort) matches the client's `HireTeamConfirmResult`
+  interface which has `errors: { agentName, error }[]`. Always match the client interface exactly
+  before designing the server return shape.
+- tsx watch on WSL2 auto-reloaded on file save — no manual server restart needed.
+
+
 
 **Commit:** `3e3fefad` — `fix(templates): resolve workloads page load error + empty state`
 
