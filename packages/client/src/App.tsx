@@ -23,6 +23,7 @@ import Diagnostics from './pages/Diagnostics.tsx'
 import Heartbeat from './pages/Heartbeat.tsx'
 import Templates from './pages/Templates.tsx'
 import LoadingGallery from './components/loading/LoadingGallery.tsx'
+import LiveRunViewer from './components/runs/LiveRunViewer.tsx'
 
 export default function App() {
   return (
@@ -66,6 +67,8 @@ export default function App() {
         <Route path="projects/:id/workflows/new" element={<WorkflowEditor />} />
         <Route path="projects/:id/workflows/:workflowId" element={<WorkflowEditor />} />
         <Route path="projects/:id/settings" element={<Settings />} />
+        {/* Wave 28 JIS-T8: live run viewer */}
+        <Route path="projects/:projectId/issues/:issueId/runs/:runId/live" element={<LiveRunViewer />} />
         {import.meta.env.DEV && (
           <Route path="__loading-gallery" element={<LoadingGallery />} />
         )}
