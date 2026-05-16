@@ -368,6 +368,39 @@ export function useDeleteSchedule(projectId: string, ceremonyId: string) {
 }
 
 // ---------------------------------------------------------------------------
+// CER-4: YAML export / import API wrappers
+// ---------------------------------------------------------------------------
+
+/**
+ * Export a ceremony as canonical YAML text.
+ * Wraps: GET /api/projects/:projectId/ceremonies/:id/yaml
+ */
+export async function exportCeremonyYaml(projectId: string, id: string): Promise<string> {
+  const res = await fetch(`/api/projects/${projectId}/ceremonies/${id}/yaml`, {
+    headers: { Accept: 'text/yaml' },
+  })
+  if (!res.ok) {
+    const body = await res.text()
+    throw new Error(`exportCeremonyYaml ${res.status}: ${body}`)
+  }
+  return res.text()
+}
+
+/**
+ * Import (upsert) a ceremony from a canonical YAML string.
+ * Wraps: POST /api/projects/:projectId/ceremonies/import-yaml
+ */
+export async function importCeremonyYaml(
+  projectId: string,
+  yaml: string,
+): Promise<{ ceremonyId: string; created: boolean }> {
+  return apiFetch<{ ceremonyId: string; created: boolean }>(
+    `/api/projects/${projectId}/ceremonies/import-yaml`,
+    { method: 'POST', body: JSON.stringify({ yaml }) },
+  )
+}
+
+// ---------------------------------------------------------------------------
 // Validation
 // ---------------------------------------------------------------------------
 
