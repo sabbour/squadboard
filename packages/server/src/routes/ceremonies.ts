@@ -57,7 +57,7 @@ import { importCeremonyFromYaml, type ImportResult } from '../services/ceremony-
 // Helpers
 // ---------------------------------------------------------------------------
 
-const VALID_TRIGGER_KINDS = ['on_issue_entry', 'on_schedule', 'on_event', 'manual'] as const;
+const VALID_TRIGGER_KINDS = ['on_issue_entry', 'on_schedule', 'on_event', 'manual', 'agent-signal'] as const;
 const VALID_KINDS = ['workflow', 'ceremony', 'review_policy', 'narrative'] as const;
 const VALID_STATUSES = ['active', 'draft', 'paused', 'archived'] as const;
 
