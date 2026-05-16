@@ -204,16 +204,23 @@ export async function recordSessionUsage(
   inputTokens: number,
   outputTokens: number,
   costUsdDelta: string,
+  premiumRequestsDelta?: number,
 ): Promise<void> {
   const db = getDb();
+  const updates: Record<string, any> = {
+    inputTokens: sql`${schema.consultSessions.inputTokens} + ${inputTokens}`,
+    outputTokens: sql`${schema.consultSessions.outputTokens} + ${outputTokens}`,
+    costUsd: sql`${schema.consultSessions.costUsd} + ${costUsdDelta}`,
+    updatedAt: new Date(),
+  };
+  
+  if (premiumRequestsDelta != null) {
+    updates.premiumRequests = sql`${schema.consultSessions.premiumRequests} + ${premiumRequestsDelta}`;
+  }
+
   await db
     .update(schema.consultSessions)
-    .set({
-      inputTokens: sql`${schema.consultSessions.inputTokens} + ${inputTokens}`,
-      outputTokens: sql`${schema.consultSessions.outputTokens} + ${outputTokens}`,
-      costUsd: sql`${schema.consultSessions.costUsd} + ${costUsdDelta}`,
-      updatedAt: new Date(),
-    })
+    .set(updates)
     .where(eq(schema.consultSessions.id, sessionId));
 }
 

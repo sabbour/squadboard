@@ -15,23 +15,47 @@ const MODEL_PRICING: Record<string, ModelPricing> = {
   // Claude Opus 4.x
   'claude-opus-4':          { inputPerM: 15.00, outputPerM: 75.00 },
   'claude-opus-4-5':        { inputPerM: 15.00, outputPerM: 75.00 },
+  'claude-opus-4-6':        { inputPerM: 15.00, outputPerM: 75.00 },
   'claude-opus-4-7':        { inputPerM: 15.00, outputPerM: 75.00 },
+  'claude-opus-4-7-1m-internal': { inputPerM: 15.00, outputPerM: 75.00 },
+  'claude-opus-4-7-high':   { inputPerM: 15.00, outputPerM: 75.00 },
+  'claude-opus-4-7-xhigh':  { inputPerM: 15.00, outputPerM: 75.00 },
   // Claude Sonnet 4.x
   'claude-sonnet-4':        { inputPerM:  3.00, outputPerM: 15.00 },
   'claude-sonnet-4-5':      { inputPerM:  3.00, outputPerM: 15.00 },
   'claude-sonnet-4-6':      { inputPerM:  3.00, outputPerM: 15.00 },
-  // Claude Haiku 4.x
-  'claude-haiku-4':         { inputPerM:  0.25, outputPerM:  1.25 },
-  'claude-haiku-4-5':       { inputPerM:  0.25, outputPerM:  1.25 },
-  // GPT-4.x
-  'gpt-4':                  { inputPerM: 10.00, outputPerM: 30.00 },
-  'gpt-4-turbo':            { inputPerM: 10.00, outputPerM: 30.00 },
-  'gpt-4o':                 { inputPerM: 10.00, outputPerM: 30.00 },
-  'gpt-4.1':                { inputPerM: 10.00, outputPerM: 30.00 },
-  // GPT-4o-mini
-  'gpt-4o-mini':            { inputPerM:  0.15, outputPerM:  0.60 },
-  'gpt-5-mini':             { inputPerM:  0.15, outputPerM:  0.60 },
-  'gpt-4.1-mini':           { inputPerM:  0.15, outputPerM:  0.60 },
+  // Claude Haiku 4.x (COST-1 fix: 0.25→1.00 input, 1.25→5.00 output)
+  'claude-haiku-4':         { inputPerM:  1.00, outputPerM:  5.00 },
+  'claude-haiku-4-5':       { inputPerM:  1.00, outputPerM:  5.00 },
+  // GPT-4.x (COST-1 fix: 10.00→2.00 input, 30.00→8.00 output for 4.1)
+  'gpt-4':                  { inputPerM:  2.00, outputPerM:  8.00 },
+  'gpt-4-turbo':            { inputPerM:  2.00, outputPerM:  8.00 },
+  'gpt-4o':                 { inputPerM:  2.00, outputPerM:  8.00 },
+  'gpt-4.1':                { inputPerM:  2.00, outputPerM:  8.00 },
+  // GPT-5.x standard tier
+  'gpt-5.4':                { inputPerM:  2.50, outputPerM: 15.00 },
+  'gpt-5.3-codex':          { inputPerM:  2.50, outputPerM: 15.00 },
+  'gpt-5.2-codex':          { inputPerM:  2.50, outputPerM: 15.00 },
+  'gpt-5.2':                { inputPerM:  2.50, outputPerM: 15.00 },
+  'gpt-5.1':                { inputPerM:  2.50, outputPerM: 15.00 },
+  'gpt-5.1-codex':          { inputPerM:  2.50, outputPerM: 15.00 },
+  'gpt-5.1-codex-max':      { inputPerM:  2.50, outputPerM: 15.00 },
+  // GPT-5.x mini tier (COST-1 fix: 0.15→0.25 input, 0.60→2.00 output)
+  'gpt-5-mini':             { inputPerM:  0.25, outputPerM:  2.00 },
+  'gpt-4o-mini':            { inputPerM:  0.25, outputPerM:  2.00 },
+  'gpt-4.1-mini':           { inputPerM:  0.25, outputPerM:  2.00 },
+  'gpt-5.4-mini':           { inputPerM:  0.75, outputPerM:  4.50 },
+  'gpt-5.1-codex-mini':     { inputPerM:  0.75, outputPerM:  4.50 },
+  // GPT-5.5 (COST-2 addition)
+  'gpt-5.5':                { inputPerM:  5.00, outputPerM: 30.00 },
+  // Gemini models (COST-2 addition)
+  'gemini-2.5-pro':         { inputPerM:  1.25, outputPerM: 10.00 },
+  'gemini-3-flash':         { inputPerM:  0.50, outputPerM:  3.00 },
+  'gemini-3.1-pro':         { inputPerM:  2.00, outputPerM: 12.00 },
+  'gemini-3-pro-preview':   { inputPerM:  2.00, outputPerM: 12.00 },
+  // Fine-tuned models (COST-2 addition)
+  'raptor-mini':            { inputPerM:  0.25, outputPerM:  2.00 },
+  'goldeneye':              { inputPerM:  1.25, outputPerM: 10.00 },
 };
 
 const DEFAULT_PRICING: ModelPricing = { inputPerM: 3.00, outputPerM: 15.00 };

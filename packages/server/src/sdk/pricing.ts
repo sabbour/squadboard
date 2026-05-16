@@ -24,28 +24,40 @@ export const MODEL_PRICING: Record<string, ModelPrice> = {
   // Claude — premium
   'claude-opus-4.6': { input: 15, output: 75 },
   'claude-opus-4.5': { input: 15, output: 75 },
+  'claude-opus-4-7': { input: 15, output: 75 },
+  'claude-opus-4-7-1m-internal': { input: 15, output: 75 },
+  'claude-opus-4-7-high': { input: 15, output: 75 },
+  'claude-opus-4-7-xhigh': { input: 15, output: 75 },
   // Claude — standard
   'claude-sonnet-4.6': { input: 3, output: 15 },
   'claude-sonnet-4.5': { input: 3, output: 15 },
   'claude-sonnet-4': { input: 3, output: 15 },
-  // Claude — fast / cheap
-  'claude-haiku-4.5': { input: 0.8, output: 4 },
+  // Claude — fast / cheap (COST-1 fix: 0.8→1.00 input, 4→5.00 output)
+  'claude-haiku-4.5': { input: 1.00, output: 5.00 },
   // OpenAI — standard
-  'gpt-5.4': { input: 2.5, output: 10 },
-  'gpt-5.3-codex': { input: 2.5, output: 10 },
-  'gpt-5.2-codex': { input: 2.5, output: 10 },
-  'gpt-5.2': { input: 2.5, output: 10 },
-  'gpt-5.1-codex-max': { input: 2.5, output: 10 },
-  'gpt-5.1-codex': { input: 2.5, output: 10 },
-  'gpt-5.1': { input: 2.5, output: 10 },
-  'gpt-4o': { input: 2.5, output: 10 },
-  // OpenAI — fast / cheap
-  'gpt-5.4-mini': { input: 0.4, output: 1.6 },
-  'gpt-5.1-codex-mini': { input: 0.4, output: 1.6 },
-  'gpt-5-mini': { input: 0.4, output: 1.6 },
+  'gpt-5.4': { input: 2.5, output: 15 },
+  'gpt-5.3-codex': { input: 1.75, output: 14 },
+  'gpt-5.2-codex': { input: 1.75, output: 14 },
+  'gpt-5.2': { input: 1.75, output: 14 },
+  'gpt-5.1-codex-max': { input: 2.5, output: 15 },
+  'gpt-5.1-codex': { input: 2.5, output: 15 },
+  'gpt-5.1': { input: 2.5, output: 15 },
+  'gpt-4o': { input: 2.5, output: 15 },
+  // OpenAI — fast / cheap (COST-1/2 fix)
+  'gpt-5.4-mini': { input: 0.75, output: 4.50 },
+  'gpt-5.1-codex-mini': { input: 0.75, output: 4.50 },
+  'gpt-5-mini': { input: 0.25, output: 2.00 },
   'gpt-4.1': { input: 2.0, output: 8 },
-  // Google
-  'gemini-3-pro-preview': { input: 3, output: 15 },
+  // OpenAI — powerful (COST-2 addition)
+  'gpt-5.5': { input: 5.00, output: 30.00 },
+  // Google (COST-2 addition)
+  'gemini-2.5-pro': { input: 1.25, output: 10 },
+  'gemini-3-flash': { input: 0.50, output: 3 },
+  'gemini-3.1-pro': { input: 2.00, output: 12 },
+  'gemini-3-pro-preview': { input: 2.00, output: 12 },
+  // Fine-tuned (COST-2 addition)
+  'raptor-mini': { input: 0.25, output: 2.00 },
+  'goldeneye': { input: 1.25, output: 10.00 },
 };
 
 const FALLBACK = MODEL_PRICING['claude-sonnet-4.5']!;
@@ -81,7 +93,9 @@ export const MODEL_MULTIPLIERS: Record<string, number> = {
   'gpt-5.4-mini': 0,
   'gpt-4.1': 0,
   'gpt-4o': 0,
+  'raptor-mini': 0,
   // Standard 1× tier
+  'gpt-5.5': 1,
   'gpt-5.4': 1,
   'gpt-5.3-codex': 1,
   'gpt-5.2-codex': 1,
@@ -94,10 +108,18 @@ export const MODEL_MULTIPLIERS: Record<string, number> = {
   'claude-sonnet-4.5': 1,
   'claude-sonnet-4.6': 1,
   'claude-haiku-4.5': 0.25,
+  'gemini-2.5-pro': 1,
+  'gemini-3-flash': 1,
+  'gemini-3.1-pro': 1,
   'gemini-3-pro-preview': 1,
+  'goldeneye': 1,
   // Premium / reasoning tier
   'claude-opus-4.5': 10,
   'claude-opus-4.6': 10,
+  'claude-opus-4-7': 10,
+  'claude-opus-4-7-1m-internal': 10,
+  'claude-opus-4-7-high': 10,
+  'claude-opus-4-7-xhigh': 10,
 };
 
 const DEFAULT_MULTIPLIER = 1;
