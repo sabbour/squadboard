@@ -1,8 +1,9 @@
 import { Router } from 'express';
 import type { Request, Response } from 'express';
-import { eq, and, gte, asc, sql } from 'drizzle-orm';
+import { eq, and, gte, asc, sql, max } from 'drizzle-orm';
 import { getDb, schema } from '../db/index.js';
 import { eventBus } from '../realtime/event-bus.js';
+import * as activeIssueSessions from '../engine/active-issue-sessions.js';
 import {
   pushBranch,
   createPr,
@@ -197,6 +198,82 @@ issueRunsRouter.get('/:runId/events', async (req: Request, res: Response) => {
     const nextSeq   = lastEvent ? lastEvent.seq + 1 : (useSince ? sinceSeq : offset + events.length);
 
     res.json({ events, total, nextSeq });
+  } catch (err) {
+    handleError(res, err);
+  }
+});
+
+// ---------------------------------------------------------------------------
+// JIS-T4: Steer endpoint
+// POST /:runId/steer  — inject a message into an in-flight issue run
+// Body: { message: string, actor?: string }
+// Response: { ok: true, eventSeq: N }
+// ---------------------------------------------------------------------------
+
+issueRunsRouter.post('/:runId/steer', async (req: Request, res: Response) => {
+  try {
+    const { projectId, issueId, runId } = req.params as Record<string, string>;
+    const { message, actor } = req.body as { message?: string; actor?: string };
+
+    if (!message || typeof message !== 'string' || !message.trim()) {
+      res.status(400).json({ error: '`message` is required and must be a non-empty string' });
+      return;
+    }
+
+    const db = getDb();
+
+    // Validate run exists, belongs to this project + issue, and is still running.
+    const [runRow] = await db
+      .select({ id: schema.issueRuns.id, status: schema.issueRuns.status, issueId: schema.issueRuns.issueId })
+      .from(schema.issueRuns)
+      .where(and(eq(schema.issueRuns.id, runId), eq(schema.issueRuns.issueId, issueId)))
+      .limit(1);
+
+    if (!runRow) {
+      res.status(404).json({ error: 'Run not found for this issue' });
+      return;
+    }
+
+    // Also verify the issue belongs to the project.
+    const [issueRow] = await db
+      .select({ id: schema.issues.id })
+      .from(schema.issues)
+      .where(and(eq(schema.issues.id, issueId), eq(schema.issues.projectId, projectId)))
+      .limit(1);
+
+    if (!issueRow) {
+      res.status(404).json({ error: 'Issue not found for this project' });
+      return;
+    }
+
+    if (runRow.status !== 'running') {
+      res.status(409).json({
+        error: `Run is not active (status: ${runRow.status}). Only running runs can be steered.`,
+      });
+      return;
+    }
+
+    // Look up the active in-memory session.
+    const session = activeIssueSessions.get(runId);
+    if (!session) {
+      res.status(404).json({
+        error: 'Run is not active in this server instance (it may have completed or the server restarted).',
+      });
+      return;
+    }
+
+    // Inject the steering message.
+    await session.steer(message, actor);
+
+    // Retrieve the seq of the steered event we just recorded.
+    const [seqRow] = await db
+      .select({ maxSeq: max(schema.issueRunEvents.seq) })
+      .from(schema.issueRunEvents)
+      .where(eq(schema.issueRunEvents.runId, runId));
+
+    const eventSeq = seqRow?.maxSeq ?? 0;
+
+    res.json({ ok: true, eventSeq });
   } catch (err) {
     handleError(res, err);
   }

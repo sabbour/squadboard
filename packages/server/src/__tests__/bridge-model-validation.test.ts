@@ -85,6 +85,25 @@ vi.mock('../sdk/model-defaults.js', () => ({
   BUILTIN_FALLBACK: 'gpt-5.4',
 }));
 
+// Mock new T3 deps — isolate bridge-model-validation from session infrastructure
+vi.mock('../sdk/issue-stream.js', () => ({
+  RunningIssueSessionImpl: class {
+    constructor() {}
+    emit()       { return Promise.resolve(0); }
+    steer()      { return Promise.resolve(); }
+    dispose()    { return Promise.resolve(); }
+    getRunId()   { return ''; }
+    getProjectId() { return ''; }
+  },
+}));
+
+vi.mock('../engine/active-issue-sessions.js', () => ({
+  register:   vi.fn(),
+  unregister: vi.fn(),
+  get:        vi.fn(),
+  list:       vi.fn(() => []),
+}));
+
 // ─── Agent fixture factory ────────────────────────────────────────────────────
 
 function makeInput(model: string | null) {

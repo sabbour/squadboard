@@ -8,6 +8,7 @@ import { OutputStreamer } from './output-streamer.js';
 import { CostTracker } from './cost-tracker.js';
 import { BudgetGuard, BudgetExceededError } from './budget-guard.js';
 import { BUILTIN_FALLBACK } from './model-defaults.js';
+import { RunningIssueSessionImpl } from './issue-stream.js';
 
 export type { IssueRun } from '../db/schema.js';
 
@@ -67,6 +68,7 @@ export async function executeAgentRun(input: AgentRunInput): Promise<AgentRunOut
   const db = getDb();
   const streamer = new OutputStreamer(input.issueRunId, db);
   const tracker = new CostTracker(input.issueRunId, db);
+  const startTime = Date.now();
 
   // Budget guard check (opt-in: no-op if project has no budget configured)
   try {
@@ -83,7 +85,21 @@ export async function executeAgentRun(input: AgentRunInput): Promise<AgentRunOut
     throw err;
   }
 
+  // JIS-T3: Create the running session BEFORE the try block so that dispose()
+  // is always reachable in finally, even if the SDK call itself throws.
+  const session = new RunningIssueSessionImpl({
+    runId: input.issueRunId,
+    projectId: input.projectId,
+    sdkClient: null, // one-shot bridge runs have no interactive SDK client
+  });
+
   try {
+    // Emit start event so WS clients see the run begin immediately.
+    await session.emit('issue.run.start', {
+      agentName: input.agent.name,
+      taskTitle: input.issueTitle,
+    }).catch(() => {});
+
     // 1. Resolve agent charter from disk.
     const charter = await readFile(input.agent.charterPath, 'utf8').catch(() => '');
 
@@ -107,6 +123,12 @@ export async function executeAgentRun(input: AgentRunInput): Promise<AgentRunOut
       projectDefaultModel: projectRow?.defaultModel ?? null,
     });
 
+    // Emit turn event with the agent's response text.
+    await session.emit('issue.run.turn', {
+      agentName: input.agent.name,
+      content: result.output,
+    }).catch(() => {});
+
     // 5. Stream output to DB.
     await streamer.write(result.output);
     await streamer.flush();
@@ -116,9 +138,30 @@ export async function executeAgentRun(input: AgentRunInput): Promise<AgentRunOut
     const modelId = result.resolvedModel || BUILTIN_FALLBACK;
     if (result.inputTokens != null && result.outputTokens != null) {
       await tracker.recordCost(result.inputTokens, result.outputTokens, modelId);
+      // Emit metric event with token split.
+      await session.emit('issue.run.metric', {
+        agentName: input.agent.name,
+        inputTokens: result.inputTokens,
+        outputTokens: result.outputTokens,
+        model: modelId,
+      }).catch(() => {});
     } else {
       await tracker.record(result.tokensUsed, result.costUsd);
     }
+
+    const durationMs = Date.now() - startTime;
+
+    // Emit finish event with summary metrics.
+    await session.emit('issue.run.finish', {
+      agentName: input.agent.name,
+      durationMs,
+      cost: result.costUsd,
+      tokenCounts: {
+        input: result.inputTokens,
+        output: result.outputTokens,
+        total: result.tokensUsed,
+      },
+    }).catch(() => {});
 
     // Mark run success.
     await db
@@ -134,11 +177,20 @@ export async function executeAgentRun(input: AgentRunInput): Promise<AgentRunOut
     };
   } catch (err: unknown) {
     const errorMessage = err instanceof Error ? err.message : String(err);
+
+    // Emit error event — catch any secondary error so we don't obscure the original.
+    await session.emit('issue.run.error', { message: errorMessage }).catch(() => {});
+
     await db
       .update(issueRuns)
       .set({ status: 'failed', errorMessage })
       .where(eq(issueRuns.id, input.issueRunId));
     return { success: false, output: '', errorMessage };
+  } finally {
+    // Always clean up the session to unregister from activeIssueSessions.
+    await session.dispose().catch((e) => {
+      console.warn(`[bridge] session dispose failed for run ${input.issueRunId}:`, e);
+    });
   }
 }
 

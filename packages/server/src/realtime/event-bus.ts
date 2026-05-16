@@ -145,6 +145,25 @@ export type CopilotEventType = 'copilot.pr.detected';
  */
 export type GitHubWebhookEventType = `github.${string}`;
 
+/**
+ * Wave 28 JIS-T2: per-run issue stream events.
+ * Emitted by RunningIssueSessionImpl so the WS layer can push real-time
+ * issue-run updates to the browser (agent transcript, tool calls, costs, etc.).
+ *
+ * Scoped to the project room (same routing as RunEventType) so existing
+ * subscribers that already watch issue.run.* messages continue to work.
+ */
+export type IssueRunEventType =
+  | 'issue.run.start'
+  | 'issue.run.turn'
+  | 'issue.run.token'
+  | 'issue.run.tool_call'
+  | 'issue.run.tool_result'
+  | 'issue.run.metric'
+  | 'issue.run.finish'
+  | 'issue.run.error'
+  | 'issue.run.steered';
+
 export type BusEventType =
   | IssueEventType
   | RunEventType
@@ -159,7 +178,8 @@ export type BusEventType =
   | FlowEventType
   | GitEventType
   | CopilotEventType
-  | GitHubWebhookEventType;
+  | GitHubWebhookEventType
+  | IssueRunEventType;
 
 export interface BusEvent {
   type: BusEventType;
@@ -303,6 +323,12 @@ class EventBus extends EventEmitter {
       ? `github.${eventType}.${action}`
       : `github.${eventType}`;
     const event: BusEvent = { type: busType as BusEventType, projectId, payload };
+    this.emit('event', event);
+  }
+
+  /** Wave 28 JIS-T2: emit an issue-run stream event scoped to a project. */
+  emitIssueRunEvent(type: IssueRunEventType, projectId: string, payload: unknown): void {
+    const event: BusEvent = { type, projectId, payload };
     this.emit('event', event);
   }
 
