@@ -103,6 +103,7 @@ vi.mock('../db/index.js', async () => {
       ci_url                  TEXT,
       git_cache_refreshed_at  TIMESTAMPTZ,
       external_ref            JSONB,
+      stale_reason            TEXT,
       lease_expires_at        TIMESTAMPTZ,
       heartbeat_at            TIMESTAMPTZ,
       started_at              TIMESTAMPTZ,

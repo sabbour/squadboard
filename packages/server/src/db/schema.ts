@@ -237,6 +237,10 @@ export const issueRuns = pgTable('issue_runs', {
   ciState: text('ci_state'),                   // 'passing'|'failing'|'running'|'unknown'
   ciUrl: text('ci_url'),                       // URL to latest CI check run
   gitCacheRefreshedAt: timestamp('git_cache_refreshed_at', { withTimezone: true }), // for 5-min CI TTL
+  // Wave 21 — i3: stale run recovery on restart.
+  // Set to 'restart-pickup' when a run is found in status='running' on boot
+  // with no active process — indicates data-safe recovery after a server kill.
+  staleReason: text('stale_reason'),
   // Wave 20 — G4.1: external dispatch reference for copilot runs.
   // Shape: { owner, repo, workflowRunId?, issueNumber? }
   externalRef: jsonb('external_ref'),

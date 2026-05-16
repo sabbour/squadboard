@@ -1228,6 +1228,10 @@ async function bootstrapSchema(): Promise<void> {
     -- G6.6: external webhook context for enriching agent prompts
     ALTER TABLE issue_runs
       ADD COLUMN IF NOT EXISTS external_gh_context JSONB;
+
+    -- Wave 21 — i3: stale_reason for restart-pickup recovery.
+    ALTER TABLE issue_runs
+      ADD COLUMN IF NOT EXISTS stale_reason TEXT;
   `);
 
   await seedGhCardSideEffects();

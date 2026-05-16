@@ -82,11 +82,28 @@ export function maybeAutoStartDaemon(): void {
   const cmd = isTsx ? 'tsx' : process.execPath;
   const args = isTsx ? [processEntrySrc] : [processEntry];
 
+  // When running under tsx (dev mode), use the full path to tsx so the daemon
+  // spawn succeeds even when tsx is not on PATH (it never is in the pnpm store).
+  const fullCmd = isTsx
+    ? (process.argv[0] && process.argv[1]?.includes('tsx')
+      ? process.argv[0]  // node binary
+      : cmd)
+    : cmd;
+  const fullArgs = isTsx
+    ? (process.argv[0] && process.argv[1]?.includes('tsx')
+      ? [process.argv[1] ?? '', processEntrySrc]  // node tsx-cli.mjs process.ts
+      : args)
+    : args;
+
   try {
-    const child = spawn(cmd, args, {
+    const child = spawn(fullCmd, fullArgs, {
       detached: true,
       stdio: ['ignore', 'ignore', 'ignore'],
       env: { ...process.env },
+    });
+    // Handle async spawn error (e.g. tsx not found on PATH) without crashing.
+    child.on('error', (err) => {
+      console.warn('[squadboard:daemon] auto-start spawn error (non-fatal):', err.message);
     });
     child.unref();
     console.log('[squadboard:daemon] auto-started coordinator daemon (detached)');

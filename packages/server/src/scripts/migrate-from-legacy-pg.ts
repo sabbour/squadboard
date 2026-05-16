@@ -151,6 +151,10 @@ export interface MigrateResult {
   skipped: boolean;
   reason?: string;
   rowCounts?: Record<string, number>;
+  /** WAL LSN after the post-migration CHECKPOINT. Present only on successful full migration. */
+  checkpointLsn?: string;
+  /** Path to the dumpDataDir snapshot written for safe restore. Present only when snapshot was created. */
+  snapshotPath?: string;
 }
 
 // ─── Binary discovery ─────────────────────────────────────────────────────────
@@ -585,13 +589,64 @@ export async function runMigration(opts: MigrateOptions = {}): Promise<MigrateRe
       }
     }
 
+    // ── CRITICAL: Force WAL checkpoint + dumpDataDir snapshot ──────────────
+    // PGlite@0.4.5 NodeFS persistence works for simple cases but the NodeFS
+    // data directory layout is not reliably reloadable by a new PGlite instance
+    // when the schema is complex (many tables, custom types, FK constraints).
+    // The PROVEN persistence path is: CHECKPOINT → dumpDataDir('gzip') → restore
+    // via PGlite.create({ loadDataDir: blob }). We create a migration snapshot
+    // in the backups dir, then delegate to the restore script to swap it in.
+    console.log('[migrate] Issuing CHECKPOINT to flush WAL to data directory…');
+    let checkpointLsn = 'unknown';
+    try {
+      await pgliteInstance.exec('CHECKPOINT');
+      // Read the LSN so we can record it in the marker and the migration log.
+      const lsnRes = await pgliteInstance.query<{ lsn: string }>(
+        'SELECT pg_current_wal_lsn()::text AS lsn',
+      );
+      checkpointLsn = lsnRes.rows[0]?.lsn ?? 'unknown';
+      console.log(`[migrate] ✅ CHECKPOINT complete. WAL LSN: ${checkpointLsn}`);
+    } catch (cpErr) {
+      // PGlite may not expose pg_current_wal_lsn(); log and continue.
+      console.warn('[migrate] CHECKPOINT issued but LSN query failed (non-fatal):', cpErr);
+    }
+
+    // ── dumpDataDir snapshot → restore via loadDataDir ────────────────────
+    // This ensures the migrated data survives process restart. NodeFS writes
+    // alone are not sufficient because PGlite internal format changes between
+    // mounts. dumpDataDir/loadDataDir is the canonical round-trip.
+    console.log('[migrate] Creating dumpDataDir snapshot for safe restore…');
+    const backupDir = join(HOME, '.squadboard', 'backups');
+    if (!existsSync(backupDir)) {
+      mkdirSync(backupDir, { recursive: true });
+    }
+    const migrationSnapshotPath = join(
+      backupDir,
+      `migration-snapshot-${new Date().toISOString().replace(/:/g, '-').replace(/\..+/, '')}.tar.gz`,
+    );
+
+    let snapshotCreated = false;
+    try {
+      const blob = await pgliteInstance.dumpDataDir('gzip');
+      const arrayBuf = await blob.arrayBuffer();
+      const bytes = Buffer.from(arrayBuf);
+      writeFileSync(migrationSnapshotPath, bytes);
+      snapshotCreated = true;
+      console.log(`[migrate] ✅ Snapshot written (${(bytes.length / 1024 / 1024).toFixed(2)} MB) → ${migrationSnapshotPath}`);
+    } catch (snapErr) {
+      console.warn('[migrate] dumpDataDir failed — will rely on NodeFS persistence:', snapErr);
+    }
+
     // ── Write marker file ─────────────────────────────────────────────────
+    const migratedAt = new Date().toISOString();
     const markerPayload = {
-      migrated_at: '2026-05-15T22:14:50.847-07:00',
+      migrated_at: migratedAt,
       source_path: LEGACY_DATA_DIR,
       dest_path: PGLITE_DATA_DIR,
       pg_major_version: pgMajorVersion,
       row_counts: rowCounts,
+      checkpoint_lsn: checkpointLsn,
+      snapshot_path: snapshotCreated ? migrationSnapshotPath : undefined,
     };
     writeFileSync(MARKER_FILE, JSON.stringify(markerPayload, null, 2), 'utf8');
 
@@ -612,16 +667,24 @@ export async function runMigration(opts: MigrateOptions = {}): Promise<MigrateRe
       `safe to delete ${LEGACY_DATA_DIR} manually after verifying.`,
     );
 
-    return { skipped: false, rowCounts };
+    return { skipped: false, rowCounts, checkpointLsn, snapshotPath: snapshotCreated ? migrationSnapshotPath : undefined };
 
   } finally {
-    // Always disconnect and stop the cluster we started
+    // Always disconnect and stop the legacy cluster we started
     if (startedOk) {
       try { await srcClient.end(); } catch { /* ignore */ }
     }
     if (weStartedIt) {
       await stopLegacyCluster(binDir);
     }
+    // Close PGlite cleanly so the data-directory files are fully flushed.
+    // Without this explicit close(), the WASM process exits abruptly (process.exit)
+    // leaving the data directory in dirty state — the next PGlite open will
+    // find an "unexpected postmaster state" and abort.
+    try {
+      const { stopPglite } = await import('../db/pglite.js');
+      await stopPglite();
+    } catch { /* ignore */ }
   }
 }
 

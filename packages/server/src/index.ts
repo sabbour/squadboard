@@ -3,8 +3,8 @@ import { createServer } from 'node:http';
 import { existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
-import { startPglite } from './db/pglite.js';
-import { initDb, closeDb } from './db/index.js';
+import { startPglite, getPglite } from './db/pglite.js';
+import { initDb, closeDb, getPool } from './db/index.js';
 import healthRouter from './routes/health.js';
 import projectsRouter from './routes/projects.js';
 import squadRouter from './routes/squad.js';
@@ -98,6 +98,17 @@ async function main(): Promise<void> {
       const result = await runMigration({ force: false, dryRun: false, yes: false });
       if (result.skipped && result.reason && !result.reason.includes('No legacy cluster')) {
         console.log(`[migrate] ${result.reason}`);
+      } else if (!result.skipped && result.snapshotPath) {
+        // Migration created a dumpDataDir snapshot — restore from it immediately
+        // so the data survives the upcoming startPglite() open (W21 regression fix).
+        console.log('[migrate] Restoring migration snapshot into PGlite data dir…');
+        const { runRestore } = await import('./scripts/restore.js');
+        const restoreResult = await runRestore(result.snapshotPath, { force: true });
+        if (restoreResult.ok) {
+          console.log('[migrate] ✅ Migration snapshot restored successfully.');
+        } else {
+          console.error('[migrate] ⚠️  Snapshot restore failed:', restoreResult.message);
+        }
       }
     } catch (err) {
       // Migration failure must not crash the server — log and continue.
@@ -108,6 +119,29 @@ async function main(): Promise<void> {
 
   const connectionString = await startPglite();
   await initDb(connectionString);
+
+  // Wave 21 — i3: restart-pickup — mark any runs left in status='running'
+  // as 'failed' with stale_reason='restart-pickup'. These are orphaned from
+  // a prior unclean shutdown; no process is executing them any longer.
+  try {
+    const pool = getPool();
+    const { rows: staleRuns } = await pool.query<{ id: string }>(
+      `UPDATE issue_runs
+          SET status       = 'failed',
+              stale_reason = 'restart-pickup',
+              error_message = COALESCE(error_message, '') || ' [recovered: server restarted]',
+              updated_at   = NOW()
+        WHERE status = 'running'
+        RETURNING id`,
+    );
+    if (staleRuns.length > 0) {
+      console.log(`[squadboard] restart-pickup: recovered ${staleRuns.length} stale run(s): ${staleRuns.map(r => r.id).join(', ')}`);
+    }
+  } catch (err) {
+    // Non-fatal — log and continue. Stale runs will be picked up by the
+    // stuckIssueRunsSweep heartbeat on the next 30 s tick.
+    console.warn('[squadboard] restart-pickup: stale run recovery failed (non-fatal):', err);
+  }
 
   // Wave 10 Stream A1: dogfood — self-register the running squadboard repo as
   // a project on first boot so the MCP capture loop has somewhere to land
@@ -278,14 +312,45 @@ async function main(): Promise<void> {
   });
 
   const gracefulShutdown = (signal: string) => {
-    console.log(`[squadboard] received ${signal}`);
+    const shutdownStart = Date.now();
+    console.log(`[squadboard] ${signal} received — starting graceful shutdown`);
+
+    // Stop accepting new connections and sweeps immediately.
     heartbeat.stop();
-    stopAllSyncLoops(); // Demo 15: stop GitHub sync polling loops
-    stopCopilotWatcher(); // Wave 20: stop @copilot PR watcher
-    server.close(() => {
-      closeDb()
-        .then(() => process.exit(0))
-        .catch(() => process.exit(1));
+    stopAllSyncLoops();
+    stopCopilotWatcher();
+
+    // Give in-flight requests up to 10 s to complete.
+    const DRAIN_TIMEOUT_MS = 10_000;
+    const drainTimer = setTimeout(() => {
+      console.warn(`[squadboard] drain timeout (${DRAIN_TIMEOUT_MS}ms) exceeded — forcing exit`);
+      process.exit(1);
+    }, DRAIN_TIMEOUT_MS);
+    // Allow process to exit even if drainTimer is still pending.
+    drainTimer.unref();
+
+    server.close(async () => {
+      try {
+        // Issue a PGlite CHECKPOINT before closing — ensures WAL is flushed
+        // and data is recoverable on next boot.
+        const pglite = getPglite();
+        if (pglite) {
+          try {
+            await pglite.exec('CHECKPOINT');
+          } catch (cpErr) {
+            console.warn('[squadboard] CHECKPOINT failed (non-fatal):', cpErr);
+          }
+        }
+        await closeDb();
+        const elapsed = Date.now() - shutdownStart;
+        console.log(`[squadboard] shutdown.graceful signal=${signal} duration=${elapsed}ms`);
+        clearTimeout(drainTimer);
+        process.exit(0);
+      } catch (err) {
+        const elapsed = Date.now() - shutdownStart;
+        console.error(`[squadboard] shutdown.error signal=${signal} duration=${elapsed}ms`, err);
+        process.exit(1);
+      }
     });
   };
 
