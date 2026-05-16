@@ -279,3 +279,35 @@ This wave's Keyser-w22 correctly quoted 3 spec lines verbatim in the close-out d
 
 This history file exceeds 15KB. Older waves (W1–W20) are archived in `.squad/decisions.md`.
 Current focus: W21–W23. For earlier context, search `.squad/decisions.md` by wave number.
+
+---
+
+## W24 Lessons — Conjure/Consult Re-Swap + Collapsible Nav
+
+**Date:** 2026-05-16
+**Wave:** 24
+**Commits:** 6cd1ae15 (Item A — Conjure→Consult swap + nav removal), 55b4383f (Item B — collapsible nav, empty commit — changes were in first commit since both items were in Layout.tsx)
+
+### Conjure/Consult Re-Swap — Pattern
+
+This is the **2nd correction in 3 waves** (W22 put Conjure in the top bar; W24 reverts it to Consult). What would have prevented it:
+
+1. **Read the most recent directive in `decisions/inbox/` BEFORE reading the spec.** W22 correctly followed the spec at the time. W24 is a product decision, not a spec violation. No amount of spec-reading would have caught it — only reading the latest human directive would have.
+2. **Treat top-bar buttons as product-level decisions, not dev-level layout.** Before changing any top-bar button (add/remove/relabel), re-read the last 3 directives in `decisions/inbox/` regardless of what the spec says.
+3. **Checklist for Conjure/Consult entry-point changes:** (a) re-read canonical Conjure spec at `decisions-archive.md` lines 1666–1960; (b) read the most recent directive in `decisions/inbox/`; (c) verify Board FAB, keyboard shortcuts, and ConjureModal are untouched.
+
+### NavDrawer Collapse — Approach Used
+
+**Approach: Hybrid CSS-width + conditional Tooltip wrapping.**
+- Applied a `navDrawerCollapsed` makeStyles class (`width: 56px; minWidth: 56px; overflow: hidden`) to the NavDrawer when collapsed, with a CSS `transition: 'width 200ms ease'` in the base `navDrawer` style.
+- Conditionally rendered each NavItem's label text (`{navCollapsed ? null : 'Label'}`) to hide text when collapsed.
+- Wrapped every NavItem in a Fluent `<Tooltip>` with `positioning="after"` and `hideDelay={0}` when collapsed, for proper hover hints.
+- Logo image hidden when collapsed (`{!navCollapsed && <div ...logo...>}`) since the horizontal image would overflow 56px.
+- NavSectionHeaders hidden when collapsed (`{!navCollapsed && <NavSectionHeader>...`).
+- localStorage key: `'squadboard.nav.collapsed'` (boolean string).
+
+**Why not pure CSS (approach 1):** CSS-only couldn't handle Tooltip wrapping — Tooltip requires a proper React component tree child. The hybrid gives a smooth width transition (CSS) with proper Tooltip UX (conditional JSX).
+
+**Why not full conditional render (approach 2):** Would duplicate all NavItem logic. The hybrid keeps a single NavDrawer component tree, with only label text + Tooltip rendering conditionally.
+
+**Caveat for testers:** Fluent NavItem with no children (collapsed state) renders icon-only. The selected highlight still works via `selectedValue` on NavDrawer. Section headers are absent in collapsed state — no grouping visual — acceptable for 56px icon-only mode.
