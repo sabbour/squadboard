@@ -201,3 +201,11 @@ Run: wave-15
 
 - **hockney**: Stream I (backup/restore + W14 migration)
 - **keyser**: UI batch (#2, #6, #7 fixes)
+
+## Team Update — undefined
+
+Run: wave-15-final
+
+- **hockney**: Stream I (backup/restore + W14 migration)
+- **keyser**: UI batch (#2, #6, #7 fixes)
+- **scribe**: W15 close-out + SDK fidelity audit

@@ -215,3 +215,11 @@ Run: wave-15
 
 - **mcmanus**: Universal Project Bundle (3rd escalation cleared)
 - **keyser**: UI batch (#2, #6, #7 fixes)
+
+## Team Update — undefined
+
+Run: wave-15-final
+
+- **mcmanus**: Universal Project Bundle (3rd escalation cleared)
+- **keyser**: UI batch (#2, #6, #7 fixes)
+- **scribe**: W15 close-out + SDK fidelity audit

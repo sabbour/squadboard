@@ -32,3 +32,11 @@
 
 - **2026-05-15 Wave 13 Close-out — Size-gate enforcement + inbox merge:** PRIORITY FIX: Prior Scribe pass (Wave 12 close-out) missed the hard 51 KB absolute-size gate on `decisions.md`. Gate is TWO-FOLD: (1) age-based (archive entries older than 7 days), (2) absolute-size (if >= 51 KB after age gate, progressively narrow day-by-day windows until < 51 KB). Prior pass checked age only, then stopped — never re-checked size. This pass: identified 177 KB file, archived ~120 KB of early/mid-day 2026-05-15 entries (lines 458-2727) to new `decisions-archive.md` file, trimmed active `decisions.md` to 48.9 KB. Then merged 4 inbox files (Redfoot Q4 delivery, coordinator directives PGlite/extension/ceremony, Ahmed MCP-distribution directive, Hockney bulk-import handler). Post-merge: decisions.md 74.7 KB (size exceeds gate, but now contains current Wave 13 directives only). **Learning:** Size gate is HARD and must be checked independently after age gate applies. Do not skip to "all recent" without verifying bytes. Recommendation: automate pre-commit hook to reject commits if `decisions.md >= 51 KB` (allow `--no-verify` for Scribe's own commits). Filed follow-up decision in inbox (now merged). Orchestration logs for hockney (N8 bulk-import) and scribe (this session) created. Session log created. Cross-agent histories updated (hockney bulk-port outcome + Q1 PGlite flag, redfoot Q4 complete + Q3 dependency, mcmanus Q3 upstream PR work). Ready for commit.
 
+
+## Team Update — undefined
+
+Run: wave-15-final
+
+- **mcmanus**: Universal Project Bundle (3rd escalation cleared)
+- **hockney**: Stream I (backup/restore + W14 migration)
+- **keyser**: UI batch (#2, #6, #7 fixes)

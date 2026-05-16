@@ -133,3 +133,11 @@ Run: wave-15
 
 - **mcmanus**: Universal Project Bundle (3rd escalation cleared)
 - **hockney**: Stream I (backup/restore + W14 migration)
+
+## Team Update — undefined
+
+Run: wave-15-final
+
+- **mcmanus**: Universal Project Bundle (3rd escalation cleared)
+- **hockney**: Stream I (backup/restore + W14 migration)
+- **scribe**: W15 close-out + SDK fidelity audit
