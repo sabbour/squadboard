@@ -224,6 +224,8 @@ export const issueRuns = pgTable('issue_runs', {
   // Demo 7: granular token tracking
   inputTokens: integer('input_tokens').default(0),
   outputTokens: integer('output_tokens').default(0),
+  // W28 COST-3: cached input tokens (for caching billing)
+  cachedInputTokens: integer('cached_input_tokens').notNull().default(0),
   costUsd: text('cost_usd').default('0'),
   // Stream D — D6: GitHub Copilot premium-request consumption
   premiumRequests: numeric('premium_requests', { precision: 12, scale: 4 }).default('0'),
@@ -572,6 +574,8 @@ export const liveSessions = pgTable('live_sessions', {
   sdkSessionId: text('sdk_session_id'),           // SquadClient session id (opaque)
   inputTokens: integer('input_tokens').notNull().default(0),
   outputTokens: integer('output_tokens').notNull().default(0),
+  // W28 COST-3: cached input tokens (for caching billing)
+  cachedInputTokens: integer('cached_input_tokens').notNull().default(0),
   costUsd: numeric('cost_usd', { precision: 12, scale: 6 }).notNull().default('0'),
   turnCount: integer('turn_count').notNull().default(0),
   errorMessage: text('error_message'),
@@ -865,6 +869,8 @@ export const consultSessions = pgTable('consult_sessions', {
   sdkSessionId: text('sdk_session_id'),
   inputTokens: integer('input_tokens').notNull().default(0),
   outputTokens: integer('output_tokens').notNull().default(0),
+  // W28 COST-3: cached input tokens (for caching billing)
+  cachedInputTokens: integer('cached_input_tokens').notNull().default(0),
   costUsd: numeric('cost_usd', { precision: 12, scale: 6 }).notNull().default('0'),
   // Stream D — D6: GitHub Copilot premium-request consumption
   premiumRequests: numeric('premium_requests', { precision: 12, scale: 4 }).notNull().default('0'),

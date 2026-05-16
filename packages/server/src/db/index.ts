@@ -1294,6 +1294,18 @@ async function bootstrapSchema(): Promise<void> {
       ON issue_run_events (run_id, created_at);
   `);
 
+  // W28 COST-3: cached_input_tokens column for caching billing
+  await _pool.query(`
+    ALTER TABLE issue_runs
+      ADD COLUMN IF NOT EXISTS cached_input_tokens INTEGER NOT NULL DEFAULT 0;
+
+    ALTER TABLE live_sessions
+      ADD COLUMN IF NOT EXISTS cached_input_tokens INTEGER NOT NULL DEFAULT 0;
+
+    ALTER TABLE consult_sessions
+      ADD COLUMN IF NOT EXISTS cached_input_tokens INTEGER NOT NULL DEFAULT 0;
+  `);
+
   console.log('[db] schema bootstrapped');
 }
 

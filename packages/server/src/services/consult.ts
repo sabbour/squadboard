@@ -205,6 +205,7 @@ export async function recordSessionUsage(
   outputTokens: number,
   costUsdDelta: string,
   premiumRequestsDelta?: number,
+  cachedInputTokensDelta?: number,
 ): Promise<void> {
   const db = getDb();
   const updates: Record<string, any> = {
@@ -216,6 +217,10 @@ export async function recordSessionUsage(
   
   if (premiumRequestsDelta != null) {
     updates.premiumRequests = sql`${schema.consultSessions.premiumRequests} + ${premiumRequestsDelta}`;
+  }
+
+  if (cachedInputTokensDelta != null) {
+    updates.cachedInputTokens = sql`${schema.consultSessions.cachedInputTokens} + ${cachedInputTokensDelta}`;
   }
 
   await db

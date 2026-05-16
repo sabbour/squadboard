@@ -73,6 +73,12 @@ function computeCost(inputTokens: number, outputTokens: number, pricing: ModelPr
        + (outputTokens / 1_000_000) * pricing.outputPerM;
 }
 
+function computeCachedInputCost(cachedInputTokens: number, pricing: ModelPricing): number {
+  // Cached input rate = 10% of regular input rate (read cache cost)
+  // TODO: handle cache-write cost separately (1.25× input) when SDK reports it
+  return (cachedInputTokens / 1_000_000) * pricing.inputPerM * 0.1;
+}
+
 // ---------------------------------------------------------------------------
 // CostTracker — per-run instance
 // ---------------------------------------------------------------------------
@@ -96,10 +102,13 @@ export class CostTracker {
     outputTokens: number,
     modelId: string,
     premiumOpts?: PremiumRequestOptions,
+    cachedInputTokens?: number,
   ): Promise<void> {
     const pricing = getPricing(modelId);
-    const costUsd = computeCost(inputTokens, outputTokens, pricing).toFixed(6);
-    const totalTokens = inputTokens + outputTokens;
+    const baseCost = computeCost(inputTokens, outputTokens, pricing);
+    const cachedCost = cachedInputTokens ? computeCachedInputCost(cachedInputTokens, pricing) : 0;
+    const costUsd = (baseCost + cachedCost).toFixed(6);
+    const totalTokens = inputTokens + outputTokens + (cachedInputTokens ?? 0);
     // Stream D — D6: stamp the GitHub Copilot premium-request equivalent
     // alongside the USD figure so the Costs page can render either model.
     const premiumRequests = estimatePremiumRequests(modelId, premiumOpts);
@@ -109,6 +118,7 @@ export class CostTracker {
       .set({
         inputTokens,
         outputTokens,
+        cachedInputTokens: cachedInputTokens ?? 0,
         costTokens: totalTokens,
         costUsd,
         premiumRequests: premiumRequests.toString(),
@@ -118,13 +128,16 @@ export class CostTracker {
   }
 
   /** Accumulate cost incrementally (for streaming runs). */
-  async accumulate(deltaTokens: number, deltaCostUsd: string): Promise<void> {
+  async accumulate(deltaTokens: number, deltaCostUsd: string, cachedInputDelta?: number): Promise<void> {
     const delta = parseFloat(deltaCostUsd);
     await this.db
       .update(issueRuns)
       .set({
         costTokens: sql`COALESCE(${issueRuns.costTokens}, 0) + ${deltaTokens}`,
         costUsd: sql`(COALESCE(${issueRuns.costUsd}::numeric, 0) + ${delta})::text`,
+        ...(cachedInputDelta != null && {
+          cachedInputTokens: sql`COALESCE(${issueRuns.cachedInputTokens}, 0) + ${cachedInputDelta}`,
+        }),
       })
       .where(eq(issueRuns.id, this.issueRunId));
   }

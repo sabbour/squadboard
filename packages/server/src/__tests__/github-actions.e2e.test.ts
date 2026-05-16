@@ -91,6 +91,7 @@ vi.mock('../db/index.js', async () => {
       workspace_path          TEXT,
       input_tokens            INTEGER DEFAULT 0,
       output_tokens           INTEGER DEFAULT 0,
+      cached_input_tokens     INTEGER NOT NULL DEFAULT 0,
       cost_tokens             INTEGER DEFAULT 0,
       cost_usd                TEXT DEFAULT '0',
       premium_requests        NUMERIC(12,4) DEFAULT 0,
