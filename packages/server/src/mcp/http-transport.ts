@@ -58,9 +58,17 @@ export function createMcpHttpRouter(): Router {
       if (!entry) {
         if (sessionId) {
           // Client sent a stale session ID — let it know it's gone so it can re-initialize.
+          // curl users: capture the Mcp-Session-Id header from the initialize response, e.g.:
+          //   SESSION=$(curl -s -D - -X POST .../mcp ... | grep -i mcp-session-id | awk '{print $2}' | tr -d '\r')
+          //   curl -H "Mcp-Session-Id: $SESSION" ...
           res.status(404).json({
             jsonrpc: '2.0',
-            error: { code: -32001, message: 'Unknown or expired Mcp-Session-Id; re-initialize.' },
+            error: {
+              code: -32001,
+              message:
+                'Unknown or expired Mcp-Session-Id. Send a new `initialize` request (without the header) to obtain a fresh session ID. ' +
+                'curl users: capture the Mcp-Session-Id response header from the initialize call and replay it on every subsequent request.',
+            },
             id: null,
           });
           return;
@@ -71,7 +79,10 @@ export function createMcpHttpRouter(): Router {
             jsonrpc: '2.0',
             error: {
               code: -32000,
-              message: 'Bad Request: first request on a new session must be an `initialize` JSON-RPC call.',
+              message:
+                'Bad Request: first request on a new session must be an `initialize` JSON-RPC call. ' +
+                'curl users: (1) POST an initialize request without Mcp-Session-Id, (2) capture the Mcp-Session-Id ' +
+                'response header (use -D - or -v), (3) include that header on all subsequent requests.',
             },
             id: null,
           });

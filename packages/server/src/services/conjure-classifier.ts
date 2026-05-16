@@ -731,6 +731,28 @@ export async function classifyAndDraft(req: ConjureRequest): Promise<ConjureResp
   const allZero = scores.every((s) => s.rawScore === 0);
   const ruleIntent: ConjureIntent = allZero ? AMBIGUOUS_DEFAULT : top.intent;
 
+  // Hard override: when the caller passes an explicit hint, that intent MUST be
+  // returned regardless of what the scorer thinks. Scoring still runs for
+  // transparency (candidates array reflects real scores) but the top-level
+  // `intent` is locked to the hint. This fixes the W27 dogfood finding where
+  // domain words like "project" / "skill" outweighed an explicit hint=issue.
+  if (req.hint && ALL_INTENTS.includes(req.hint)) {
+    const hintDraft = DRAFT_BUILDERS[req.hint](prompt);
+    const hintScore = scores.find((s) => s.intent === req.hint);
+    const hintConfidence = hintScore ? rawScoreToConfidence(hintScore.rawScore) : 0.9;
+    const candidates = ruleBasedCandidates(scores, prompt, 3);
+    const rationale = `Hint override: caller explicitly requested intent "${req.hint}". Scoring ran for transparency only.`;
+    return {
+      intent: req.hint,
+      confidence: Math.max(hintConfidence, 0.9),
+      draft: hintDraft,
+      candidates,
+      routing: buildRouting(req.hint, scores),
+      rationale,
+      strategy: 'rule-based',
+    };
+  }
+
   // Fast path: rule-based is confident enough — return immediately.
   // candidates = [winner] only (spec: "single high-confidence match").
   if (ruleConfidence >= CONFIDENCE_THRESHOLD) {

@@ -240,11 +240,36 @@ router.get('/:id', async (req: Request, res: Response) => {
 });
 
 router.patch('/:id', async (req: Request, res: Response) => {
-  const { defaultModel, costModel } = (req.body ?? {}) as {
+  const { name, description, defaultModel, costModel } = (req.body ?? {}) as {
+    name?: string | null;
+    description?: string | null;
     defaultModel?: string | null;
     costModel?: string | null;
   };
   const updates: Partial<typeof schema.projects.$inferInsert> = {};
+
+  // W27 — future-patch-project-fields: allow renaming and describing a project.
+  if (name !== undefined) {
+    if (typeof name !== 'string' || name.trim() === '') {
+      res.status(400).json({ error: '`name` must be a non-empty string' });
+      return;
+    }
+    updates.name = name.trim();
+  }
+
+  if (description !== undefined) {
+    if (description === null || description === '') {
+      updates.description = null;
+    } else if (typeof description !== 'string') {
+      res.status(400).json({ error: '`description` must be a string or null' });
+      return;
+    } else if (description.length > 4000) {
+      res.status(400).json({ error: '`description` must not exceed 4000 characters' });
+      return;
+    } else {
+      updates.description = description;
+    }
+  }
 
   if (defaultModel !== undefined) {
     let normalized: string | null = null;

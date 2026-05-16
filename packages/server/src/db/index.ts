@@ -1272,6 +1272,12 @@ async function bootstrapSchema(): Promise<void> {
       WHERE idempotency_key IS NOT NULL;
   `);
 
+  // W27 — future-patch-project-fields: make name + description PATCH-able.
+  await _pool.query(`
+    ALTER TABLE projects
+      ADD COLUMN IF NOT EXISTS description TEXT;
+  `);
+
   console.log('[db] schema bootstrapped');
 }
 
@@ -1361,7 +1367,13 @@ async function seedSystemReviewPolicyPresets(): Promise<void> {
 
 export async function closeDb(): Promise<void> {
   if (_pool) {
-    await _pool.end();
+    try {
+      await _pool.end();
+    } catch (err) {
+      // ECONNRESET is cosmetic noise: the parent process closed the connection
+      // before pool.end() flushed. Swallow it; re-throw anything unexpected.
+      if ((err as NodeJS.ErrnoException).code !== 'ECONNRESET') throw err;
+    }
     _pool = null;
     _db = null;
     console.log('[db] pool closed');

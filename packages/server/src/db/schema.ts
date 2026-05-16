@@ -12,6 +12,7 @@ export const projects = pgTable('projects', {
   id: uuid('id').primaryKey().defaultRandom(),
   name: text('name').notNull(),
   path: text('path').notNull(), // path to .squad/ directory
+  description: text('description'),               // free-form project description (PATCH-able)
   monthlyBudgetUsd: numeric('monthly_budget_usd', { precision: 10, scale: 2 }), // opt-in budget cap
   // Demo 15: GitHub Sync (OQ #8 resolution — OFF by default, opt-in per project)
   githubSyncEnabled: boolean('github_sync_enabled').notNull().default(false),

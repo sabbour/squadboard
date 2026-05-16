@@ -443,3 +443,44 @@ describe('scorePromptByRules unit tests', () => {
     }
   });
 });
+
+// ---------------------------------------------------------------------------
+// W27 — future-conjure-hint-override: hint is a HARD override
+// Prompts that would normally be mis-routed by domain words must respect hint.
+// ---------------------------------------------------------------------------
+
+describe('hint hard override (W27 dogfood fix)', () => {
+  it('hint=issue wins even when body text scores heavily for "project" and "team"', async () => {
+    // Domain words: project, skill, team, tool — these all score for their
+    // respective intents, but the explicit hint must override them.
+    const r = await classify(
+      'This project needs a new team skill tool to organize the project backlog',
+      { hint: 'issue' },
+    );
+    expect(r.intent).toBe('issue');
+    expect(r.confidence).toBeGreaterThanOrEqual(0.9);
+    expect(r.rationale).toContain('Hint override');
+    // Candidates still reflect the real scoring (for transparency)
+    expect(r.candidates.length).toBeGreaterThan(0);
+  });
+
+  it('hint=ceremony wins even when body text scores heavily for "project"', async () => {
+    const r = await classify(
+      'Create a new project with the full team and all the tools we need',
+      { hint: 'ceremony' },
+    );
+    expect(r.intent).toBe('ceremony');
+    expect(r.confidence).toBeGreaterThanOrEqual(0.9);
+    expect(r.rationale).toContain('Hint override');
+  });
+
+  it('hint=skill wins even when body text scores heavily for "tool" and "project"', async () => {
+    const r = await classify(
+      'I need a tool script for the project that the team can use repeatedly',
+      { hint: 'skill' },
+    );
+    expect(r.intent).toBe('skill');
+    expect(r.confidence).toBeGreaterThanOrEqual(0.9);
+    expect(r.rationale).toContain('Hint override');
+  });
+});

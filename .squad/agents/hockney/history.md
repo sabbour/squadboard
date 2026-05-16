@@ -220,3 +220,30 @@ Applied the same sentinel guard to the `identity_table` section for consistency.
 Charter's `## Model` section with `Preferred: auto` was forwarding markdown bold syntax to the platform API because the parser only stripped leading bullets, not markdown formatting. The rule: `auto`, `default`, and empty are **sentinels** — omit `model` field entirely when present. Fixed by detecting `**Key:** value` (bold) and `Key: value` (plain) patterns, extracting just the value, then returning `undefined` for sentinels. This prevents API contract violations and allows the platform to select the default model. 12 new regression tests in place.
 
 **Pattern:** Use negative guards in parser output validation. Check what you DON'T forward, not just what you do.
+
+
+---
+
+## W27 Server Quad (2026-05-16T03:38:00-07:00)
+
+**Task:** Four Stream A dogfood bugs in one commit.
+
+### Bug 1 — Conjure hint override
+
+`classifyAndDraft` only *boosted* the hint intent score by +5.0 but didn't guarantee it wins. Domain-heavy prompts (project, skill, team, tool) could outscore the hint. Fix: added a hard-override block before the fast-path check — when `req.hint` is present and valid, `intent = hint` unconditionally, `confidence ≥ 0.9`. Scoring still runs for transparent candidates. **Lesson:** Caller intent hints are instructions, not suggestions. Always short-circuit before scoring governs the output.
+
+### Bug 2 — MCP HTTP curl session
+
+The SDK client auto-replays `Mcp-Session-Id`; curl doesn't. Error messages for missing/stale session were too terse. Fix: option 1 (small fix) — expanded 404/400 error bodies with explicit curl capture-and-replay instructions. **Lesson:** When HTTP session semantics depend on header replay, make the error messages teach the protocol, not just report the failure.
+
+### Bug 3 — MCP stdio pg trace
+
+`closeDb()` called `await _pool.end()` without error handling. On parent disconnect (SIGPIPE/SIGTERM), pg pool throws `ECONNRESET` before drain completes → cosmetic stderr noise. Fix: wrapped `_pool.end()` in try/catch, swallow `code === 'ECONNRESET'` only, re-throw anything else. **Lesson:** pg pool drain on process exit is inherently racy when the parent closes the connection. Always pattern-match on the specific error code rather than swallowing everything.
+
+### Bug 4 — PATCH project fields
+
+`PATCH /api/projects/:id` only allowed `defaultModel` / `costModel`. `name` and `description` were missing. The `projects` table had no `description` column at all. Fix: added `description` to the Drizzle schema, added `ALTER TABLE projects ADD COLUMN IF NOT EXISTS description TEXT` migration, extended the PATCH handler with `name` (non-empty required-if-present) and `description` (optional, max 4000 chars) validation. **Lesson:** When a new field is needed on the PATCH allowlist, check for (1) schema column, (2) migration, (3) route handler — all three must be in sync.
+
+**Tests:** 3 conjure hint cases + 5 PATCH project cases = 8 new tests. All 464 tests green.  
+**Commit:** filed as W27 quad commit on main.  
+**Decision file:** `.squad/decisions/inbox/hockney-w27-server-quad.md`
