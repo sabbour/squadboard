@@ -3854,3 +3854,68 @@ If a new sweep is added to `index.ts`, also add it to `ALL_SWEEPS` in
 ## Build Status
 
 `pnpm -C packages/client build` → ✓ green (tsc + vite, 7.05s, zero type errors)
+
+---
+
+# 2026-05-16T03:19:00-07:00: User directives (W26 follow-up)
+
+**By:** Brady (via Copilot)
+
+**What 1 — REGRESSION:** "Clicking Run on a task doesn't do anything now."
+Captured after Keyser's W26 batch 1 commit `53cba6eb` (footer refactor: RunButton moved outside card click wrapper, stopPropagation added, useAssignIssue hook). Suspect own change. Could also cascade from Verbal's in-flight auto-assign + heartbeat-sweep fix (workflow may dispatch but silently fail to enqueue).
+
+**What 2 — FEATURE:** "I should be able to jump into a running session for a task to see it live and steer if necessary."
+Real-time observability + interactive steering. UI per-task "Attach" action opens side panel with live transcript stream. Steer = inject guidance into agent's next turn. Verbal's territory (WS + run transcript streaming). Slotted to W27.
+
+**Why:** User testing immediately after W26 batch 1 landed. The Run regression blocks all run validation — must fix before W26 closes.
+
+---
+
+# 2026-05-16T03:21:18-07:00: User directive — W26 regression report
+
+**By:** Brady (via Copilot, attached screenshot)
+
+**What — REGRESSION:** The Sweeps acted on view (SweepTimeline component from Verbal W25 commit `2fc72086`) renders a phantom red "error / 1-4ms / unknown error" row paired with every successful sweep tick. Same timestamp, no sweep name, paired with named rows like `ceremonies-due`, `ready-workflow-steps`, `stale-presence`, `stuck-issue-runs` which all show legitimate `acted N · err 0` status.
+
+**Hypotheses:**
+1. WS `sweep.tick` payload missing `name` field on some emissions (client renders as error fallback)
+2. Two emissions per tick — start AND complete — start has no result so renders as error
+3. Server double-broadcasts from event-bus AND ws-server
+4. Client defensive render miscategorizes null payload as error state
+
+**Why:** Visual noise; obscures real sweep failures; broken signal for the very feature meant to give Brady operational confidence.
+
+**Routing:** Verbal owns. Queue as next-up after `w26-autoassign-defaults-to-fenster` closes — don't interrupt her current P0 work.
+
+---
+
+### Followup observation 2026-05-16T03:23 (Brady screenshot)
+
+After Verbal's WIP (uncommitted; includes `pickup-todos.ts` new sweep + 3 new lanes), the timeline now renders cleanly with the 7 expected lanes (Ceremonies / Workflow Steps / Stuck Runs / Presence / Live Sessions / GitHub Sync / Todo Dispatch) BUT shows ZERO pulses + the "Waiting for sweep activity..." empty-state placeholder.
+
+**Probable cause:** Brady's running dev server may not have restarted to register the new sweep — `heartbeat.config.json` explicitly warns "Restart the server to apply changes."
+
+**Validation checklist for Verbal's close-out:**
+1. Restart picks up all 7 sweeps cleanly (orchestration log evidence)
+2. `sweep.tick` event `name` field matches lane IDs in `SweepTimeline.tsx` (mapping table at lines 52-58)
+3. The phantom-error twin rows from the PRIOR screenshot are eliminated (root cause: was the error emission missing the `name` field?)
+4. New `pickup-todos` lane shows activity within 10s of any new To Do item
+
+---
+
+# 2026-05-16T03:32:33-07:00: User directive — W27 heartbeat console-revealed bugs
+
+**By:** Brady (via Copilot, attached devtools screenshot)
+
+**What — THREE distinct bugs in one screenshot:**
+
+1. **Phantom "unknown error" twin rows in "Sweeps acted on" list.** Every named sweep (ceremonies-due, ready-workflow-steps) is paired with a no-name "error / Xms / unknown error" row at the same timestamp. Hypothesis: when Verbal added `sweep.tick` event in W25 (`2fc72086`), both `heartbeat.sweep.completed` and `sweep.tick` end up in the same ring buffer served by `/api/heartbeat/sweeps`. `sweep.tick` events have a different schema (`sweepName`/`status` vs `sweepId`/`outcome`), so when the client maps them through `SweepEvent`, `sweepId` is undefined and `outcome` is undefined → renders as "error / unknown error".
+
+2. **React duplicate-key warnings: 397, 398, 399, 400** (and rolling). Same root cause as #1: two events per tick sharing the same `seq` counter; the `.map(e => <div key={e.seq}>)` at `packages/client/src/pages/Heartbeat.tsx:192` collides.
+
+3. **WebSocket fails to connect.** Console: `WebSocket connection to 'ws://localhost:5173/api/ws' failed: WebSocket is closed before the connection is established` (ws-client.ts:251). The Vite dev proxy on 5173 likely isn't forwarding ws upgrades. This is why SweepTimeline shows the empty "Waiting for sweep activity..." placeholder — events never arrive.
+
+**Why:** The heartbeat surface is the team's operational dashboard. These bugs flood the console, break React reconciliation, and make the timeline silent. Three bugs in one screenshot, all in code shipped in W25-W26.
+
+**Routing:** Verbal owns (SweepTimeline + sweep.tick + heartbeat events are her surface). Slot to W27 per Brady's tag — close W26 first, then dispatch.
+

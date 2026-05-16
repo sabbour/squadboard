@@ -159,3 +159,49 @@ New items start **unassigned** unless a label or strong keyword rule matches on 
 10 new vitest cases: 7 for Bug A (matchRule word-length, label/catchall unaffected) + 3 for Bug B (Tier-2 dispatch, idempotency, least-loaded fallback). 434 total tests passing.
 
 **Decision file:** `.squad/decisions/inbox/verbal-w26-autoassign-and-heartbeat-pickup.md`
+
+---
+
+## W26 Learning 1: Keyword Router Length Tuning
+
+**Date:** 2026-05-16  
+**Commit:** 910cb14c
+
+Tier-1 keyword router had `word.length > 3` filter, allowing 4-letter generics like "type", "icon", "view", "live" to participate in matching. These words are ubiquitous in codebases, causing false-positive routing to design agent (Fenster). Fix: raised threshold to `> 4` (5+ chars minimum). Keywords like "design" (6), "flows" (5), "color" (5) still participate; generics dropped. Rule: use length tuning to prune common words; test against actual routing table entries.
+
+**Pattern:** Router keyword length thresholds must be tested against real agent patterns. 4 chars = too many false positives; 5+ is stable.
+
+---
+
+## W26 Learning 2: To Do Queue Without Initial Routing
+
+**Date:** 2026-05-16  
+**Commit:** 910cb14c
+
+When Tier-1 routing fails (no label/keyword match), issues landed in To Do with no `issue_run` created. Existing "ready-workflow-steps" sweep only claimed existing pending runs, so unrouted items sat dormant forever. Solution: new `pickupTodosSweep` (10s interval) scans To Do without active runs, tries Tier-2 keyword scoring, falls back to least-loaded agent distribution. Pattern: for async queuing, separate "create run" (POST-time) from "claim and run" (sweep-time). Multiple tiers of scoring across different sweeps gives graceful degradation (Tier-1 sync → Tier-2 async → least-loaded fallback).
+
+**Pattern:** Queue items without initial routing. Async sweeps + fallback assignment prevent data loss.
+
+---
+
+## W26 Learning 3: Deterministic Fallback Ordering
+
+**Date:** 2026-05-16  
+**Commit:** 910cb14c
+
+`resolveRouteTier3` fallback picked `activeAgents[0]` (undefined order, often alphabetical luck). MCP `run_agent` with no `agentId` used `LIMIT 1` without `ORDER BY` (database randomness). Fixed by: (a) making all agent queries `ORDER BY name ASC` for determinism, (b) changing Tier-3 fallback from arbitrary pick to `null` (human triage), (c) MCP pick uses least-loaded subquery with name tiebreak. Rule: never pick arbitrarily. Explicit order BY or explicit null.
+
+**Pattern:** Fallback agent selection must be deterministic (ORDER BY name) or explicit null (human triage). No unnamed picks.
+
+---
+
+## W26 Deferred to W27: Three Heartbeat Console Bugs
+
+**Date:** 2026-05-16
+
+Brady's screenshot revealed three bugs in the heartbeat surface:
+1. Phantom "unknown error" twin rows (sweep.tick schema mismatch with sweep.completed in same buffer)
+2. React duplicate-key warnings 397-400+ (two events per tick, same seq counter)
+3. WS connection fails on dev (Vite proxy not forwarding ws:// upgrades)
+
+Verbal owns all three. Routing deferred to W27; W26 closes with these noted for immediate next-wave priority.

@@ -209,3 +209,14 @@ Applied the same sentinel guard to the `identity_table` section for consistency.
 - `.squad/decisions/inbox/hockney-w26-charter-parser-auto-sentinel.md`
 
 **Commit:** `fix(server): charter parser treats Preferred: auto as sentinel (W26)`
+
+---
+
+## W26 Learning: Charter Parser Model Sentinel Detection
+
+**Date:** 2026-05-16  
+**Commit:** c762610a
+
+Charter's `## Model` section with `Preferred: auto` was forwarding markdown bold syntax to the platform API because the parser only stripped leading bullets, not markdown formatting. The rule: `auto`, `default`, and empty are **sentinels** — omit `model` field entirely when present. Fixed by detecting `**Key:** value` (bold) and `Key: value` (plain) patterns, extracting just the value, then returning `undefined` for sentinels. This prevents API contract violations and allows the platform to select the default model. 12 new regression tests in place.
+
+**Pattern:** Use negative guards in parser output validation. Check what you DON'T forward, not just what you do.

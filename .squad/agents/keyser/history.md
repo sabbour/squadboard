@@ -226,3 +226,25 @@ No test runner existed in `packages/client`. Added vitest + @testing-library/rea
 ### Lesson
 
 When visual feedback depends on an incidental side-effect of a bug (panel opening because Run was inside the onOpen wrapper), fixing the bug removes that feedback. Always audit every interactive element for its OWN visual confirmation path — don't rely on ambient side-effects to signal state changes.
+
+---
+
+## W26 Learning 1: UI Event Bubbling Regressions
+
+**Date:** 2026-05-16  
+**Commit:** 53cba6eb
+
+Moved RunButton outside `onClick={onOpen}` wrapper to fix event bubbling. Unintended side-effect: users lost the visual cue that their click was received (panel opening was the confirmation). Rule: when removing accidental feedback, add explicit feedback. Fixed by extending isPending logic into button style (cursor, opacity, text transition, background dim). Commit 57429237 added visual feedback + 3 component tests using vitest.
+
+**Pattern:** Footer/action-area refactors need explicit visual feedback for async operations. Component tests should cover isPending states.
+
+---
+
+## W26 Learning 2: Error Boundary for Non-Array Data
+
+**Date:** 2026-05-16  
+**Commit:** 53cba6eb
+
+RoutingLogTable crashed on `entries.map` when server returned non-array (e.g., `{ error: "..." }`). Also crashed on `entry.score.toFixed(2)` when score was a string. Fixes: (a) guard with `!Array.isArray(entries) || entries.length === 0`, (b) type-check score before `.toFixed()`, (c) wrap entire routing section with ErrorBoundary. Pattern: defensive rendering for tables + ErrorBoundary escape hatch prevents app-wide crashes from malformed API responses.
+
+**Pattern:** Assume server data can be malformed. Type-check before calling methods. Use ErrorBoundary for data-intensive sections.
