@@ -29,6 +29,14 @@ function resetMocks() {
 
 // ─── DB + drizzle mocks ───────────────────────────────────────────────────────
 
+// MC-7: disable coordinator dispatch so the queue-based DB mock is unaffected by new queries.
+vi.mock('../coordinator/index.js', () => ({
+  dispatchViaCoordinator: vi.fn(),
+}));
+vi.mock('../config/coordinator-env.js', () => ({
+  isCoordinatorDispatchEnabled: () => false,
+}));
+
 vi.mock('../db/index.js', () => {
   const schema = {
     issues: { id: 'id', projectId: 'project_id', status: 'status', archived: 'archived', title: 'title', body: 'body' },
@@ -38,6 +46,7 @@ vi.mock('../db/index.js', () => {
       routingReasoning: 'routing_reasoning', createdAt: 'created_at',
     },
     agents: { id: 'id', projectId: 'project_id', status: 'status', name: 'name' },
+    projects: { id: 'id', name: 'name' },
   };
 
   function makeChain(rows: unknown[]) {

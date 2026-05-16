@@ -112,6 +112,14 @@ let mockLeastLoadedAgent: { id: string; name: string } | null = null;
 let mockTier2Result: { agentId: string; agentName: string; score: number; reasoning: string } | null = null;
 let mockInsertedRuns: Array<Record<string, unknown>> = [];
 
+// MC-7: disable coordinator dispatch so the counter-based DB mock is unaffected by new queries.
+vi.mock('../coordinator/index.js', () => ({
+  dispatchViaCoordinator: vi.fn(),
+}));
+vi.mock('../config/coordinator-env.js', () => ({
+  isCoordinatorDispatchEnabled: () => false,
+}));
+
 vi.mock('../db/index.js', () => {
   const schema = {
     issues: {
@@ -138,6 +146,7 @@ vi.mock('../db/index.js', () => {
       status: 'status',
       name: 'name',
     },
+    projects: { id: 'id', name: 'name' },
   };
 
   // Fluent DB mock: chain of .from().where().orderBy().limit() all return arrays.
@@ -249,7 +258,7 @@ describe('Bug B — pickupTodosSweep dispatches unattended To Do items', () => {
     expect(result.errors).toBe(0);
     expect(result.acted).toBe(1);
     expect(mockInsertedRuns[0].agentId).toBe('agent-kujan');
-    // Fallback: no routingTier (null)
-    expect(mockInsertedRuns[0].routingTier).toBeNull();
+    // Fallback: least-loaded is now tier 3 (MC-7 — was null in old code, now explicit).
+    expect(mockInsertedRuns[0].routingTier).toBe(3);
   });
 });
