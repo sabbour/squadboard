@@ -193,6 +193,29 @@ export default function IssueCard({ issue, index, projectId, isSelected, onSelec
             {/* GitHub badges (G2.6) */}
             <GitHubBadges github={issue.github} />
 
+            {/* Deliverable badge (O4) */}
+            {issue.deliverableType && issue.deliverableType !== 'none' && (
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', marginTop: '4px' }}>
+                <span style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '3px',
+                  fontSize: '10px',
+                  color: issue.deliverableStatus === 'accepted' ? '#3fb950'
+                    : issue.deliverableStatus === 'rejected' ? '#f85149'
+                    : issue.deliverableStatus === 'ready-for-review' ? '#e3b341'
+                    : '#8b949e',
+                  background: 'rgba(139,148,158,0.1)',
+                  border: '1px solid rgba(139,148,158,0.25)',
+                  borderRadius: '10px',
+                  padding: '1px 7px',
+                  whiteSpace: 'nowrap' as const,
+                }}>
+                  📦 {issue.deliverableType} · {issue.deliverableStatus ?? 'not-started'}
+                </span>
+              </div>
+            )}
+
             {/* Footer: assignee + comment count + run */}
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '6px' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>

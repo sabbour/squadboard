@@ -243,3 +243,25 @@ The data model already implemented Model C correctly — Ceremonies = named trig
 **Decision doc:** `.squad/decisions/inbox/mcmanus-workflow-vs-ceremony-nomenclature.md`
 
 **Doc debt:** Redfoot W17 — write canonical `/docs/concepts/ceremonies` page.
+
+---
+
+## 2026-05-15T22:42 — Wave 19: Concept Cleanup (H4 · O2 · O3 · O4)
+
+**Tasks:** Four concept/architecture items landing as one body of work.
+
+### H4 — Kind dropdown
+Replaced raw enum rendering (`workflow`, `ceremony`, `review_policy`, `narrative`) with a `CEREMONY_KIND_OPTIONS` array — each entry has a label and one-sentence description shown in the dropdown hint and option body. All 4 kinds retained. `narrative` kept but visually dimmed (deprecated Phase 11 preview). Kind badge in CeremonyEditor header now shows the human label.
+
+### O2 — Workflows tab removed (Option B)
+Reversed the W16 Model C "Saved Workflows" tab decision in Templates.tsx. Workflows are now an implementation detail — users only see Ceremonies. Tab set reduced to 3: Ceremony Templates · Teams · Projects. Explainer block rewritten to focus on ceremonies only. Workflow template hooks remain in the file, ready for a future `/settings/advanced/workflows` route. Flagged for Ahmed review in decision doc.
+
+### O3 — Scope badges
+Added `ScopeBadge` component to `CeremonyBadges.tsx`. Scope reads from `triggerConfig.scope` (defaults `project`). Badges: 🌐 Project / 📋 Board / 🎯 Task. Surfaced in: CeremonyList DataGrid column, CeremonyEditor header (next to trigger badge).
+
+### O4 — Deliverable on work items
+Added 4 columns to `issues` table (`deliverable_type`, `deliverable_link`, `deliverable_acceptance_criteria`, `deliverable_status`). Wave 19 migration block in `db/index.ts`. Extended PATCH handler to accept deliverable fields + auto-move card to `semantic='done'` column when `deliverable_status = 'accepted'`. Client: `Issue` interface, `useUpdateDeliverable` hook. UI: Accordion section in CardDetail overview tab; `📦 type · status` badge on IssueCard. Hockney conventions followed; no coordination needed.
+
+**TypeScript:** Clean on new code. 2 pre-existing unused-var errors in CeremonyEditor (`convertCeremony`, `setConvertToast` — Phase 11 stubs).
+
+**Decision doc:** `.squad/decisions/inbox/mcmanus-w19-concept-cleanup.md`

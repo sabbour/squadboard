@@ -50,6 +50,11 @@ export interface Issue {
       url?: string
     }
   } | null
+  // Wave 19 — O4: Deliverable intent fields.
+  deliverableType?: 'pr' | 'doc' | 'deployment' | 'asset' | 'decision' | 'none'
+  deliverableLink?: string | null
+  deliverableAcceptanceCriteria?: string | null
+  deliverableStatus?: 'not-started' | 'in-progress' | 'ready-for-review' | 'accepted' | 'rejected'
 }
 
 export interface CreateIssueInput {
@@ -119,6 +124,28 @@ export function useBulkAction(projectId: string) {
     mutationFn: (input) =>
       apiFetch<void>(`/api/projects/${projectId}/issues/bulk`, {
         method: 'POST',
+        body: JSON.stringify(input),
+      }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['issues', projectId] })
+    },
+  })
+}
+
+export interface DeliverableUpdateInput {
+  deliverableType?: 'pr' | 'doc' | 'deployment' | 'asset' | 'decision' | 'none'
+  deliverableLink?: string | null
+  deliverableAcceptanceCriteria?: string | null
+  deliverableStatus?: 'not-started' | 'in-progress' | 'ready-for-review' | 'accepted' | 'rejected'
+  version: number
+}
+
+export function useUpdateDeliverable(projectId: string) {
+  const queryClient = useQueryClient()
+  return useMutation<Issue, Error, { issueId: string } & DeliverableUpdateInput>({
+    mutationFn: ({ issueId, ...input }) =>
+      apiFetch<Issue>(`/api/projects/${projectId}/issues/${issueId}`, {
+        method: 'PATCH',
         body: JSON.stringify(input),
       }),
     onSuccess: () => {

@@ -93,6 +93,15 @@ export const issues = pgTable('issues', {
   completedAt: timestamp('completed_at', { withTimezone: true }),
   /** Wave 13: provenance tag — 'user' | 'cli' | 'mcp' | 'bulk-import'. */
   createdBy: text('created_by').notNull().default('user'),
+  // Wave 19 — O4: Deliverable intent (what concrete artifact this work item produces).
+  //   deliverableType:                'pr'|'doc'|'deployment'|'asset'|'decision'|'none'
+  //   deliverableLink:                URL when the artifact is ready (nullable)
+  //   deliverableAcceptanceCriteria:  short markdown describing done (nullable)
+  //   deliverableStatus:              lifecycle of the deliverable itself
+  deliverableType: text('deliverable_type').notNull().default('none'),
+  deliverableLink: text('deliverable_link'),
+  deliverableAcceptanceCriteria: text('deliverable_acceptance_criteria'),
+  deliverableStatus: text('deliverable_status').notNull().default('not-started'),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 });

@@ -3,17 +3,16 @@
  *
  * Tab layout:
  *   Ceremonies       — built-in ceremony templates (pre-built starting points)
- *   Saved Workflows  — user-saved workflow execution graphs (apply / delete)
  *   Teams            — user-saved team templates (apply / delete / drag-import)
  *   Projects         — user-saved project templates (apply / delete / drag-import)
  *
- * Nomenclature (Model C — W16 McManus):
+ * Nomenclature (Model C → O2 — W19 McManus):
  *   Ceremony  = a named, triggered process (trigger config + workflow execution graph)
- *   Workflow  = the ordered steps (route, agent_run, approve, …) that run inside a ceremony
- *   The "Ceremony Templates" tab surfaces pre-built starting points.
- *   The "Saved Workflows" tab surfaces user-authored execution graphs saved for reuse.
+ *   Workflow  = implementation detail — the execution graph inside a ceremony.
+ *               Users author workflows via the Ceremony Editor, not from this page.
+ *               Power-user Saved Workflows view moved to Settings → Advanced (W19 O2).
  *
- * Active tab is persisted in the URL: ?tab=ceremonies|workflows|teams|projects
+ * Active tab is persisted in the URL: ?tab=ceremonies|teams|projects
  * Drag-and-drop zone validates payload.kind matches the active tab before import.
  *
  * DOC DEBT (Redfoot W17): write the canonical "Ceremonies vs Workflows" doc page
@@ -664,15 +663,13 @@ function CeremonyTemplatesTab() {
 // Root page
 // ---------------------------------------------------------------------------
 
-type TabId = 'ceremonies' | 'workflows' | 'teams' | 'projects'
+type TabId = 'ceremonies' | 'teams' | 'projects'
 const TAB_LABELS: Record<TabId, string> = {
   ceremonies: 'Ceremony Templates',
-  workflows: 'Saved Workflows',
   teams: 'Teams',
   projects: 'Projects',
 }
 const USER_TEMPLATE_KINDS: Record<Exclude<TabId, 'ceremonies'>, TemplateKind> = {
-  workflows: 'workflow',
   teams: 'team',
   projects: 'project',
 }
@@ -683,7 +680,7 @@ export default function Templates() {
   const [searchParams, setSearchParams] = useSearchParams()
   const rawTab = searchParams.get('tab') ?? 'ceremonies'
   const activeTab: TabId =
-    rawTab === 'workflows' || rawTab === 'teams' || rawTab === 'projects'
+    rawTab === 'teams' || rawTab === 'projects'
       ? rawTab
       : 'ceremonies'
 
@@ -697,29 +694,23 @@ export default function Templates() {
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'auto' }}>
       <PageHeader
         title="Templates"
-        description="Ceremony starting points and your saved workflow, team, and project templates."
+        description="Ceremony starting points and your saved team and project templates."
       />
 
       {/* Concept explainer */}
       <div className={styles.explainer}>
         <Body1 style={{ fontWeight: 600, color: tokens.colorNeutralForeground1 }}>
-          Ceremonies vs Workflows — what's the difference?
+          What is a Ceremony?
         </Body1>
         <Caption1 style={{ color: tokens.colorNeutralForeground2 }}>
           A <strong>Ceremony</strong> is a named, triggered process your team runs — for example "Bug Fix",
           "RFC Review", or "End-of-Wave Close-Out." Each ceremony has a <em>trigger</em> (a schedule,
-          an issue label, a manual button) and a <em>workflow</em> that executes when the trigger fires.
+          an issue label, a manual button) and an execution graph that runs when the trigger fires.
         </Caption1>
         <Caption1 style={{ color: tokens.colorNeutralForeground2 }}>
-          A <strong>Workflow</strong> is the execution graph inside a ceremony — the ordered steps
-          (route, agent_run, peer_review, approve, fan_out, …) that define exactly what happens when
-          the ceremony runs. You can author workflows in the Workflow Editor and save them here for reuse.
-        </Caption1>
-        <Caption1 style={{ color: tokens.colorNeutralForeground2 }}>
-          <strong>Ceremony Templates</strong> (first tab) are pre-built starting points for common team
-          processes. Pick one, name your ceremony, configure its trigger, and it's ready to run.{' '}
-          <strong>Saved Workflows</strong> (second tab) are execution graphs you've authored and saved —
-          apply one to create a new ceremony wired to that step sequence.
+          <strong>Ceremony Templates</strong> are pre-built starting points for common team processes.
+          Pick one, name your ceremony, configure its trigger, and it's ready to run.
+          Workflows — the execution graphs inside ceremonies — are an implementation detail managed in the Ceremony Editor.
         </Caption1>
       </div>
 

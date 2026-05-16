@@ -191,26 +191,48 @@ router.get('/:id', async (req: Request, res: Response) => {
 router.patch('/:id', async (req: Request, res: Response) => {
   try {
     const { projectId, id } = req.params as Record<string, string>;
-    const { title, body, status, column, assigneeId, version } = req.body as {
+    const {
+      title, body, status, column, assigneeId, version,
+      deliverableType, deliverableLink, deliverableAcceptanceCriteria, deliverableStatus,
+    } = req.body as {
       title?: string;
       body?: string;
       status?: ColumnStatus;
-      column?: ColumnStatus; // client alias for status
+      column?: ColumnStatus;
       assigneeId?: string | null;
       version?: number;
+      deliverableType?: string;
+      deliverableLink?: string | null;
+      deliverableAcceptanceCriteria?: string | null;
+      deliverableStatus?: string;
     };
     const resolvedStatus = status ?? column;
 
     // Optimistic concurrency check (OQ #6): if client sends `version`, enforce it.
     if (version !== undefined) {
       const db = getDb();
-      const { issues } = schema;
+      const { issues, columnMeta } = schema;
 
       const patch: Record<string, unknown> = { updatedAt: new Date(), version: sql`${issues.version} + 1` };
       if (title !== undefined) patch.title = title.trim();
       if (body !== undefined) patch.body = body;
       if (resolvedStatus !== undefined) patch.status = resolvedStatus;
       if ('assigneeId' in req.body) patch.assigneeId = assigneeId ?? null;
+      if (deliverableType !== undefined) patch.deliverableType = deliverableType;
+      if ('deliverableLink' in req.body) patch.deliverableLink = deliverableLink ?? null;
+      if ('deliverableAcceptanceCriteria' in req.body) patch.deliverableAcceptanceCriteria = deliverableAcceptanceCriteria ?? null;
+      if (deliverableStatus !== undefined) {
+        patch.deliverableStatus = deliverableStatus;
+        // Auto-move to done column when deliverable is accepted.
+        if (deliverableStatus === 'accepted') {
+          const [doneCol] = await db
+            .select({ columnId: columnMeta.columnId })
+            .from(columnMeta)
+            .where(and(eq(columnMeta.projectId, projectId), eq(columnMeta.semantic, 'done')))
+            .limit(1);
+          if (doneCol) patch.status = doneCol.columnId;
+        }
+      }
 
       const [updated] = await db
         .update(issues)

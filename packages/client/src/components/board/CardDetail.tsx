@@ -1,6 +1,28 @@
 import { useEffect, useRef, useState } from 'react'
-import { tokens, Body1Strong, Caption1 } from '@fluentui/react-components'
-import { type Issue } from '../../api/issues.ts'
+import { useNavigate } from 'react-router'
+import {
+  tokens,
+  Body1Strong,
+  Caption1,
+  Menu,
+  MenuTrigger,
+  MenuPopover,
+  MenuList,
+  MenuItem,
+  Tooltip,
+  Accordion,
+  AccordionItem,
+  AccordionHeader,
+  AccordionPanel,
+  Dropdown,
+  Option,
+  Input,
+  Field,
+  Badge,
+  Textarea,
+} from '@fluentui/react-components'
+import { MoreHorizontal20Regular, Lightbulb20Regular } from '@fluentui/react-icons'
+import { type Issue, useUpdateDeliverable } from '../../api/issues.ts'
 import { useLabels } from '../../api/labels.ts'
 import { useIssueRuns } from '../../api/runs.ts'
 import { useAgents } from '../../api/agents.ts'
@@ -31,6 +53,7 @@ interface CardDetailProps {
 type Tab = 'overview' | 'runs' | 'deliverables' | 'flow'
 
 export default function CardDetail({ projectId, issue, onClose, initialTab }: CardDetailProps) {
+  const navigate = useNavigate()
   const panelRef = useRef<HTMLDivElement>(null)
   const [activeTab, setActiveTab] = useState<Tab>(initialTab ?? 'overview')
   const [showAttachModal, setShowAttachModal] = useState(false)
@@ -42,6 +65,7 @@ export default function CardDetail({ projectId, issue, onClose, initialTab }: Ca
   const { data: deliverables } = useDeliverables(projectId, issue.id)
   const { data: attachments } = useIssueAttachments(projectId, issue.id)
   const startWorkflow = useStartWorkflow(projectId, issue.id)
+  const updateDeliverable = useUpdateDeliverable(projectId)
 
   const activeRun = runs?.find((r) => r.status === 'running' || r.status === 'pending')
 
@@ -117,6 +141,43 @@ export default function CardDetail({ projectId, issue, onClose, initialTab }: Ca
               {COLUMN_LABELS[issue.column] ?? issue.column}
             </Caption1>
             <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+              {/* Overflow menu */}
+              <Menu>
+                <MenuTrigger>
+                  <Tooltip content="More actions" relationship="label">
+                    <button
+                      style={{
+                        background: 'none',
+                        border: 'none',
+                        color: tokens.colorNeutralForeground2,
+                        fontSize: '18px',
+                        cursor: 'pointer',
+                        padding: '2px 6px',
+                        borderRadius: '4px',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                      }}
+                      onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.color = tokens.colorNeutralForeground1 }}
+                      onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.color = tokens.colorNeutralForeground2 }}
+                    >
+                      <MoreHorizontal20Regular />
+                    </button>
+                  </Tooltip>
+                </MenuTrigger>
+                <MenuPopover>
+                  <MenuList>
+                    <MenuItem
+                      icon={<Lightbulb20Regular />}
+                      onClick={() => {
+                        onClose()
+                        navigate(`/projects/${projectId}/consult/new?prefill=issue:${issue.id}`)
+                      }}
+                    >
+                      Investigate in Conjure
+                    </MenuItem>
+                  </MenuList>
+                </MenuPopover>
+              </Menu>
               <button
                 onClick={onClose}
                 style={{
@@ -383,6 +444,107 @@ export default function CardDetail({ projectId, issue, onClose, initialTab }: Ca
                   onClose={() => setShowAttachModal(false)}
                 />
               )}
+
+              {/* Deliverable Intent (O4) */}
+              <Accordion collapsible defaultOpenItems={issue.deliverableType && issue.deliverableType !== 'none' ? ['deliverable'] : []}>
+                <AccordionItem value="deliverable">
+                  <AccordionHeader>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <Caption1 style={{ textTransform: 'uppercase', letterSpacing: '0.05em', color: tokens.colorNeutralForeground2 }}>
+                        Deliverable
+                      </Caption1>
+                      {issue.deliverableType && issue.deliverableType !== 'none' && (
+                        <Badge
+                          appearance="filled"
+                          color={
+                            issue.deliverableStatus === 'accepted' ? 'success'
+                            : issue.deliverableStatus === 'rejected' ? 'danger'
+                            : issue.deliverableStatus === 'ready-for-review' ? 'warning'
+                            : 'informative'
+                          }
+                          size="small"
+                        >
+                          {issue.deliverableStatus ?? 'not-started'}
+                        </Badge>
+                      )}
+                    </div>
+                  </AccordionHeader>
+                  <AccordionPanel>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 12, paddingTop: 8 }}>
+                      <Field label="Type">
+                        <Dropdown
+                          value={issue.deliverableType ?? 'none'}
+                          selectedOptions={[issue.deliverableType ?? 'none']}
+                          onOptionSelect={(_, d) => {
+                            void updateDeliverable.mutateAsync({
+                              issueId: issue.id,
+                              deliverableType: d.optionValue as Issue['deliverableType'],
+                              version: (issue as unknown as { version?: number }).version ?? 1,
+                            })
+                          }}
+                        >
+                          <Option value="none">None</Option>
+                          <Option value="pr">Pull Request</Option>
+                          <Option value="doc">Document</Option>
+                          <Option value="deployment">Deployment</Option>
+                          <Option value="asset">Asset</Option>
+                          <Option value="decision">Decision</Option>
+                        </Dropdown>
+                      </Field>
+                      {issue.deliverableType && issue.deliverableType !== 'none' && (
+                        <>
+                          <Field label="Status">
+                            <Dropdown
+                              value={issue.deliverableStatus ?? 'not-started'}
+                              selectedOptions={[issue.deliverableStatus ?? 'not-started']}
+                              onOptionSelect={(_, d) => {
+                                void updateDeliverable.mutateAsync({
+                                  issueId: issue.id,
+                                  deliverableStatus: d.optionValue as Issue['deliverableStatus'],
+                                  version: (issue as unknown as { version?: number }).version ?? 1,
+                                })
+                              }}
+                            >
+                              <Option value="not-started">Not started</Option>
+                              <Option value="in-progress">In progress</Option>
+                              <Option value="ready-for-review">Ready for review</Option>
+                              <Option value="accepted">Accepted ✓</Option>
+                              <Option value="rejected">Rejected ✗</Option>
+                            </Dropdown>
+                          </Field>
+                          <Field label="Link" hint="URL of the artifact when ready (PR, doc, deployment, …)">
+                            <Input
+                              value={issue.deliverableLink ?? ''}
+                              placeholder="https://…"
+                              onChange={(_, d) => {
+                                void updateDeliverable.mutateAsync({
+                                  issueId: issue.id,
+                                  deliverableLink: d.value || null,
+                                  version: (issue as unknown as { version?: number }).version ?? 1,
+                                })
+                              }}
+                            />
+                          </Field>
+                          <Field label="Acceptance criteria" hint="Short markdown — what makes this done?">
+                            <Textarea
+                              value={issue.deliverableAcceptanceCriteria ?? ''}
+                              placeholder="- [ ] …"
+                              rows={3}
+                              onChange={(_, d) => {
+                                void updateDeliverable.mutateAsync({
+                                  issueId: issue.id,
+                                  deliverableAcceptanceCriteria: d.value || null,
+                                  version: (issue as unknown as { version?: number }).version ?? 1,
+                                })
+                              }}
+                            />
+                          </Field>
+                        </>
+                      )}
+                    </div>
+                  </AccordionPanel>
+                </AccordionItem>
+              </Accordion>
 
               {/* Comments */}
               <div>

@@ -1098,6 +1098,15 @@ async function bootstrapSchema(): Promise<void> {
       ON ceremony_github_fires (ceremony_slug, delivery_id);
   `);
 
+  // Wave 19 — O4: Deliverable intent fields on issues.
+  await _pool.query(`
+    ALTER TABLE issues
+      ADD COLUMN IF NOT EXISTS deliverable_type   TEXT NOT NULL DEFAULT 'none',
+      ADD COLUMN IF NOT EXISTS deliverable_link   TEXT,
+      ADD COLUMN IF NOT EXISTS deliverable_acceptance_criteria TEXT,
+      ADD COLUMN IF NOT EXISTS deliverable_status TEXT NOT NULL DEFAULT 'not-started';
+  `);
+
   await seedSystemReviewPolicyPresets();
 
   console.log('[db] schema bootstrapped');

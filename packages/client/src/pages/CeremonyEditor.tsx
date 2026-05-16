@@ -26,7 +26,6 @@ import {
   useRunCeremony,
   useValidateCeremony,
   usePreviewCron,
-  useConvertCeremony,
   useGenerateFromProse,
   useCeremonySchedules,
   useCreateSchedule,
@@ -84,6 +83,7 @@ import {
   ArrowDownloadRegular,
 } from '@fluentui/react-icons'
 import VisualCanvas from '../components/ceremony/VisualCanvas.tsx'
+import { ScopeBadge } from '../components/ceremony/CeremonyBadges.tsx'
 // Stream D — D5: ProseTab removed. The "Formulate" hero on the new-ceremony
 // flow still exposes prose → YAML; the always-visible Prose tab inside the
 // editor was a duplicate path (see plan.md D5). The component file
@@ -124,6 +124,31 @@ const TRIGGER_KIND_OPTIONS: { value: TriggerKind; label: string; description: st
   { value: 'on_schedule', label: 'Schedule', description: 'Run on a recurring schedule (cron expression).' },
   { value: 'on_event', label: 'Event', description: 'Run when a specific event happens (e.g., issue created, deliverable submitted).' },
   { value: 'on_issue_entry', label: 'Issue entry', description: 'Run when an issue enters a board column.' },
+]
+
+/** Canonical kind options with human-readable labels and one-sentence descriptions. */
+const CEREMONY_KIND_OPTIONS: { value: CeremonyKind; label: string; description: string; deprecated?: boolean }[] = [
+  {
+    value: 'workflow',
+    label: 'Workflow',
+    description: 'Execution graph — the ordered steps (route, agent_run, approve, …) that run inside a ceremony.',
+  },
+  {
+    value: 'ceremony',
+    label: 'Ceremony',
+    description: 'Named triggered process — has a trigger (schedule, label, event) and runs a workflow graph.',
+  },
+  {
+    value: 'review_policy',
+    label: 'Review Policy',
+    description: 'Defines who-can-approve rules applied to peer_review and approve steps.',
+  },
+  {
+    value: 'narrative',
+    label: 'Narrative (Phase 11 preview)',
+    description: 'Documentation-only prose description of a process — not yet executable; convert to a ceremony in Phase 11.',
+    deprecated: true,
+  },
 ]
 
 const EVENT_TYPE_OPTIONS = [
@@ -181,7 +206,6 @@ export default function CeremonyEditor() {
   const runCeremony = useRunCeremony(projectId)
   const validateCeremony = useValidateCeremony()
   const previewCron = usePreviewCron(projectId)
-  const convertCeremony = useConvertCeremony(projectId)
   const generateFromProse = useGenerateFromProse(projectId)
 
   // Editor state (initialised from the loaded ceremony or defaults).
@@ -208,7 +232,6 @@ export default function CeremonyEditor() {
   const [validationErrors, setValidationErrors] = useState<string[]>([])
   const [cronPreview, setCronPreview] = useState<string[] | null>(null)
   const [cronPreviewErr, setCronPreviewErr] = useState<string | null>(null)
-  const [convertToast, setConvertToast] = useState<string | null>(null)
 
   // Wave 10 B9: only active agents are pickable for ceremony steps.
   const { data: agents } = useActiveAgents(projectId)
@@ -420,27 +443,6 @@ export default function CeremonyEditor() {
     }
   }, [triggerConfig, isNew, ceremonyId, previewCron])
 
-  const handleConvert = useCallback(async () => {
-    if (isNew) return
-    try {
-      const result = await convertCeremony.mutateAsync(ceremonyId!)
-      const draftId = (result as { draftCeremonyId?: string } | undefined)?.draftCeremonyId
-      if (draftId) {
-        setConvertToast('Translated — opening draft for review.')
-        setTimeout(() => {
-          navigate(`/projects/${projectId}/ceremonies/review`)
-        }, 600)
-      } else {
-        setConvertToast('Ceremony converted.')
-        setTimeout(() => setConvertToast(null), 4000)
-      }
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err)
-      setConvertToast(msg)
-      setTimeout(() => setConvertToast(null), 6000)
-    }
-  }, [isNew, ceremonyId, convertCeremony, navigate, projectId])
-
   const handleFormulate = useCallback(async (prose: string) => {
     setFormulateModelUsed(null)
     try {
@@ -517,11 +519,12 @@ export default function CeremonyEditor() {
             style={{ minWidth: 220, fontWeight: 600 }}
           />
           <Badge appearance="filled" color={kind === 'narrative' ? 'warning' : kind === 'workflow' ? 'subtle' : 'brand'}>
-            kind: {kind}
+            {CEREMONY_KIND_OPTIONS.find((o) => o.value === kind)?.label ?? kind}
           </Badge>
           <Badge appearance="outline" color="informative">
             trigger: {triggerKind}
           </Badge>
+          <ScopeBadge triggerKind={triggerKind} triggerConfig={triggerConfig} />
 
           <div style={{ flex: 1 }} />
 
@@ -704,19 +707,26 @@ export default function CeremonyEditor() {
                       </Field>
                       <Field
                         label="Kind"
-                        hint="Use workflow for most automations. narrative is documentation-only."
+                        hint={CEREMONY_KIND_OPTIONS.find((o) => o.value === kind)?.description ?? ''}
                       >
                         <Dropdown
-                          value={kind}
+                          value={CEREMONY_KIND_OPTIONS.find((o) => o.value === kind)?.label ?? kind}
                           selectedOptions={[kind]}
                           onOptionSelect={(_, d) => setKind(d.optionValue as CeremonyKind)}
-                          style={{ maxWidth: 240 }}
+                          style={{ maxWidth: 280 }}
                         >
-                          {(['workflow', 'ceremony', 'review_policy', 'narrative'] as CeremonyKind[]).map(
-                            (k) => (
-                              <Option key={k} value={k}>{k}</Option>
-                            ),
-                          )}
+                          {CEREMONY_KIND_OPTIONS.filter((o) => !o.deprecated).map((opt) => (
+                            <Option key={opt.value} value={opt.value} text={opt.label}>
+                              <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                                <span style={{ fontWeight: 600, opacity: opt.deprecated ? 0.6 : 1 }}>
+                                  {opt.label}
+                                </span>
+                                <span style={{ fontSize: 11, color: 'inherit', opacity: 0.7 }}>
+                                  {opt.description}
+                                </span>
+                              </div>
+                            </Option>
+                          ))}
                         </Dropdown>
                       </Field>
                     </div>
@@ -1002,11 +1012,6 @@ export default function CeremonyEditor() {
               </MessageBarBody>
             </MessageBar>
           )}
-          {convertToast && (
-            <MessageBar intent={convertToast === 'Coming in Phase 11' ? 'info' : 'warning'}>
-              <MessageBarBody>{convertToast}</MessageBarBody>
-            </MessageBar>
-          )}
           <div style={{ flex: 1, display: 'flex', minHeight: 0, overflow: 'hidden' }}>
             {/* Left: Trigger + meta */}
             <div
@@ -1078,37 +1083,18 @@ export default function CeremonyEditor() {
               onOptionSelect={(_, d) => setKind(d.optionValue as CeremonyKind)}
               disabled={readOnly}
             >
-              {(['workflow', 'ceremony', 'review_policy', 'narrative'] as CeremonyKind[]).map((k) => (
+              {(['workflow', 'ceremony', 'review_policy'] as CeremonyKind[]).map((k) => (
                 <Option key={k} value={k}>{k}</Option>
               ))}
             </Dropdown>
             <Caption1 style={{ color: tokens.colorNeutralForeground3 }}>
-              Use <strong>workflow</strong> for most automations. <strong>narrative</strong> is documentation-only.
+              Use <strong>workflow</strong> for most automations.
             </Caption1>
           </div>
 
           {/* Schedules side-pane (only meaningful for on_schedule). */}
           {triggerKind === 'on_schedule' && !isNew && (
             <SchedulesPanel projectId={projectId} ceremonyId={ceremonyId!} />
-          )}
-
-          {kind === 'narrative' && (
-            <div
-              style={{
-                marginTop: 12,
-                padding: 12,
-                background: 'var(--surface)',
-                border: '1px solid var(--border)',
-                borderRadius: 6,
-                fontSize: 12,
-                color: 'var(--text-muted)',
-              }}
-            >
-              This ceremony is documentation only — convert to executable to enable scheduling/runs.
-              <div style={{ marginTop: 8 }}>
-                <Button onClick={handleConvert} disabled={isNew}>Convert to executable</Button>
-              </div>
-            </div>
           )}
 
           {triggerKind === 'manual' && (
