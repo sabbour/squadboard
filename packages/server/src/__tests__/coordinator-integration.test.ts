@@ -13,11 +13,7 @@
  *   E. Cross-cutting             — agent-sync drift, decision-log shape
  *
  * Bugs found and NOT fixed (deferred per lane rules):
- *   BUG-1: resolveCoordinatorModelChain() in coordinator-env.ts defines a
- *           multi-model fallback chain, but dispatchViaCoordinator() and
- *           callCoordinatorLlm() do NOT attempt fallbacks — a single model is
- *           used per call. If the primary model call throws, the error propagates
- *           directly to the caller with no retry. Scenario 7 documents this.
+ *   (none outstanding — BUG-1 resolved by W30: fallback chain wired in dispatch.ts)
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
@@ -1160,7 +1156,7 @@ describe('GROUP D — Route integration (real coordinator, mocked DB + LLM)', ()
 describe('GROUP E — Cross-cutting (drift detection, model chain, env config)', () => {
 
   // -------------------------------------------------------------------------
-  // Scenario 7: Model fallback chain — documented current behavior
+  // Scenario 7: Model fallback chain — W30 wired (BUG-1 fixed)
   // -------------------------------------------------------------------------
   describe('Scenario 7 — model fallback chain', () => {
     it('resolveCoordinatorModelChain returns primary + deduped fallbacks', () => {
@@ -1176,28 +1172,56 @@ describe('GROUP E — Cross-cutting (drift detection, model chain, env config)',
       expect(chain.filter(m => m === 'claude-sonnet-4.5')).toHaveLength(1); // no dupe
     });
 
-    it('BUG-1: dispatchViaCoordinator does NOT retry fallbacks — primary error propagates directly', async () => {
-      // Scenario 7 documents that the fallback chain (resolveCoordinatorModelChain)
-      // is NOT wired into dispatchViaCoordinator. When the primary model fails,
-      // the error is thrown immediately with no retry.
-      //
-      // Expected future behaviour: if primary model throws, dispatch should try
-      // gpt-5.4-mini, then gpt-5.1-codex-mini, etc.
-      //
-      // Current (buggy) behaviour: error from the primary model propagates.
-      const failingCaller: LlmCaller = {
-        call: vi.fn().mockRejectedValue(new Error('Rate limit exceeded')),
+    it('W30: primary model fails with retriable error → fallback succeeds → meta.model = fallback', async () => {
+      // W30 fix: dispatchViaCoordinator now loops through resolveCoordinatorModelChain().
+      // Primary fails with a rate-limit error (retriable); second model in the injected
+      // chain succeeds. Result arrives from the fallback model.
+      const decision = makeDispatchDecision();
+      const caller: LlmCaller = {
+        call: vi.fn()
+          .mockRejectedValueOnce(new Error('Rate limit exceeded')) // primary fails
+          .mockResolvedValueOnce({                                  // fallback succeeds
+            text: JSON.stringify(decision),
+            promptTokens: 80,
+            completionTokens: 20,
+            model: 'gpt-5.4-mini',
+          }),
       };
       const cache = new CoordinatorDecisionCache();
 
-      // Assert current (broken) behaviour: error propagates, no fallback
-      await expect(
-        dispatchViaCoordinator(makeInput(), { llmCaller: failingCaller, cache, bypassCache: true }),
-      ).rejects.toThrow('Rate limit exceeded');
+      const result = await dispatchViaCoordinator(makeInput(), {
+        llmCaller: caller,
+        cache,
+        bypassCache: true,
+        modelChain: ['claude-haiku-4.5', 'gpt-5.4-mini'],
+      });
 
-      // If fallback were implemented, call count would be > 1 (primary + fallbacks).
-      // Current implementation: single call, then throw.
-      expect((failingCaller.call as ReturnType<typeof vi.fn>).mock.calls).toHaveLength(1);
+      // Fallback succeeded — result is valid
+      expect(result.decision).toEqual(decision);
+      expect(result.cacheHit).toBe(false);
+      // meta.model reflects the model that actually answered
+      expect(result.meta.model).toBe('gpt-5.4-mini');
+      // Two LLM calls were made (primary + fallback)
+      expect((caller.call as ReturnType<typeof vi.fn>).mock.calls).toHaveLength(2);
+    });
+
+    it('W30: all models fail with retriable errors → aggregate error thrown', async () => {
+      const failingCaller: LlmCaller = {
+        call: vi.fn().mockRejectedValue(new Error('model not available')),
+      };
+      const cache = new CoordinatorDecisionCache();
+
+      await expect(
+        dispatchViaCoordinator(makeInput(), {
+          llmCaller: failingCaller,
+          cache,
+          bypassCache: true,
+          modelChain: ['claude-haiku-4.5', 'gpt-5.4-mini'],
+        }),
+      ).rejects.toThrow('All coordinator models failed');
+
+      // Both models were tried
+      expect((failingCaller.call as ReturnType<typeof vi.fn>).mock.calls).toHaveLength(2);
     });
   });
 
