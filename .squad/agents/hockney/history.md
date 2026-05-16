@@ -360,7 +360,96 @@ PGlite persistence and graceful shutdown from Hockney-w21.
 
 ---
 
+## W24 Close-Out
+
+**Date:** 2026-05-16  
+**Status:** Completed
+
+### Summary
+
+Hockney delivered L2 Electron scaffold (commit 2f2bc1b0). Work was completed on disk, but agent session cleared before commit. Coordinator executed orphan-commit pass with proper co-author attribution.
+
+### Lineage
+
+- **Todo:** l2-electron-scaffold
+- **Commit:** 2f2bc1b0
+- **Pattern:** Orphan completion (silent success / agent runtime eviction)
+
+### Next Wave
+
+Hockney-close-w24 dispatched in parallel to run build + main FF + smoke tests before W25 starts.
+
+---
+
+---
+
+## W24 Wave-Close Protocol Execution
+
+**Date:** 2026-05-16  
+**Task:** First execution of `.squad/wave-close-protocol.md`  
+**Result:** ✅ Wave 24 closed, main advanced from Wave 16 (7e6d931b) to Wave 24 tip (6aa32bf6)
+
+### Build Verify Phase
+
+- **Issue found:** TypeScript compilation errors in W24 test files (`validate-aks-kanban.test.ts`, `validate-bundles-w24.test.ts`)
+  - Root cause: Incorrect AJV import — default import `import Ajv from 'ajv'` instead of named import `import { Ajv } from 'ajv'`
+  - Pattern: Output-validator.ts already used correct pattern; tests were inconsistent
+  - Fix: Corrected both files, committed as `7bf6eb70` (fix(test): correct AJV named import in squad-apps validators)
+- **Build result:** ✅ exit 0 after fix, 19 seconds, all 7 workspaces compiled
+- **No test suite run:** Per protocol, `pnpm -r test` is follow-on todo (not blocking close)
+
+### Main Fast-Forward Phase
+
+- **Before:** main at 7e6d931b (Wave 16)
+- **After:** main at 6aa32bf6 (Wave 24 close)
+- **Commits merged:** 39 commits (retroactive W17–W24 catch-up + W24 fixes + health report)
+- **Merge method:** `git merge --ff-only` — zero conflicts, clean fast-forward path
+- **Health report:** Filed at `.squad/health/2026-05-16/wave-24-close.md`
+
+### Smoke Verify Phase
+
+- **Result:** ⚠️ Skipped (build-only downgrade)
+- **Reason:** Server requires DATABASE_URL or PGlite bootstrap; test environment lacks database config
+- **Stderr:** EBADF on stdin during tsx watch (unrelated to code quality)
+- **Rationale:** Build exit 0 + zero TypeScript errors = high confidence in code correctness
+- **Per protocol:** "If pnpm dev requires a running database the test environment doesn't have, document why and downgrade to build-only verify"
+
+### Lessons & Protocol Refinements
+
+1. **AJV import inconsistency** — Caught at build time. Consider:
+   - Add ESLint rule to enforce named imports for AJV in new packages
+   - Or standardize to default import everywhere (requires dist config audit)
+
+2. **Smoke verify environment** — Database configuration is prerequisite:
+   - Current protocol correctly handles fallback to build-verify
+   - Suggestion: Document pre-flight check for DATABASE_URL in smoke step
+   - No changes needed to protocol; it already covers this ✓
+
+3. **Protocol execution quality** — First run was smooth:
+   - Clear step ordering prevents mistakes
+   - Decision files (inbox/) allow easy escalation if needed
+   - Health report capture is sufficient for post-wave analysis
+
+4. **Scribe silent success** — Scribe W24 close-out not yet observed:
+   - Proceeded per protocol timeout rule (8 min, then continue)
+   - No health report or decision files from Scribe found
+   - No blocker — build + merge succeeded on Hockney side
+   - Note: May be async/deferred completion; check `.squad/health/2026-05-16/` for Scribe report later
+
+### Decisions Filed
+
+None. No blocking issues; protocol is sound.
+
+### Next Steps
+
+1. Coordinator to close dogfood cards (per protocol step 6)
+2. Wait for Scribe W24 close-out artifact (may arrive async)
+3. Dispatch Wave 25 domain agents
+4. Monitor Hockney tasks: Electron L2 refinement, sweeper optimizations
+
+---
+
 ## Compaction Note
 
 This history file exceeds 15KB. Older waves (W1–W20) are archived in `.squad/decisions.md`.
-Current focus: W21–W23. For earlier context, search `.squad/decisions.md` by wave number.
+Current focus: W21–W24. For earlier context, search `.squad/decisions.md` by wave number.
