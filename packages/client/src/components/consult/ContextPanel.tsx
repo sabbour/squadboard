@@ -112,7 +112,7 @@ interface ContextPanelProps {
 
 export function ContextPanel({ sessionId }: ContextPanelProps) {
   const styles = useStyles()
-  const stream = useConsultStream(sessionId)
+  const { entries: stream } = useConsultStream(sessionId)
   const [snapshot, setSnapshot] = useState<ContextSnapshot | null>(null)
 
   // Pick up the latest consult.context event from the stream.

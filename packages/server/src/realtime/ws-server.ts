@@ -7,12 +7,16 @@
  *   subscribe       { projectId }
  *   unsubscribe     { projectId }
  *   presence.cursor { projectId, issueId | null }
+ *   resubscribe     { projectId, lastSeq }  — W28 J3: replay from lastSeq
  *
  * Server → Client messages (all sourced from eventBus):
  *   issue.created   issue.updated   issue.moved   issue.deleted
  *   run.started     run.output      run.completed
  *   workflow.advanced
  *   presence.joined presence.left   presence.moved
+ *
+ * W28 J3: 15 s WS ping/pong heartbeat. Connections that miss a pong are
+ * terminated to free stale sockets and give the client a clean reconnect.
  */
 import { WebSocketServer, WebSocket } from 'ws';
 import type { IncomingMessage } from 'node:http';
@@ -20,14 +24,16 @@ import type { Server as HttpServer } from 'node:http';
 import { randomUUID } from 'node:crypto';
 import { eventBus, type BusEvent } from './event-bus.js';
 import { joinPresence, leavePresence, moveCursor, removeUser } from './presence.js';
+import { getBufferedEvents } from '../sdk/sse-stream.js';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
 interface ClientMessage {
-  type: 'subscribe' | 'unsubscribe' | 'presence.cursor';
+  type: 'subscribe' | 'unsubscribe' | 'presence.cursor' | 'resubscribe';
   payload?: {
     projectId?: string;
     issueId?: string | null;
+    lastSeq?: number;
   };
 }
 
@@ -143,6 +149,22 @@ function handleMessage(state: ClientState, raw: string): void {
       // The exclusion is handled in the bus listener via the excludeWs mechanism.
       break;
 
+    case 'resubscribe': {
+      // W28 J3: replay buffered consult events from lastSeq.
+      if (!projectId) { send(state.ws, 'error', { message: 'resubscribe requires projectId' }); return; }
+      const lastSeq = typeof payload?.lastSeq === 'number' ? payload.lastSeq : 0;
+      // Only applicable to consult rooms (consult:<sessionId>)
+      if (projectId.startsWith('consult:')) {
+        const sessionId = projectId.slice('consult:'.length);
+        const missed = getBufferedEvents(sessionId, lastSeq);
+        for (const entry of missed) {
+          send(state.ws, entry.type, entry.payload);
+        }
+      }
+      send(state.ws, 'resubscribed', { projectId, replayed: projectId.startsWith('consult:') });
+      break;
+    }
+
     default:
       send(state.ws, 'error', { message: `Unknown message type: ${String(type)}` });
   }
@@ -178,6 +200,8 @@ function onBusEvent(event: BusEvent): void {
 
 let wss: WebSocketServer | null = null;
 
+export const WS_PING_INTERVAL_MS = 15_000;
+
 export function initWebSocketServer(httpServer: HttpServer): WebSocketServer {
   // Mounted under /api/ws so the dev-server Vite proxy (which only forwards
   // /api with `ws: true`) routes the WebSocket upgrade to the Express server
@@ -200,13 +224,29 @@ export function initWebSocketServer(httpServer: HttpServer): WebSocketServer {
     // Send the assigned userId so the client knows who it is
     send(ws, 'connected', { userId });
 
+    // W28 J3: 15 s ping/pong heartbeat. Track liveness; terminate on missed pong.
+    let isAlive = true;
+    ws.on('pong', () => { isAlive = true; });
+    const pingTimer = setInterval(() => {
+      if (!isAlive) {
+        ws.terminate();
+        return;
+      }
+      isAlive = false;
+      ws.ping();
+    }, WS_PING_INTERVAL_MS);
+
     ws.on('message', (data) => {
       handleMessage(state, data.toString());
     });
 
-    ws.on('close', () => handleClose(state));
+    ws.on('close', () => {
+      clearInterval(pingTimer);
+      handleClose(state);
+    });
     ws.on('error', (err) => {
       console.error(`[ws] client ${userId} error:`, err);
+      clearInterval(pingTimer);
       handleClose(state);
     });
   });

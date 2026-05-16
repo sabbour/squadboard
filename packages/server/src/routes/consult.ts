@@ -35,6 +35,7 @@ import {
   discardProposal,
   promoteConsult,
 } from '../sdk/consult-stream.js';
+import { handleConsultSSE } from './consult-sse.js';
 
 // /api/consult
 export const consultRouter = Router();
@@ -359,3 +360,8 @@ consultRouter.post('/:sessionId/promote', async (req: Request, res: Response) =>
 
 // Re-export helper so the runtime import wiring is testable from outside.
 export { VALID_MODES, VALID_PROPOSAL_KINDS, VALID_PROMOTE_KINDS };
+
+// ─── W28 J3: SSE streaming endpoint ──────────────────────────────────────────
+// Must be registered AFTER the specific /:sessionId routes so Express matches
+// GET /:sessionId/stream before the generic /:sessionId handler.
+consultRouter.get('/:sessionId/stream', handleConsultSSE);

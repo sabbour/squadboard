@@ -279,57 +279,160 @@ export interface ConsultStreamEntry {
   receivedAt: number
 }
 
+/** Which real-time transport is currently in use. */
+export type ConsultTransport = 'ws' | 'sse' | null
+
+const REFETCH_TYPES: ReadonlySet<(typeof CONSULT_EVENT_TYPES)[number]> = new Set([
+  'consult.message_complete',
+  'consult.usage',
+  'consult.completed',
+  'consult.error',
+  'consult.proposal_created',
+  'consult.proposal_decided',
+])
+
+/** 3 s: if WS is not connected by this deadline, fall back to SSE. */
+const WS_FALLBACK_TIMEOUT_MS = 3_000
+
 /**
- * Subscribe to a consult session's WS room and surface streaming events.
+ * Subscribe to a consult session's real-time event stream.
+ *
+ * Transport strategy (W28 J3):
+ *   1. WS (preferred) — subscribe immediately. If not connected within 3 s,
+ *      fall back to SSE.
+ *   2. SSE fallback — opens `GET /api/consult/:id/stream`. Browser EventSource
+ *      auto-reconnects with `Last-Event-Id` on the first disconnect. A second
+ *      failure surfaces `showRetryBar = true` so the caller can render a
+ *      MessageBar with a Retry button.
+ *
  * The caller drives the visible transcript by combining
  * useConsultSession() (initial hydration) with this hook (live tail).
  */
 export function useConsultStream(sessionId: string | null) {
   const [entries, setEntries] = useState<ConsultStreamEntry[]>([])
+  const [transport, setTransport] = useState<ConsultTransport>(null)
+  const [showRetryBar, setShowRetryBar] = useState(false)
   const counter = useRef(0)
   const qc = useQueryClient()
+  const activeTransportRef = useRef<ConsultTransport>(null)
+  const lastEventIdRef = useRef<string | null>(null)
+  const sseErrorCountRef = useRef(0)
+
+  // Keep a stable ref to qc so the effect only depends on [sessionId].
+  const qcRef = useRef(qc)
+  qcRef.current = qc
 
   useEffect(() => {
     if (!sessionId) return
+
     const room = `consult:${sessionId}`
+    activeTransportRef.current = 'ws'
+    setTransport('ws')
+    setShowRetryBar(false)
+
     wsClient.subscribeRoom(room)
+
+    function addEntry(type: (typeof CONSULT_EVENT_TYPES)[number], payload: unknown) {
+      if (!payload || typeof payload !== 'object') return
+      const sid = (payload as { sessionId?: string }).sessionId
+      if (sid !== sessionId) return
+      const key = `${Date.now()}-${counter.current++}`
+      setEntries((prev) => [
+        ...prev,
+        { key, type, payload: payload as ConsultStreamEntry['payload'], receivedAt: Date.now() },
+      ])
+      if (REFETCH_TYPES.has(type)) {
+        void qcRef.current.invalidateQueries({ queryKey: ['consultSession', sessionId] })
+        void qcRef.current.invalidateQueries({ queryKey: ['consultSessions'] })
+      }
+    }
+
+    function openSSE(fromLastEventId?: string | null): () => void {
+      activeTransportRef.current = 'sse'
+      setTransport('sse')
+      sseErrorCountRef.current = 0
+
+      const url = fromLastEventId
+        ? `/api/consult/${sessionId}/stream?lastEventId=${encodeURIComponent(fromLastEventId)}`
+        : `/api/consult/${sessionId}/stream`
+
+      const es = new EventSource(url)
+
+      for (const evType of CONSULT_EVENT_TYPES) {
+        es.addEventListener(evType, (ev: MessageEvent) => {
+          if (activeTransportRef.current !== 'sse') return
+          if (ev.lastEventId) lastEventIdRef.current = ev.lastEventId
+          try {
+            addEntry(evType, JSON.parse(ev.data as string) as unknown)
+          } catch { /* malformed data */ }
+        })
+      }
+
+      es.onerror = () => {
+        sseErrorCountRef.current += 1
+        if (sseErrorCountRef.current >= 2) {
+          es.close()
+          setShowRetryBar(true)
+        }
+        // else: let EventSource auto-reconnect (it sends Last-Event-Id automatically)
+      }
+
+      return () => es.close()
+    }
 
     const handlers: Array<{ type: (typeof CONSULT_EVENT_TYPES)[number]; fn: (p: unknown) => void }> = []
     for (const type of CONSULT_EVENT_TYPES) {
       const fn = (payload: unknown) => {
-        if (!payload || typeof payload !== 'object') return
-        const sid = (payload as { sessionId?: string }).sessionId
-        if (sid !== sessionId) return
-        const key = `${Date.now()}-${counter.current++}`
-        setEntries((prev) => [
-          ...prev,
-          { key, type, payload: payload as ConsultStreamEntry['payload'], receivedAt: Date.now() },
-        ])
-        if (
-          type === 'consult.message_complete' ||
-          type === 'consult.usage' ||
-          type === 'consult.completed' ||
-          type === 'consult.error' ||
-          type === 'consult.proposal_created' ||
-          type === 'consult.proposal_decided'
-        ) {
-          void qc.invalidateQueries({ queryKey: ['consultSession', sessionId] })
-          void qc.invalidateQueries({ queryKey: ['consultSessions'] })
-        }
+        if (activeTransportRef.current !== 'ws') return
+        addEntry(type, payload)
       }
       wsClient.on(type, fn as never)
       handlers.push({ type, fn })
     }
 
+    let sseCleanup: (() => void) | null = null
+
+    // 3 s deadline: fall back to SSE if WS isn't connected yet
+    const fallbackTimer = setTimeout(() => {
+      if (wsClient.state !== 'connected' && activeTransportRef.current === 'ws') {
+        sseCleanup = openSSE(lastEventIdRef.current)
+      }
+    }, WS_FALLBACK_TIMEOUT_MS)
+
+    // Mid-stream WS disconnect: switch to SSE
+    const unsubState = wsClient.onStateChange((state) => {
+      if (
+        (state === 'disconnected' || state === 'reconnecting') &&
+        activeTransportRef.current === 'ws' &&
+        !sseCleanup
+      ) {
+        sseCleanup = openSSE(lastEventIdRef.current)
+      }
+    })
+
     return () => {
+      clearTimeout(fallbackTimer)
+      unsubState()
       for (const h of handlers) wsClient.off(h.type, h.fn as never)
       wsClient.unsubscribeRoom(room)
+      sseCleanup?.()
+      activeTransportRef.current = null
     }
-  }, [sessionId, qc])
+  }, [sessionId]) // stable: qc accessed via qcRef, helpers defined inline
 
   useEffect(() => {
     setEntries([])
+    lastEventIdRef.current = null
+    sseErrorCountRef.current = 0
   }, [sessionId])
 
-  return useMemo(() => entries, [entries])
+  return useMemo(
+    () => ({ entries, transport, showRetryBar }),
+    [entries, transport, showRetryBar],
+  )
+}
+
+/** Exposed for callers that only need the entries array (backward compat). */
+export function useConsultStreamEntries(sessionId: string | null): ConsultStreamEntry[] {
+  return useConsultStream(sessionId).entries
 }

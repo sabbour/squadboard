@@ -61,6 +61,7 @@ import { useProjects } from '../api/projects.ts'
 import PageHeader from '../components/layout/PageHeader.tsx'
 import { ChatBubble } from '../components/ChatBubble.tsx'
 import { ContextPanel } from '../components/consult/ContextPanel.tsx'
+import { ConsultDisconnectBar } from '../components/consult/ConsultDisconnectBar.tsx'
 
 const useStyles = makeStyles({
   root: {
@@ -708,7 +709,7 @@ interface ChatRow {
 function SessionView({ sessionId, projectId }: { sessionId: string; projectId: string | null }) {
   const styles = useStyles()
   const detailQuery = useConsultSession(sessionId)
-  const stream = useConsultStream(sessionId)
+  const { entries: stream, showRetryBar: streamRetryBar } = useConsultStream(sessionId)
   const sendMut = useSendConsultMessage(sessionId)
   const endMut = useEndConsult()
   const deleteMut = useDeleteConsult()
@@ -921,6 +922,11 @@ function SessionView({ sessionId, projectId }: { sessionId: string; projectId: s
 
       {/* W28 J5: collapsible "What context this agent has" panel */}
       <ContextPanel sessionId={sessionId} />
+
+      {/* W28 J3: stream disconnect bar — shown after two failed reconnect attempts */}
+      {streamRetryBar && (
+        <ConsultDisconnectBar onRetry={() => window.location.reload()} />
+      )}
 
       <div className={styles.composer}>
         {sendError && (
