@@ -15,6 +15,7 @@ import { ReviewPolicySection } from '../components/settings/ReviewPolicySection.
 import { SystemBackupSection } from '../components/settings/SystemBackupSection.tsx'
 import { SystemGitHubSection } from '../components/settings/SystemGitHubSection.tsx'
 import PageHeader from '../components/layout/PageHeader.tsx'
+import { useUserPrefs } from '../utils/userPrefs.ts'
 import {
   Dropdown,
   Option,
@@ -22,6 +23,7 @@ import {
   Subtitle2,
   Caption1,
   Body1,
+  Switch,
   tokens,
   Dialog,
   DialogSurface,
@@ -46,13 +48,15 @@ import {
   ArrowUpload20Regular,
   DatabaseArrowRight20Regular,
   Branch20Regular,
+  Eye20Regular,
 } from '@fluentui/react-icons'
 import { PageLoading, SectionLoading } from '../components/loading/index.tsx'
 
-type Section = 'general' | 'mcp' | 'budget' | 'reviews' | 'portability' | 'backup' | 'github'
+type Section = 'general' | 'mcp' | 'budget' | 'reviews' | 'portability' | 'backup' | 'github' | 'display'
 
 const SECTIONS: { id: Section; label: string; icon: React.ReactNode }[] = [
   { id: 'general', label: 'General', icon: <TextDescription20Regular /> },
+  { id: 'display', label: 'Display', icon: <Eye20Regular /> },
   { id: 'mcp', label: 'MCP Config', icon: <PlugConnected20Regular /> },
   { id: 'budget', label: 'Budget', icon: <Money20Regular /> },
   { id: 'reviews', label: 'Review policy', icon: <Shield20Regular /> },
@@ -70,6 +74,37 @@ function SectionHeader({ title, sub }: { title: string; sub?: string }) {
           {sub}
         </Caption1>
       )}
+    </div>
+  )
+}
+
+function DisplaySection() {
+  const { prefs, setPref } = useUserPrefs()
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: tokens.spacingVerticalM, maxWidth: 480 }}>
+      <div
+        style={{
+          background: 'var(--surface)',
+          border: `1px solid ${tokens.colorNeutralStroke1}`,
+          borderRadius: '8px',
+          padding: '14px 16px',
+        }}
+      >
+        <Switch
+          checked={prefs.routeProgressBar}
+          onChange={(_, data) => setPref('routeProgressBar', data.checked)}
+          label={
+            <div>
+              <Body1 style={{ display: 'block', fontWeight: tokens.fontWeightSemibold }}>
+                Route progress bar
+              </Body1>
+              <Caption1 style={{ display: 'block', color: tokens.colorNeutralForeground3 }}>
+                Show a thin progress bar at the top of the page during navigation. (Ctrl+K → Conjure)
+              </Caption1>
+            </div>
+          }
+        />
+      </div>
     </div>
   )
 }
@@ -666,6 +701,13 @@ export default function Settings() {
                 </Caption1>
               </div>
               <DefaultModelSection projectId={projectId} current={project.defaultModel ?? null} />
+            </>
+          )}
+
+          {activeSection === 'display' && (
+            <>
+              <SectionHeader title="Display" sub="UI preferences stored locally in this browser." />
+              <DisplaySection />
             </>
           )}
 

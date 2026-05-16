@@ -1,17 +1,19 @@
 /**
- * Inbox page — Phase 14 cross-project quick-capture review.
+ * Inbox page — Phase 14 cross-project captured-items review.
  *
  * Lists every InboxItem grouped by status (Captured / Formulated / Published
  * / Discarded). Each row shows: the original draft (truncated), the
  * formulated title (if any), the suggested project name, a status badge,
- * and an "Open" button that re-opens the CaptureModal pre-loaded with the
- * existing item.
+ * and an "Open in Conjure" button that navigates to Consult /new with the
+ * item's original draft pre-filled.
+ *
+ * Wave 21 B2: CaptureModal removed. "Open" now opens Conjure.
  */
 
-import { useMemo, useState } from 'react'
+import { useMemo } from 'react'
 import { useNavigate } from 'react-router'
 import { Body1, Body1Strong, Button, Caption1, tokens } from '@fluentui/react-components'
-import { Open16Regular, Delete16Regular, ArrowRight16Regular } from '@fluentui/react-icons'
+import { ChatHelpRegular, Delete16Regular, ArrowRight16Regular } from '@fluentui/react-icons'
 import {
   useDiscardInboxItem,
   useInboxItems,
@@ -19,7 +21,6 @@ import {
   type InboxStatus,
 } from '../api/inbox.ts'
 import { useProjects } from '../api/projects.ts'
-import CaptureModal from '../components/inbox/CaptureModal.tsx'
 import PageHeader from '../components/layout/PageHeader.tsx'
 import { safeAbsoluteTime } from '../utils/dates.ts'
 
@@ -38,7 +39,6 @@ export default function Inbox() {
   const navigate = useNavigate()
   const { data: items = [], isLoading } = useInboxItems()
   const { data: projects = [] } = useProjects()
-  const [editingId, setEditingId] = useState<string | null>(null)
 
   const projectName = useMemo(() => {
     const map = new Map<string, string>()
@@ -100,7 +100,7 @@ export default function Inbox() {
         >
           <Body1 style={{ display: 'block' }}>Your inbox is empty.</Body1>
           <Caption1 style={{ display: 'block', marginTop: tokens.spacingVerticalS }}>
-            Press <kbd style={kbdStyle}>c</kbd> anywhere to capture an idea.
+            Press <kbd style={kbdStyle}>c</kbd> or <kbd style={kbdStyle}>Ctrl+K</kbd> anywhere to open Conjure.
           </Caption1>
         </div>
       )}
@@ -183,7 +183,16 @@ export default function Inbox() {
                       </div>
                     </div>
                     {item.status !== 'discarded' && item.status !== 'published' && (
-                      <InboxRowActions item={item} onOpen={() => setEditingId(item.id)} />
+                      <InboxRowActions
+                        item={item}
+                        onOpen={() => {
+                          const prefill = encodeURIComponent(item.originalDraft)
+                          const dest = item.suggestedProjectId
+                            ? `/projects/${item.suggestedProjectId}/consult/new?prefill=text:${prefill}`
+                            : `/consult/new?prefill=text:${prefill}`
+                          void navigate(dest)
+                        }}
+                      />
                     )}
                     {item.status === 'published' && item.publishedIssueId && item.suggestedProjectId && (
                       <Button
@@ -203,11 +212,6 @@ export default function Inbox() {
           )
         })}
 
-      <CaptureModal
-        open={Boolean(editingId)}
-        onClose={() => setEditingId(null)}
-        existingItemId={editingId}
-      />
       </div>
     </div>
   )
@@ -226,10 +230,10 @@ function InboxRowActions({
       <Button
         appearance="subtle"
         size="small"
-        icon={<Open16Regular />}
+        icon={<ChatHelpRegular />}
         onClick={onOpen}
       >
-        Open
+        Open in Conjure
       </Button>
       <Button
         appearance="subtle"

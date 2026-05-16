@@ -1,5 +1,6 @@
 import { Routes, Route, Navigate } from 'react-router'
 import Layout from './components/Layout.tsx'
+import RouteProgressBar from './components/RouteProgressBar.tsx'
 import ProjectPicker from './pages/ProjectPicker.tsx'
 import Board from './pages/Board.tsx'
 import Agents from './pages/Agents.tsx'
@@ -24,7 +25,9 @@ import Templates from './pages/Templates.tsx'
 
 export default function App() {
   return (
-    <Routes>
+    <>
+      <RouteProgressBar />
+      <Routes>
       <Route element={<Layout />}>
         <Route index element={<ProjectPicker />} />
         <Route path="inbox" element={<Inbox />} />
@@ -64,6 +67,7 @@ export default function App() {
         <Route path="projects/:id/settings" element={<Settings />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Route>
-    </Routes>
+      </Routes>
+    </>
   )
 }

@@ -260,8 +260,8 @@ export default function Layout() {
 
   // Wave 10 B2: 'c' (legacy Capture shortcut) and '?' both route into Conjure
   // — i.e. the Consult /new entry point that owns raw input + classification.
-  // Capture is deprecated; the global "+ Capture" button has been removed
-  // from the top bar (only the per-project Board FAB remains as a shim).
+  // Wave 21 B2: Ctrl/Cmd+K is the additional global Conjure shortcut (replaces
+  // Capture's former Ctrl/Cmd+K binding). 'c' and '?' are kept for ergonomics.
   useEffect(() => {
     function isTypingTarget(target: EventTarget | null): boolean {
       const el = target as HTMLElement | null
@@ -274,6 +274,12 @@ export default function Layout() {
       )
     }
     function onKey(e: KeyboardEvent) {
+      // Ctrl/Cmd+K → Conjure (works even in text fields to match VS Code / browser palette UX)
+      if ((e.ctrlKey || e.metaKey) && !e.altKey && e.key === 'k') {
+        e.preventDefault()
+        void navigate(id ? `/projects/${id}/consult/new` : '/consult/new')
+        return
+      }
       if (e.ctrlKey || e.metaKey || e.altKey) return
       if (isTypingTarget(e.target)) return
       if (e.key === 'c' || e.key === '?') {
@@ -465,7 +471,7 @@ export default function Layout() {
               appearance="primary"
               icon={<ChatHelp20Regular />}
               onClick={() => navigate(id ? `/projects/${id}/consult/new` : '/consult/new')}
-              title="Conjure (press c or ?)"
+              title="Conjure (press c, ? or Ctrl+K)"
             >
               Conjure
             </Button>
