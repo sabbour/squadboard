@@ -223,3 +223,52 @@ Run: wave-15-final
 - **mcmanus**: Universal Project Bundle (3rd escalation cleared)
 - **keyser**: UI batch (#2, #6, #7 fixes)
 - **scribe**: W15 close-out + SDK fidelity audit
+
+---
+
+## Wave 16 — Bug Bash #3: Built-in Project Templates
+
+**Date:** 2026-05-15T22:42:29.855-07:00  
+**Task:** Restore built-in project templates Ahmed remembered from squad-irl; wire them into the New Project flow using the Universal Project Bundle format McManus shipped in W15.
+
+### What shipped
+
+**6 built-in bundles** at `bundles/{slug}/squad-bundle.json`:
+
+| Bundle | Icon | Core focus |
+|--------|------|------------|
+| `default-software-project` | 🚀 | Pre-existing McManus bundle — kept as-is |
+| `library-or-sdk-project` | 📦 | npm/PyPI lib dev: API RFC + semver + changelog |
+| `bug-bash-project` | 🐛 | Backlog cleaner: triage → verified → in-fix → verified-fixed |
+| `research-spike` | 🔬 | Time-boxed exploration: questions → findings |
+| `content-writing-project` | ✍️ | Non-technical: pitches → outlines → drafting → review → published |
+| `ops-runbook-project` | 🚨 | Incident response: alerts → triaging → mitigating → resolved → postmortem |
+
+**Backend** (`packages/server/src/services/builtin-bundles.ts`):
+- Lazy scanner: `getBuiltinBundles()`, `getBuiltinBundle(id)`, `getBuiltinBundleDir(id)`
+- In-process cache; `resetBuiltinBundleCache()` called by diagnostics on each check run so edits are visible without restart
+
+**Routes** (added to `packages/server/src/routes/templates.ts`, before `/:id`):
+- `GET /api/templates/builtin-projects` → list
+- `POST /api/templates/builtin-projects/:bundleId/apply` → calls `applyBundle()`
+
+**Diagnostics**: `checkBuiltinBundles()` added to `runDiagnostics()` battery. Invalid bundles → `warn`; unreadable bundles dir → `fail`. Server never crashes on invalid bundles.
+
+**Frontend** (`packages/client/src/pages/ProjectPicker.tsx`):
+- `CreateFromTemplateModal` updated to show "Built-in" section (built-in bundles) + "My templates" section (user-saved)
+- New hooks: `useBuiltinProjectTemplates()`, `useApplyBuiltinProjectTemplate()` in `packages/client/src/api/templates.ts`
+
+### squad-irl check
+
+Not found in this tree or parent directories. Content curated from first principles.
+
+### McManus coordination
+
+`mcmanus-workflow-vs-ceremony-nomenclature.md` not yet written at time of wave. Used provisional slugs: `simple-review`, `bug-fix`, `rfc`, `spike`.
+
+### Invariants added
+
+- Built-in bundle scanner must always be defensive: log warnings, never throw, never crash server.
+- `/builtin-projects` routes must be declared **before** `/:id` in the Express router — "builtin-projects" would otherwise be treated as an id param.
+- Diagnostics resets the bundle cache on every check run (not just boot) — ensures freshness without restart.
+- `bundleDir` must be passed to `applyBundle()` for any bundle that uses `bodyPath` references to external markdown files.

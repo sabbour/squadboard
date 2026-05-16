@@ -1,0 +1,110 @@
+{
+  "manifest": {
+    "bundleId": "bug-bash-project",
+    "name": "Bug Bash Project",
+    "version": "1.0.0",
+    "description": "Focused on cleaning a bug backlog fast: triage / verified / in-fix / verified-fixed kanban. Team: a triage lead and three fixers. Ceremonies: bug-fix loop and batch-close.",
+    "author": "Squadboard Team",
+    "license": "MIT",
+    "schemaVersion": 1
+  },
+
+  "project": {
+    "name": "Bug Bash",
+    "description": "A time-boxed bug bash to clear a backlog of defects.",
+    "icon": "🐛"
+  },
+
+  "kanban": {
+    "columns": [
+      { "slug": "triage",          "label": "Triage",          "order": 0 },
+      { "slug": "verified",        "label": "Verified",        "order": 1 },
+      { "slug": "in-fix",          "label": "In Fix",          "order": 2, "wip_limit": 5 },
+      { "slug": "verified-fixed",  "label": "Verified Fixed",  "order": 3 }
+    ],
+    "defaultColumn": "triage"
+  },
+
+  "team": [
+    {
+      "name": "TriageLead",
+      "role": "Triage Lead",
+      "persistent": true,
+      "charter": "# TriageLead\n\n## Role\nTriage Lead — owns initial bug assessment, severity classification, and routing.\n\n## Expertise\n- Severity and priority classification (P0–P3)\n- Repro step validation\n- Fixer assignment\n- Batch-close decisions\n\n## Style\nFast and decisive. Every bug gets a severity within one review cycle.\n"
+    },
+    {
+      "name": "Fixer1",
+      "role": "Bug Fixer",
+      "persistent": true,
+      "charter": "# Fixer1\n\n## Role\nBug Fixer — implements fixes and writes regression tests.\n\n## Expertise\n- Root cause analysis\n- Minimal targeted fixes\n- Regression test authoring\n\n## Style\nSurgical. Fix the bug, not the neighbourhood. Document the root cause.\n"
+    },
+    {
+      "name": "Fixer2",
+      "role": "Bug Fixer",
+      "persistent": true,
+      "charter": "# Fixer2\n\n## Role\nBug Fixer — implements fixes and writes regression tests.\n\n## Expertise\n- Root cause analysis\n- Minimal targeted fixes\n- Regression test authoring\n\n## Style\nSurgical. Fix the bug, not the neighbourhood. Document the root cause.\n"
+    },
+    {
+      "name": "Fixer3",
+      "role": "Bug Fixer",
+      "persistent": true,
+      "charter": "# Fixer3\n\n## Role\nBug Fixer — implements fixes and writes regression tests.\n\n## Expertise\n- Root cause analysis\n- Minimal targeted fixes\n- Regression test authoring\n\n## Style\nSurgical. Fix the bug, not the neighbourhood. Document the root cause.\n"
+    }
+  ],
+
+  "ceremonies": [
+    {
+      "id": "bug-fix",
+      "name": "Bug Fix Loop",
+      "scope": "task",
+      "trigger": {
+        "kind": "on_issue_entry",
+        "config": { "column": "verified" }
+      },
+      "workflowYaml": "name: Bug Fix Loop\nsteps:\n  - type: agent_run\n    label: Triage lead assigns severity and fixer\n    agent: TriageLead\n    prompt: \"Classify this bug: severity (P0 crash / P1 major / P2 minor / P3 cosmetic), component, and assign to a fixer. Write repro steps if not already present.\"\n    timeout: 20m\n  - type: route\n    label: Route to assigned fixer\n    agent: \"{{ assignee }}\"\n  - type: agent_run\n    label: Fixer implements the fix\n    agent: \"{{ assignee }}\"\n    prompt: \"Implement a targeted fix for this bug. Write a regression test that would have caught it. Commit message format: fix(<component>): <what and why>.\"\n    timeout: 60m\n  - type: agent_run\n    label: Triage lead verifies the fix\n    agent: TriageLead\n    prompt: \"Verify the fix using the repro steps. Confirm the regression test passes. Mark as Verified Fixed or reopen with notes.\"\n    timeout: 20m\n"
+    },
+    {
+      "id": "simple-review",
+      "name": "Batch Close",
+      "scope": "project",
+      "trigger": {
+        "kind": "manual"
+      },
+      "workflowYaml": "name: Batch Close\nsteps:\n  - type: agent_run\n    label: Summarise verified-fixed bugs\n    agent: TriageLead\n    prompt: \"Summarise all bugs in the Verified Fixed column: count by severity, list any patterns or root cause clusters, and recommend which ones to ship in the next release vs defer.\"\n    timeout: 30m\n  - type: approve\n    label: Ship approval\n    approvers: []\n    timeout: 2h\n    timeoutAction: notify\n"
+    }
+  ],
+
+  "skills": [
+    {
+      "key": "repro-steps",
+      "name": "Repro Step Authoring",
+      "description": "Structured reproduction steps: environment, preconditions, exact actions, observed vs expected behavior.",
+      "category": "quality",
+      "promptAddendum": "## Repro Step Authoring\n\nEvery bug report must include:\n\n```\n**Environment:** <OS, runtime version, package version>\n**Preconditions:** <state the system must be in before starting>\n**Steps to reproduce:**\n1. ...\n2. ...\n3. ...\n**Observed:** <what actually happens>\n**Expected:** <what should happen>\n**Severity:** P0 (crash/data-loss) | P1 (major, no workaround) | P2 (minor, has workaround) | P3 (cosmetic)\n```\n\nRules:\n- Steps must be atomic and ordered. Each step = one action.\n- \"Observed\" must be specific — include error messages verbatim.\n- If you can't reproduce it, say so and note what you tried.\n- Attach screenshots, logs, or stack traces as needed.\n"
+    }
+  ],
+
+  "routing": [
+    {
+      "pattern": "p0",
+      "matchType": "label",
+      "agentName": "TriageLead",
+      "priority": 5,
+      "rawRule": "| p0 | TriageLead | P0 crashes go directly to TriageLead for immediate escalation. |"
+    },
+    {
+      "pattern": "bug",
+      "matchType": "label",
+      "agentName": "TriageLead",
+      "priority": 10,
+      "rawRule": "| bug | TriageLead | All bugs route to TriageLead for initial triage. |"
+    },
+    {
+      "pattern": "catchall",
+      "matchType": "catchall",
+      "agentName": "TriageLead",
+      "priority": 99,
+      "rawRule": "| * | TriageLead | All unmatched issues route to TriageLead. |"
+    }
+  ]
+}

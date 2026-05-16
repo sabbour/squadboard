@@ -1,0 +1,121 @@
+{
+  "manifest": {
+    "bundleId": "content-writing-project",
+    "name": "Content Writing Project",
+    "version": "1.0.0",
+    "description": "Non-technical content pipeline: pitches / outlines / drafting / review / published kanban. Team: editor, two writers, reviewer. Ceremonies: outline review, draft review, publish.",
+    "author": "Squadboard Team",
+    "license": "MIT",
+    "schemaVersion": 1
+  },
+
+  "project": {
+    "name": "Content Writing Project",
+    "description": "A content pipeline for articles, posts, scripts, or any long-form writing.",
+    "icon": "✍️"
+  },
+
+  "kanban": {
+    "columns": [
+      { "slug": "pitches",    "label": "Pitches",    "order": 0 },
+      { "slug": "outlines",   "label": "Outlines",   "order": 1 },
+      { "slug": "drafting",   "label": "Drafting",   "order": 2, "wip_limit": 4 },
+      { "slug": "review",     "label": "Review",     "order": 3 },
+      { "slug": "published",  "label": "Published",  "order": 4 }
+    ],
+    "defaultColumn": "pitches"
+  },
+
+  "team": [
+    {
+      "name": "Editor",
+      "role": "Editor-in-Chief",
+      "persistent": true,
+      "charter": "# Editor\n\n## Role\nEditor-in-Chief — owns the editorial calendar, approves pitches, sets tone and style standards, and signs off before publication.\n\n## Expertise\n- Editorial judgement\n- Tone and audience fit\n- Structural feedback\n- Publication standards\n\n## Style\nExacting but encouraging. Feedback is specific and actionable, never vague.\n"
+    },
+    {
+      "name": "Writer1",
+      "role": "Writer",
+      "persistent": true,
+      "charter": "# Writer1\n\n## Role\nWriter — researches, outlines, and drafts content pieces from brief to polished draft.\n\n## Expertise\n- Research and synthesis\n- Clear, engaging prose\n- SEO-aware writing (when applicable)\n- Adapting tone to audience\n\n## Style\nClarity over cleverness. Every sentence earns its place.\n"
+    },
+    {
+      "name": "Writer2",
+      "role": "Writer",
+      "persistent": true,
+      "charter": "# Writer2\n\n## Role\nWriter — researches, outlines, and drafts content pieces from brief to polished draft.\n\n## Expertise\n- Research and synthesis\n- Clear, engaging prose\n- SEO-aware writing (when applicable)\n- Adapting tone to audience\n\n## Style\nClarity over cleverness. Every sentence earns its place.\n"
+    },
+    {
+      "name": "Reviewer",
+      "role": "Content Reviewer",
+      "persistent": true,
+      "charter": "# Reviewer\n\n## Role\nContent Reviewer — fact-checks, proofs, and validates tone before content moves to Editor sign-off.\n\n## Expertise\n- Fact verification\n- Grammar and style consistency\n- Tone calibration\n- Readability assessment\n\n## Style\nDetailed and systematic. Catches what authors miss after too many reads.\n"
+    }
+  ],
+
+  "ceremonies": [
+    {
+      "id": "simple-review",
+      "name": "Outline Review",
+      "scope": "task",
+      "trigger": {
+        "kind": "on_issue_entry",
+        "config": { "column": "outlines" }
+      },
+      "workflowYaml": "name: Outline Review\nsteps:\n  - type: agent_run\n    label: Writer builds outline\n    agent: \"{{ assignee }}\"\n    prompt: \"Build a detailed outline for this piece. Include: working title, target audience, key message, section headings with 2-3 bullet points each, estimated word count, and sources to consult.\"\n    timeout: 30m\n  - type: agent_run\n    label: Editor reviews outline\n    agent: Editor\n    prompt: \"Review the outline. Check: Does the structure serve the key message? Is the scope right for the format? Does the target audience framing hold? Approve or return with structural notes.\"\n    timeout: 20m\n  - type: approve\n    label: Outline approved\n    approvers: [Editor]\n    timeout: 24h\n    timeoutAction: notify\n"
+    },
+    {
+      "id": "bug-fix",
+      "name": "Draft Review",
+      "scope": "task",
+      "trigger": {
+        "kind": "on_issue_entry",
+        "config": { "column": "review" }
+      },
+      "workflowYaml": "name: Draft Review\nsteps:\n  - type: agent_run\n    label: Reviewer proofs the draft\n    agent: Reviewer\n    prompt: \"Proof this draft. Check: factual accuracy (flag unverified claims), grammar and spelling, consistency with project style guide, tone fit for target audience, and readability. Leave specific, line-level feedback.\"\n    timeout: 30m\n  - type: agent_run\n    label: Writer addresses feedback\n    agent: \"{{ assignee }}\"\n    prompt: \"Address all reviewer feedback. For each point: apply the fix, or explain in a comment why you disagree. Produce a revised draft.\"\n    timeout: 30m\n  - type: agent_run\n    label: Editor final sign-off\n    agent: Editor\n    prompt: \"Give this piece a final editorial read. Check overall narrative arc, headline, opening hook, and closing call-to-action. Approve for publication or return with final notes.\"\n    timeout: 20m\n  - type: approve\n    label: Ready to publish\n    approvers: [Editor]\n    timeout: 24h\n    timeoutAction: notify\n"
+    },
+    {
+      "id": "spike",
+      "name": "Publish",
+      "scope": "task",
+      "trigger": {
+        "kind": "manual"
+      },
+      "workflowYaml": "name: Publish\nsteps:\n  - type: agent_run\n    label: Prepare for publication\n    agent: Editor\n    prompt: \"Prepare this piece for publication: confirm final headline, write meta description (150-160 chars), confirm any images/assets are ready, and note the target publication channel and date.\"\n    timeout: 20m\n  - type: approve\n    label: Publish confirmation\n    approvers: []\n    timeout: 4h\n    timeoutAction: notify\n"
+    }
+  ],
+
+  "skills": [
+    {
+      "key": "tone-check",
+      "name": "Tone Check",
+      "description": "Audience-fit assessment: formal vs conversational, technical depth calibration, reading level awareness.",
+      "category": "content",
+      "promptAddendum": "## Tone Check\n\nBefore finalising any piece of content, run this tone check:\n\n**Audience fit:**\n- Who is the primary reader? (expert / practitioner / general public)\n- Does the vocabulary match their expertise level?\n- Would a reader in the target audience feel spoken *to* or *at*?\n\n**Tone spectrum check:**\n- Formal ↔ Conversational: Is the register consistent throughout?\n- Technical ↔ Accessible: Are technical terms explained on first use?\n- Confident ↔ Hedging: Avoid weasel words (\"sort of\", \"kind of\", \"maybe\") unless deliberate.\n\n**Readability:**\n- Average sentence length under 20 words (aim for variety: short punchy + longer explanatory).\n- No paragraph longer than 5 sentences in web content.\n- Active voice preferred unless passive is intentional for emphasis.\n\n**Red flags:**\n- Jargon not introduced before use\n- Tonal shifts between sections (usually from switching authors)\n- Hedging on claims you actually believe\n"
+    }
+  ],
+
+  "routing": [
+    {
+      "pattern": "pitch",
+      "matchType": "label",
+      "agentName": "Editor",
+      "priority": 10,
+      "rawRule": "| pitch | Editor | Pitches route to Editor for approval before work begins. |"
+    },
+    {
+      "pattern": "draft",
+      "matchType": "label",
+      "agentName": "Reviewer",
+      "priority": 20,
+      "rawRule": "| draft | Reviewer | Drafts route to Reviewer for proofing. |"
+    },
+    {
+      "pattern": "catchall",
+      "matchType": "catchall",
+      "agentName": "Editor",
+      "priority": 99,
+      "rawRule": "| * | Editor | Unmatched items route to Editor. |"
+    }
+  ]
+}

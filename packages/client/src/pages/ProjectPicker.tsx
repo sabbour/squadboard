@@ -21,7 +21,12 @@ import { Folder20Regular, DocumentCopy20Regular, ArrowSync20Regular } from '@flu
 import { useProjects } from '../api/projects.ts'
 import { useDiscoverSquad, useRegisterSquad, useInitSquad, useCreateSquad } from '../api/squad.ts'
 import type { SquadDirectory } from '../api/squad.ts'
-import { useTemplates, useInstantiateProjectTemplate } from '../api/templates.ts'
+import {
+  useTemplates,
+  useInstantiateProjectTemplate,
+  useBuiltinProjectTemplates,
+  useApplyBuiltinProjectTemplate,
+} from '../api/templates.ts'
 import ProjectCard from '../components/ProjectCard.tsx'
 
 export default function ProjectPicker() {
@@ -114,58 +119,138 @@ function CreateFromTemplateModal({
   onClose: () => void
   onCreated: (id: string) => void
 }) {
-  const { data: templates = [], isLoading, isError } = useTemplates('project')
+  const { data: savedTemplates = [], isLoading: savedLoading, isError: savedError } = useTemplates('project')
+  const { data: builtinTemplates = [], isLoading: builtinLoading } = useBuiltinProjectTemplates()
   const instantiate = useInstantiateProjectTemplate()
+  const applyBuiltin = useApplyBuiltinProjectTemplate()
+
+  // selectedKind: 'builtin' | 'saved'
+  const [selectedKind, setSelectedKind] = useState<'builtin' | 'saved' | null>(null)
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [name, setName] = useState('')
   const [squadPath, setSquadPath] = useState('')
   const [error, setError] = useState<string | null>(null)
 
+  const isLoading = savedLoading || builtinLoading
+  const isPending = instantiate.isPending || applyBuiltin.isPending
+
   async function handleCreate() {
-    if (!selectedId || !name.trim() || !squadPath.trim()) return
+    if (!selectedId || !selectedKind || !name.trim() || !squadPath.trim()) return
     setError(null)
     try {
-      const result = await instantiate.mutateAsync({
-        templateId: selectedId,
-        name: name.trim(),
-        squadPath: squadPath.trim(),
-      })
-      onCreated(result.id)
+      if (selectedKind === 'builtin') {
+        const result = await applyBuiltin.mutateAsync({
+          bundleId: selectedId,
+          name: name.trim(),
+          squadPath: squadPath.trim(),
+        })
+        onCreated(result.id)
+      } else {
+        const result = await instantiate.mutateAsync({
+          templateId: selectedId,
+          name: name.trim(),
+          squadPath: squadPath.trim(),
+        })
+        onCreated(result.id)
+      }
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Failed to create project')
     }
   }
 
+  function selectBuiltin(bundleId: string, bundleName: string) {
+    setSelectedKind('builtin')
+    setSelectedId(bundleId)
+    setName(bundleName)
+  }
+
+  function selectSaved(id: string, tplName: string) {
+    setSelectedKind('saved')
+    setSelectedId(id)
+    setName(tplName)
+  }
+
+  const hasAny = builtinTemplates.length > 0 || savedTemplates.length > 0
+
   return (
     <Dialog open onOpenChange={(_, d) => { if (!d.open) onClose() }}>
-      <DialogSurface style={{ maxWidth: 540, width: '100%' }}>
+      <DialogSurface style={{ maxWidth: 560, width: '100%' }}>
         <DialogBody>
           <DialogTitle>Create project from template</DialogTitle>
           <DialogContent style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
             {isLoading && (
               <Body1 style={{ color: 'var(--text-muted)' }}>Loading templates…</Body1>
             )}
-            {isError && (
-              <Body1 style={{ color: 'var(--danger)' }}>Failed to load templates.</Body1>
-            )}
-            {!isLoading && !isError && templates.length === 0 && (
+            {!isLoading && !hasAny && (
               <Body1 style={{ color: 'var(--text-muted)' }}>
-                No project templates yet. Save a project as a template from Settings → Portability.
+                No project templates available.
               </Body1>
             )}
-            {!isLoading && templates.length > 0 && (
+
+            {/* Built-in templates section */}
+            {!isLoading && builtinTemplates.length > 0 && (
               <>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: '200px', overflowY: 'auto' }}>
-                  {templates.map((tpl) => (
+                <div style={{ fontSize: '11px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--text-muted)' }}>
+                  Built-in
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                  {builtinTemplates.map((tpl) => (
+                    <button
+                      key={tpl.bundleId}
+                      onClick={() => selectBuiltin(tpl.bundleId, tpl.name)}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '10px',
+                        background: selectedKind === 'builtin' && selectedId === tpl.bundleId
+                          ? 'rgba(56,139,253,0.12)'
+                          : 'var(--bg)',
+                        border: `1px solid ${selectedKind === 'builtin' && selectedId === tpl.bundleId ? tokens.colorBrandStroke1 : 'var(--border)'}`,
+                        borderRadius: 'var(--radius)',
+                        padding: '10px 14px',
+                        color: 'var(--text)',
+                        textAlign: 'left',
+                        width: '100%',
+                        cursor: 'pointer',
+                      }}
+                    >
+                      {tpl.icon && <span style={{ fontSize: '20px', lineHeight: 1 }}>{tpl.icon}</span>}
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontWeight: 500 }}>{tpl.name}</div>
+                        {tpl.description && (
+                          <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '2px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                            {tpl.description}
+                          </div>
+                        )}
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              </>
+            )}
+
+            {/* User-saved templates section */}
+            {!isLoading && savedTemplates.length > 0 && (
+              <>
+                <div style={{ fontSize: '11px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--text-muted)' }}>
+                  My templates
+                </div>
+                {savedError && (
+                  <Body1 style={{ color: 'var(--danger)' }}>Failed to load saved templates.</Body1>
+                )}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', maxHeight: '180px', overflowY: 'auto' }}>
+                  {savedTemplates.map((tpl) => (
                     <button
                       key={tpl.id}
-                      onClick={() => { setSelectedId(tpl.id); setName(tpl.name) }}
+                      onClick={() => selectSaved(tpl.id, tpl.name)}
                       style={{
                         display: 'flex',
                         flexDirection: 'column',
                         alignItems: 'flex-start',
-                        background: selectedId === tpl.id ? 'rgba(56,139,253,0.12)' : 'var(--bg)',
-                        border: `1px solid ${selectedId === tpl.id ? tokens.colorBrandStroke1 : 'var(--border)'}`,
+                        background: selectedKind === 'saved' && selectedId === tpl.id
+                          ? 'rgba(56,139,253,0.12)'
+                          : 'var(--bg)',
+                        border: `1px solid ${selectedKind === 'saved' && selectedId === tpl.id ? tokens.colorBrandStroke1 : 'var(--border)'}`,
                         borderRadius: 'var(--radius)',
                         padding: '10px 14px',
                         color: 'var(--text)',
@@ -181,6 +266,12 @@ function CreateFromTemplateModal({
                     </button>
                   ))}
                 </div>
+              </>
+            )}
+
+            {/* Project name + squad path fields — shown once any template is selected */}
+            {selectedId && (
+              <>
                 <div>
                   <label style={{ fontSize: '12px', color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>
                     Project name <span style={{ color: 'var(--danger)' }}>*</span>
@@ -211,16 +302,17 @@ function CreateFromTemplateModal({
                 </div>
               </>
             )}
+
             {error && <p style={{ color: 'var(--danger)', fontSize: '13px', margin: 0 }}>{error}</p>}
           </DialogContent>
           <DialogActions>
             <Button appearance="secondary" onClick={onClose}>Cancel</Button>
             <Button
               appearance="primary"
-              disabled={!selectedId || !name.trim() || !squadPath.trim() || instantiate.isPending}
+              disabled={!selectedId || !name.trim() || !squadPath.trim() || isPending}
               onClick={() => void handleCreate()}
             >
-              {instantiate.isPending ? 'Creating…' : 'Create project'}
+              {isPending ? 'Creating…' : 'Create project'}
             </Button>
           </DialogActions>
         </DialogBody>

@@ -389,3 +389,54 @@ export function useImportWorkflow() {
   })
 }
 
+// ---------------------------------------------------------------------------
+// Built-in project bundle templates  (Wave 16 — Hockney)
+// ---------------------------------------------------------------------------
+
+export interface BuiltinProjectTemplate {
+  bundleId: string
+  name: string
+  description: string
+  icon?: string
+  version: string
+}
+
+/** List built-in project bundle templates scanned from the server's bundles/ directory. */
+export function useBuiltinProjectTemplates() {
+  return useQuery<BuiltinProjectTemplate[], Error>({
+    queryKey: ['templates', 'builtin-projects'],
+    queryFn: async () => {
+      const env = await apiFetch<ApiEnvelope<{ templates: BuiltinProjectTemplate[] }>>(
+        '/api/templates/builtin-projects',
+      )
+      return unwrapEnvelope(env).templates
+    },
+    staleTime: 60_000,
+  })
+}
+
+/**
+ * Apply a built-in project bundle template to create a new project.
+ * Body: { bundleId, name, squadPath }
+ */
+export function useApplyBuiltinProjectTemplate() {
+  const queryClient = useQueryClient()
+  return useMutation<
+    { id: string; name: string },
+    Error,
+    { bundleId: string; name: string; squadPath: string }
+  >({
+    mutationFn: async ({ bundleId, name, squadPath }) => {
+      const env = await apiFetch<ApiEnvelope<{ project: { id: string; name: string } }>>(
+        `/api/templates/builtin-projects/${bundleId}/apply`,
+        { method: 'POST', body: JSON.stringify({ name, squadPath }) },
+      )
+      return unwrapEnvelope(env).project
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['projects'] })
+    },
+  })
+}
+
+

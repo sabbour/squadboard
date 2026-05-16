@@ -1,0 +1,136 @@
+{
+  "manifest": {
+    "bundleId": "library-or-sdk-project",
+    "name": "Library / SDK Project",
+    "version": "1.0.0",
+    "description": "Kanban for npm / PyPI library development: triage through release. Ceremonies cover API RFC, version bump, and release notes. Team includes a lead, implementer, docs writer, and tester.",
+    "author": "Squadboard Team",
+    "license": "MIT",
+    "schemaVersion": 1
+  },
+
+  "project": {
+    "name": "Library / SDK Project",
+    "description": "An open-source library or SDK managed through Squadboard.",
+    "icon": "📦"
+  },
+
+  "kanban": {
+    "columns": [
+      { "slug": "triage",      "label": "Triage",      "order": 0 },
+      { "slug": "api-design",  "label": "API Design",  "order": 1 },
+      { "slug": "impl",        "label": "Impl",        "order": 2, "wip_limit": 3 },
+      { "slug": "docs",        "label": "Docs",        "order": 3 },
+      { "slug": "release",     "label": "Release",     "order": 4 }
+    ],
+    "defaultColumn": "triage"
+  },
+
+  "team": [
+    {
+      "name": "Lead",
+      "role": "Library Lead",
+      "persistent": true,
+      "charter": "# Lead\n\n## Role\nLibrary Lead — owns public API design, versioning policy, and release cadence.\n\n## Expertise\n- Public API design and semver discipline\n- Breaking-change analysis\n- Deprecation policy\n- Changelog authoring\n\n## Style\nConservative on breaking changes. Every public API is a contract.\n"
+    },
+    {
+      "name": "Implementer",
+      "role": "Core Implementer",
+      "persistent": true,
+      "charter": "# Implementer\n\n## Role\nCore Implementer — writes the library internals, unit tests, and benchmarks.\n\n## Expertise\n- Language idioms and performance\n- Internal architecture\n- Test coverage\n- CI / build tooling\n\n## Style\nClean internals behind stable public surfaces. No implementation detail leaks.\n"
+    },
+    {
+      "name": "Docs",
+      "role": "Documentation Writer",
+      "persistent": true,
+      "charter": "# Docs\n\n## Role\nDocumentation Writer — owns API reference, guides, migration notes, and examples.\n\n## Expertise\n- API reference authoring\n- Tutorial and guide writing\n- Migration guides\n- Example projects\n\n## Style\nUser-first. If the docs aren't clear, the API is broken.\n"
+    },
+    {
+      "name": "Tester",
+      "role": "QA / Compatibility Tester",
+      "persistent": true,
+      "charter": "# Tester\n\n## Role\nQA / Compatibility Tester — validates across supported runtime versions and integration scenarios.\n\n## Expertise\n- Cross-version compatibility\n- Integration test scenarios\n- Regression detection\n- Edge case enumeration\n\n## Style\nBreak it before users do. Regression tests are non-negotiable.\n"
+    }
+  ],
+
+  "ceremonies": [
+    {
+      "id": "rfc",
+      "name": "API RFC",
+      "scope": "project",
+      "trigger": {
+        "kind": "on_issue_entry",
+        "config": { "column": "api-design" }
+      },
+      "workflowYaml": "name: API RFC\nsteps:\n  - type: agent_run\n    label: Draft API RFC\n    agent: Lead\n    prompt: \"Draft an API RFC for this change. Include: motivation, proposed API surface (signatures, types, defaults), alternatives considered, semver impact (patch/minor/major), and open questions.\"\n    timeout: 60m\n  - type: approve\n    label: Team API review\n    approvers: [Implementer, Docs, Tester]\n    request_changes_policy: majority\n    timeout: 48h\n    timeoutAction: escalate\n    fallbackReviewer: Lead\n  - type: agent_run\n    label: Incorporate feedback and mark accepted\n    agent: Lead\n    prompt: \"Incorporate review feedback. Mark RFC accepted, summarise the final API decision, and update the issue with the resolved design.\"\n    timeout: 30m\n"
+    },
+    {
+      "id": "simple-review",
+      "name": "Implementation Review",
+      "scope": "task",
+      "trigger": {
+        "kind": "on_issue_entry",
+        "config": { "column": "docs" }
+      },
+      "workflowYaml": "name: Implementation Review\nsteps:\n  - type: agent_run\n    label: Review implementation\n    agent: Lead\n    prompt: \"Review the implementation. Check: public API matches the accepted RFC, internal design is sound, test coverage is adequate, no implementation details leak through the public surface.\"\n    timeout: 30m\n  - type: approve\n    label: Merge gate\n    approvers: []\n    timeout: 2h\n    timeoutAction: notify\n"
+    },
+    {
+      "id": "spike",
+      "name": "Version Bump & Release Notes",
+      "scope": "project",
+      "trigger": {
+        "kind": "on_issue_entry",
+        "config": { "column": "release" }
+      },
+      "workflowYaml": "name: Version Bump and Release Notes\nsteps:\n  - type: agent_run\n    label: Determine semver bump\n    agent: Lead\n    prompt: \"Review all changes in this release. Determine the correct semver bump (patch/minor/major). Justify based on breaking-change policy.\"\n    timeout: 20m\n  - type: agent_run\n    label: Draft changelog entry\n    agent: Docs\n    prompt: \"Write the CHANGELOG entry for this release. Follow Keep a Changelog format. Group by Added/Changed/Deprecated/Removed/Fixed/Security. Link to relevant issues.\"\n    timeout: 30m\n  - type: agent_run\n    label: Write migration guide if needed\n    agent: Docs\n    prompt: \"If this is a major or breaking-minor release, write a migration guide covering every breaking change. If no breaking changes, write 'No migration required.'\"\n    timeout: 30m\n  - type: approve\n    label: Release approval\n    approvers: []\n    timeout: 4h\n    timeoutAction: notify\n"
+    }
+  ],
+
+  "skills": [
+    {
+      "key": "semver",
+      "name": "Semver Discipline",
+      "description": "Strict semantic versioning: patch for fixes, minor for backwards-compatible additions, major for breaking changes.",
+      "category": "release",
+      "promptAddendum": "## Semver Discipline\n\nFollow semantic versioning (semver.org) rigorously:\n\n- **PATCH** (x.y.Z): backwards-compatible bug fix only. No new public API.\n- **MINOR** (x.Y.0): backwards-compatible new functionality. Existing API is unchanged.\n- **MAJOR** (X.0.0): any breaking change to the public API. Adding required parameters, removing exports, changing types.\n\n**Rules:**\n1. A breaking change in any public export forces a MAJOR bump — no exceptions.\n2. Deprecation is MINOR (add `@deprecated` JSDoc/docstring, keep the symbol).\n3. Never increment PATCH if ANY public behaviour changed.\n4. `0.x.y` versions: MINOR can contain breaking changes. Graduate to `1.0.0` before promising stability.\n"
+    },
+    {
+      "key": "changelog",
+      "name": "Changelog Authoring",
+      "description": "Keep a Changelog format: Added / Changed / Deprecated / Removed / Fixed / Security sections, user-facing language.",
+      "category": "release",
+      "promptAddendum": "## Changelog Authoring\n\nFollow [Keep a Changelog](https://keepachangelog.com) format:\n\n```\n## [x.y.z] — YYYY-MM-DD\n### Added\n- ...\n### Changed\n- ...\n### Deprecated\n- ...\n### Removed\n- ...\n### Fixed\n- ...\n### Security\n- ...\n```\n\n**Rules:**\n- Write for users, not for developers. Describe impact, not implementation.\n- Every public-facing change gets an entry. Internal refactors don't.\n- Link to relevant issues / PRs with `([#123](url))`.\n- Use present tense: \"Adds support for X\" not \"Added support for X\".\n- Omit empty sections.\n"
+    }
+  ],
+
+  "routing": [
+    {
+      "pattern": "breaking-change",
+      "matchType": "label",
+      "agentName": "Lead",
+      "priority": 10,
+      "rawRule": "| breaking-change | Lead | Breaking changes route to Lead for API impact assessment. |"
+    },
+    {
+      "pattern": "docs",
+      "matchType": "label",
+      "agentName": "Docs",
+      "priority": 20,
+      "rawRule": "| docs | Docs | Documentation issues go directly to Docs. |"
+    },
+    {
+      "pattern": "bug",
+      "matchType": "label",
+      "agentName": "Tester",
+      "priority": 30,
+      "rawRule": "| bug | Tester | Bugs route to Tester for reproduction and severity assessment. |"
+    },
+    {
+      "pattern": "catchall",
+      "matchType": "catchall",
+      "agentName": "Lead",
+      "priority": 99,
+      "rawRule": "| * | Lead | Unmatched issues route to Lead for triage. |"
+    }
+  ]
+}
