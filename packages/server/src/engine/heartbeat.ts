@@ -125,6 +125,19 @@ export class Heartbeat {
   }
 
   /**
+   * W25: Returns the effective intervalMs/enabled for every registered sweep.
+   * Used by GET /api/heartbeat/config so Brady can verify which overrides
+   * from heartbeat.config.json actually took effect at boot.
+   */
+  getEffectiveIntervals(): Array<{ id: string; intervalMs: number; enabled: boolean }> {
+    return Array.from(this.registry.values()).map((state) => ({
+      id:         state.sweep.id,
+      intervalMs: state.sweep.intervalMs,
+      enabled:    state.sweep.enabled,
+    }));
+  }
+
+  /**
    * Toggle the enabled flag of a registered sweep by id.
    * Used by PATCH /api/heartbeat/sweeps/:id in the route layer.
    */
@@ -173,6 +186,16 @@ export class Heartbeat {
         durationMs,
       });
 
+      // W25: sweep timeline tick — broadcast to global WS subscribers so the
+      // Heartbeat + Now pages can animate a pulse on the sweep's lane.
+      eventBus.emitHeartbeatEvent('sweep.tick', {
+        sweepName:       state.sweep.id,
+        timestamp:       new Date().toISOString(),
+        agentsActivated: [],
+        durationMs,
+        status:          'success' as const,
+      });
+
       if (result.acted > 0 || process.env.LOG_LEVEL === 'debug') {
         console.log(
           `[heartbeat] ${state.sweep.id} — acted=${result.acted} errors=${result.errors} (${durationMs}ms)` +
@@ -191,6 +214,16 @@ export class Heartbeat {
         sweepId: state.sweep.id,
         error: errorMsg,
         durationMs,
+      });
+
+      // W25: also emit a sweep.tick with status=error so the timeline shows
+      // a red pulse on the relevant lane.
+      eventBus.emitHeartbeatEvent('sweep.tick', {
+        sweepName:       state.sweep.id,
+        timestamp:       new Date().toISOString(),
+        agentsActivated: [],
+        durationMs,
+        status:          'error' as const,
       });
     }
   }

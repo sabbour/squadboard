@@ -72,4 +72,18 @@ router.patch('/sweeps/:id', (req: Request, res: Response): void => {
   }
 });
 
+/**
+ * GET /api/heartbeat/config — effective per-sweep cadence config.
+ *
+ * Returns the intervalMs + enabled flag for every registered sweep AFTER
+ * heartbeat.config.json overrides have been applied at boot. Use this to
+ * verify which overrides took effect without restarting verbose logging.
+ */
+router.get('/config', (_req: Request, res: Response): void => {
+  res.json({
+    configPath: 'packages/server/heartbeat.config.json',
+    sweeps: heartbeat.getEffectiveIntervals(),
+  });
+});
+
 export default router;

@@ -1,0 +1,11 @@
+{
+  "_comment": "Per-sweep cadence overrides. intervalMs replaces the coded default. multiplier scales the coded default (ignored if intervalMs is set). Set enabled=false to disable a sweep. Restart the server to apply changes.",
+  "sweeps": {
+    "ceremonies-due":       { "intervalMs": 5000,  "enabled": true  },
+    "ready-workflow-steps": { "intervalMs": 5000,  "enabled": true  },
+    "stuck-issue-runs":     { "intervalMs": 30000, "enabled": true  },
+    "stale-presence":       { "intervalMs": 30000, "enabled": true  },
+    "idle-live-sessions":   { "intervalMs": 60000, "enabled": true  },
+    "github-sync-overdue":  { "intervalMs": 60000, "enabled": true  }
+  }
+}

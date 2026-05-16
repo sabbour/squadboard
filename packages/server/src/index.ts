@@ -46,6 +46,7 @@ import { createMcpHttpRouter } from './mcp/http-transport.js';
 import { setDefaultProjectId } from './mcp/server.js';
 import { dispatcher } from './engine/dispatcher.js';
 import { heartbeat } from './engine/heartbeat.js';
+import { applyHeartbeatConfig } from './engine/heartbeat-config.js';
 import { stuckIssueRunsSweep } from './engine/sweeps/stuck-issue-runs.js';
 import { idleLiveSessionsSweep } from './engine/sweeps/idle-live-sessions.js';
 import { stalePresenceSweep } from './engine/sweeps/stale-presence.js';
@@ -161,6 +162,16 @@ async function main(): Promise<void> {
 
   // Phase 3: register and start the heartbeat sweep registry
   // (replaces the old dispatcher.start() 5 s monolithic tick).
+  // W25: apply per-component cadence overrides from heartbeat.config.json
+  // BEFORE register() so the registry stores the effective intervals.
+  applyHeartbeatConfig([
+    stuckIssueRunsSweep,
+    idleLiveSessionsSweep,
+    stalePresenceSweep,
+    readyWorkflowStepsSweep,
+    githubSyncOverdueSweep,
+    ceremoniesDueSweep,
+  ]);
   heartbeat.register(stuckIssueRunsSweep);      // 30 s — reclaim expired/orphaned runs
   heartbeat.register(idleLiveSessionsSweep);    // 60 s — mark inactive sessions idle
   heartbeat.register(stalePresenceSweep);       // 30 s — evict phantom presence records

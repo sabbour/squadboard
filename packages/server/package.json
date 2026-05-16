@@ -12,6 +12,7 @@
   "files": [
     "dist",
     "coordinator-fragment.md",
+    "heartbeat.config.json",
     "scripts/postinstall-coordinator-fragment.mjs",
     "README.md"
   ],
