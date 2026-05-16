@@ -319,3 +319,28 @@ Logic extracted from inline route handlers into `services/github-git-ops.ts`. Bo
 
 ### Decision filed
 `.squad/decisions/inbox/hockney-stream-g-phase2b.md`
+
+---
+
+## W21 Lesson (Closed in W22) — PGlite Persistence + Graceful Shutdown
+
+**Date:** 2026-05-16
+**Wave:** 21 (closed in Wave 22)
+
+PGlite persistence and graceful shutdown from Hockney-w21.
+
+**PGlite NodeFS persistence bug fix:**
+- PGlite NodeFS is unreliable for complex schemas. Reopening a corrupted NodeFS directory triggers WebAssembly Aborted() crash.
+- **Solution:** Use dumpDataDir → runRestore cycle. CHECKPOINT before exit. Call stopPglite() cleanly.
+- **Result:** 225 issues restored (was 0 before fix); all 656 rows recovered
+
+**Graceful shutdown pattern:**
+- Stop heartbeat, sync loops, Copilot watcher immediately
+- Set 10s drain timeout (unref so it does not block clean exits)
+- After server.close(): CHECKPOINT → closeDb() → log shutdown event
+
+**Stale-run recovery (boot-time):**
+- Mark orphaned running rows as failed with stale_reason="restart-pickup" on boot
+- Prevents hung processes from blocking users
+
+**Lessons:** Always CHECKPOINT before exit. Use dumpDataDir for complex schemas. Stale-run recovery prevents user-blocking hung states. Daemon spawn errors need .on("error") handlers.

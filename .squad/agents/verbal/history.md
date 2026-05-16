@@ -197,3 +197,24 @@ Run: w17
 
 **rehype-sanitize allowlist for highlight.js:** `defaultSchema` strips all class attributes. highlight.js relies on class names like `language-typescript` on `<code>` and `hljs-keyword` on `<span>`. The allowlist must explicitly permit these patterns via regex (`/^language-.+/`, `/^hljs-.*/`) or code blocks render as unstyled monospace.
 
+
+---
+
+## W22 Lesson — Classifier Extension Pattern
+
+**Date:** 2026-05-16  
+**Wave:** 22
+
+Classifier extension pattern from Verbal-w22:
+
+1. **Define canonical enum** of all intents. Start with existing 6, add new 4 (ceremony, mcp-server, inbox-item, consult). Use a const array as the source of truth: `export const ALL_INTENTS = ['project', 'issue', ...] as const`
+
+2. **Implement rule-based scorer** for each intent. Give each intent a heuristic weight (4–5 for strong signals, 2–3 for weak). Fast-path fires when confidence ≥ 0.55 (CONFIDENCE_THRESHOLD).
+
+3. **Implement LLM fallback** that returns top-3 candidates with confidence + reason + draft. If LLM returns legacy single-intent format, complement with rule-based runners-up (up to 3 total).
+
+4. **Backward-compat field aliasing:** Accept both `prose` (preferred) and `prompt` (deprecated alias). Prefer `prose` when both sent. Accept both flat (`projectId`, `projectName`, `knownProjectNames`, `hint`) and nested (`context: { currentProjectId, currentProjectName }`) request shapes; flat takes precedence.
+
+5. **Test coverage must span:** heuristic fast-path (all intents), LLM happy path (top-3 parsing), LLM degradation (legacy single-intent), backward-compat aliases, edge cases (ambiguous prompts, no matches, etc).
+
+**Result for W22:** 56 tests, all passing. Coexistence of Keyser-w22's modal works seamlessly; modal automatically uses `candidates` array when present, gracefully falls back if not.

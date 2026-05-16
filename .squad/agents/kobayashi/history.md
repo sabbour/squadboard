@@ -177,3 +177,29 @@ This is the "Scribe stays one agent" principle: one source of truth for algorith
 
 **Decision doc:** `.squad/decisions/inbox/kobayashi-w18-npm-publish-squad-aware.md`
 
+
+---
+
+## W22 Lesson — Loading Gallery + ActionLoading Pattern
+
+**Date:** 2026-05-16  
+**Wave:** 22
+
+Loading gallery (K5) + ActionLoading component (K7) from Kobayashi-w22.
+
+**K5 — Dev-only loading gallery:**
+- Route `/__loading-gallery` is DEV-gated with `import.meta.env.DEV` — zero production bundle cost
+- Gallery showcases all loading patterns: RouteProgressBar, PageLoading (3 variants), SectionLoading (3 variants), InlineLoading (3 variants), ActionLoading (2 variants)
+- Single source of truth for loading UI — developers visit the gallery to see and copy-paste markup
+- Wraps in `<PageHeader>` using existing layout component
+
+**K7 — ActionLoading component + sweep:**
+- `<ActionLoading>` wraps `<Spinner size="tiny" />` for button-icon slot
+- Use `display: contents` on wrapper to keep icon slot clean (no margin bleed)
+- Add optional `label` prop for semantic meaning (e.g., "Ending wave…", "Formulating…", "Casting…")
+- Swept 4 call-sites (CeremonyList 2×, FormulatePanel 1×, HireTeamModal 1×) with semantic labels
+- Cleaned up unused imports
+
+**Surgical sweep strategy:** Fix the most critical sites first (button actions), defer UI-only spinners (status indicators, text inline spinners) to future waves. Keeps PRs focused and reviewable.
+
+**Future:** 8+ remaining tiny-spinner sites documented for next sweep wave (ProjectPicker, SystemBackup, SystemGitHub, GitHubActivityFeed, LiveSession).

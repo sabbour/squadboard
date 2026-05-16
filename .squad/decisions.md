@@ -2396,3 +2396,564 @@ Added to `issues` table (Wave 20 migration, idempotent `IF NOT EXISTS`):
 ## 6. Upstream PR
 
 Not filed — `bradygaster/squad` PR is out of scope per Wave 20 brief (don't touch PR #1124). The local `squad.agent.md` has been updated as the canonical source; upstream sync is deferred.
+
+---
+
+# 2026-05-16T01:55:00-07:00: User directive — Fluent icons not unicode emoji
+
+**By:** Ahmed Sabbour (via Copilot)
+
+**What:** **Always use `@fluentui/react-icons` for any UI affordance — never unicode emoji.** Tab labels, button icons, menu icons, badges, status indicators, empty-state illustrations: all of these must use Fluent icon components (e.g., `Sparkle20Regular`, `Beaker20Regular`, `Wand20Regular`, `Globe20Regular`, `Bug20Regular`). Unicode emoji glyphs (✨, 🧪, ��, 🐛, 📋, 🔧, ⚗️, etc.) are NOT allowed in the rendered UI — they break visual consistency with the rest of the Fluent 2 surface, do not respect token-based color, do not scale predictably across platforms, and lose their semantic meaning in screen readers without aria-labels.
+
+**Concrete violations called out:** Add Project modal → "Suggest setup" tab uses ✨ (should be `<Sparkle20Regular />`); the Suggest setup primary button uses 🧪 (should be `<Beaker20Regular />` — the "experiment" or "lab" Fluent variant).
+
+**Scope of the rule:**
+- Tab labels (`<Tab icon={...}>` — use the `icon` prop with a Fluent component)
+- Button icons (`<Button icon={...}>`)
+- Menu items (`<MenuItem icon={...}>`)
+- Section headers, cards, badges, empty states, status pills
+- Toasts and notifications
+
+**Acceptable exceptions** (vanishingly small):
+- Stored user-generated content (emoji typed into issue titles by a person stays as-is)
+- Console/CLI output where Fluent isn't available (orchestration log, terminal-only paths)
+- Source-of-truth markdown files that are read by humans on GitHub, where emoji conveys structured meaning the renderer respects (this is what `.squad/decisions.md` already does and is unaffected)
+
+**Why:** User request — visual consistency, accessibility, Fluent 2 conformance.
+
+**Required follow-up:**
+1. Audit the existing UI for emoji usage and replace with Fluent icons (sweep across `packages/client/src/**/*.tsx` for unicode emoji literals).
+2. Add the rule to Keyser's charter so future UI work doesn't reintroduce them.
+3. Lint rule (future) — ESLint custom rule that flags non-ASCII emoji characters in JSX text/attributes; small but high-leverage to prevent recurrence.
+
+This directive is RETROACTIVE — applies to all in-flight work this wave including the new ConjureModal (Keyser-w22) that's currently being built.
+
+---
+
+# 2026-05-16T01:35:00-07:00: Conjure Misdiagnosis Post-Mortem (W15 / W19 / W21 → corrected in W22)
+
+**Author:** Coordinator (Squad)
+**Date:** 2026-05-16T01:35:00-07:00
+**Status:** PROPOSED → ready for next Scribe merge
+**Why this exists:** Brady explicitly asked for a record so future agents don't repeat the same mistake a 4th time.
+
+---
+
+## What the spec actually says
+
+The canonical Conjure design lives in `.squad/decisions-archive.md` lines **1666–1960** ("Polymorphic Capture → 'Conjure' — Design Proposal" by McManus, 2026-05-15).
+
+Three things are non-negotiable in that spec and were missed by three consecutive waves:
+
+1. **Conjure is a NEW modal** (`ConjureModal.tsx`) — a separate component that replaces CaptureModal as the global intent-routing surface. It is NOT a rename of any existing page.
+2. **Consult is a DIFFERENT surface** — the chat/Q&A page at `/consult/new` keeps the "Consult" label everywhere. It coexists with Conjure; they serve different purposes.
+3. **The classifier service exists** (`packages/server/src/services/conjure-classifier.ts`, ~500 lines, 90% complete). The remaining work is: extend to 10 intents (it had 6), return top-3 candidates (it returned only the winner), and ship the modal that consumes the API.
+
+---
+
+## The misdiagnosis pattern (three waves got this wrong the same way)
+
+**W15 — Keyser:** Searched the codebase for "Conjure", found that the only matches were the route value `"consult"` and old label text. Concluded "Conjure was a labeling regression — page at `/consult/new` just had wrong labels" and renamed the nav item "Consult" → "Conjure". Result: Consult page got mis-labeled; no actual Conjure surface shipped.
+
+**W19 — Keyser:** Added "Investigate in Conjure" deep-link from `CardDetail.tsx` that navigates to `/consult/new?prefill=issue:<id>`. This re-cemented the W15 mistake — the deep-link goes to the Consult page (now mis-labeled Conjure), not to any actual Conjure modal.
+
+**W21 — Keyser:** Deleted `CaptureFab.tsx` and `CaptureModal.tsx`, repurposed the Board's `+` FAB to navigate to `/consult/new?prefill=text:`, added a `Ctrl/Cmd+K` global shortcut firing the same nav. Result: the Capture surface is now gone AND its replacement is the Consult page (still mis-labeled). The actual Conjure modal still doesn't exist.
+
+---
+
+## Why the misdiagnosis repeated
+
+1. **The classifier file is named `conjure-classifier.ts`** — agents searched for "conjure" in code, found this file, saw it referenced by `routes/conjure.ts`, concluded "Conjure is implemented; UI just needs the right label" and stopped digging.
+2. **The design proposal was in `decisions-archive.md`, not `decisions.md`** — agents that read `decisions.md` for context didn't pick up the spec. The 1666-line offset also obscured it from skim-reading.
+3. **The CaptureModal was the implicit reference design** — agents understood "Capture must be replaced by Conjure" as "rename the Capture button to Conjure" rather than "the polymorphic intent-router replaces CaptureModal."
+4. **No spec quotes in W15/W19/W21 decision notes** — none of those agents quoted the design spec, which is the tell. They acted on inference, not on the document.
+
+---
+
+## The fix (W22)
+
+- **Keyser-w22** — builds `ConjureModal.tsx` (the actually-missing artifact), reverts the W15 label rename so Consult is "Consult" again, wires the modal to: top-bar Conjure button + `c` hotkey + Ctrl/Cmd+K + Board FAB (the last with `hint: 'issue'` per spec section 4).
+- **Verbal-w22** — extends `conjure-classifier.ts` from 6 → 10 intents (adds `ceremony`, `mcp-server`, `inbox-item`, `consult`) and returns top-3 candidates per spec section 3.
+
+Both agents are required to **quote spec lines verbatim** in their decision notes — the absence of quoted spec text was the single best leading indicator of misdiagnosis in W15/W19/W21.
+
+---
+
+## Hardening for future agents
+
+Three preventive measures to layer into the coordinator playbook and Scribe close-out:
+
+1. **Spec-quote checklist.** When an agent is dispatched against a decision spec, the dispatch prompt MUST require the agent to quote ≥3 verbatim lines from the spec in their close-out doc. The coordinator verifies the quotes match the spec file before marking the todo done. This blocks "I inferred from the code" closures.
+
+2. **Archive search promotion.** `decisions-archive.md` content is just as authoritative as `decisions.md`. Coordinator dispatch prompts should explicitly point agents at BOTH files when a spec might pre-date the current decisions head. (Today: only `decisions.md` is mentioned by convention.)
+
+3. **"Missing file" failure mode.** When an agent reports "the code already implements X — just needed to fix the label," treat that as a code smell unless the implementation file matches the spec's named filename. In the Conjure case: spec names `ConjureModal.tsx`; W15 didn't produce that file; W15's close-out should have been rejected at coordinator review.
+
+---
+
+## Files affected by W22
+
+- **Restored:** `ConsultPage` nav label, Layout top-bar tooltip ("Consult" stays Consult)
+- **Created:** `packages/client/src/components/conjure/ConjureModal.tsx` (Keyser-w22) — owner of the modal shell, candidate chips, sessionStorage draft survival, undo toast
+- **Modified:** `packages/server/src/services/conjure-classifier.ts` (Verbal-w22) — +4 intents, top-3 candidates
+- **Modified:** `packages/server/src/routes/conjure.ts` (Verbal-w22) — new response shape, hint + projectName + knownProjectNames fields, backward-compat `prompt` alias
+- **Rewired:** top-bar Conjure button + `c` hotkey + Ctrl/Cmd+K + Board FAB → all open the new modal (Keyser-w22)
+- **Untouched:** Consult page itself (correctly so — it was never the problem)
+
+---
+
+## Reference
+
+Read the spec yourself: `.squad/decisions-archive.md` lines 1666–1960. Sections 2 (Intent Dimensions, 10 v1 kinds), 3 (Classifier Architecture, top-3 candidates), and 5 (Server Contract, request/response) are mandatory reading for any future Conjure work.
+
+
+---
+
+# 2026-05-16T02:00:00-07:00: Keyser W22 — ConjureModal: Real Implementation + Consult Label Restoration
+
+**Author:** Keyser (UI/UX)  
+**Date:** 2026-05-16  
+**Wave:** 22  
+**Branch:** keyser/w17-settings-backup-github  
+**Commits:** `92a6cb4f`, `44b0176f`
+
+---
+
+## Summary
+
+Three waves of agents (W10–W21) misdiagnosed Conjure as a label problem on the Consult surface. Ahmed course-corrected in W22: Conjure is a **NEW modal**, not a renamed Consult entry point. This decision doc records what Keyser built to fix that.
+
+---
+
+## Verbatim Spec Quotes (from `.squad/decisions-archive.md` lines 1666–1960)
+
+1. **Line 1693–1694 (Naming/Icon):**
+   > "Keyboard shortcut stays `c`."  
+   > `Import: import { Wand20Regular } from '@fluentui/react-icons'`
+
+2. **Lines 1811–1814 (Routing — Hybrid Option C):**
+   > "**In-place (light):** issue, inbox-item, consult, label (if ever added).  
+   > **Navigate (heavy):** project, team, agent, skill, tool, ceremony, mcp-server."
+
+3. **Lines 1818–1820 (Draft survival):**
+   > "Context loss is mitigated: the draft is stashed in `sessionStorage` keyed by a unique formulation ID. If the user hits Back, the draft survives. The Conjure modal also shows a 'Navigating to [Agent Creator]…' toast with an undo link (3s window)."
+
+---
+
+## Files Changed
+
+| File | Change |
+|------|--------|
+| `packages/client/src/components/conjure/ConjureModal.tsx` | **NEW** — full modal implementation |
+| `packages/client/src/context/ConjureContext.tsx` | **NEW** — React context for hoisted modal state |
+| `packages/client/src/components/Layout.tsx` | Restore "Consult" nav label; rewire Conjure button + `c`/`?`/Ctrl+K to open modal; add `<ConjureModal>` instance + `<ConjureProvider>` |
+| `packages/client/src/pages/Board.tsx` | FAB opens `ConjureModal` with `hint="issue"` (replaces navigate-to-consult) |
+| `packages/client/src/pages/Inbox.tsx` | "Open in Conjure" button opens `ConjureModal` with `initialProse` set (replaces navigate-to-consult) |
+
+---
+
+## Label Restorations Done
+
+- **Nav item**: `"Conjure"` → `"Consult"` (it navigates to `/consult/new` as always — that's the Consult surface)
+- **Top-bar button**: stays labeled `"Conjure"` but now opens `ConjureModal` (with `Wand20Regular` icon per spec) instead of navigating
+- **Tooltip**: updated from `"Conjure (press c, ? or Ctrl+K)"` to `"Conjure anything (c, ? or Ctrl+K)"`
+- **Keyboard shortcuts** (`c`, `?`, `Ctrl/Cmd+K`): all three now open `ConjureModal`, not navigate to `/consult/new`
+
+---
+
+## Modal Behavior Shipped
+
+### Input
+- `<Textarea>` with auto-focus and natural language placeholder
+- `Ctrl+Enter` submits from within the textarea
+
+### Classification pipeline
+1. **Heuristic fast-path** (no network): `bug:` / `fix:` / `task:` → issue (0.95); `hire ` / `recruit ` → agent/team (0.92); `project:` / `new project` → project (0.95). Fires if confidence ≥ 0.9.
+2. **Server classify** (`POST /api/conjure/classify` with `{ prompt, hint?, context? }`): returns winner + `routing.fallbacks`. Supports future Verbal-w22 `candidates` array too.
+3. Top-3 candidate chips shown after classification. Most confident chip auto-selected.
+
+### Routing
+- **Light** (`issue`, `inbox-item`, `consult`): create in-place or navigate to consult/new with prose pre-filled. Close modal + success toast.
+- **Heavy** (`project`, `team`, `agent`, `skill`, `tool`, `ceremony`, `mcp-server`): stash draft in `sessionStorage` keyed by `conjure-draft-<uuid>` → navigate → 3s undo toast.
+- `hint="issue"` on Board FAB biases the modal (auto-selects the chip, skips API if heuristic matches).
+
+---
+
+## Entry Points Wired
+
+| Trigger | Before W22 | After W22 |
+|---------|-----------|-----------|
+| Top-bar "Conjure" button | Navigate to `/consult/new` | Opens `ConjureModal` |
+| `c` key | Navigate to `/consult/new` | Opens `ConjureModal` |
+| `?` key | Navigate to `/consult/new` | Opens `ConjureModal` |
+| `Ctrl/Cmd+K` | Navigate to `/consult/new` | Opens `ConjureModal` |
+| Board FAB | Navigate to `/consult/new` | Opens `ConjureModal` with `hint="issue"` |
+| Inbox "Open in Conjure" | Navigate to `/consult/new?prefill=...` | Opens `ConjureModal` with `initialProse` set |
+
+---
+
+## Architecture Decisions
+
+1. **React Context over Zustand**: Zustand is not in the dependency tree. Used `ConjureContext.tsx` with a simple `useState` inside `ConjureProvider`. Hoisted into `Layout.tsx` so the modal is a singleton.
+
+2. **Server field name**: Server uses `prompt` (not `prose` as the spec uses). Client adapts silently.
+
+3. **Candidates from server**: Current server (`classifyAndDraft`) returns `{ intent, confidence, draft, routing: { fallbacks } }` — no top-3 `candidates` array yet (that's Verbal-w22's job). Client builds candidates from `winner + fallbacks` as a graceful fallback. When Verbal-w22 ships the `candidates` array, the modal picks it up automatically.
+
+4. **ConjureIntent type**: Client defines a broader 10-kind type (`project | issue | team | agent | skill | tool | inbox-item | consult | ceremony | mcp-server`) even though the server currently only classifies 6. The extra 4 kinds are ready for Verbal-w22's extension.
+
+---
+
+## Screenshots (by description — no browser available)
+
+1. **ConjureModal open**: Fluent 2 Dialog with `Wand20Regular` icon in title, textarea placeholder, and "Classify" primary action button.
+2. **After classification**: Three candidate chips appear (e.g. "Issue · 87%", "Agent", "Project"), most confident pre-selected. Primary button changes to "Create Issue".
+3. **Nav sidebar**: "Consult" (ChatHelp24Regular) navigates to the Consult chat surface. "Conjure" is only in the top-bar button.
+4. **Board FAB**: `Wand20Regular` icon (was ChatHelp24Regular). Clicking opens ConjureModal pre-biased to issue.
+
+---
+
+## Known Limitations / Follow-ups
+
+1. **No `label` field** in the top-bar "Conjure" button per Fluent 2 Button pattern — this is intentional since the label IS "Conjure"; just using the wand icon differentiation.
+2. **`consult` routing**: Currently classified as "light" — navigates to `/consult/new?prefill=...`. This matches the spec's intent even though it's technically a navigation.
+3. **`inbox-item` without projectId**: Falls back to creating an inbox item without a project (uses `suggestedProjectId: null`). Acceptable for v1.
+4. **Verbal-w22 coordination needed**: When Verbal-w22 ships `candidates` array from `/api/conjure/classify`, the modal will automatically use it (the `if (d.candidates && d.candidates.length > 0)` branch).
+5. **Auto-select after 5s**: Spec section 3 says "if user doesn't pick within 5s and confidence ≥ 0.5, auto-select top candidate but keep chip bar visible." Not implemented in v1 — follow-up task.
+6. **Keyboard a11y for chips**: Arrow key navigation on candidate chips is not yet implemented. Open question from spec section 7. Filed as follow-up.
+
+---
+
+## Ahmed Directive (2026-05-16): No Unicode Emoji in Rendered UI
+
+**Rule (retroactive):** ALWAYS use `@fluentui/react-icons` components. NEVER unicode emoji in any rendered UI string or JSX.
+
+### W22 fixes applied
+
+| Location | Violation | Fix |
+|----------|-----------|-----|
+| `ConjureModal.tsx` (new) | `⚡` heuristic indicator | `<Flash20Regular />` |
+| `ConjureModal.tsx` (new) | `✓ Issue created` toast | `<Checkmark20Regular />` + plain text |
+| `ConjureModal.tsx` (new) | `✓ Inbox item captured` toast | `<Checkmark20Regular />` + plain text |
+| `ConjureModal.tsx` (new) | `×` dismiss in toast | `<Dismiss20Regular />` |
+| `ProjectPicker.tsx` (`DiscoveryModal`) | `✨ Suggest setup` tab label | `<Sparkle20Regular />` + `"Suggest setup"` |
+| `Inbox.tsx` (W22-modified) | `📁 {projectName(...)}` | `<Folder16Regular />` |
+
+**ConjureModal confirmed: zero unicode emoji.** (`grep` verified clean.)
+
+### W23 follow-up — remaining emoji violations (>8, deferred)
+
+| File | Line | Violation |
+|------|------|-----------|
+| `pages/Now.tsx` | 388 | `🔴`, `🟡`, `🟢` health labels |
+| `pages/Now.tsx` | 476–478 | `🤖`, `📋`, `⚙️` activity feed icons |
+| `pages/Agents.tsx` | 117 | `🧪 Test Routing` button |
+| `pages/Diagnostics.tsx` | 112 | `💡` remediation icon |
+| `pages/McpServers.tsx` | 281 | `🔒` secret indicator |
+| `pages/ProjectFlow.tsx` | 270 | `📎` attachment label |
+| `components/agents/HireTeamModal.tsx` | 51–66 | All role labels (`🏗️`, `🔧`, `🧪`, etc.) |
+| `components/flow/StepNode.tsx` | 27–31 | Step type icons (`🧭`, `⚙️`, `✅`, `🌿`, `🤝`) |
+| `components/flow/CeremonyStepNode.tsx` | 24–27 | Same step type icons |
+| `components/sessions/AgentActivityFeed.tsx` | 242–388 | `💸`, `⚠`, `🎛`, `💬` pill icons |
+| `components/runs/GitActions.tsx` | 185–294 | `✓`, `✗`, `💬` action feedback |
+| `components/settings/SystemBackupSection.tsx` | 246 | `⚠️` warning |
+| `pages/Inbox.tsx` | (other instances) | `✓`, `✗` pattern chars |
+
+
+---
+
+# 2026-05-16T01:25:00-07:00: verbal-w22-conjure-classifier — Decision Record
+
+**Agent:** Verbal (back-end integrations)  
+**Wave:** 22  
+**Date:** 2026-05-16T01:25:00-07:00  
+**Status:** SHIPPED  
+
+---
+
+## Spec Quotes (verbatim from decisions-archive.md)
+
+> "**v1 kind count: 10** (project, issue, team, agent, skill, tool, ceremony, mcp-server, inbox-item, consult)."
+> — decisions-archive.md §2, "Recommended additions for v1" summary line
+
+> "`candidates`: array (top-3 by confidence). Today the classifier returns only the winner. We'll instruct the LLM to return its top-3 in a `candidates` array alongside the primary pick."
+> — decisions-archive.md §3, "Output contract (extended from current)"
+
+---
+
+## Files Changed
+
+| File | Change |
+|------|--------|
+| `packages/server/src/services/conjure-classifier.ts` | Extended to 10 intents, top-3 candidates, new request/response shape |
+| `packages/server/src/routes/conjure.ts` | Accepts `prose`/flat fields; returns new shape |
+| `packages/server/src/__tests__/conjure-classify.test.ts` | New — 56 Vitest tests |
+
+---
+
+## Test Count
+
+**56 tests, all passing.** Breakdown:
+- ALL_INTENTS list assertions: 2
+- Heuristic fast-path (6 original intents): 6
+- Heuristic fast-path (4 new W22 intents): 8
+- Candidates array shape: 6
+- LLM degradation path: 3
+- LLM happy path (candidates parsed): 2
+- Per-intent draft shapes: 9
+- Request field backward compat (prose/prompt): 3
+- Flat context fields: 2
+- Hint boosts score for each intent (10 × 1): 10
+- scorePromptByRules unit: 5
+
+Existing tests unaffected: `issues-service.test.ts` (4 pass), `graceful-shutdown.test.ts` (5 pass).
+
+---
+
+## Decisions Made
+
+### 1. Field name: `prose` vs `prompt`
+
+**Decision:** Both accepted. `prose` is the canonical W22 name. `prompt` is deprecated but fully backward-compatible (accepted as alias, `prose` takes precedence when both are sent).
+
+**Keyser-w22 integration note:** ConjureModal SHOULD send `prose`. Old callers still work without changes.
+
+### 2. Request shape: flat vs nested context
+
+**Decision:** Both accepted simultaneously.
+- New flat shape: `{ prose, projectId, projectName, knownProjectNames, hint }` (spec §5)  
+- Old nested shape: `{ prompt, context: { currentProjectId, currentProjectName } }` (backward compat)
+- Flat fields take precedence when both are provided.
+
+### 3. `candidates` on fast-path
+
+**Decision:** When rule-based confidence ≥ 0.55 (CONFIDENCE_THRESHOLD), `candidates = [winner]` — a single-element array. This is consistent with the spec note: "If the heuristic fires with confidence ≥ 0.9, skip the LLM call entirely and go straight to the form." UI should show chips only when `candidates.length > 1`.
+
+### 4. `candidates` on ambiguous LLM path
+
+**Decision:** If LLM returns a `candidates` array (top-3 format per new prompt), use it verbatim. If the LLM returns legacy single-intent format, complement with rule-based runners-up (up to 3 total). Drafts for all candidates are pre-built on the server so the modal can show them immediately.
+
+### 5. `tool` vs `mcp-server` disambiguation
+
+**Decision:** Reduced `tool` signal weight for "MCP server" from 4 → 2 (still fires weakly). `mcp-server` signals are weight 4–5 and clearly dominate for explicit MCP prompts. Generic tool prompts without "mcp" keyword still classify as `tool`.
+
+### 6. Routing destinations for new intents
+
+| Intent | Destination | Presentation |
+|--------|-------------|--------------|
+| `ceremony` | `/projects/:projectId/ceremonies?conjure=ceremony` | `page` |
+| `mcp-server` | `/projects/:projectId/mcp?conjure=mcp-server` | `page` |
+| `inbox-item` | `/projects/:projectId/board?conjure=inbox-item` | `modal` |
+| `consult` | `/consult?conjure=1` | `modal` |
+
+Note: `consult` routes to global `/consult` (no project context) since consulting is workspace-level.
+
+### 7. LLM prompt updated to 10 intents + top-3
+
+The LLM system message and prompt template now reference all 10 intents with clear definitions and request the `candidates` array in the JSON response. Backward-compatible: if a model returns only the old single-intent shape, the parser falls back gracefully.
+
+---
+
+## Wire Contract Summary for Keyser-w22
+
+```typescript
+// Request
+POST /api/conjure/classify
+{
+  prose: string;               // ← USE THIS (not prompt)
+  hint?: ConjureIntent;
+  projectId?: string;
+  projectName?: string;
+  knownProjectNames?: string[];
+  useLlm?: boolean;
+}
+
+// Response
+{
+  ok: true,
+  data: {
+    intent: ConjureIntent;          // = candidates[0].intent
+    confidence: number;             // = candidates[0].confidence
+    draft: object;                  // = candidates[0].draft
+    candidates: Array<{
+      intent: ConjureIntent;
+      confidence: number;
+      reason: string;
+      draft: object;
+    }>;                             // 1–3 entries, desc confidence
+    routing: { destination, presentation, fallbacks };
+    rationale: string;
+    strategy: 'rule-based' | 'llm';
+  }
+}
+```
+
+Show disambiguation chips when `candidates.length > 1` (spec §3, Ambiguity handling rule 1).
+
+---
+
+# 2026-05-16T02:00:00-07:00: McManus W22 — Squad Apps Packaging Spec (F3)
+
+**Author:** McManus (Lead Architect)  
+**Wave:** 22  
+**Stream:** F3  
+**Date:** 2026-05-16  
+**Deliverable:** `docs/squadapp-spec.md`
+
+---
+
+## Key Design Decisions
+
+### D1 — Squad App format is a superset of the existing `squad-bundle.json`
+
+The existing bundle format (`squad-bundle.json` in `bundles/`) becomes the **runtime representation** that Squadboard uses internally. The Squad App format (`squadapp.json`) is the **distribution format** — it adds `appId`, `tags`, `homepage`, `requires`, `seedIssues`, and a `README.md` on top of the bundle shape. The `bundle-loader.ts` idempotency contract is reused verbatim for the install pipeline.
+
+### D2 — `appId` is kebab-case, scoped to a Squadboard instance (not a global registry)
+
+Global uniqueness is F6's responsibility. For now, `appId` + `version` is the dedupe key within a project's installed-app registry. This avoids blocking F4 on F6 infrastructure.
+
+### D3 — Two-tier versioning: `schemaVersion` (integer) + `version` (SemVer)
+
+Mirrors the existing bundle schema pattern. `schemaVersion` only bumps on breaking format changes (rare). `version` is author-controlled content versioning. This is the same pattern already in `BundleManifest` — no new concepts introduced.
+
+### D4 — File-based artifacts win over inline, but both are valid
+
+Per-file layout (e.g., `skills/<key>/SKILL.md`, `ceremonies/<id>.yaml`) supports large bodies and git-diff-ability. Inline JSON is valid for small apps. The installer merges both; per-file takes precedence. This mirrors the existing `bodyPath` pattern in `bundle/schema.ts`.
+
+### D5 — Skills use upstream SKILL.md format verbatim
+
+Zero conversion cost. Skills from a Squad App are immediately usable by upstream Squad tooling. Upstream plugins (single SKILL.md files) are valid partial Squad Apps (skills-only subset). This secures F6 marketplace compatibility without a translation layer.
+
+### D6 — Artifact creation order is fixed and dependency-ordered
+
+`project → kanban → skills → tools → mcp → team → routing → ceremonies → workflows → seed issues`. This order prevents foreign-key violations and mirrors the existing `bundle-loader.ts` apply order. Seed issues are written outside the main DB transaction to avoid blocking on GitHub API rate limits.
+
+### D7 — Default collision behavior is skip-with-warning (not fail, not overwrite)
+
+Matches `bundle-loader.ts` existing contract (`ON CONFLICT: skip with a warning unless opts.overwriteExisting = true`). `--overwrite` opt-in, `--fail-on-conflict` for strict CI, `--dry-run` for preview. This is already what users expect from the built-in project templates.
+
+### D8 — Seed issues are idempotent by `title + column` and never re-created on re-install
+
+Prevents duplicate backlog pollution on re-install or upgrade. Even with `--overwrite`, seed issues are skipped if they already exist.
+
+### D9 — MCP secrets are placeholders only (`${ENV_VAR}` syntax)
+
+No secrets in bundles. Post-install, users configure actual values. This is a hard security requirement. Documented as OQ-8 for future secret-management integration.
+
+### D10 — Rollback via DB transaction (except seed issues)
+
+All writes are in a single transaction; any failure rolls back the project to pre-install state. Seed issues are outside the transaction (non-fatal on failure) to avoid blocking on external APIs.
+
+---
+
+## Examples Chosen
+
+- **Example A (minimal):** `bug-repro-starter` — one skill + one ceremony. No project section; installs into current active project. Tests the partial-bundle path.
+- **Example B (full):** `aks-feature-kanban` — 4 agents (Lead/Backend/Frontend/Tester), 3 ceremonies, 2 skills, 1 tool, 1 MCP server (GitHub), routing rules, 3 seed issues, README. Covers the F4 "AKS feature kanban" curated app that Hockney/Keyser will implement.
+
+---
+
+## Open Questions Deferred
+
+| ID | Topic |
+|---|---|
+| OQ-1 | Global vs instance-scoped `appId` uniqueness (F6) |
+| OQ-2 | Seed issues vs real GitHub issues (F5/GitHub sync) |
+| OQ-3 | Schema publication location (F7) |
+| OQ-4 | Multi-project install |
+| OQ-5 | Seed issue column validation strictness |
+| OQ-6 | Init Mode re-cast behavior |
+| OQ-7 | SHA-256 checksum in tarball (F5) |
+| OQ-8 | Secret management for MCP env vars (security review) |
+| OQ-9 | Partial-bundle as first-class mode (already specced — yes) |
+| OQ-10 | `--overwrite` diff preview for customised ceremonies |
+
+---
+
+## Downstream Impact
+
+- **F4 (curated apps):** Can start immediately. Use `aks-feature-kanban` example B as the template for the first curated app.
+- **F5 (unified import/export):** Adopt `squadapp.json` as the maximal bundle shape; partial bundles (single-artifact) are valid subsets.
+- **F6 (marketplace):** `appId` + `version` is the dedupe key. Marketplace adds global uniqueness enforcement on top.
+- **F7 (community):** CI validator uses the JSON Schema at `packages/server/src/services/squad-apps/schema.json`.
+
+---
+
+# 2026-05-16T01:40:00-07:00: Kobayashi — Wave 22 Loading follow-ups decision log
+
+**Agent**: Kobayashi (SDK + data-shapes specialist)
+**Wave**: 22
+**Date**: 2026-05-16T01:40:00-07:00
+**Commits**: `b84cbc9d` (K5) · `e64a1fca` (K7)
+
+---
+
+## K5 — Dev-only `/__loading-gallery` route
+
+### Files created / modified
+
+| File | Action |
+|---|---|
+| `packages/client/src/components/loading/LoadingGallery.tsx` | **Created** — gallery page component |
+| `packages/client/src/App.tsx` | **Modified** — import + `{import.meta.env.DEV && <Route path="__loading-gallery" …/>}` |
+| `packages/client/README.md` | **Created** — "Loading patterns" section |
+
+### Gallery route
+
+- URL: `/__loading-gallery`
+- Gating: `{import.meta.env.DEV && <Route …/>}` — zero cost in production bundle
+- Components rendered:
+  - `RouteProgressBar` — description + live instance
+  - `PageLoading` × 3 variants (default, custom label, large size)
+  - `SectionLoading` × 3 variants (no label, label, medium size)
+  - `InlineLoading` × 3 variants (default, with label, small size)
+  - `ActionLoading` × 2 variants (default, with label)
+- Wraps in `<PageHeader title="Loading patterns gallery" />` using the existing layout component
+
+---
+
+## K7 — ActionLoading component + sweep
+
+### Files created / modified
+
+| File | Action |
+|---|---|
+| `packages/client/src/components/loading/ActionLoading.tsx` | **Created** — wraps `<Spinner size="tiny" />` for button-icon slot |
+| `packages/client/src/components/loading/index.tsx` | **Modified** — export added |
+
+### Button-spinner sweep sites (3 files, 4 call-sites)
+
+| File | Location | Before | After |
+|---|---|---|---|
+| `packages/client/src/pages/CeremonyList.tsx` | Line ~143 (PageHeader action) | `<Spinner size="tiny" />` | `<ActionLoading label="Ending wave…" />` |
+| `packages/client/src/pages/CeremonyList.tsx` | Line ~249 (Dialog action) | `<Spinner size="tiny" />` | `<ActionLoading label="Ending wave…" />` |
+| `packages/client/src/components/formulate/FormulatePanel.tsx` | Line ~99 (Formulate button) | `<Spinner size="tiny" />` | `<ActionLoading label="Formulating…" />` |
+| `packages/client/src/components/agents/HireTeamModal.tsx` | Lines ~425, ~438 (Cast Team + Hire) | `<Spinner size="tiny" />` | `<ActionLoading label="Casting…/Hiring…" />` |
+
+### Design decisions
+
+- **Size `tiny`**: matches the existing ad-hoc pattern universally used in button `icon` props across the codebase. `extra-small` is reserved for `InlineLoading` (body text context).
+- **`role="status"` + `aria-busy`**: consistent with the other loading components in the family.
+- **`display: contents`**: the wrapper `<span>` is invisible to layout so the spinner sits cleanly in the button-icon slot without adding margins.
+- **Unused `Spinner` import removed** from `FormulatePanel.tsx` and `HireTeamModal.tsx` after sweep. `CeremonyList.tsx` retains `Spinner` because line 184 still uses `<Spinner label="Loading ceremonies…" />` (a SectionLoading candidate for a future wave).
+
+### Known not-swept sites (left for future waves)
+
+- `packages/client/src/pages/ProjectPicker.tsx` — 3 more tiny spinners
+- `packages/client/src/components/settings/SystemBackupSection.tsx` — 3 more
+- `packages/client/src/components/settings/SystemGitHubSection.tsx` — 2 more
+- `packages/client/src/components/GitHubActivityFeed.tsx` — 1 more (non-button, in text)
+- `packages/client/src/pages/LiveSession.tsx` — 1 more
+
+These were not touched to keep the PR surgical. A future sweep wave can address them.
+
+---
+
+## Pre-existing build failures (not introduced by this wave)
+
+The following TypeScript errors existed before this wave and are owned by Keyser-w22:
+- `src/components/conjure/ConjureModal.tsx` — unused `useCallback`
+- `src/pages/Inbox.tsx` — `openConjure`, `Wand20Regular`, `ChatHelpRegular` not found
+
+No new errors were introduced by K5 or K7 changes.
+

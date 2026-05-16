@@ -239,3 +239,23 @@ Three items from Ahmed's intake batched into one pass:
 
 **Files changed:** `services/ceremony-translator.ts`, `api/client.ts`, `pages/CeremonyEditor.tsx`, `components/board/CardDetail.tsx`, `pages/CeremonyList.tsx`, `routes/ceremonies.ts`
 **Build:** ✓ green — client `tsc -b && vite build` ✓; server `tsc` ✓
+
+---
+
+## W22 Lesson — Conjure Misdiagnosis Correction
+
+**Date:** 2026-05-16  
+**Wave:** 22
+
+The Conjure misdesign lesson: W15/W19/W21 all misdiagnosed Conjure as a label problem on the Consult surface rather than a missing modal. The root causes were:
+
+1. The classifier file (`conjure-classifier.ts`) existed, creating the false impression that "Conjure is implemented — just needs UI"
+2. The design spec lived in `decisions-archive.md` (lines 1666–1960), not `decisions.md` — agents reading only `decisions.md` missed the canonical design
+3. No verbatim spec quotes in W15/W19/W21 close-out docs — the absence of quotes was the single best leading indicator of misdiagnosis
+
+**Hardening for future work:**
+- **ALWAYS quote the spec verbatim** — minimum 3 consecutive lines — in any decision doc closing out a feature. Absence of quotes is a red flag that the agent inferred from code rather than reading the actual spec.
+- **Before claiming a missing feature is shipped,** verify that the component file named in the spec actually exists in the codebase. If the spec says "build ConjureModal.tsx," search for ConjureModal.tsx. If it doesn't exist, it's not shipped, no matter what labels you renamed.
+- **Mention both decisions.md AND decisions-archive.md** when dispatching agents against design specs. Archive content is just as authoritative as live decisions, but it's easy to miss.
+
+This wave's Keyser-w22 correctly quoted 3 spec lines verbatim in the close-out doc — this pattern should be mandatory for all future feature closures.
