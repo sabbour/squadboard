@@ -1705,3 +1705,461 @@ references the expected final surface; if Hockney's work lands after this publis
 | q3-squad-extension-pr | **IN FLIGHT** — PR #1124 filed at bradygaster/squad |
 | q5-extension-fallback-patcher | **DONE** — `install-squad-extension.js` shipped |
 | p1-publish-mcp-auth-needed | **PENDING** — human must re-auth npm then trigger |
+
+
+# Keyser W19 — Three-item batch decision log
+
+**Date:** 2026-05-15T22:42:29.855-07:00
+**Author:** Keyser (Frontend Dev)
+
+---
+
+## O7 — Formulate ceremony grammar bug
+
+### Root cause
+
+`buildProseAuthorPrompt` in `services/ceremony-translator.ts` described step
+types using shorthand bullet notation:
+
+```
+- agent_run: { agent: ..., prompt: ... }
+```
+
+LLMs interpret this as a **YAML mapping-key** syntax (key `agent_run` → value
+object), not as `- type: agent_run\n  agent: ...`.  `validateWorkflowYaml`
+requires a `type:` field on every step; it threw:
+
+> `step[0]: 'type' must be one of route | agent_run | approve | fan_out | handoff`
+
+That error was then wrapped raw as `API 502: {"error":"..."}` by `apiFetch`,
+which showed a confusing JSON envelope to the user.
+
+### Fix
+
+1. **`services/ceremony-translator.ts`** — replaced shorthand bullet schema
+   with an explicit, indented YAML example that shows the `type:` field
+   verbatim, plus a `CRITICAL:` constraint line reinforcing it.
+2. **`api/client.ts`** (`apiFetch`) — added JSON body parsing of error
+   responses: extracts `parsed.error` string when the body is
+   `{ error: "..." }`, so callers see a clean human message instead of the
+   raw JSON envelope.
+3. Prompt now also ships a concrete two-step `Daily Standup` YAML example so
+   the LLM has an unambiguous template to follow.
+
+### Alternate "from text" path removed
+
+The **narrative → convert** path was the second text-to-ceremony flow:
+
+- Users could set `kind: narrative` in the ceremony form, write prose, then
+  click "Convert to executable" (which called `POST /:id/convert`).
+- **Removed from UI:** `narrative` option filtered from both kind dropdowns in
+  `CeremonyEditor.tsx` (using the existing `deprecated: true` flag on the
+  `CEREMONY_KIND_OPTIONS` entry), "Convert to executable" button and
+  `handleConvert` callback deleted, `convertToast` state removed,
+  `useConvertCeremony` import dropped.
+- **Backend kept:** `POST /:id/convert`, `POST /:id/translate`, and
+  `POST /api/ceremonies/import-narrative` routes are untouched — they are
+  shared infra used by the daemon and SDK.
+- Existing ceremonies with `kind='narrative'` in the DB are still rendered
+  read-only (`readOnly = kind === 'narrative'`).
+
+---
+
+## W19 Conjure deep-link from card (conjure-workitem-deeplink)
+
+### Mechanism
+
+`CardDetail.tsx` — overflow `…` button added to the top-right of the panel
+header (a Fluent2 `Menu`/`MenuTrigger`/`MenuPopover`/`MenuList` with a single
+`MenuItem`).
+
+- **Icon:** `MoreHorizontal20Regular` for the trigger; `Lightbulb20Regular`
+  for the "Investigate in Conjure" item (consistent with Conjure's brand icon).
+- **On click:** `onClose()` first (closes the panel), then
+  `navigate(`/projects/${projectId}/consult/new?prefill=issue:${issue.id}`)`.
+
+### Prefill mapping (Consult.tsx — no changes needed)
+
+The existing `?prefill=issue:<id>` handler in `Consult.tsx` (Phase 17) already
+does exactly what the spec required:
+
+| Spec requirement | Mapped field |
+|---|---|
+| Title as Conjure input | `prefill.content` ← `issue.title + body` |
+| Body as additional context | Appended to `prefill.content` |
+| Labels as tags | Serialised into context block |
+| Linked GitHub issue as reference | Latest run output + git branch/PR if present |
+
+No changes to `Consult.tsx` — the existing mechanism is complete.
+
+### Invalid card ID
+
+If the issue fetch fails inside Consult's prefill effect, it catches the error,
+logs a warning, and starts a blank Conjure session (existing non-fatal fallback).
+
+---
+
+## Q9 — Manual End-wave button
+
+### Placement
+
+Added to the **CeremonyList** page header toolbar (`actions` prop of
+`PageHeader`), to the left of "New ceremony". Chosen because:
+
+- Ceremonies are the mechanism that runs Scribe close-out.
+- The toolbar is always visible — no nested settings nav needed.
+- Button is labelled "End wave" with a `Flag20Regular` icon.
+- Disabled + spinner while running.
+
+### UX flow
+
+1. Click "End wave" → confirmation `Dialog` opens.
+2. Dialog body: "End the current wave? This will run Scribe close-out: merge
+   inbox decisions into **decisions.md**, archive old history, commit. ~30 seconds."
+3. Primary "End wave" button + Cancel.
+4. Confirmed → dialog closes; toast appears: "Running Scribe close-out…"
+5. On success: "Wave closed ✓ (commit abc1234)" (SHA from `result.commitSha`).
+6. On error: error message in the toast.
+7. Toast auto-dismisses after 8 seconds.
+
+### Endpoint contract
+
+**`POST /api/projects/:projectId/ceremonies/invoke`**
+
+Request:
+```json
+{ "ceremonySlug": "scribe-close-out", "context": { "projectId": "..." } }
+```
+
+Response (success 200):
+```json
+{ "ok": true, "result": { "commitSha": "abc1234...", ... } }
+```
+
+Response (error 400/502):
+```json
+{ "error": "no built-in ceremony registered with id 'X'" }
+```
+
+The endpoint delegates to `invokeBuiltInCeremony(ceremonySlug, { projectId, extra: context })`.
+Errors from `TranslatorError` (which wraps SDK failures) are forwarded as
+400 (non-retryable) or 502 (retryable).
+
+### Optional schedule setting
+
+Filed as follow-up (Q9-schedule): per-project "Auto-run end-of-wave Scribe
+every N hours" on the Settings page. Non-trivial (needs a new DB column +
+daemon integration) — deferred past W19.
+
+---
+
+## Coordination notes
+
+- **McManus W19 Item 4** (Deliverable concept / work item model): if `Issue`
+  gains a `deliverable` field, the Conjure prefill in `CardDetail.tsx` will
+  pick it up automatically — the `?prefill=issue:` handler in Consult fetches
+  the full issue object, so any new fields will be available in the context
+  block without a CardDetail change.
+- **Verbal W19** (Stream J): no overlapping files this wave.
+
+
+# McManus W19 — Concept Cleanup: Kinds · Workflows · Scope · Deliverable
+
+**Author:** McManus (Lead Architect)  
+**Date:** 2026-05-15T22:42:29.855-07:00  
+**Wave:** 19  
+**Scope:** Data model, UI labels, Templates page, scope visibility, Deliverable concept
+
+---
+
+## H4 — Kind Dropdown (workflow / ceremony / review_policy / narrative)
+
+### Decision: Keep all 4 kinds; label them clearly
+
+**What each kind means:**
+
+| Kind | Label in UI | Meaning | Status |
+|---|---|---|---|
+| `workflow` | **Workflow** | Execution graph — the ordered steps (route, agent_run, approve, fan_out, …) that run inside a ceremony | Active, ship it |
+| `ceremony` | **Ceremony** | Named triggered process — has a trigger (schedule, label, event) and runs a workflow graph | Active, ship it |
+| `review_policy` | **Review Policy** | Defines who-can-approve rules applied to peer_review and approve steps; backed by `review_policy_presets` + `review_policy_defaults` tables | Active, ship it |
+| `narrative` | **Narrative (Phase 11 preview)** | Documentation-only prose description of a process — not yet executable; Convert function deferred to Phase 11 | Keep but visually deprecated |
+
+**Implementation:** Added `CEREMONY_KIND_OPTIONS` array in `CeremonyEditor.tsx`. Dropdown now shows human-readable labels with one-sentence descriptions. The `hint` field dynamically shows the selected kind's description. Narrative is included but visually dimmed (opacity 0.6 on label) to signal it's a preview.
+
+`narrative` is NOT dead code — `routes/ceremonies.ts` has `kind='narrative'` specific branches, the Phase 11 `POST /:id/convert` stub exists, and `parentNarrativeId` FK is in the schema. We keep it but do not promote it.
+
+---
+
+## O2 — Workflows Tab on Templates Page (REVISIT of W16 Model C)
+
+### Decision: **Option B — Remove Workflows tab; Workflows are an implementation detail**
+
+**Rationale:** Ahmed's O2 is correct. Users think in terms of *ceremonies* — "I want a bug fix ceremony." They should never need to author a raw workflow and then wire it to a trigger separately. The W16 Model C explainer block was already a symptom of the abstraction leaking: we were explaining a concept users shouldn't have to care about.
+
+**What changed:**
+- `TAB_LABELS` in `Templates.tsx`: removed `workflows` key entirely
+- `USER_TEMPLATE_KINDS`: removed `workflows` mapping
+- Tab parsing: `rawTab === 'workflows'` no longer valid → falls through to `'ceremonies'`
+- Explainer block rewritten: no longer explains "Workflows vs Ceremonies" — now just explains what a Ceremony is
+- Page description updated: removed "saved workflow" reference
+
+**Power-user access:** The `useInstantiateWorkflowTemplate`, `useImportWorkflow`, `DragImportZone` hooks and components remain in the file (unused by the new tab set) and are available for a future `/settings/advanced/workflows` page. No code deleted — just not surfaced. The Ceremony Editor remains the canonical place to author and save workflow graphs.
+
+**UI impact:** Templates page now has 3 tabs: Ceremony Templates · Teams · Projects.
+
+**Note for Ahmed:** This reverses the W16 "Saved Workflows" tab decision. If you want power-user access to raw workflow templates in the main flow, the cleanest next step is a `/settings/advanced/workflows` route that uses the existing `TemplateGrid kind="workflow"` + `DragImportZone` components.
+
+---
+
+## O3 — Scope Badges on Ceremonies and Templates
+
+### Decision: Implement scope badge everywhere a ceremony is listed
+
+**Scope is stored in:** `ceremony.triggerConfig.scope` — a JSON field on the `workflows` row, defaulting to `'project'`. Only meaningful for `triggerKind === 'on_issue_entry'`. Other trigger kinds have no applicable scope.
+
+**Badge design:**
+
+| Scope | Badge |
+|---|---|
+| `project` (default) | `🌐 Project` (outline, subtle) |
+| `board` | `📋 Board` (outline, informative) |
+| `task` | `🎯 Task` (outline, brand) |
+
+**Surfaces updated:**
+1. **`CeremonyBadges.tsx`** — added `ScopeBadge` component (exported)
+2. **`CeremonyList.tsx`** — added "Scope" column to the DataGrid
+3. **`CeremonyEditor.tsx` header** — `ScopeBadge` appears next to the trigger badge so scope is visible at a glance without opening the Advanced accordion
+4. **`CeremonyEditor.tsx` header badge** — kind badge now shows the human label (e.g. "Ceremony") instead of the raw enum string (e.g. "ceremony")
+
+**Limitation:** `CeremonyTemplatesTab` in Templates.tsx does not show scope badges — built-in templates are not ceremony instances with live `triggerConfig`. Scope badges appear only on instantiated ceremonies.
+
+---
+
+## O4 — Deliverable on Work Items
+
+### Concept definition
+
+A **deliverable** is the concrete artifact a work item commits to producing. It is separate from the existing `deliverables` table (which tracks workflow-run artifacts). This is the *intent* field on the issue itself.
+
+**Fields added to `issues` table:**
+
+| Column | Type | Default | Description |
+|---|---|---|---|
+| `deliverable_type` | TEXT NOT NULL | `'none'` | `pr` · `doc` · `deployment` · `asset` · `decision` · `none` |
+| `deliverable_link` | TEXT | NULL | URL of the artifact when ready |
+| `deliverable_acceptance_criteria` | TEXT | NULL | Short markdown — what makes this done |
+| `deliverable_status` | TEXT NOT NULL | `'not-started'` | `not-started` · `in-progress` · `ready-for-review` · `accepted` · `rejected` |
+
+### DB migration
+
+Wave 19 block in `packages/server/src/db/index.ts`:
+```sql
+ALTER TABLE issues
+  ADD COLUMN IF NOT EXISTS deliverable_type   TEXT NOT NULL DEFAULT 'none',
+  ADD COLUMN IF NOT EXISTS deliverable_link   TEXT,
+  ADD COLUMN IF NOT EXISTS deliverable_acceptance_criteria TEXT,
+  ADD COLUMN IF NOT EXISTS deliverable_status TEXT NOT NULL DEFAULT 'not-started';
+```
+
+Drizzle schema columns added to `issues` table definition in `schema.ts`.
+
+### Auto-move to done
+
+When the PATCH handler receives `deliverableStatus = 'accepted'`:
+1. Query `column_meta` for the row with `semantic = 'done'` in this project
+2. If found, set `issues.status = doneCol.columnId` in the same update
+
+This is server-side and fires only on the versioned PATCH path. Safe to call from the UI.
+
+### UI placement
+
+- **`CardDetail.tsx` overview tab** — "Deliverable" `Accordion` section (collapsed by default unless `deliverableType !== 'none'`). Shows Type dropdown + Status dropdown + Link input + Acceptance criteria textarea when type is not `none`.
+- **`IssueCard.tsx`** — `📦 {type} · {status}` inline badge below GitHub badges, shown only when `deliverableType !== 'none'`. Color-coded: green (accepted), red (rejected), amber (ready-for-review), muted (others).
+- **`api/issues.ts` client** — `Issue` interface extended with 4 optional deliverable fields. `useUpdateDeliverable` mutation added (PATCH to `/:id` with deliverable fields + version).
+
+### Hockney coordination
+
+Migration is self-contained (4 nullable/defaulted columns, idempotent `IF NOT EXISTS`). No Hockney sign-off needed. Drizzle schema conventions followed (snake_case column names, `timestamp` with `withTimezone: true`, `notNull().default()`).
+
+---
+
+## Open questions for Ahmed
+
+1. **O2 power-user access:** Should `/settings/advanced/workflows` be added as a W20 task so power users can still manage raw workflow templates?
+2. **O4 deliverable_status on card column move:** Today, moving a card to the "done" column does NOT flip `deliverable_status` to `accepted`. Should it? (Would require a board column-move handler update.)
+3. **O4 multi-deliverable:** Today one issue = one deliverable intent. Is that sufficient, or do some issues need to declare multiple deliverables (e.g., a PR *and* a doc)?
+4. **H4 narrative deprecation:** Should `narrative` be hidden from the Kind dropdown entirely (removed from `CEREMONY_KIND_OPTIONS`) in W20 once Phase 11 is confirmed cut?
+
+---
+
+## Files changed
+
+| File | Change |
+|---|---|
+| `packages/server/src/db/schema.ts` | Added 4 deliverable columns to `issues` table |
+| `packages/server/src/db/index.ts` | Wave 19 migration block: 4 `ADD COLUMN IF NOT EXISTS` |
+| `packages/server/src/routes/issues.ts` | Extended PATCH to accept deliverable fields; auto-move to done on `accepted` |
+| `packages/client/src/api/issues.ts` | `Issue` interface + `DeliverableUpdateInput` + `useUpdateDeliverable` |
+| `packages/client/src/components/ceremony/CeremonyBadges.tsx` | Added `ScopeBadge` component |
+| `packages/client/src/pages/CeremonyList.tsx` | Added "Scope" DataGrid column |
+| `packages/client/src/pages/CeremonyEditor.tsx` | `CEREMONY_KIND_OPTIONS`; labeled Kind dropdown; `ScopeBadge` in header |
+| `packages/client/src/pages/Templates.tsx` | Removed "Saved Workflows" tab (Option B); updated explainer |
+| `packages/client/src/components/board/CardDetail.tsx` | Deliverable Accordion section in overview tab |
+| `packages/client/src/components/board/IssueCard.tsx` | Deliverable status badge |
+
+
+# verbal-w19-stream-j-chat-polish
+
+**Author:** Verbal  
+**Date:** 2026-05-15T22:42:29.855-07:00  
+**Wave:** 19  
+**Stream:** J — Chat polish bundle
+
+---
+
+## Items landed
+
+| Item | Status |
+|---|---|
+| J1 — Per-message identity (avatar + name + role badge) | ✅ Landed |
+| J2 — Markdown rendering (streaming-aware) | ✅ Landed |
+| J4 — "Agent is thinking…" pre-stream indicator | ✅ Landed |
+| J6 — Extract reusable ChatBubble component | ✅ Landed |
+| J3 — Streaming/SSE fallback | ⏭ Deferred (focused wave, corporate-proxy scenario) |
+| J5 — Project meta context injection | ⏭ Deferred to Kobayashi |
+
+---
+
+## J6 — ChatBubble API
+
+**File:** `packages/client/src/components/ChatBubble.tsx`
+
+```tsx
+<ChatBubble
+  role="user" | "agent" | "system" | "tool"
+  identity={{ name: string; avatar?: string | null; roleBadge?: string }}
+  content={markdownString}
+  streaming={boolean}        // shows thinking indicator when streaming + content empty
+  actions={[{ icon, label, onClick }]}  // copy, regenerate, etc.
+  timestamp={Date}
+/>
+```
+
+### Role rendering model
+
+| Role | Layout | Badge colour | Positioning |
+|---|---|---|---|
+| `user` | Full bubble | `brand` | Right-aligned |
+| `agent` | Full bubble | `informative` | Left-aligned |
+| `system` | Compact pill | `subtle` | Centred |
+| `tool` | Compact pill | `informative` | Centred |
+
+### Avatar strategy
+
+- Initials extracted from `identity.name` (1–2 chars).
+- Color: deterministic hue from djb2 hash of name → `hsl(hue, 55%, 40%)`.
+- **No external icon set required.** Follow-up todo filed for Fenster to design cast-member icons.
+- When Fenster ships icons: swap `Avatar` component to accept `identity.avatar` URL as `<img>` with initials fallback.
+
+---
+
+## J2 — Markdown rendering choices
+
+### Libraries added
+
+| Library | Version pinned | Purpose |
+|---|---|---|
+| `rehype-sanitize` | `^3.x` (installed as new dep) | XSS prevention |
+| `react-markdown` | `^10.1.0` (pre-existing) | Markdown → React |
+| `remark-gfm` | `^4.0.1` (pre-existing) | Tables, strikethrough, task lists |
+| `rehype-highlight` | `^7.0.2` (pre-existing) | Syntax highlighting (highlight.js) |
+
+### Sanitization rules
+
+- Extends `defaultSchema` from `rehype-sanitize`.
+- Allowlisted class names: `/^language-.+/` on `<code>`, `/^hljs-.*/` on `<span>`/`<div>` — required for highlight.js class-based coloring.
+- All other attributes stripped. External `href` links permitted (open in new tab via `rel="noopener noreferrer"`).
+
+### Streaming debounce
+
+- `useDebounced(text, 100)` — only active when `streaming={true}`.
+- When `streaming={false}` (completed messages), debounce delay is 0 (instant).
+- Prevents reflow on every arriving token; display catches up within 100ms.
+
+### Code blocks
+
+- Custom `<pre>` component wraps each block in `position: relative`.
+- Copy button appears on hover (opacity transition); uses `navigator.clipboard.writeText`.
+- Inline code gets a subtle `rgba(255,255,255,0.08)` background for visual separation.
+
+---
+
+## J4 — Thinking indicator
+
+### Trigger behavior
+
+| Surface | Trigger condition | Dismiss condition |
+|---|---|---|
+| `AgentActivityFeed` | Last coalesced row is `session.message` with `role='user'` AND `sessionActive=true` | First `session.assistant_streaming` row arrives |
+| `Consult` | `isSessionActive` AND last persisted message `role='user'` AND `streamingBuffer.content === ''` | First `consult.message_delta` event populates buffer |
+
+### Long-wait escalation
+
+- After **30 seconds** of showing thinking indicator (`isThinking && !content`), show "Agent is taking longer than usual…" text with a pulsing animation.
+- Timer resets when `isThinking` becomes false.
+
+### WS events
+
+- Added to `WsEventMap` in `packages/client/src/realtime/ws-client.ts`:
+  ```ts
+  'assistant.thinking.start': { sessionId: string; agentName?: string | null }
+  'assistant.thinking.stop':  { sessionId: string }
+  ```
+- **Note for Kobayashi:** The thinking indicator in the current wave derives its state from message role inspection (no server-emitted event needed). If a server-side `assistant.thinking.start` event is ever emitted (e.g., from the run dispatcher at session creation), `AgentActivityFeed`/`useSessionStream` should subscribe to it via the EventBus adapter — add to `SESSION_EVENT_TYPES` and let `coalesceFeed` handle it. The WS event types are pre-registered in the client; server wiring is optional.
+
+---
+
+## J1 — Identity model
+
+- **"You"** for user role (hardcoded; future: pass `userName` prop from auth context).
+- **Agent name** from `agentName` prop on `AgentActivityFeed` or `session.agentName` on Consult.
+- **`roleBadge` override:** Pass `roleBadge: 'thinking'` to show a thinking badge on streaming bubbles.
+
+---
+
+## Surfaces refactored
+
+| Surface | Before | After |
+|---|---|---|
+| `AgentActivityFeed.tsx` | Local `Bubble` component (plain text) | `ChatBubble` (markdown + identity) |
+| `Consult.tsx` `ChatRowView` | `styles.msgUser`/`styles.msgAssistant` divs | `ChatBubble` |
+| Streaming row in Consult | Raw text with cursor `▍` | `ChatBubble` with `streaming={true}` |
+
+---
+
+## Deferred items
+
+### J3 — SSE fallback when WS isn't viable
+
+Corporate proxies that strip WebSocket upgrades make WS unreliable. J3 would:
+- Add `EventSource` as a transport fallback with the same event contract.
+- Auto-detect WS failure after N retries and switch transports.
+- Surface transport indicator in the header.
+
+**Deferred** to a focused transport-reliability wave. File as a new stream when needed.
+
+### J5 — Project meta context injection
+
+Injecting project metadata (active agents, open issues, project description) into the session context the way `SquadCoordinator` does — this is Kobayashi's lane (SDK session management). He should pick it up when the SDK session model stabilises.
+
+---
+
+## Follow-up todos
+
+| Owner | Todo |
+|---|---|
+| Fenster | Design cast-member icon set; update `ChatBubble` `Avatar` to accept `identity.avatar` URL |
+| Kobayashi | Wire `assistant.thinking.start` server-side emission from run dispatcher if needed |
+| Kobayashi | J5 — Project meta context injection into consult/live sessions |
+| Verbal (future) | J3 — SSE fallback transport |
