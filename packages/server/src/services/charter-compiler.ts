@@ -98,7 +98,10 @@ export function parseCharterContent(content: string): CharterMetadata {
           if (cols.length >= 2) {
             const key = cols[0].toLowerCase();
             if (key === 'role' && !role) role = cols[1];
-            if ((key === 'model' || key === 'preferred model') && !model) model = cols[1];
+            if ((key === 'model' || key === 'preferred model') && !model) {
+              const v = cols[1].trim().toLowerCase();
+              if (v && v !== 'auto' && v !== 'default') model = cols[1].trim();
+            }
             if ((key === 'name') && !name) name = cols[1];
           }
         }
@@ -108,7 +111,10 @@ export function parseCharterContent(content: string): CharterMetadata {
           if (bold) {
             const [, key, value] = bold;
             if (key.toLowerCase() === 'role' && !role) role = value.trim();
-            if (key.toLowerCase() === 'model' && !model) model = value.trim();
+            if (key.toLowerCase() === 'model' && !model) {
+              const v = value.trim().toLowerCase();
+              if (v && v !== 'auto' && v !== 'default') model = value.trim();
+            }
             if (key.toLowerCase() === 'name' && !name) name = value.trim();
           }
         }
@@ -130,7 +136,28 @@ export function parseCharterContent(content: string): CharterMetadata {
 
       case 'model': {
         if (!model && !trimmed.startsWith('#')) {
-          model = trimmed.replace(/^-\s*/, '').trim();
+          // Strip leading bullet marker (- or *)
+          let raw = trimmed.replace(/^[-*]\s*/, '').trim();
+
+          // Handle "**Key:** value" (bold markdown) — e.g. "**Preferred:** auto"
+          const boldMatch = raw.match(/^\*\*[^*]+:\*\*\s*(.*)$/);
+          if (boldMatch) {
+            raw = boldMatch[1].trim();
+          } else {
+            // Handle "Key: value" (plain) — e.g. "Preferred: claude-sonnet-4.6"
+            const plainMatch = raw.match(/^[A-Za-z][A-Za-z ]*:\s*(.*)$/);
+            if (plainMatch) {
+              raw = plainMatch[1].trim();
+            }
+          }
+
+          // "auto" and "default" are sentinels meaning "let the platform pick".
+          // Strip any trailing annotation after whitespace (e.g. "auto → coordinator selected …")
+          const valueOnly = raw.split(/\s*[→>]/)[0].trim();
+          const normalized = valueOnly.toLowerCase();
+          if (valueOnly && normalized !== 'auto' && normalized !== 'default') {
+            model = valueOnly;
+          }
         }
         break;
       }

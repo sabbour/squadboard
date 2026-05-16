@@ -179,3 +179,33 @@ W24 .gitignore patch is now fully enforced. Build verified green. Repo health si
 **Commit:** bef36a47
 
 See `.squad/decisions.md` for full details.
+
+---
+
+## W26 Charter Parser — `auto` Sentinel Fix (2026-05-16)
+
+**P0 Bug:** Runs failing with `Model "**Preferred:** auto" is not available`.
+
+**Root cause:** `parseCharterContent()` in `charter-compiler.ts` stripped only the leading `- ` bullet marker in `case 'model':`, leaving the raw markdown bold prefix `**Preferred:** auto` as the model value. `resolveModel()` only handles the literal string `'auto'` as a sentinel — not markdown-wrapped variants — so the malformed string reached the platform API.
+
+**Fix:** Extended the `case 'model':` parser to:
+1. Strip `**Key:** value` bold markdown prefix (and `Key: value` plain prefix)
+2. Strip trailing annotations after `→` (e.g. "auto → coordinator selected …")
+3. Treat `auto`, `default`, and empty as sentinels → `model = undefined`
+
+Applied the same sentinel guard to the `identity_table` section for consistency.
+
+**Tests:** 12 vitest cases added in `charter-parser.test.ts` — all green.
+
+**Takeaways:**
+- Charter parsing must be defensive about markdown formatting. Regex-strip *all* structural decoration before storing values.
+- Sentinel values (`auto`, `default`) must be filtered at the *parser* layer, not only at the resolution layer. Defense-in-depth: the resolver also handles `'auto'` as a fallback, but the parser should never let markdown markup escape into stored metadata.
+- The arrow-annotation pattern (`auto → some note`) in charters must be handled: split on `→` and use only the first part.
+- Any new charter field extraction must have unit tests covering: (a) bold prefix, (b) plain prefix, (c) sentinel values, (d) absent section, (e) empty value.
+
+**Files:**
+- `packages/server/src/services/charter-compiler.ts`
+- `packages/server/src/__tests__/charter-parser.test.ts`
+- `.squad/decisions/inbox/hockney-w26-charter-parser-auto-sentinel.md`
+
+**Commit:** `fix(server): charter parser treats Preferred: auto as sentinel (W26)`
