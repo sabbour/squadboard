@@ -111,6 +111,8 @@ export const issues = pgTable('issues', {
   archivedAt: timestamp('archived_at', { withTimezone: true }),
   /** Wave 20 — dedupe: reason for archival (e.g. 'dedupe:bulk-port-vs-seed-backlog'). */
   archivedReason: text('archived_reason'),
+  /** Wave 23 — I7: caller-supplied dedup token for idempotent creates. Partial unique per project. */
+  idempotencyKey: text('idempotency_key'),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 });
@@ -703,8 +705,8 @@ export const inboxItems = pgTable('inbox_items', {
   rationale: text('rationale'),
   status: text('status').notNull().default('captured'),
   publishedIssueId: uuid('published_issue_id').references(() => issues.id, { onDelete: 'set null' }),
-  // Wave 12 — N2: double-pickup prevention.
-  idempotencyKey: text('idempotency_key').unique(),
+  // Wave 12 — N2 / Wave 23 — I7: caller-supplied dedup token. Partial unique per (project, key).
+  idempotencyKey: text('idempotency_key'),
   createdBy: text('created_by').notNull().default('user'),
   claimedBy: text('claimed_by'),
   claimExpiresAt: timestamp('claim_expires_at', { withTimezone: true }),

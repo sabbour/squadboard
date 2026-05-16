@@ -72,21 +72,27 @@ router.get('/:id', async (req: Request, res: Response) => {
 // POST /api/inbox
 router.post('/', async (req: Request, res: Response) => {
   try {
-    const { originalDraft, suggestedProjectId, userId } = req.body as {
+    const { originalDraft, suggestedProjectId, userId, idempotencyKey: bodyKey } = req.body as {
       originalDraft?: string;
       suggestedProjectId?: string | null;
       userId?: string | null;
+      idempotencyKey?: string;
     };
+    // Accept key from header (canonical) or body field (convenience).
+    const idempotencyKey =
+      (req.headers['idempotency-key'] as string | undefined) ?? bodyKey ?? undefined;
+
     if (!originalDraft || typeof originalDraft !== 'string') {
       res.status(400).json({ error: '`originalDraft` is required' });
       return;
     }
-    const created = await inboxService.createInboxItem({
+    const { item, created } = await inboxService.createInboxItem({
       originalDraft,
       suggestedProjectId: suggestedProjectId ?? null,
       userId: userId ?? null,
+      idempotencyKey: idempotencyKey ?? null,
     });
-    res.status(201).json(created);
+    res.status(created ? 201 : 200).json(item);
   } catch (err) {
     handleError(res, err);
   }

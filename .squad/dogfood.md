@@ -273,3 +273,39 @@ SQUADBOARD_DEFAULT_PROJECT_ID=<id> \
 
 …to re-run the smoke at any time.
 
+
+---
+
+## Wave 23 — I7: Deterministic idempotency keys for coordinator calls (W23)
+
+The `capture` MCP tool now auto-generates a deterministic
+`sha256(projectId + NUL + normalizedPrompt).slice(0, 32)` key when the
+caller omits one. This prevents duplicate cards when the coordinator
+retries a call that may have already succeeded.
+
+### Two-flow coordinator pattern (intake + close-out)
+
+When the coordinator calls `capture` for intake AND close-out of the
+same directive, use **distinct** explicit keys derived from the directive
+identity so both calls are idempotent but independent:
+
+```
+intake key    = sha256(directiveId + ':intake').slice(0, 32)
+close-out key = sha256(directiveId + ':closeout').slice(0, 32)
+```
+
+Example (pseudo-code):
+```js
+// On intake
+await mcp.capture({ prompt: directiveSummary, projectId, idempotencyKey: hash(id + ':intake') });
+
+// On close-out (scribe symmetry)
+await mcp.capture({ prompt: `done: ${title}`, projectId, idempotencyKey: hash(id + ':closeout') });
+```
+
+Both calls are safe to retry. The MCP server's built-in auto-generation
+is used when no explicit key is passed; explicit keys are recommended for
+the two-flow pattern to guarantee independence between intake and closeout.
+
+The unique index is scoped per `(project_id, idempotency_key)`, so the
+same key may be reused safely across different projects.

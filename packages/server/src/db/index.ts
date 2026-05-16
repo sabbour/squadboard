@@ -1237,6 +1237,41 @@ async function bootstrapSchema(): Promise<void> {
   await seedGhCardSideEffects();
   await seedSystemReviewPolicyPresets();
 
+  // Wave 23 — I7: Idempotency keys on capture + MCP writes.
+  //   1. Add nullable idempotency_key column on issues.
+  //   2. Drop the old global-unique constraint on inbox_items.idempotency_key and
+  //      replace with project-scoped partial unique indexes on both tables.
+  //      (The old constraint name is 'inbox_items_idempotency_key_key' — Postgres
+  //      auto-names UNIQUE column constraints as <table>_<col>_key.)
+  await _pool.query(`
+    ALTER TABLE issues
+      ADD COLUMN IF NOT EXISTS idempotency_key TEXT;
+
+    DO $$ BEGIN
+      IF EXISTS (
+        SELECT 1
+        FROM   information_schema.table_constraints
+        WHERE  constraint_name = 'inbox_items_idempotency_key_key'
+        AND    table_name      = 'inbox_items'
+        AND    constraint_type = 'UNIQUE'
+      ) THEN
+        ALTER TABLE inbox_items DROP CONSTRAINT inbox_items_idempotency_key_key;
+      END IF;
+    END $$;
+
+    -- Project-scoped partial unique on inbox_items.
+    -- Uses suggested_project_id as the project scope (nullable — NULL keys
+    -- are allowed cross-project because all NULLs are distinct in Postgres).
+    CREATE UNIQUE INDEX IF NOT EXISTS inbox_items_project_idempotency_uq
+      ON inbox_items (suggested_project_id, idempotency_key)
+      WHERE idempotency_key IS NOT NULL;
+
+    -- Project-scoped partial unique on issues.
+    CREATE UNIQUE INDEX IF NOT EXISTS issues_project_idempotency_uq
+      ON issues (project_id, idempotency_key)
+      WHERE idempotency_key IS NOT NULL;
+  `);
+
   console.log('[db] schema bootstrapped');
 }
 

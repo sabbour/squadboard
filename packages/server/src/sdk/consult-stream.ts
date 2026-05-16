@@ -810,7 +810,7 @@ async function acceptProposeInboxItem(
     session.projectId ||
     null;
   const inboxService = await import('../services/inbox.js');
-  const item = await inboxService.createInboxItem({
+  const { item } = await inboxService.createInboxItem({
     originalDraft: summary,
     suggestedProjectId,
     userId: null,
@@ -1016,7 +1016,7 @@ export async function promoteConsult(input: PromoteConsultInput): Promise<Promot
 
   if (input.kind === 'inbox') {
     const inboxService = await import('../services/inbox.js');
-    const item = await inboxService.createInboxItem({
+    const { item } = await inboxService.createInboxItem({
       originalDraft: summary
         ? `# ${finalTitle}\n\n${finalBody}\n\n---\n\n<details><summary>Original consult transcript</summary>\n\n${transcriptMd}\n\n</details>`
         : transcriptMd,

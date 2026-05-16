@@ -56,14 +56,18 @@ router.get('/', async (req: Request, res: Response) => {
 router.post('/', async (req: Request, res: Response) => {
   try {
     const { projectId } = req.params as Record<string, string>;
-    const { title, body, status, column, assigneeId, labels } = req.body as {
+    const { title, body, status, column, assigneeId, labels, idempotencyKey: bodyKey } = req.body as {
       title: string;
       body?: string;
       status?: ColumnStatus;
       column?: ColumnStatus; // client alias for status
       assigneeId?: string;
       labels?: string[];
+      idempotencyKey?: string;
     };
+    // Accept key from header (canonical) or body field (convenience).
+    const idempotencyKey =
+      (req.headers['idempotency-key'] as string | undefined) ?? bodyKey ?? undefined;
 
     const effectiveStatus = status ?? column;
 
@@ -80,7 +84,19 @@ router.post('/', async (req: Request, res: Response) => {
       assigneeId: assigneeId ?? null,
       labels: labels ?? [],
       createdBy: 'user',
+      idempotencyKey,
     });
+
+    // If the row already existed (idempotent retry), return 200 + existing data.
+    if (!result.created) {
+      const existingIssue = result.issue ?? await issuesService.getIssue(projectId, result.id);
+      if (existingIssue) {
+        res.status(200).json({ ...serialize(existingIssue), autoRoutedTo: null });
+      } else {
+        res.status(200).json({ id: result.id, autoRoutedTo: null });
+      }
+      return;
+    }
 
     const created = result.issue!;
 

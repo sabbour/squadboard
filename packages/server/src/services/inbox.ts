@@ -40,6 +40,8 @@ export interface CreateInboxInput {
   userId?: string | null;
   originalDraft: string;
   suggestedProjectId?: string | null;
+  idempotencyKey?: string | null;
+  createdBy?: string;
 }
 
 export interface UpdateInboxInput {
@@ -107,11 +109,32 @@ export async function getInboxItem(id: string): Promise<InboxItem | null> {
   return row ?? null;
 }
 
-export async function createInboxItem(input: CreateInboxInput): Promise<InboxItem> {
+export async function createInboxItem(input: CreateInboxInput): Promise<{ item: InboxItem; created: boolean }> {
   const db = getDb();
   const draft = input.originalDraft?.trim();
   if (!draft) {
     throw Object.assign(new Error('`originalDraft` is required'), { status: 400 });
+  }
+
+  // I7: idempotency — if a key is provided, look for an existing row in the
+  // same project scope before inserting.
+  if (input.idempotencyKey) {
+    const condition = input.suggestedProjectId
+      ? and(
+          eq(schema.inboxItems.idempotencyKey, input.idempotencyKey),
+          eq(schema.inboxItems.suggestedProjectId, input.suggestedProjectId),
+        )
+      : eq(schema.inboxItems.idempotencyKey, input.idempotencyKey);
+
+    const [existing] = await db
+      .select()
+      .from(schema.inboxItems)
+      .where(condition)
+      .limit(1);
+
+    if (existing) {
+      return { item: existing, created: false };
+    }
   }
 
   const [created] = await db
@@ -120,10 +143,12 @@ export async function createInboxItem(input: CreateInboxInput): Promise<InboxIte
       userId: input.userId ?? null,
       originalDraft: draft,
       suggestedProjectId: input.suggestedProjectId ?? null,
+      ...(input.idempotencyKey ? { idempotencyKey: input.idempotencyKey } : {}),
+      createdBy: input.createdBy ?? 'user',
       status: 'captured',
     })
     .returning();
-  return created;
+  return { item: created, created: true };
 }
 
 export async function updateInboxItem(id: string, patch: UpdateInboxInput): Promise<InboxItem> {

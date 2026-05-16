@@ -23,6 +23,7 @@ import {
 } from '@modelcontextprotocol/sdk/types.js';
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
+import { createHash } from 'node:crypto';
 import { getDb } from '../db/index.js';
 import { issues, issueRuns, agents, issueLabels, projects, inboxItems } from '../db/schema.js';
 import { eq, and, ilike, or } from 'drizzle-orm';
@@ -836,13 +837,14 @@ async function handleListInbox(args: ToolArgs, extra: Extra): Promise<unknown> {
 
 async function handleCapture(args: ToolArgs, extra: Extra): Promise<unknown> {
   const db = getDb();
-  const { prompt, hint, useLlm, idempotencyKey, createdBy } = args as {
+  const { prompt, hint, useLlm, createdBy } = args as {
     prompt?: string;
     hint?: ConjureIntent;
     useLlm?: boolean;
     idempotencyKey?: string;
     createdBy?: string;
   };
+  let { idempotencyKey } = args as { idempotencyKey?: string };
   const projectId = resolveProjectId(args as { projectId?: string }, extra);
 
   if (!prompt || typeof prompt !== 'string' || !prompt.trim()) {
@@ -851,6 +853,15 @@ async function handleCapture(args: ToolArgs, extra: Extra): Promise<unknown> {
 
   const normalizedPrompt = prompt.trim();
 
+  // I7: auto-generate a deterministic key when caller omits one.
+  // Key = sha256(projectId + NUL + normalizedPrompt).slice(0,32).
+  // Same call with same content → same key → deduped. Two genuinely distinct
+  // calls with the same prose but different explicit keys are still distinct.
+  if (!idempotencyKey) {
+    const keyInput = `${projectId ?? ''}\0${normalizedPrompt}`;
+    idempotencyKey = createHash('sha256').update(keyInput).digest('hex').substring(0, 32);
+  }
+
   // ── N1: done: prefix — close out an existing card ────────────────────────
   const DONE_PREFIX = /^done:\s*/i;
   if (DONE_PREFIX.test(normalizedPrompt)) {
@@ -858,12 +869,15 @@ async function handleCapture(args: ToolArgs, extra: Extra): Promise<unknown> {
     return handleCaptureClose(descriptor, projectId, idempotencyKey);
   }
 
-  // ── N2: idempotency dedup on inbox_items ──────────────────────────────────
-  if (idempotencyKey) {
+  // ── N2: idempotency dedup on inbox_items (project-scoped) ─────────────────
+  {
+    const condition = projectId
+      ? and(eq(inboxItems.idempotencyKey, idempotencyKey), eq(inboxItems.suggestedProjectId, projectId))
+      : eq(inboxItems.idempotencyKey, idempotencyKey);
     const existing = await db
       .select({ id: inboxItems.id, status: inboxItems.status, publishedIssueId: inboxItems.publishedIssueId })
       .from(inboxItems)
-      .where(eq(inboxItems.idempotencyKey, idempotencyKey))
+      .where(condition)
       .limit(1);
     if (existing.length > 0) {
       return { action: 'dedup', idempotencyKey, inboxItemId: existing[0].id, status: existing[0].status };
@@ -912,22 +926,20 @@ async function handleCapture(args: ToolArgs, extra: Extra): Promise<unknown> {
         });
 
       // Persist the inbox_items row for idempotency tracking, linking back to
-      // the created issue.
-      if (idempotencyKey || createdBy) {
-        try {
-          await db.insert(inboxItems).values({
-            originalDraft: normalizedPrompt,
-            formulatedTitle: title,
-            formulatedBody: body,
-            status: 'published',
-            publishedIssueId: created.id,
-            ...(projectId ? { suggestedProjectId: projectId } : {}),
-            ...(idempotencyKey ? { idempotencyKey } : {}),
-            createdBy: createdBy ?? 'copilot-cli',
-          });
-        } catch {
-          // idempotency row insertion is best-effort; don't fail the main capture
-        }
+      // the created issue. Always done — idempotencyKey is always set by now.
+      try {
+        await db.insert(inboxItems).values({
+          originalDraft: normalizedPrompt,
+          formulatedTitle: title,
+          formulatedBody: body,
+          status: 'published',
+          publishedIssueId: created.id,
+          ...(projectId ? { suggestedProjectId: projectId } : {}),
+          idempotencyKey,
+          createdBy: createdBy ?? 'copilot-cli',
+        });
+      } catch {
+        // idempotency row insertion is best-effort; don't fail the main capture
       }
 
       return {

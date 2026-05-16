@@ -312,7 +312,7 @@ export async function createIssue(input: {
     ? `[${input.idempotencyKey}] ${rawTitle}`
     : rawTitle;
 
-  // Key-based idempotency: exact title-prefix match, no time window.
+  // I7: Column-based idempotency — check (project_id, idempotency_key) index first.
   if (input.idempotencyKey) {
     const [existing] = await db
       .select()
@@ -320,13 +320,13 @@ export async function createIssue(input: {
       .where(
         and(
           eq(issues.projectId, input.projectId),
-          eq(issues.title, insertTitle),
+          eq(issues.idempotencyKey, input.idempotencyKey),
         ),
       )
       .limit(1);
 
     if (existing) {
-      return { created: false, id: existing.id, idempotencyKey: input.idempotencyKey };
+      return { created: false, id: existing.id, issue: existing, idempotencyKey: input.idempotencyKey };
     }
   } else {
     // Soft 60-second dedup guard for callers without an explicit key.
@@ -387,6 +387,7 @@ export async function createIssue(input: {
       archived: input.archived ? 1 : 0,
       completedAt: completedAt ?? undefined,
       createdBy: input.createdBy ?? 'user',
+      ...(input.idempotencyKey ? { idempotencyKey: input.idempotencyKey } : {}),
     })
     .returning();
 
