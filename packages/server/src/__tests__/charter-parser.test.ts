@@ -82,6 +82,55 @@ describe('parseCharterContent — ## Model section', () => {
   });
 });
 
+describe('parseCharterContent — W27 Bug A: key allowlist + backtick stripping', () => {
+  it('**Preferred:** auto followed by **Rationale:** prose → model is undefined (rationale ignored)', () => {
+    const section = [
+      '- **Preferred:** auto',
+      '- **Rationale:** Coordinator selects the best model based on task type',
+    ].join('\n');
+    const meta = parseCharterContent(charterWithModel(section));
+    expect(meta.model).toBeUndefined();
+  });
+
+  it('**Preferred:** `claude-haiku-4.5` (backtick-wrapped) → "claude-haiku-4.5"', () => {
+    const meta = parseCharterContent(charterWithModel('- **Preferred:** `claude-haiku-4.5`'));
+    expect(meta.model).toBe('claude-haiku-4.5');
+  });
+
+  it('**Preferred:** **claude-sonnet-4.6** (double-bold wrapped) → "claude-sonnet-4.6"', () => {
+    const meta = parseCharterContent(charterWithModel('- **Preferred:** **claude-sonnet-4.6**'));
+    expect(meta.model).toBe('claude-sonnet-4.6');
+  });
+
+  it('**Preferred:** default → model is undefined (sentinel)', () => {
+    const meta = parseCharterContent(charterWithModel('- **Preferred:** default'));
+    expect(meta.model).toBeUndefined();
+  });
+
+  it('**Preferred:** auto alone → model is undefined', () => {
+    const meta = parseCharterContent(charterWithModel('- **Preferred:** auto'));
+    expect(meta.model).toBeUndefined();
+  });
+
+  it('**Rationale:** before **Preferred:** → Rationale is ignored; model set from Preferred', () => {
+    const section = [
+      '- **Rationale:** something about this agent',
+      '- **Preferred:** claude-opus-4.7',
+    ].join('\n');
+    const meta = parseCharterContent(charterWithModel(section));
+    expect(meta.model).toBe('claude-opus-4.7');
+  });
+
+  it('**Fallback:** after valid **Preferred:** → Fallback key is ignored, model unchanged', () => {
+    const section = [
+      '- **Preferred:** claude-opus-4.7',
+      '- **Fallback:** auto',
+    ].join('\n');
+    const meta = parseCharterContent(charterWithModel(section));
+    expect(meta.model).toBe('claude-opus-4.7');
+  });
+});
+
 describe('parseCharterContent — identity_table model sentinel guard', () => {
   it('identity table with Model: auto → model is undefined', () => {
     const content = `# TestAgent\n\n## Identity\n\n| Model | auto |\n\n## Role\n\nTest role\n`;

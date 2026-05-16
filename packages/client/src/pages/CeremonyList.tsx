@@ -18,7 +18,7 @@ import { apiFetch } from '../api/client.ts'
 import PageHeader from '../components/layout/PageHeader.tsx'
 import { TriggerBadge, KindBadge, ScopeBadge } from '../components/ceremony/CeremonyBadges.tsx'
 import { safeRelativeTime, safeAbsoluteTime } from '../utils/dates.ts'
-import { ActionLoading } from '../components/loading/index.tsx'
+import { ActionLoading, PageLoading } from '../components/loading/index.tsx'
 import {
   Button,
   Caption1,
@@ -26,7 +26,6 @@ import {
   Subtitle1,
   CounterBadge,
   Tooltip,
-  Spinner,
   tokens,
   DataGrid,
   DataGridHeader,
@@ -160,31 +159,17 @@ export default function CeremonyList() {
 
   if (isLoading) {
     return (
-      <div
-        style={{
-          display: 'flex',
-          flexDirection: 'column',
-          height: '100%',
-          background: tokens.colorNeutralBackground1,
-        }}
-      >
-        <PageHeader
-          eyebrow={project?.name?.toUpperCase()}
-          title="Ceremonies"
-          description="Workflows, narratives, and review policies — anything triggered by an event, schedule, or hand."
-          actions={toolbar}
-        />
-        <div
-          style={{
-            flex: 1,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-          }}
-        >
-          <Spinner label="Loading ceremonies…" />
-        </div>
-      </div>
+      <PageLoading
+        header={
+          <PageHeader
+            eyebrow={project?.name?.toUpperCase()}
+            title="Ceremonies"
+            description="Workflows, narratives, and review policies — anything triggered by an event, schedule, or hand."
+            actions={toolbar}
+          />
+        }
+        label="Loading ceremonies…"
+      />
     )
   }
 

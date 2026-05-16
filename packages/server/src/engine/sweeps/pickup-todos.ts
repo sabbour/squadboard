@@ -18,8 +18,13 @@
  */
 import type { Sweep, SweepResult } from '../heartbeat.js';
 import { getDb, schema } from '../../db/index.js';
-import { eq, and, notInArray, sql, asc, inArray } from 'drizzle-orm';
+import { eq, and, notInArray, sql, asc, inArray, gte } from 'drizzle-orm';
 import { resolveRouteTier2 } from '../router.js';
+
+/** Minimum number of recent failures before a (issue, agent) tuple is blocked. */
+const CIRCUIT_BREAKER_MIN_FAILURES = 3;
+/** Rolling window (ms) for counting recent failures. */
+const CIRCUIT_BREAKER_WINDOW_MS = 30 * 60 * 1000; // 30 minutes
 
 export const pickupTodosSweep: Sweep = {
   id: 'pickup-todos',
@@ -124,6 +129,28 @@ export const pickupTodosSweep: Sweep = {
             }
 
             if (!targetAgentId) continue;
+
+            // Circuit breaker: skip if this (issue, agent) tuple has ≥ N failures
+            // in the last M minutes to prevent infinite failure loops.
+            const windowStart = new Date(Date.now() - CIRCUIT_BREAKER_WINDOW_MS);
+            const recentFailures = await db
+              .select({ id: issueRuns.id })
+              .from(issueRuns)
+              .where(
+                and(
+                  eq(issueRuns.issueId, issue.id),
+                  eq(issueRuns.agentId, targetAgentId),
+                  eq(issueRuns.status, 'failed'),
+                  gte(issueRuns.createdAt, windowStart),
+                ),
+              );
+
+            if (recentFailures.length >= CIRCUIT_BREAKER_MIN_FAILURES) {
+              console.log(
+                `[sweep:pickup-todos] circuit-breaker tripped for issue ${issue.id} agent ${targetAgentId}`,
+              );
+              continue;
+            }
 
             await db.insert(issueRuns).values({
               issueId: issue.id,

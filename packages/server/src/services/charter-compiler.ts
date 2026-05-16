@@ -11,6 +11,28 @@ export interface CharterMetadata {
 }
 
 /**
+ * Strip leading/trailing inline markdown decorations from a string.
+ * Handles: backticks (`foo`), bold (**foo**), italic (*foo* or _foo_).
+ * Applied to model values extracted from charter sections so that
+ * e.g. "`claude-haiku-4.5`" becomes "claude-haiku-4.5".
+ */
+function stripInlineMd(s: string): string {
+  let v = s.trim();
+  // Backticks first (may wrap bold/italic)
+  v = v.replace(/^`+|`+$/g, '');
+  // Bold
+  v = v.replace(/^\*\*|\*\*$/g, '');
+  // Italic *
+  v = v.replace(/^\*|\*$/g, '');
+  // Italic _
+  v = v.replace(/^_|_$/g, '');
+  return v.trim();
+}
+
+/** Keys allowed in bold/plain "Key: value" lines under ## Model. */
+const MODEL_KEY_ALLOWLIST = new Set(['preferred', 'model', 'default']);
+
+/**
  * Parse charter markdown content into structured metadata.
  *
  * Extraction rules:
@@ -139,24 +161,48 @@ export function parseCharterContent(content: string): CharterMetadata {
           // Strip leading bullet marker (- or *)
           let raw = trimmed.replace(/^[-*]\s*/, '').trim();
 
+          // Track whether this line produced an extractable value.
+          let extracted = false;
+
           // Handle "**Key:** value" (bold markdown) — e.g. "**Preferred:** auto"
-          const boldMatch = raw.match(/^\*\*[^*]+:\*\*\s*(.*)$/);
+          // Only proceed if the key is in the allowlist {preferred, model, default}.
+          // Non-allowlisted keys like **Rationale:** or **Fallback:** are silently ignored.
+          const boldMatch = raw.match(/^\*\*([^*]+):\*\*\s*(.*)$/);
           if (boldMatch) {
-            raw = boldMatch[1].trim();
+            const key = boldMatch[1].trim().toLowerCase();
+            if (MODEL_KEY_ALLOWLIST.has(key)) {
+              raw = boldMatch[2].trim();
+              extracted = true;
+            }
+            // else: non-allowlisted key — skip this line entirely
           } else {
             // Handle "Key: value" (plain) — e.g. "Preferred: claude-sonnet-4.6"
-            const plainMatch = raw.match(/^[A-Za-z][A-Za-z ]*:\s*(.*)$/);
+            // Only proceed if the key is in the allowlist.
+            const plainMatch = raw.match(/^([A-Za-z][A-Za-z ]*):\s*(.*)$/);
             if (plainMatch) {
-              raw = plainMatch[1].trim();
+              const key = plainMatch[1].trim().toLowerCase();
+              if (MODEL_KEY_ALLOWLIST.has(key)) {
+                raw = plainMatch[2].trim();
+                extracted = true;
+              }
+              // else: non-allowlisted plain key — skip this line entirely
+            } else {
+              // No key prefix at all — treat as bare model string (e.g. "claude-opus-4.7")
+              extracted = true;
             }
           }
 
-          // "auto" and "default" are sentinels meaning "let the platform pick".
-          // Strip any trailing annotation after whitespace (e.g. "auto → coordinator selected …")
-          const valueOnly = raw.split(/\s*[→>]/)[0].trim();
-          const normalized = valueOnly.toLowerCase();
-          if (valueOnly && normalized !== 'auto' && normalized !== 'default') {
-            model = valueOnly;
+          if (extracted) {
+            // Strip inline markdown decorations (backticks, bold, italic) from value.
+            raw = stripInlineMd(raw);
+
+            // "auto" and "default" are sentinels meaning "let the platform pick".
+            // Strip any trailing annotation after arrow (e.g. "auto → coordinator selected …")
+            const valueOnly = raw.split(/\s*[→>]/)[0].trim();
+            const normalized = valueOnly.toLowerCase();
+            if (valueOnly && normalized !== 'auto' && normalized !== 'default') {
+              model = valueOnly;
+            }
           }
         }
         break;

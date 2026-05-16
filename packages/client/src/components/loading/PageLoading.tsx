@@ -1,5 +1,6 @@
 import { type ReactNode } from 'react'
 import { Spinner, tokens, type SpinnerProps } from '@fluentui/react-components'
+import { useAntiFlash } from './useAntiFlash'
 
 interface PageLoadingProps {
   /** Contextual label shown beneath the spinner. Defaults to "Loading…" */
@@ -12,6 +13,8 @@ interface PageLoadingProps {
   header?: ReactNode
   /** Spinner size. Defaults to "medium". */
   size?: SpinnerProps['size']
+  /** Anti-flash delay in milliseconds. Defaults to 150. */
+  antiFlashDelayMs?: number
 }
 
 /**
@@ -19,12 +22,20 @@ interface PageLoadingProps {
  *
  * Use when an entire page is in `isLoading` and there is nothing else to show.
  *
+ * Features 150ms anti-flash delay to prevent spinners flashing on quick loads.
+ * Accessible with role="status", aria-live="polite", aria-busy, and aria-label.
+ *
  * @example
  * if (isLoading) return <PageLoading label="Loading costs…" />
+ * if (isLoading) return <PageLoading header={<PageHeader … />} label="Loading…" />
  */
-export function PageLoading({ label = 'Loading…', header, size = 'medium' }: PageLoadingProps) {
+export function PageLoading({ label = 'Loading…', header, size = 'medium', antiFlashDelayMs = 150 }: PageLoadingProps) {
+  const shouldShow = useAntiFlash(antiFlashDelayMs)
+
   return (
     <div
+      role="status"
+      aria-live="polite"
       aria-busy="true"
       aria-label={label}
       style={{
@@ -43,7 +54,7 @@ export function PageLoading({ label = 'Loading…', header, size = 'medium' }: P
           justifyContent: 'center',
         }}
       >
-        <Spinner label={label} size={size} />
+        {shouldShow ? <Spinner label={label} size={size} /> : null}
       </div>
     </div>
   )

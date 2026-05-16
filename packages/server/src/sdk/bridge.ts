@@ -11,6 +11,34 @@ import { BUILTIN_FALLBACK } from './model-defaults.js';
 
 export type { IssueRun } from '../db/schema.js';
 
+/**
+ * Regex for a plausible model id: starts with a lowercase letter, contains
+ * only lowercase alphanum, dots, or hyphens, and is ≤40 chars.
+ * Intentionally permissive for future model ids while catching parser garbage.
+ */
+const VALID_MODEL_RE = /^[a-z][a-z0-9.\-]{0,39}$/;
+
+/**
+ * Boundary validator for agent model strings arriving from the DB.
+ * If the value looks like parser garbage (spaces, backticks, double-asterisks,
+ * or > 40 chars), log a structured warning and return null so the resolution
+ * chain falls through to project default or BUILTIN_FALLBACK.
+ */
+function validateModel(model: string | null | undefined, agentName: string): string | null {
+  if (model == null) return null;
+  const suspicious =
+    model.includes(' ') ||
+    model.includes('`') ||
+    model.includes('**') ||
+    model.length > 40 ||
+    !VALID_MODEL_RE.test(model);
+  if (suspicious) {
+    console.warn(`[bridge] suspicious model rejected: ${agentName} ${model}`);
+    return null;
+  }
+  return model;
+}
+
 export interface AgentRunInput {
   issueRunId: string;
   projectId: string; // needed for budget guard
@@ -75,7 +103,7 @@ export async function executeAgentRun(input: AgentRunInput): Promise<AgentRunOut
       workspacePath: input.workspacePath,
       squadPath: input.projectSquadPath,
       task,
-      agentModel: input.agent.model ?? null,
+      agentModel: validateModel(input.agent.model ?? null, input.agent.name),
       projectDefaultModel: projectRow?.defaultModel ?? null,
     });
 
