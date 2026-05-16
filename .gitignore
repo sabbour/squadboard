@@ -1,3 +1,16 @@
+# Dependencies and build artifacts (added 2026-05-16 — these were leaking dirty status across all packages)
+node_modules/
+**/node_modules/
+dist/
+**/dist/
+build/
+**/build/
+out/
+**/out/
+.vite/
+**/.vite/
+*.tsbuildinfo
+
 # Squad: ignore runtime state (logs, inbox, sessions)
 .squad/orchestration-log/
 .squad/log/
@@ -12,6 +25,7 @@
 .server-dev.log
 .squad/server.log
 .verify.log
+.srv-verify.log
 # Playwright test reports
 packages/e2e/playwright-report/
 packages/e2e/test-results/
