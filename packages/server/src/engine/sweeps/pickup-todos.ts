@@ -25,6 +25,8 @@ import { eq, and, sql, asc, inArray, gte } from 'drizzle-orm';
 import { resolveRouteTier2 } from '../router.js';
 import { dispatchViaCoordinator } from '../../coordinator/index.js';
 import { isCoordinatorDispatchEnabled } from '../../config/coordinator-env.js';
+import { persistCoordinatorDecision } from '../../services/coordinator-decision-log.js';
+import type { CoordinatorDecision, CoordinatorCallMeta } from '../../coordinator/types.js';
 
 /** Minimum number of recent failures before a (issue, agent) tuple is blocked. */
 const CIRCUIT_BREAKER_MIN_FAILURES = 3;
@@ -144,6 +146,9 @@ export const pickupTodosSweep: Sweep = {
             let targetAgentId: string | null = null;
             let routingTier: 1 | 2 | 3 | null = null;
             let routingReasoning: string | null = null;
+            // MC-10: captured when coordinator dispatches, for persistence after insert.
+            let capturedCoordinatorDecision: CoordinatorDecision | null = null;
+            let capturedCoordinatorMeta: CoordinatorCallMeta | null = null;
 
             // ----------------------------------------------------------------
             // Tier 1: Coordinator dispatch (MC-7)
@@ -222,6 +227,9 @@ export const pickupTodosSweep: Sweep = {
                     targetAgentId = resolvedId;
                     routingTier = 1;
                     routingReasoning = decision.rationale ?? 'coordinator dispatch';
+                    // MC-10: capture for persistence after insert.
+                    capturedCoordinatorDecision = decision;
+                    capturedCoordinatorMeta = result.meta;
                   } else {
                     console.warn(
                       `[sweep:pickup-todos] coordinator returned unknown agent '${decision.agent}' for issue ${issue.id} — falling through to tier-2`,
@@ -310,7 +318,7 @@ export const pickupTodosSweep: Sweep = {
               continue;
             }
 
-            await db.insert(issueRuns).values({
+            const [insertedRun] = await db.insert(issueRuns).values({
               issueId: issue.id,
               agentId: targetAgentId,
               kind: 'agent_run',
@@ -318,7 +326,12 @@ export const pickupTodosSweep: Sweep = {
               output: '[auto-dispatched by pickup-todos sweep]',
               routingTier,
               routingReasoning,
-            });
+            }).returning({ id: issueRuns.id });
+
+            // MC-10: persist coordinator decision on the newly-created run.
+            if (insertedRun && capturedCoordinatorDecision && capturedCoordinatorMeta) {
+              await persistCoordinatorDecision(insertedRun.id, capturedCoordinatorDecision, capturedCoordinatorMeta);
+            }
 
             acted += 1;
             console.log(`[sweep:pickup-todos] dispatched issue ${issue.id} → agent ${targetAgentId} (tier=${routingTier ?? 'fallback'})`);

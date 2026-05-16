@@ -36,6 +36,10 @@ vi.mock('../coordinator/index.js', () => ({
 vi.mock('../config/coordinator-env.js', () => ({
   isCoordinatorDispatchEnabled: () => false,
 }));
+// MC-10: mock decision-log so persistCoordinatorDecision is a no-op here.
+vi.mock('../services/coordinator-decision-log.js', () => ({
+  persistCoordinatorDecision: vi.fn().mockResolvedValue(undefined),
+}));
 
 vi.mock('../db/index.js', () => {
   const schema = {
@@ -69,7 +73,7 @@ vi.mock('../db/index.js', () => {
     insert: (_table: unknown) => ({
       values: (row: Record<string, unknown>) => {
         mockInsertedRuns.push(row);
-        return Promise.resolve([{ id: 'run-new-' + mockInsertedRuns.length }]);
+        return { returning: () => Promise.resolve([{ id: 'run-new-' + mockInsertedRuns.length }]) };
       },
     }),
   });

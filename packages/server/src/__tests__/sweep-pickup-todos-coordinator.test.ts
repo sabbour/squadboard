@@ -24,6 +24,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 // ---------------------------------------------------------------------------
 
 const mockInsertValues = vi.fn();
+const mockInsertReturning = vi.fn();
 const mockInsert = vi.fn();
 const mockSelect = vi.fn();
 const mockDb = { select: mockSelect, insert: mockInsert };
@@ -32,7 +33,7 @@ vi.mock('../db/index.js', () => ({
   getDb: () => mockDb,
   schema: {
     issues:    { __table: 'issues' },
-    issueRuns: { __table: 'issue_runs' },
+    issueRuns: { __table: 'issue_runs', id: 'issue_runs.id' },
     agents:    { __table: 'agents' },
     projects:  { __table: 'projects' },
   },
@@ -51,6 +52,11 @@ vi.mock('../coordinator/index.js', () => ({
 const mockIsCoordinatorDispatchEnabled = vi.fn();
 vi.mock('../config/coordinator-env.js', () => ({
   isCoordinatorDispatchEnabled: () => mockIsCoordinatorDispatchEnabled(),
+}));
+
+// MC-10: mock the decision-log service so the sweep test doesn't need a DB update chain.
+vi.mock('../services/coordinator-decision-log.js', () => ({
+  persistCoordinatorDecision: vi.fn().mockResolvedValue(undefined),
 }));
 
 vi.mock('drizzle-orm', () => ({
@@ -178,8 +184,10 @@ beforeEach(() => {
   vi.resetAllMocks();
   mockIsCoordinatorDispatchEnabled.mockReturnValue(true);
   mockResolveRouteTier2.mockResolvedValue(null);
+  // MC-10: insert chain now includes .returning() — return a fluent builder.
+  mockInsertReturning.mockResolvedValue([{ id: 'new-run-id' }]);
+  mockInsertValues.mockReturnValue({ returning: mockInsertReturning });
   mockInsert.mockReturnValue({ values: mockInsertValues });
-  mockInsertValues.mockResolvedValue(undefined);
 });
 
 // ---------------------------------------------------------------------------

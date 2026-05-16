@@ -18,6 +18,7 @@ import {
 import { isCoordinatorDispatchEnabled } from '../config/coordinator-env.js';
 import { dispatchViaCoordinator } from '../coordinator/index.js';
 import type { CoordinatorInput } from '../coordinator/index.js';
+import { persistCoordinatorDecision } from '../services/coordinator-decision-log.js';
 
 /** Sanitize a branch name — reject any shell-unsafe characters */
 function sanitizeBranchName(name: string): string {
@@ -326,6 +327,11 @@ issueRunsRouter.post('/', async (req: Request, res: Response) => {
         workspaceStrategy: workspaceStrategy ?? 'scratch',
       })
       .returning();
+
+    // MC-10: persist coordinator decision on the newly-created run (fire-and-forget).
+    if (run) {
+      await persistCoordinatorDecision(run.id, decision, dispatchResult.meta, db);
+    }
 
     eventBus.emitRunEvent('run.started', projectId, { run });
     res.status(201).json({ ...run, _coordinatorDecision: decision });

@@ -118,6 +118,11 @@ vi.mock('../services/github-git-ops.js', () => ({
   },
 }));
 
+// MC-10: mock the decision-log service — the route calls it fire-and-forget.
+vi.mock('../services/coordinator-decision-log.js', () => ({
+  persistCoordinatorDecision: vi.fn().mockResolvedValue(undefined),
+}));
+
 // ---------------------------------------------------------------------------
 // Import router AFTER mocks
 // ---------------------------------------------------------------------------

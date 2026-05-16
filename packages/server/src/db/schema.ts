@@ -250,6 +250,8 @@ export const issueRuns = pgTable('issue_runs', {
   // Wave 20 — G4.1: external dispatch reference for copilot runs.
   // Shape: { owner, repo, workflowRunId?, issueNumber? }
   externalRef: jsonb('external_ref'),
+  // W29 MC-10: coordinator decision + call metadata (nullable; set when coordinator drove dispatch).
+  coordinatorDecision: jsonb('coordinator_decision').$type<unknown>(),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 });
