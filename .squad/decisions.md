@@ -1460,3 +1460,248 @@ Response errors: 404 (run not found), 403 (unsafe workspace), 422 (no PR found /
 
 ### CI URL
 - `gh pr checks --json name,state,conclusion` does not return the per-check URL in all GH API versions. May need `--json name,state,conclusion,link` (newer API). Field is stored as nullable `ciUrl` — safe to omit if unavailable.
+
+
+# Keyser W18 UX Polish — Decision Record
+
+**Date:** 2026-05-15T22:42:29.855-07:00
+**Wave:** 18
+**Author:** Keyser (Frontend Dev)
+**Items:** O6 (project combobox), H6 (Ceremonies audit), O5 (Consult button removal)
+
+---
+
+## O6 — Top Project Selector → Fluent2 Combobox
+
+### Before
+- `Menu` + `MenuTrigger` + `Button` (subtle, with `ChevronDown16Regular` icon)
+- Max-width `320px`, min-width `180px`
+- Not searchable — full list always visible, no filtering
+- No recent-projects section
+- Project names that exceed max-width showed ellipsis in button text but the menu items themselves were not constrained
+
+### After
+- `Combobox` from `@fluentui/react-components` — searchable, keyboard-navigable
+- Min-width `320px`, max-width `480px`, `flex-shrink: 1` so top bar never overflows
+- Typing filters the project list in real time; if the typed value matches the current project name exactly, the full list is shown (avoids filtering away everything on initial open)
+- **Recent section:** last 5 selected projects persist to `localStorage` under `squadboard:recent-project-ids`, shown as an `OptionGroup` labelled "Recent" at the top of the dropdown, excluded from the main "All Projects" group. Recent list also respects the search filter.
+- On selection: `pushRecentId()` updates localStorage, state is synced, navigation preserves the current page category (board → same board on new project, etc.)
+- On blur without selection: combobox value is restored to the current project name
+- Tooltip wraps the Combobox and surfaces the full project name (handles very long names cleanly)
+- Removed: `Menu`, `MenuTrigger`, `MenuPopover`, `MenuList`, `MenuItem`, `ChevronDown16Regular` (all now unused)
+
+### Acceptance test
+A project named "My Long Project Name That Used To Wrap In The Old Dropdown" renders in a 320–480px input with ellipsis; full name is visible in the Tooltip on hover. Typing "Long" filters the list to matching projects.
+
+---
+
+## H6 — Ceremonies Page Fluent2 Audit
+
+### Audit Findings
+
+**`CeremonyList.tsx`** — Already well-formed Fluent2:
+- Buttons: `appearance="primary"` and `appearance="subtle"` ✓
+- Spacing: `tokens.spacingHorizontal*` / `tokens.spacingVertical*` throughout ✓
+- `PageHeader` component used ✓
+- Empty state: centred card with Subtitle1 + Body1 + primary CTA ✓
+- DataGrid rows: `cursor: pointer` only, no hover-resize (no `transform`/`scale`) ✓
+
+**`CeremonyEditor.tsx` — edit-mode header (lines ~499–570):** Three issues found and fixed:
+1. `borderBottom: '1px solid var(--border)'` → `tokens.colorNeutralStroke1` (Fluent2 token, not CSS var)
+2. `gap: 12` → `gap: tokens.spacingHorizontalM` (token-based, not raw px)
+3. Hardcoded status colors `'#3fb950'` / `'#f85149'` → `tokens.colorPaletteGreenForeground1` / `tokens.colorPaletteRedForeground1` (already used correctly in the new-ceremony header; now consistent in both modes)
+
+Action buttons (Validate / Run now / Save as template / Export YAML / Save) were already horizontal flex — no change needed.
+
+### Hover-resize
+The hover-resize fix (`transform: none` + elevation-only on hover) already applied in `ProjectCard.tsx` (W10 B4). `CeremonyList` uses `DataGrid` rows — no card-scale behaviour is present.
+
+### Empty-state convergence (Skills / Tools / MCP)
+The empty-state pattern in `CeremonyList` is the target. `Skills.tsx`, `Tools.tsx`, and `McpServers.tsx` were not audited this wave (defer to W19 unless trivial). Filed as follow-up.
+
+---
+
+## O5 — Remove Consult Button from Work-Item Side View
+
+### What was removed
+In `packages/client/src/components/board/CardDetail.tsx`:
+- Removed the `<Tooltip>` + `<Button appearance="subtle" icon={<Lightbulb20Regular />}>Consult</Button>` block from the panel header
+- Removed unused imports: `useNavigate` (react-router), `Button` (Fluent2), `Lightbulb20Regular` (@fluentui/react-icons), `Tooltip` (Fluent2)
+
+The button navigated to `/projects/${projectId}/consult/new?prefill=issue:${issue.id}`. Despite the `?prefill=issue:...` query param being present in the URL, the Consult/Conjure page was not reading it (intake note: "doesn't really populate any context"). The button was therefore redundant noise next to the close (✕) button.
+
+### Context-passing follow-up (W19)
+The intended UX — opening Conjure pre-loaded with the work-item context — is worth reviving properly in W19 as a Conjure deep-link:
+
+```
+/conjure/new?context=workItem:{issue.id}
+```
+
+This should be a named "Investigate with Conjure" action, possibly in the work-item's `…` overflow menu rather than a top-bar button, so it doesn't compete with the close affordance. The Conjure page (`Consult.tsx`) needs to read `context=workItem:{id}`, fetch the issue, and pre-populate the prompt with title + body + current column.
+
+**W19 todo:** `conjure-workitem-deeplink` — implement `?context=workItem:{id}` in Consult.tsx + add "Investigate with Conjure" to CardDetail overflow menu.
+
+---
+
+## Build
+
+`tsc --noEmit` + `vite build` → ✓ green, 6.71s, zero new errors.
+
+
+# Kobayashi W18 — npm publish + Squad coordinator awareness
+**Date:** 2026-05-15T22:42:29.855-07:00  
+**Author:** Kobayashi (SDK Integrator)  
+**Wave:** 18  
+**Status:** Partial ship — packages ready, publish blocked on npm token; upstream PR filed
+
+---
+
+## P1 — npm publish audit + status
+
+### packages/server → `@sabbour/squadboard@0.1.0`
+
+**Audit findings + changes made:**
+
+| Field | Before | After |
+|-------|--------|-------|
+| `name` | `@sabbour/squadboard-server` | `@sabbour/squadboard` |
+| `private` | `true` | removed |
+| `bin` | missing | `{ "squadboard": "./dist/cli/index.js" }` |
+| `files` | missing | `["dist", "coordinator-fragment.md", "scripts/postinstall-coordinator-fragment.mjs", "README.md"]` |
+| `publishConfig` | missing | `{ "access": "public" }` |
+| `repository` | missing | `{ "type": "git", "url": "https://github.com/asabbour/squadboard.git" }` |
+| `homepage` | missing | `https://github.com/asabbour/squadboard#readme` |
+| `license` | missing | `"MIT"` |
+| `prepublishOnly` | missing | `pnpm run build` |
+| `postinstall` | missing | `node scripts/postinstall-coordinator-fragment.mjs` |
+| duplicate `@electric-sql/pglite` | two entries | deduplicated to one |
+
+**New artifacts created:**
+- `packages/server/src/cli/index.ts` — main CLI dispatcher (mcp, start, --help, --version)
+- `packages/server/coordinator-fragment.md` — copied from packages/squadboard (absorbed)
+- `packages/server/scripts/postinstall-coordinator-fragment.mjs` — copied from packages/squadboard
+
+**Related:** `packages/squadboard/package.json` renamed to `@sabbour/squadboard-coordinator-fragment` and marked private (role absorbed into packages/server). Root `package.json` renamed to `@sabbour/squadboard-monorepo` and marked private to avoid pnpm workspace name conflict.
+
+### packages/squadboard-sdk → `@sabbour/squadboard-sdk@0.1.0`
+
+**Audit findings + changes made:**
+
+| Field | Before | After |
+|-------|--------|-------|
+| `private` | absent (publishable) | already correct |
+| `license` | missing | `"MIT"` |
+| `files` | missing | `["dist", "README.md"]` |
+| `publishConfig` | missing | `{ "access": "public" }` |
+| `repository` | missing | added |
+| `prepublishOnly` | missing | `pnpm run build` |
+
+### Build status
+
+Both packages built clean:
+- `packages/squadboard-sdk`: `tsc` → exit 0
+- `packages/server`: `tsc` → exit 0 (CLI index compiled to `dist/cli/index.js` ✅)
+
+### Pack dry-run outputs
+
+**@sabbour/squadboard-sdk@0.1.0**
+- 21 files · 19.4 kB packed · 70.9 kB unpacked
+- Contains: `dist/{bundle,scribe,index}` — clean, no .ts source, no node_modules
+
+**@sabbour/squadboard@0.1.0**
+- 422 files · 645.1 kB packed · 3.2 MB unpacked
+- Contains: `dist/`, `coordinator-fragment.md`, `scripts/postinstall-coordinator-fragment.mjs`
+- Confirmed: `dist/cli/index.js` ✅, `dist/mcp/index.js` ✅, no .squad/, no node_modules/
+
+### Publish status — BLOCKED
+
+**Blocker:** npm auth token present in `~/.npmrc` returns HTTP 401 on `npm whoami`.
+
+**To publish (human action required):**
+```bash
+npm login --registry https://registry.npmjs.org
+# then:
+cd packages/squadboard-sdk && pnpm publish --access public --no-git-checks
+cd packages/server        && pnpm publish --access public --no-git-checks
+```
+
+**Todos filed:** `p1-publish-mcp-auth-needed`, `p1-publish-needs-human-trigger`
+
+---
+
+## P2 — Squad coordinator awareness
+
+### Path taken: **Path A (upstream PR)** — FILED
+
+Repo: `bradygaster/squad` (not `squad-duck` — the correct repo name confirmed via `gh repo view`)
+
+**PR:** https://github.com/bradygaster/squad/pull/1124  
+**Branch:** `sabbour:feat/extension-fragments → bradygaster:dev`
+
+**What the PR adds:**
+
+1. `squad.agent.md` — new `### Extension Fragments` section after MCP Integration:
+   - Scan dirs: `~/.squad/extensions/coordinator/*.md` (user-global) and `<repo>/.squad/extensions/coordinator/*.md` (project-local)
+   - Fragment YAML front matter: `name`, `version`, `extends: squad`, `inject_into`
+   - Loading rules (silent skip, append-only, detection-guarded)
+   - Anti-patterns documented
+   - Source of Truth table updated with extension-fragments row
+
+2. `docs/plugins/squad-coordinator-extensions.md` — full plugin-author guide:
+   - Fragment format + style rules (coordinator voice, ≤200 lines, additive only)
+   - Postinstall script pattern (idempotent, SHA-aware, always exits 0)
+   - User override contract + upgrade story
+   - @sabbour/squadboard as reference implementation
+
+### Path B (fallback patcher) — ALSO SHIPPED
+
+`packages/server/scripts/install-squad-extension.js` created:
+- Patches `.github/agents/squad.agent.md` with sentinel block (`<!-- SQUADBOARD_EXTENSION_START -->` … `<!-- SQUADBOARD_EXTENSION_END -->`)
+- Idempotent: upgrade-aware, sentinel-based
+- `remove` command strips sentinel block
+- Works independently of the upstream PR landing
+
+---
+
+## Extension fragment content (canonical)
+
+Fragment injected by the squadboard postinstall or fallback patcher:
+
+```
+## Squadboard Integration (auto-injected by @sabbour/squadboard@X.Y.Z)
+
+If a ~/.squadboard/config.json exists OR a .squadboard/project.json exists in the cwd,
+you have Squadboard running alongside you. You can:
+
+- Capture issues / chores / features via MCP tools (squadboard_capture, squadboard_report_bug,
+  squadboard_add_feature, squadboard_add_chore, squadboard_backlog_status).
+- Drive GitHub workflows via MCP tools (github_push_branch, github_open_pr,
+  github_comment_issue, github_trigger_workflow, github_merge_pr) — see W18 Hockney work.
+- Invoke ceremonies on issues via the SDK or HTTP API.
+
+When the user asks to triage / log / track work, prefer Squadboard tools over manual SQL
+or local files.
+```
+
+Note: `github_*` tools documented here are arriving same wave (W18) from Hockney. Fragment
+references the expected final surface; if Hockney's work lands after this publish, update to
+`@sabbour/squadboard@0.1.1` with the corrected tool list.
+
+---
+
+## Versioning strategy
+
+- **@sabbour/squadboard-sdk**: `0.1.0` — library-first, SemVer. Breaking changes to `scribe.*` or `bundle.*` exports → minor bump until stable API declared.
+- **@sabbour/squadboard**: `0.1.0` — distribution umbrella. Coordinator-fragment updates → patch bump. New MCP tools → minor bump.
+- **Coordinator fragment version** in front matter tracks distribution package version. Postinstall script compares SHAs; no manual version check needed.
+- Both packages published independently; `@sabbour/squadboard` declares `@sabbour/squadboard-sdk: "^0.1.0"` in prod dependencies (resolved from `workspace:*` by pnpm at publish time).
+
+---
+
+## q-item status
+
+| Item | Status |
+|------|--------|
+| q3-squad-extension-pr | **IN FLIGHT** — PR #1124 filed at bradygaster/squad |
+| q5-extension-fallback-patcher | **DONE** — `install-squad-extension.js` shipped |
+| p1-publish-mcp-auth-needed | **PENDING** — human must re-auth npm then trigger |
