@@ -112,6 +112,8 @@ export interface BatchDispatchOptions {
   cache?: BatchDecisionCache;
   /** Injectable clock (forwarded to default cache only when cache is omitted). */
   now?: () => number;
+  /** LLM call timeout in milliseconds. Default: 30_000 (30 s). */
+  timeoutMs?: number;
 }
 
 export interface BatchDispatchResult {
@@ -158,18 +160,34 @@ export async function dispatchBatchViaCoordinator(
   // 6. Resolve model
   const model = opts?.model ?? process.env.COORDINATOR_MODEL ?? "claude-haiku-4.5";
 
-  // 7. Call LLM directly (can't use callCoordinatorLlm — it hard-codes coordinatorDecisionSchema)
-  const caller = opts?.llmCaller ?? defaultLlmCaller;
+  // 7. Build abort signal with timeout (30s default, overrideable via opts.timeoutMs)
+  const timeoutMs = opts?.timeoutMs ?? 30_000;
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
   const startMs = Date.now();
 
-  const callerResult = await caller.call({
-    messages: [
-      { role: "system", content: preamble.text },
-      { role: "user", content: userPayload },
-    ],
-    model,
-    temperature: 0,
-  });
+  // 8. Call LLM with timeout signal
+  const caller = opts?.llmCaller ?? defaultLlmCaller;
+  let callerResult: Awaited<ReturnType<typeof caller.call>>;
+  try {
+    callerResult = await caller.call({
+      messages: [
+        { role: "system", content: preamble.text },
+        { role: "user", content: userPayload },
+      ],
+      model,
+      temperature: 0,
+      abortSignal: controller.signal,
+    });
+  } catch (err) {
+    const elapsedMs = Date.now() - startMs;
+    if (err instanceof Error && err.name === "AbortError") {
+      throw new CoordinatorTimeoutError(model, timeoutMs, elapsedMs);
+    }
+    throw err;
+  } finally {
+    clearTimeout(timeoutId);
+  }
 
   const durationMs = Date.now() - startMs;
   const rawText = callerResult.text;
@@ -214,4 +232,21 @@ function stripCodeFences(text: string): string {
     return fenceMatch[1].trim();
   }
   return trimmed;
+}
+
+// ---------------------------------------------------------------------------
+// Error types
+// ---------------------------------------------------------------------------
+
+export class CoordinatorTimeoutError extends Error {
+  constructor(
+    public readonly model: string,
+    public readonly timeoutMs: number,
+    public readonly elapsedMs: number,
+  ) {
+    super(
+      `Coordinator LLM call to ${model} exceeded timeout of ${timeoutMs}ms (elapsed: ${elapsedMs}ms)`,
+    );
+    this.name = "CoordinatorTimeoutError";
+  }
 }

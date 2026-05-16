@@ -60,5 +60,5 @@ export { dispatchViaCoordinator } from "./dispatch.js";
 export type { DispatchOptions, DispatchResult } from "./dispatch.js";
 
 // MC-11: batch dispatch
-export { dispatchBatchViaCoordinator, BatchDecisionCache, batchDecisionCache } from "./batch.js";
+export { dispatchBatchViaCoordinator, BatchDecisionCache, batchDecisionCache, CoordinatorTimeoutError } from "./batch.js";
 export type { BatchCacheOptions, BatchDispatchOptions, BatchDispatchResult } from "./batch.js";
