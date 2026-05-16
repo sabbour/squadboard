@@ -1,3 +1,21 @@
+## W29 — Route Wiring + Ceremonies Expansion
+
+**Date:** 2026-05-16  
+**Wave:** 29  
+**Status:** Completed
+
+### Contributions
+
+**Routes & Trigger Filters (MC-8, CER-5)**
+- **MC-8:** Run button coordinator wiring — `routes/runs.ts` POST `/api/projects/:pid/issues/:iid/runs` now makes `agentId` optional. If omitted, dispatch routed through coordinator. Commit: `9ca4d18b8`.
+- **CER-5:** Expanded GitHub event trigger filters — added `pull_request_review_thread`, `release`, `deployment` to eligible ceremony triggers. Commit: `4e27e7efc`.
+
+### Lessons
+
+1. **Optional params cascade through type signatures.** Making `agentId` optional required updates in controller → service → coordinator dispatch chain. Always trace impact through full call stack.
+
+---
+
 ## W22 Lesson — Conjure Misdiagnosis Correction
 
 **Date:** 2026-05-16  

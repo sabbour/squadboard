@@ -1,5 +1,26 @@
 # Kobayashi — History
 
+## W29 — Ceremonies Overhaul Foundation
+
+**Date:** 2026-05-16  
+**Wave:** 29  
+**Status:** Completed
+
+### Contributions
+
+**Ceremonies Stack Leadership (CER-2, CER-3, CER-4, CER-9)**
+- **CER-2:** Auto-seed builtin ceremonies per project (pre-commit, code-review, ci-pass). Commit: `63e025ad9`.
+- **CER-3:** Canonicalize ceremonies as `.squad/ceremonies/*.workflow.yaml` (JSON variant deprecated). Commit: `2e82cdd6` + export bug fix `22826aaf4`.
+- **CER-4:** YAML ↔ visual editor roundtrip fidelity tests (100% parity). Commit: `55e84e186`.
+- **CER-9:** Starter templates now include canonical ceremony YAML. Commit: `2d54adad7`.
+
+### Lessons
+
+1. **YAML roundtrip fidelity is non-obvious.** Export API had field-name mismatch (`parsed.spec.steps` vs undefined). Caught during CER-4 testing — always validate export format matches visual editor schema.
+2. **Canonicalization enables automation.** Moving to YAML (consistent with squad.io/v1 spec) unlocks CLI tools, templating, and diff-based review workflows. JSON variant retained for backward-compat, but new features only support YAML.
+
+---
+
 ## Core Context
 
 - **Project:** Squadboard — local-first kanban + workflow board for [Squad](https://github.com/bradygaster/squad) agents

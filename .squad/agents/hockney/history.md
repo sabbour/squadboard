@@ -1,3 +1,28 @@
+## W29 — Mini-Coordinator DB Spawning + Launch Reviews
+
+**Date:** 2026-05-16  
+**Wave:** 29  
+**Status:** Completed
+
+### Contributions
+
+**Mini-Coordinator Database Layer (MC-5, MC-6, MC-9, MC-10)**
+- **MC-5:** `agents.charter_content TEXT` column + migration 0003 + idempotent `ensureCharterBackfill()` service. Commits: `1cb2bd96`, `f42d3b81a` (recovery).
+- **MC-6:** Agent-sync drift detection — compute `charterContentHash` during sync, detect mutations on re-sync. Commit: `f06db35b5`.
+- **MC-9:** Coordinator env config (`COORDINATOR_DISPATCH_ENABLED`, `COORDINATOR_MODEL`, `COORDINATOR_FALLBACK_MODELS` chain). Commit: `86f6c58b0`.
+- **MC-10:** Persist coordinator decisions as `issue_runs.coordinator_decision JSONB`. Migration 0004 INSERT bug discovered during reliability review; hotfixed by `109c386cc`.
+
+**Launch Reviews**
+- **Reliability Review:** Led YELLOW verdict review; identified M1 sev 10/10 (migration 0004 INSERT broken), M2 (batch timeout missing), M3 (unhandledRejection). Commit: `e3e2405be`.
+
+### Lessons
+
+1. **Migration example patterns matter.** Scribe's dispatcher prompt included faulty manual `INSERT` example. Always validate dispatch prompts against existing migration hooks.
+2. **Post-action hook timing is fragile.** Batch 2 commit race: post-action checked `git status` before staged files flushed. Mitigation: explicit `git diff --cached --stat` before marking staged.
+3. **JSONB persistence enables retroactive analysis.** `coordinator_decision` on runs allows querying coordinator routing decisions post-hoc — valuable for debugging + telemetry.
+
+---
+
 ## W23 Lesson — Idempotency Pattern at Scale
 
 **Date:** 2026-05-16  

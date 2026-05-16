@@ -1,3 +1,27 @@
+## W29 — Coordinator Caching + Strategy + Reviews
+
+**Date:** 2026-05-16  
+**Wave:** 29  
+**Status:** Completed
+
+### Contributions
+
+**Coordinator Stack (MC-4, MC-11, MC-14)**
+- **MC-4:** LRU + TTL decision cache — 128-entry capacity, 60s TTL, `hashCoordinatorInput()` deduplication. Input hash prevents spurious misses on structurally-identical differently-serialized inputs. 8 tests. Commit: `46692db7`.
+- **MC-11:** Batch dispatch — `batchDispatchViaCoordinator()` atomically routes N inputs → coordinator → N decisions. Integration tests pass; fallback chain not yet wired (BUG-1 deferred to W30). Commit: `48478c513`.
+- **MC-14:** Charter-identity extraction — `extractCharterIdentity(charterPath)` returns `{ name, hash }` for charter fingerprinting. Commit: `f5e9526fb`.
+
+**Launch Reviews**
+- **Security Review:** Led YELLOW verdict review; identified C-1 (credentials fallback), C-3 (prompt injection), C-4 (auth+CSRF). Deferred to W30. Commit: `55eeb7560`.
+
+### Lessons
+
+1. **Input deduplication via content hash is essential for caching.** Different serializations of same input (JSON key order, whitespace) prevent cache hits. Use `JSON.stringify` with sorted keys or canonical serializer.
+2. **TTL + capacity tuning is wave-dependent.** 60s TTL covers wave-scope decision consistency. For cross-wave patterns, increase TTL or add warm-start cache pre-load from decisions.md.
+3. **Fallback chain wiring is deferred complexity.** MC-9 supports `COORDINATOR_FALLBACK_MODELS` env but dispatch core doesn't wire it. W30 task: add try-catch loop through fallback chain.
+
+---
+
 ## W22 Lesson — Classifier Extension Pattern
 
 **Date:** 2026-05-16  

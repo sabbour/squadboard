@@ -1,5 +1,27 @@
 # Scribe — History
 
+## W29 — Wave Historian + Close-Out Coordination
+
+**Date:** 2026-05-16  
+**Wave:** 29  
+**Status:** Completed
+
+### Contributions
+
+**Wave Consolidation & Documentation**
+- **Decision Log Consolidation:** Merged 21 inbox decision files (MC-1..14, CER-2..9, reviews, audit) into `.squad/decisions/decisions.md` (append mode, preserved prior history).
+- **Wave Summary:** Authored comprehensive `.squad/orchestration-log/wave-29-summary.md` (290 lines) covering 22 shipped features, 2 critical incidents, 13 deferred W30 items, architectural highlights, team contributions.
+- **Incident Tracking:** Documented batch-2 commit-race (f42d3b81a recovery) and M1 migration INSERT bug (109c386cc hotfix) with root-cause analysis.
+- **Cast History Updates:** Updated `.squad/agents/*/history.md` for hockney, kobayashi, keyser, verbal with W29 contributions + lessons.
+
+### Lessons
+
+1. **Inbox consolidation hygiene.** 21 decision files with inconsistent date formats, commit SHAs, and depth. Normalize format during merge: prioritize newer decisions, validate commit SHAs against `git log --oneline`, deduplicate multi-agent decisions.
+2. **Incident narratives matter.** Recording "what went wrong → root cause → fix → mitigation" for batch-2 race and M1 INSERT bug enables W30 to avoid similar patterns. Verbal's reliability review catch became teachable moment.
+3. **Wave summary as comms artifact.** Summary is bridge between squad (technical decisions) and leadership (shipping velocity, risk posture). YELLOW verdicts on security + reliability need explicit W30 roadmap to build confidence.
+
+---
+
 ## Core Context
 
 - **Project:** A web design project (v4 iteration) for the Squad product site
