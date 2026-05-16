@@ -33,7 +33,21 @@
       "type": "string",
       "minLength": 1,
       "maxLength": 128,
-      "description": "Human-readable display name shown in the install dialog."
+      "description": "Canonical display name shown in CLI output and installed-app registry."
+    },
+
+    "displayName": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "description": "Optional UI-facing display name. If present, rendered in the install dialog and marketplace listing in preference to 'name'. Falls back to 'name' if absent. (W23 gap resolved)"
+    },
+
+    "kind": {
+      "type": "string",
+      "enum": ["project-template", "skills-pack", "team-preset", "ceremony-pack"],
+      "default": "project-template",
+      "description": "App classification. Controls install dialog presentation and marketplace browse filters. Defaults to 'project-template'. (W23 gap resolved)"
     },
 
     "description": {
@@ -250,6 +264,22 @@
         },
         "additionalProperties": false
       }
+    },
+
+    "artifacts": {
+      "type": "object",
+      "description": "Optional file manifest index. Lists relative file paths per section. Advisory — installer discovers from filesystem regardless. Used by tooling, validators, and F5 tarball integrity checks. (W23 gap resolved)",
+      "properties": {
+        "agents":     { "type": "array", "items": { "type": "string" }, "description": "Relative paths to agent charter files (agents/<name>/charter.md convention)." },
+        "team":       { "type": "array", "items": { "type": "string" }, "description": "Relative paths to team member files (team/<name>.json convention)." },
+        "ceremonies": { "type": "array", "items": { "type": "string" } },
+        "workflows":  { "type": "array", "items": { "type": "string" } },
+        "skills":     { "type": "array", "items": { "type": "string" } },
+        "tools":      { "type": "array", "items": { "type": "string" } },
+        "mcpServers": { "type": "array", "items": { "type": "string" } },
+        "seedIssues": { "type": "array", "items": { "type": "string" } }
+      },
+      "additionalProperties": false
     }
   }
 }

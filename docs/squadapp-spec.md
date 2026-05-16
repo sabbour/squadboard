@@ -113,6 +113,13 @@ The installer normalises all three to a temporary directory before processing.
 - The installer ignores unknown top-level keys in `squadapp.json` (forward-compat).
 - The installer ignores unknown directories at the `.squadapp/` root (forward-compat).
 
+> 📌 **Resolved 2026-05-16 (Gap 4 — Kobayashi W23): `agents/` and `mcp-servers/` as alternative discovery paths.**  
+> The spec originally only showed `team/` and `mcp/` in the canonical directory layout, but Kobayashi's W23 reference implementation used `agents/<name>/charter.md` (to match the live project directory convention) and `mcp-servers/<name>.json`. **Both directory names are valid at install time:**
+> - **Agent charters:** installer searches `agents/<name>/charter.md` first, then falls back to `team/<name>.json` / `team/<name>.md`. Either directory is accepted.
+> - **MCP server configs:** installer searches `mcp-servers/<name>.json` first, then falls back to `mcp/<name>.json`.
+>
+> The canonical layout shown above (`team/`, `mcp/`) remains correct for new apps. Use `agents/` and `mcp-servers/` when the bundle is co-located with a live Squadboard project checkout (where those directory names already exist).
+
 ### 2.3 `squadapp.json` — Manifest Shape
 
 ```jsonc
@@ -120,7 +127,9 @@ The installer normalises all three to a temporary directory before processing.
   "schemaVersion": 1,               // integer — format version (breaking changes only)
   "appId": "my-squad-app",          // machine-readable, kebab-case, globally unique
   "version": "1.0.0",               // SemVer — content version, author-controlled
-  "name": "My Squad App",           // human-readable display name
+  "name": "My Squad App",           // human-readable display name (canonical)
+  "displayName": "My Squad App",    // optional — UI-facing name; falls back to `name` if absent
+  "kind": "project-template",       // optional — app classification (see valid values below)
   "description": "…",              // one-liner shown in install dialog
   "author": "Ahmed Sabbour",        // free text
   "license": "MIT",                 // SPDX identifier or "proprietary"
@@ -141,9 +150,41 @@ The installer normalises all three to a temporary directory before processing.
   "tools":      [ /* BundleTool[] */ ],
   "mcpServers": [ /* BundleMcpServer[] */ ],
   "routing":    [ /* BundleRoutingRule[] */ ],
-  "seedIssues": [ /* SeedIssue[] */ ]
+  "seedIssues": [ /* SeedIssue[] */ ],
+
+  // Optional file manifest index (informational — installer discovers from filesystem)
+  "artifacts": {
+    "agents":     [ /* relative paths to agent charter files */ ],
+    "ceremonies": [ /* relative paths to ceremony YAML files */ ],
+    "skills":     [ /* relative paths to SKILL.md files */ ],
+    "tools":      [ /* relative paths to tool JSON files */ ],
+    "mcpServers": [ /* relative paths to MCP config files */ ],
+    "seedIssues": [ /* relative paths to seed issue JSON files */ ]
+  }
 }
 ```
+
+> 📌 **Resolved 2026-05-16 (Gap 1 — Kobayashi W23): `kind` enum.**  
+> Kobayashi used `"kind": "project-template"` without the spec enumerating valid values. The canonical `kind` values are:
+> | Value | Meaning |
+> |---|---|
+> | `project-template` | Full project config: project, kanban, team, ceremonies, skills. **(default)** |
+> | `skills-pack` | Skills-only partial bundle — no `project` section. Installs into an existing project. |
+> | `team-preset` | Team + routing config — no `project` section. Augments an existing project's team. |
+> | `ceremony-pack` | Ceremonies + workflows only — no `project` section. |
+>
+> If absent, the installer defaults to `project-template`. The `kind` field is informational: it controls install dialog presentation and marketplace browse filters. The installer does not gate artifact sections on `kind` — any section may be present regardless of `kind`.
+
+> 📌 **Resolved 2026-05-16 (Gap 2 — Kobayashi W23): `displayName` field.**  
+> Kobayashi used `"displayName": "AKS Feature Kanban"` alongside `"name"` without it being formally specced. **`displayName` is now an optional top-level field.** When present, the UI renders `displayName` in the install dialog, app card, and marketplace listing in preference to `name`. `name` remains the canonical identifier used in CLI output and the installed-app registry. Both fields share the same constraints (1–128 chars, free text). If `displayName` is absent, the UI falls back to `name` — authors may omit it when the two would be identical.
+
+> 📌 **Resolved 2026-05-16 (Gap 3 — Kobayashi W23): `artifacts` section.**  
+> Kobayashi added an `artifacts` object listing the relative paths of included files per section. **Decision: `artifacts` is OPTIONAL.** The installer does **not** require it — file discovery happens by scanning the filesystem (the filesystem is the authoritative source of truth). If `artifacts` is present, it serves as a declaration index used by:
+> 1. Tooling (IDE plugins, linters, CI validators) to enumerate files without a full directory scan.
+> 2. Tarball integrity checks: F5 will use `artifacts` entries as the expected file list when verifying SHA-256 checksums (OQ-7).
+> 3. Install preview cards: the server can count artifacts from `artifacts` without extracting the full tarball.
+>
+> The installer **does not error** if a file listed in `artifacts` is missing — it emits a warning and continues. The installer **does not error** if a file exists on disk but is not listed in `artifacts` — it installs it normally. `artifacts` is advisory, not gating.
 
 ### 2.4 Inline vs File-Based Artifacts
 
@@ -154,11 +195,13 @@ Every section may be specified **inline** in `squadapp.json` **or** in per-file 
 | Project | `project` | `project.json` | JSON |
 | Kanban | `kanban` | *(inline only)* | — |
 | Team members | `team[]` | `team/<AgentName>.json` | JSON (may have `charterPath` → `.md` file) |
+| Team members (alt) | `team[]` | `agents/<AgentName>/charter.md` | Markdown (charter body directly) |
 | Ceremonies | `ceremonies[]` | `ceremonies/<id>.yaml` | YAML |
 | Workflows | `workflows[]` | `workflows/<id>.yaml` | YAML |
 | Skills | `skills[]` | `skills/<key>/SKILL.md` | Markdown (upstream format) |
 | Tools | `tools[]` | `tools/<key>.json` | JSON |
 | MCP servers | `mcpServers[]` | `mcp/<name>.json` | JSON |
+| MCP servers (alt) | `mcpServers[]` | `mcp-servers/<name>.json` | JSON |
 | Routing rules | `routing[]` | `routing/rules.json` | JSON array |
 | Seed issues | `seedIssues[]` | `issues/seed.json` | JSON array |
 
@@ -302,7 +345,21 @@ It is referenced at install time for server-side validation and in CI for commun
       "type": "string",
       "minLength": 1,
       "maxLength": 128,
-      "description": "Human-readable display name shown in the install dialog."
+      "description": "Canonical display name shown in CLI output and installed-app registry."
+    },
+
+    "displayName": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "description": "Optional UI-facing display name. Falls back to 'name' if absent."
+    },
+
+    "kind": {
+      "type": "string",
+      "enum": ["project-template", "skills-pack", "team-preset", "ceremony-pack"],
+      "default": "project-template",
+      "description": "App classification. Controls install dialog presentation and marketplace browse filters."
     },
 
     "description": {
@@ -519,10 +576,46 @@ It is referenced at install time for server-side validation and in CI for commun
         },
         "additionalProperties": false
       }
+    },
+
+    "artifacts": {
+      "type": "object",
+      "description": "Optional file manifest index. Advisory — installer discovers from filesystem regardless.",
+      "properties": {
+        "agents":     { "type": "array", "items": { "type": "string" } },
+        "team":       { "type": "array", "items": { "type": "string" } },
+        "ceremonies": { "type": "array", "items": { "type": "string" } },
+        "workflows":  { "type": "array", "items": { "type": "string" } },
+        "skills":     { "type": "array", "items": { "type": "string" } },
+        "tools":      { "type": "array", "items": { "type": "string" } },
+        "mcpServers": { "type": "array", "items": { "type": "string" } },
+        "seedIssues": { "type": "array", "items": { "type": "string" } }
+      },
+      "additionalProperties": false
     }
   }
 }
 ```
+
+### 3.2 Ajv Validation Requirements
+
+> 📌 **Resolved 2026-05-16 (Gap 5 — Kobayashi W23): Ajv `addFormats` dependency.**  
+> The schema uses JSON Schema `format` keywords (`"uri"`, `"date-time"`). Ajv **does not** validate `format` keywords by default — they are silently ignored, meaning invalid URIs and date strings pass validation. The validator **must** call `addFormats(ajv)` from the [`ajv-formats`](https://github.com/ajv-validator/ajv-formats) package immediately after constructing the Ajv instance:
+
+```typescript
+import Ajv from 'ajv';
+import addFormats from 'ajv-formats';
+
+const ajv = new Ajv({ allErrors: true });
+addFormats(ajv);                          // ← REQUIRED for format: "uri", "date-time", etc.
+const validate = ajv.compile(schema);
+```
+
+`ajv-formats` **must** be listed as a production dependency (not `devDependency`) in any package that validates Squad App manifests at runtime. Fields affected:
+- `homepage`: `format: "uri"` — validates the URL is a well-formed URI.
+- Any future `format: "date-time"` fields added to the registry or installed-app record.
+
+Without `addFormats`, these format constraints are no-ops and malformed values silently pass schema validation.
 
 ---
 
@@ -537,6 +630,8 @@ It is referenced at install time for server-side validation and in CI for commun
 | `version` | **Required** | Valid SemVer |
 | `name` | **Required** | 1–128 chars |
 | `description` | **Required** | 1–512 chars |
+| `displayName` | Optional | If present, rendered in UI in preference to `name`. Same 1–128 char constraint. *(W23 gap resolved)* |
+| `kind` | Optional | Defaults to `project-template`. Valid: `project-template`, `skills-pack`, `team-preset`, `ceremony-pack`. *(W23 gap resolved)* |
 | `author` | Optional | |
 | `license` | Optional | Defaults to `"proprietary"` if absent |
 | `homepage` | Optional | Must be a valid URI if present |
@@ -552,6 +647,7 @@ It is referenced at install time for server-side validation and in CI for commun
 | `mcpServers` | Optional | Each needs `name` |
 | `routing` | Optional | |
 | `seedIssues` | Optional | |
+| `artifacts` | Optional | File manifest index. Lists relative paths per section. Installer discovers files from filesystem regardless; if present, `artifacts` is advisory — used by tooling, validators, and F5 tarball integrity checks. *(W23 gap resolved)* |
 | `README.md` | Optional | Strongly recommended for marketplace listings |
 
 A Squad App with only `schemaVersion`, `appId`, `version`, `name`, and `description` is **valid** (minimal app). It installs an empty project with the given name.
@@ -745,7 +841,9 @@ The `install_app` MCP tool allows AI agents (e.g., Copilot via Conjure) to insta
 | `schemaVersion` | `integer` | **Yes** | — | Format version. Must equal `1`. | `1` |
 | `appId` | `string` | **Yes** | — | Globally unique, kebab-case, 3–64 chars. | `"aks-feature-kanban"` |
 | `version` | `string` | **Yes** | — | SemVer content version. | `"1.0.0"` |
-| `name` | `string` | **Yes** | — | Display name (1–128 chars). | `"AKS Feature Kanban"` |
+| `name` | `string` | **Yes** | — | Canonical display name (1–128 chars). Used in CLI output and installed-app registry. | `"AKS Feature Kanban"` |
+| `displayName` | `string` | No | *(value of `name`)* | Optional UI-facing display name. If present, shown in the install dialog, app card, and marketplace listing in preference to `name`. Same 1–128 char constraint. *(W23 gap resolved)* | `"AKS Feature Kanban"` |
+| `kind` | `string` | No | `"project-template"` | App classification. Controls install dialog and marketplace filters. Valid values: `project-template`, `skills-pack`, `team-preset`, `ceremony-pack`. *(W23 gap resolved)* | `"project-template"` |
 | `description` | `string` | **Yes** | — | One-liner for install dialog (1–512 chars). | `"Engineering team kanban for shipping AKS features."` |
 | `author` | `string` | No | `""` | Author name or org. | `"Ahmed Sabbour"` |
 | `license` | `string` | No | `"proprietary"` | SPDX identifier or `"proprietary"`. | `"MIT"` |
@@ -787,6 +885,7 @@ The `install_app` MCP tool allows AI agents (e.g., Copilot via Conjure) to insta
 | `seedIssues[].body` | `string` | No | `""` | Issue body (markdown). | `"Configure GitHub Actions…"` |
 | `seedIssues[].labels` | `string[]` | No | `[]` | Label names. | `["infrastructure"]` |
 | `seedIssues[].column` | `string` | No | `kanban.defaultColumn` | Target column slug. | `"inbox"` |
+| `artifacts` | `object` | No | — | File manifest index. Keys: `agents`, `team`, `ceremonies`, `workflows`, `skills`, `tools`, `mcpServers`, `seedIssues` — each a `string[]` of relative file paths. Optional and advisory; installer discovers from filesystem regardless. *(W23 gap resolved)* | `{"agents": ["agents/Lead/charter.md"]}` |
 
 ---
 
