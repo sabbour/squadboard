@@ -278,1139 +278,283 @@ The age-only check at line 50ish of the spawn prompt is insufficient. SIZE gate 
 **Why:** User request — sets the canonical distribution model. Avoids relitigating channel choice on every Wave-13+ packaging task.
 
 ---
+# 2026-05-15T22:22:00-07:00: Directive — SDK must implement Scribe's EXACT algorithm
 
-# 2026-05-15T19:33:00-07:00: Wave 13 N8 — Bulk-import handler + factor createIssue
-# Decision: One-Handler-Three-Adapters Refactor + Bulk-Import Service
+**By:** Ahmed (via Copilot Coordinator)
+**Course-correction for:** Wave 14 q8-scribe-as-ceremony (Kobayashi spawn at 22:14)
 
-**Filed by:** Hockney  
-**Date:** 2026-05-15  
-**Wave:** 13 / N8
+## What Ahmed said
 
----
+> "you need to implement the exact algorithm of scribe into the sdk"
 
-## Context
+## What this corrects
 
-Ahmed's design call: ship a single `createIssue()` handler, wrap it with three adapters (MCP / HTTP / CLI), and defer the fourth adapter (MCP bulk-import `squadboard_bulk_import_cards`) to Wave-13 N9.
+In my original Wave 14 dispatch prompt to Kobayashi, I told him to:
+- Library-ify Scribe's mechanical primitives (correct)
+- AND "fix the archive-gate bug" by making it more aggressive than the bare 7-day rule (INCORRECT — this was me overstepping)
 
-Two sources of INSERT-into-issues logic existed before this change:
-1. `mcp/server.ts` → `handleCreateIssue()` — idempotency check + INSERT.
-2. `routes/issues.ts` → POST handler — same INSERT, no idempotency.
+## The rule
 
----
+`squadboard.scribe.closeOut()` must implement the EXACT 9-step algorithm currently in squad.agent.md's Scribe spawn template (tasks 0–8):
 
-## Decision: One Handler, Three Adapters
-
-### Unified handler
-
-`packages/server/src/services/issues.ts` — `createIssue(input)` (new unified signature).
-
-**Signature:**
-```ts
-createIssue(input: {
-  projectId: string;
-  title: string;
-  body?: string;
-  status?: 'backlog' | 'todo' | 'in_progress' | 'in_review' | 'done';
-  position?: number;
-  archived?: boolean;
-  completedAt?: Date | null;
-  assigneeId?: string | null;
-  labels?: string[];
-  idempotencyKey?: string;
-  createdBy?: string;
-}): Promise<{ created: boolean; id: string; issue?: Issue; idempotencyKey?: string }>
-```
-
-**Idempotency:** when `idempotencyKey` is provided, matches on `[key] title` exact title — no time window. Without a key, falls back to 60-second soft dedup (HTTP path safety net).
-
-**completedAt:** set automatically when `status='done'` and caller does not supply it explicitly.
-
-**Column validation:** moved to HTTP route layer (`assertColumnExists` before delegating). MCP and CLI use inert statuses that bypass column validation.
-
-### Adapter 1: MCP (`mcp/server.ts`)
-`handleCreateIssue` now delegates to `createIssueService(...)`. MCP-specific glue (projectId-from-header resolution) stays in the MCP layer. Tool input schema and return shape are byte-identical to before.
-
-### Adapter 2: HTTP (`routes/issues.ts`)
-POST handler now delegates to `createIssue(...)`. Column validation runs first in the route layer. HTTP response shape unchanged.
-
-### Adapter 3: CLI (`bin/squad-bulk-import` → `src/cli/bulk-import.ts`)
-Shell shim + TypeScript real logic. Flags: `--project-id`, `--file`, `--status-map`, `--key-prefix`, `--dry-run`, `--body-footer`, `--created-by`, `--json`. Connects to embedded postgres directly (same migration path as server).
-
----
-
-## Bulk-Import Service
-
-`packages/server/src/services/bulk-import-issues.ts` — `bulkImportIssues(input)`.
-
-- Per-row try/catch: a bad row never aborts the batch.
-- Inertness invariant: only `'backlog'` and `'done'` are permitted status values. The type `InertStatus = 'backlog' | 'done'` is enforced at the TypeScript type level AND checked at runtime — any other status yields `BulkImportInvariantError`.
-- Dry-run: checks existing idempotency hits via SELECT only; no INSERT.
-- `createdBy` defaults to `'bulk-import'`.
-
----
-
-## Schema Changes
-
-Two columns added to the `issues` table (idempotent migration in `db/index.ts`):
-- `completed_at TIMESTAMPTZ` — set on done-transition.
-- `created_by TEXT NOT NULL DEFAULT 'user'` — provenance tag.
-
----
-
-## Inertness Invariant (Ahmed's hard constraint)
-
-All bulk-ported cards land inert:
-- `status ∈ {backlog, done}` — NEVER `todo`, `in_progress`, `in_review`.
-- `assigneeId = NULL`.
-- No labels.
-
-Enforced in `bulkImportIssues()` before any `createIssue()` call. The check is both in the TypeScript literal type and a runtime guard that returns an error item (not a throw) so the batch continues.
-
----
-
-## Bulk Port Results (2026-05-15)
-
-- Input: `131 entries` from `/tmp/todos.json` (`48 done`, `83 pending`).
-- Target project: `7a9cc07a-d463-4f8c-864a-c733342aa8a8` (foo).
-- Pre-import count: 35 issues.
-- **Dry run:** 131 would-create, 0 would-skip, 0 errors.
-- **Real run:** created=131, skipped=0, errors=0.
-- Post-import count: 166 issues (35 + 131).
-- Spot-checked: `[b1-template-create]` → status=done, completedAt set, assigneeId=null ✓; `[n8-conjure-actually-deploy]` → status=backlog, completedAt=null, assigneeId=null ✓.
-
----
-
-## Deferred: Wave-13 N9 MCP Wrapper
-
-`squadboard_bulk_import_cards` MCP tool is NOT activated in this change. The shared handler `bulkImportIssues()` is importable from the MCP layer — that is the only N9-readiness requirement. N9 adds:
-1. `bulkImportIssues` import in `mcp/server.ts`.
-2. Tool definition in `TOOLS` array.
-3. Switch-case in the tool-call dispatcher.
-4. Input parsing from MCP args → `BulkImportItem[]`.
-
----
-
-## Files Changed
-
-- `packages/server/src/db/schema.ts` — added `completedAt`, `createdBy` to issues table.
-- `packages/server/src/db/index.ts` — Wave-13 migration (ALTER TABLE issues).
-- `packages/server/src/services/issues.ts` — unified `createIssue()` signature.
-- `packages/server/src/services/bulk-import-issues.ts` — new file.
-- `packages/server/src/cli/bulk-import.ts` — new file.
-- `packages/server/src/mcp/server.ts` — `handleCreateIssue` delegates to service.
-- `packages/server/src/routes/issues.ts` — POST handler delegates to service.
-- `packages/server/src/services/inbox.ts` — updated call-site.
-- `packages/server/src/sdk/consult-stream.ts` — updated two call-sites.
-- `packages/server/src/__tests__/issues-service.test.ts` — new smoke tests (4).
-- `packages/server/package.json` — added `test` script + vitest devDependency.
-- `bin/squad-bulk-import` — new shell shim.
-
----
-
-
-# 2026-05-16T02:15:42.724940Z: Wave 12 Close-out — Kanban Auto-Update, Double-Pickup Prevention, Now Dashboard, Clickable Flow, MCP Test Fix, Review Policy UX
-
-**Date:** 2026-05-15  
-**Wave:** 12  
-**Agents:** Hockney-2, Keyser-2, Fenster-2  
-**Status:** All tasks done; commit d2c06218 includes all source code.
-
-## Summary
-
-First end-to-end dogfood done-capture loop test (N1: Kanban Auto-Update). Teams completed:
-
-- **N1 (Hockney):** Kanban auto-update — `done:` prefix detection in MCP capture + token-based matching to close existing cards. Includes `bin/squad-card-done` CLI helper for idempotent card closure. Milestone: first time dogfood done-capture workflow worked end-to-end.
-- **N2 (Hockney):** Double-pickup prevention — idempotency keys + claim/lease mechanism on inbox items to prevent race conditions across dispatcher, MCP, and concurrent workers.
-- **N3 (Keyser):** Now page — global aggregated dashboard with 6 stat tiles, live panels, activity feed, and per-project mini-rollup grid. Client-side fan-out via useQueries.
-- **N4 (Keyser):** Clickable flow nodes — Agent/Step/Ceremony nodes are now navigable to detail routes with keyboard+aria support.
-- **N5 (Hockney):** MCP test connection fix — relative healthUrl + vite proxy for local MCP testing.
-- **N6 (Fenster):** Review Policy UX overhaul — plain-English labels, two-group settings, live preview strip, Learn more links. New `docs/review-policy.md`.
-- **N7 (Hockney):** Junk projects cleanup — 41 deleted.
-
-## Decisions from Inbox
-
-# N1: Kanban Auto-Update — Done-Capture Hook
-
-**Author:** Hockney (Backend / Workflow Engine Dev)  
-**Date:** 2026-05-15  
-**Wave:** 12  
-
----
-
-## Problem
-
-Cards are captured on intake via the MCP `capture` tool but never moved to "done". The `.github/agents/squad.agent.md` Wave 10 dogfood addendum specifies calling `capture` again with a `done: …` prefix after work completes, but the `handleCapture` handler had no logic for this prefix — it treated the `done:` prompt as a normal new issue.
-
----
-
-## Root Cause
-
-`handleCapture` in `packages/server/src/mcp/server.ts` did not inspect the prompt for a `done:` prefix. Every capture call went through Conjure classification and created a new inbox item, never updating an existing card.
-
----
-
-## Design
-
-### Flow A — `done:` prefix in MCP capture
-
-```
-Coordinator calls:
-  capture(prompt="done: Fixed the login redirect (sha=abc123)", projectId="...")
-
-Server:
-  1. Detect DONE_PREFIX = /^done:\s*/i
-  2. Extract descriptor = "Fixed the login redirect (sha=abc123)"
-  3. Tokenise: ["fixed", "login", "redirect", "abc123"] (stop-words removed)
-  4. Query issues WHERE project_id=$projectId AND archived=0 AND (title ILIKE '%fixed%' OR title ILIKE '%login%' OR ...)
-  5. Score candidates: count overlapping tokens
-  6. If best score ≥ 2 (or ≥ 1 for single-token queries): update status='done'
-  7. If no match: create a standalone done card so work is still visible
-```
-
-### Matching strategy
-
-- **Token extraction**: lower-case, strip punctuation, filter `len ≥ 3`, remove 30+ common stop-words plus git-specific terms (`sha=`, `fixes`, `resolves`, `implements`).
-- **False-positive guard**: require `bestScore ≥ 2` tokens to match (for descriptors with `> 1` token); single-token descriptors need `≥ 1` match.
-- **Fallback**: create a standalone `status='done'` card so the work is never lost.
-
-### Flow B — `bin/squad-card-done` CLI helper
-
-Any Copilot CLI session (or CI script) can close a card without MCP wiring:
-
-```bash
-SQUADBOARD_PROJECT_ID=7a9cc07a-... \
-  bin/squad-card-done "Fix the login redirect" "$(git rev-parse --short HEAD)"
-```
-
-The script:
-1. Detects the project (auto-detect or env var)
-2. Constructs `done: <title> (sha=<sha>)` descriptor
-3. Generates a deterministic `idempotencyKey` from `done-<project-prefix>-<md5-of-descriptor>` (so re-runs are idempotent)
-4. Calls `POST /mcp` with the `capture` tool (or falls back to REST if MCP session fails)
-
----
-
-## Files Changed
-
-| File | Change |
-|---|---|
-| `packages/server/src/mcp/server.ts` | Added `done:` prefix detection + `handleCaptureClose()` function; added `idempotencyKey`/`createdBy` params |
-| `packages/server/src/db/index.ts` | Migration: added `idempotency_key`, `created_by`, `claimed_by`, `claim_expires_at` to `inbox_items` |
-| `packages/server/src/db/schema.ts` | Drizzle schema updated for new columns |
-| `bin/squad-card-done` | New helper script |
-
----
-
-## Invariants
-
-1. A `done:` capture NEVER creates a card in `backlog`/`todo`/`in_progress` — it always sets `status='done'`.
-2. A `done:` capture with a duplicate `idempotencyKey` returns `{ action: 'dedup' }` without touching the DB.
-3. If the token-match score is below threshold, a standalone done card is created rather than silently discarding the call.
-4. The best-match update is scoped to `project_id` — cross-project false matches are impossible.
-
----
-
-## Evidence
-
-Live curl test (done after DB migration applied on server restart):
-
-```bash
-# Create a test card first
-curl -s -X POST http://localhost:3000/api/projects/<pid>/issues \
-  -H "Content-Type: application/json" \
-  -d '{"title":"Fix the login redirect bug","body":"","status":"in_progress"}'
-
-# Close it via done: capture
-curl -s http://localhost:3000/mcp \
-  -X POST \
-  -H "Content-Type: application/json" \
-  -H "Accept: application/json, text/event-stream" \
-  -H "x-project-id: <pid>" \
-  -d '{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"capture","arguments":{"prompt":"done: Fixed the login redirect bug (sha=abc1234)","projectId":"<pid>"}}}'
-# → { "action": "issue_closed", "matchedIssue": { "id": "...", "title": "Fix the login redirect bug", "previousStatus": "in_progress" } }
-```
-
-
----
-
-# N2: Double-Pickup Prevention
-
-**Author:** Hockney (Backend / Workflow Engine Dev)  
-**Date:** 2026-05-15  
-**Wave:** 12  
-
----
-
-## Problem
-
-Three actors can independently pick up the same inbox card:
-1. The Squadboard dispatcher (engine sweeps)  
-2. A Copilot CLI session calling `capture` via MCP  
-3. Multiple concurrent Squadboard agent workers
-
-Without a dedup mechanism, each actor can create a duplicate card or race on the same work.
-
----
-
-## Design
-
-### Chosen Subset (Minimal Viable)
-
-Per the task: pick the **minimal viable subset** that prevents the bug in practice. Implemented: **(1) idempotency keys + (3) claim/lease**.
-
-Source tagging (`created_by`) is included as a zero-cost column for observability.
-
----
-
-### (1) Idempotency Keys on `capture`
-
-**Schema:** `inbox_items.idempotency_key TEXT UNIQUE`
-
-**Invariant:** Two calls with the same `idempotencyKey` return `{ action: 'dedup', inboxItemId: '...' }` from the first call's row — no duplicate row, no duplicate issue.
-
-**How to use:**
-```json
-{ "name": "capture", "arguments": { "prompt": "...", "idempotencyKey": "session-abc-123" } }
-```
-
-The key should be:
-- **Per-session + per-prompt**: e.g. `<sessionId>-<sha256(prompt)[:8]>`
-- **Deterministic**: so a retry of the same logical operation produces the same key
-- **Scoped**: the uniqueness constraint is global, so keys must incorporate enough entropy to avoid cross-session collisions
-
----
-
-### (3) Claim / Lease on Inbox Items
-
-**Schema:**
-```sql
-inbox_items.claimed_by        TEXT        -- opaque worker/session ID
-inbox_items.claim_expires_at  TIMESTAMPTZ -- NULL or past = unclaimed/expired
-```
-
-**Claim endpoint:**
-```
-POST /api/inbox/:id/claim
-Body: { "claimedBy": "<worker-id>" }
-```
-
-**Atomic claim logic** (single UPDATE):
-```sql
-UPDATE inbox_items
-   SET claimed_by = $claimedBy,
-       claim_expires_at = NOW() + INTERVAL '5 minutes',
-       updated_at = NOW()
- WHERE id = $id
-   AND (
-     claimed_by IS NULL                        -- unclaimed
-     OR claim_expires_at < NOW()               -- lease expired
-     OR claimed_by = $claimedBy               -- same worker extending
-   )
-RETURNING id, claimed_by, claim_expires_at;
-```
-
-- Returns `200 { ok: true, claimed_by, claim_expires_at }` on success  
-- Returns `409 { error: 'already_claimed', claimed_by, claim_expires_at }` if another worker holds the lease  
-- TTL: **5 minutes**. Workers must heartbeat every ≤4 minutes by re-calling `POST /api/inbox/:id/claim` to extend the lease.
-
----
-
-### (2) Source Tagging
-
-**Schema:** `inbox_items.created_by TEXT NOT NULL DEFAULT 'user'`
-
-**Enum values:** `'user' | 'copilot-cli' | 'squadboard-server' | 'webhook'`
-
-Used in `capture` MCP tool via the optional `createdBy` parameter. No enforcement — observability only.
-
----
-
-## Migration
-
-```sql
--- Wave 12 N2
-ALTER TABLE inbox_items
-  ADD COLUMN IF NOT EXISTS idempotency_key   TEXT        UNIQUE,
-  ADD COLUMN IF NOT EXISTS created_by        TEXT        NOT NULL DEFAULT 'user',
-  ADD COLUMN IF NOT EXISTS claimed_by        TEXT,
-  ADD COLUMN IF NOT EXISTS claim_expires_at  TIMESTAMPTZ;
-
-CREATE INDEX IF NOT EXISTS inbox_items_idempotency_idx
-  ON inbox_items (idempotency_key)
-  WHERE idempotency_key IS NOT NULL;
-
-CREATE INDEX IF NOT EXISTS inbox_items_claim_idx
-  ON inbox_items (claimed_by, claim_expires_at)
-  WHERE claimed_by IS NOT NULL;
-```
-
-Applied in `packages/server/src/db/index.ts` — runs idempotently on every server boot.
-
----
-
-## Files Changed
-
-| File | Change |
-|---|---|
-| `packages/server/src/db/index.ts` | Migration block for 4 new columns + 2 indexes |
-| `packages/server/src/db/schema.ts` | Drizzle schema: `idempotencyKey`, `createdBy`, `claimedBy`, `claimExpiresAt` |
-| `packages/server/src/mcp/server.ts` | `capture` tool: `idempotencyKey`/`createdBy` params; dedup check before Conjure |
-| `packages/server/src/routes/inbox.ts` | `POST /api/inbox/:id/claim` endpoint |
-
----
-
-## Invariants
-
-1. Two concurrent `capture` calls with the same `idempotencyKey` MUST produce exactly one inbox row and at most one issue.
-2. A `claim` call MUST be atomic — race between two workers: exactly one wins (HTTP 200), the other loses (HTTP 409).
-3. A claim lease MUST expire after 5 minutes if not extended — stale claims never block permanently.
-4. A worker that loses the claim MAY retry after the lease expires.
-
----
-
-## Evidence — curl proof of idempotency
-
-```bash
-KEY="test-idem-$(date +%s)"
-# Two concurrent claims with the same key:
-R1=$(curl -s -X POST http://localhost:3000/mcp \
-  -H "Content-Type: application/json" -H "Accept: application/json, text/event-stream" \
-  -H "x-project-id: 7a9cc07a-d463-4f8c-864a-c733342aa8a8" \
-  -d "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/call\",\"params\":{\"name\":\"capture\",\"arguments\":{\"prompt\":\"[IDEM-TEST] Fix double-pickup race\",\"projectId\":\"7a9cc07a-d463-4f8c-864a-c733342aa8a8\",\"idempotencyKey\":\"$KEY\"}}}")
-R2=$(curl -s -X POST http://localhost:3000/mcp ... same ...)
-
-# R1: { "action": "issue_created", "issue": { "id": "xxx" } }
-# R2: { "action": "dedup", "idempotencyKey": "...", "inboxItemId": "yyy" }
-# → Same card_id, no duplicate issue.
-```
-
-
----
-
-# Keyser decisions — Wave 12 N3 + N4
-
-**Date:** 2026-05-15T18:47:05-07:00
-**Requested by:** Ahmed (Brady)
-
----
-
-## N3: Now page global aggregated dashboard
-
-**Decision:** Client-side fan-out via `useQueries` (TanStack Query) instead of a new server endpoint.
-The per-project cost queries (one per project, stale 60s) are cheap enough for ≤20 projects.
-If project count grows beyond ~30, Hockney should add `GET /api/activity/aggregate` to replace the fan-out.
-
-**Follow-ups for Hockney:**
-1. `GET /api/activity/stats?window=today` — "Done today" tile currently shows `—` placeholder.
-2. Daily cost bucket in `/costs` endpoint — Cost tile shows MTD, not daily, because the existing endpoint only exposes `mtd` and `allTime` buckets. Labelled as "Cost MTD" in the UI to be honest about the scope.
-3. Agent detail route — `/projects/:id/agents/:agentId` does not exist in App.tsx (agents page is list-only). Agent node click will 404 until Hockney adds the route.
-
-**Layout (top to bottom):**
-1. Stat tiles row — 6-up auto-fill grid: In-flight, Queued, Done today (placeholder), Active projects, Cost MTD, Health badge
-2. Scope toolbar (tabs / dropdown)
-3. Two-column row: [live panels column | recent activity feed column (340px fixed)]
-   - Live panels: Live sessions, Issue runs, Workflow runs (stacked)
-   - Recent activity: last 15 events sorted newest-first, each row links to source entity
-4. Per-project mini-rollup grid — one card per active project, shows agent count, queue depth, last-activity timestamp
-
----
-
-## N4: Flow clickable nodes
-
-| Node type | File(s) | Click target route | Implementation |
-|---|---|---|---|
-| Agent instance node | `AgentFlowGraph.tsx` | `/projects/{projectId}/agents/{agentId}` | SVG `<g>` onClick + useNavigate; `role="button"`, `tabIndex={0}`, `onKeyDown` for Enter/Space |
-| Step/Run node | `StepNode.tsx` + `IssueFlowDag.tsx` | `/projects/{projectId}/board?focus={issueId}` | ReactFlow `onNodeClick` on IssueFlowDag; `projectId` + `issueId` embedded in node.data; StepNode shows `cursor:pointer` + hover elevation when projectId present |
-| Ceremony step node | `CeremonyStepNode.tsx` | `/projects/{projectId}/ceremonies/{ceremonyId}` | div `onClick` + `onKeyDown`; only fires when `projectId` + `ceremonyId` are in data; VisualCanvas (editor) omits these fields so selection is unaffected |
-
-**Note on `/runs/:runId`:** There is no run-detail route in App.tsx. Best available navigation for step nodes is the board issue view (`?focus={issueId}`). Real run-detail is a Hockney follow-up.
-
-
----
-
-# N6 — Review Policy UX Overhaul
-
-**Date:** 2026-05-15T18:47:05-07:00  
-**Author:** Fenster  
-**Status:** Shipped (pending Wave 12 Scribe commit)
-
----
-
-## Problem
-
-Ahmed's verdict: *"I don't understand the review policy settings page."*
-
-The old page had:
-- A cryptic "Currently effective" card with no explanation of what "effective" means vs "project default"
-- A flat preset dropdown labeled simply "Preset" — no context about what presets are
-- A hidden "Customise" toggle that revealed an unlabeled 2-column grid of jargon fields
-- Labels like "Block policy", "Quorum (n of total)", "On timeout", "Fallback reviewer (role)" — all internal API vocabulary
-- No hints, descriptions, or example outcomes for any field
-- A raw footnote: "Resolution chain: workflow step override → board default → project default → system default." — incomprehensible to non-power-users
-- ⚠ warnings displayed as an emoji + text with no escalation affordance
-- No learn-more link or documentation reference
-
----
-
-## Changes made
-
-### `packages/client/src/components/settings/ReviewPolicySection.tsx`
-
-1. Replaced unlabeled card headers with `Body1Strong` + descriptive sub-text via new `CardHeading` subcomponent
-2. Renamed "Currently effective" → **"Active policy"** (user-facing language)
-3. Added **"Learn more"** link (`docs/review-policy.md`) in the card header action slot
-4. Replaced raw emoji warning with Fluent2 `MessageBar intent="warning"` 
-5. Replaced raw error `<div>` with `MessageBar intent="error"`
-6. Added **"Policy preview" strip** — shows while editing, renders `describePolicy(previewResolved)` in plain English
-7. Replaced raw text footnote with a sentence using `tokens.colorNeutralForeground3`, including a second "Learn more" link
-8. Used `tokens.spacingVerticalL` and `tokens.spacingHorizontalS` for consistent layout spacing
-
-### `packages/client/src/components/reviews/ReviewPolicyPicker.tsx`
-
-1. Added Fluent2 `Field` wrapper with `hint` prop to **every control**
-2. Grouped advanced settings into two labeled sub-sections with `SubGroupDivider`:
-   - **Approval rules** — who reviews, quorum, exclude-author, block policy
-   - **Timing & escalation** — review deadline, deadline action, fallback reviewer
-3. Renamed labels to user language:
-   - "Preset" → "Policy preset" + hint
-   - "Approvers (role names, comma-separated)" → "Who can approve" + hint
-   - "Quorum (n of total)" → "Approvals needed (quorum)" + hint
-   - "Block policy" → "When someone requests changes" + hint
-   - "Timeout" → "Review deadline" + hint
-   - "On timeout" → "When the deadline passes" + hint
-   - "Fallback reviewer (role)" → "Escalate to (role)" + hint
-4. Added **contextual sub-hint** below "When someone requests changes" and "When the deadline passes" selects — shows the selected option's description inline
-5. Preset option "Custom (override below)" → "Custom — fine-tune below"
-6. Customise toggle label "▸ Customise" → "▸ Customise individual settings"
-7. Added "Need help? Read the policy reference." link at bottom of advanced panel
-
-### `docs/review-policy.md`
-
-New stub doc explaining all 7 policy fields, resolution order with examples, preset concept.
-
----
-
-## New page structure (outline)
-
-```
-[Card: Active policy]
-  Body1Strong: "Active policy"
-  Caption: "What runs right now on every approve step..." [Learn more →]
-  → ReviewPolicyHeader (shield + policy description + "Why this policy?" popover)
-  → MessageBar [if warnings]
-
-[Card: Project default]
-  Body1Strong: "Project default"
-  Caption: "Applied to every approve step that doesn't set its own policy..."
-  → [Field: Policy preset] hint: "Choose a named bundle..."
-    <select: Use system default / Built-in presets / Project presets / Custom>
-  → [▸ Customise individual settings] toggle
-    → [Advanced panel]
-        ── APPROVAL RULES ──────────────────────
-        [Field: Who can approve] hint: "Role names, comma-separated..."
-        [Field: Approvals needed (quorum)] hint: "Require N out of assigned..."
-        [Field: Exclude author] hint: "When on, the PR author cannot approve..."
-        [Field: When someone requests changes] hint + contextual sub-hint
-        ── TIMING & ESCALATION ─────────────────
-        [Field: Review deadline] hint: "ISO-8601 duration: 24h, 2d, 1w..."
-        [Field: When the deadline passes] hint + contextual sub-hint
-        [Field: Escalate to (role)] hint: "..." [only when 'escalate' selected]
-        Caption: "Need help? Read the policy reference."
-  → [Preview strip — dashed] "With these settings: ..." [only while dirty]
-  → [Save] [Discard changes] [Saved. / error message]
-
-[Footer caption]
-  "Resolution order: ... Learn more about policy resolution."
-```
-
----
-
-## Scope NOT touched
-
-- Policy schema and API — no changes
-- Backend behavior — no changes  
-- `PolicyExplainer.tsx` — existing popover retained as-is
-- `ReviewPolicyHeader.tsx` — retained as-is
-- MCP section of Settings.tsx — not touched (Hockney's territory)
-
----
-
-## Recommendations (not implemented, needs Ahmed's nod)
-
-- `request_changes_policy: 'all'` label ("all must approve") is confusing — it's a block policy, not an approval policy. Consider renaming to "Require unanimous approval."
-- Consider exposing "Save as project preset" from the picker so users can snapshot a custom config.
-
-
----
-
-
-
-# 2026-05-15T17:52:56Z: User directive — Cap each local universe at 10 characters
-**By:** Ahmed Sabbour (via Copilot)
-**What:** Reduce the local universe registry (`packages/server/src/services/local-universes.ts`) so each universe has at most 10 characters. Keep the most popular/iconic characters; drop peripheral or recurring-guest characters.
-**Why:** Universe trim — preserve the recognisable core, reduce noise in the Hire Team picker.
-
-**Per-universe targets:**
-- The Office: 15 → 10 (drop 5)
-- Seinfeld: 10 → 10 (already at cap, no change)
-- The Simpsons: 14 → 10 (drop 4)
-- Parks & Recreation: 14 → 10 (drop 4)
-
-Total: 53 → 40 characters.
-
-**Constraint:** After trimming, each universe must still cover all 9 SDK roles (`lead | developer | tester | prompt-engineer | security | devops | designer | scribe | reviewer`) across its remaining `preferredRoles` arrays so best-fit casting still produces complete teams.
-
----
-
-# 2026-05-15T17:50:29Z: User directive — Drop 4 non-tech roles
-
-- `packages/server/src/services/conjure-classifier.ts` — rewritten (was broken/unused), ~350 lines
-- `packages/server/src/routes/conjure.ts` — new, ~75 lines
-- `packages/server/src/index.ts` — mount `/api/conjure`, +5 lines
-
-**Verification:** `tsc --noEmit` clean; 13/13 sample prompts classified correctly offline; edge cases handled.
-
----
-
-## 2026-05-15: McManus — Casting reference trim + non-tech charter templates
-
-**Author:** McManus
-**Date:** 2026-05-15
-**Status:** Shipped (commits `10f659bf`, `db12a997`)
-
-**What:**
-1. **Casting reference trimmed from 20 → 17 universes.** Dropped Mad Men, Succession, and Silicon Valley from `.squad/templates/casting-reference.md`.
-2. **Per-role charter templates added for 7 non-tech roles** under `.squad/templates/non-tech-charters/` (PM, Designer, Founder, Sales, Marketing, Customer Success, Research) plus an index README.
-
-**Why:**
-- **Trim:** Coordinator/picker symmetry — 3 dropped universes don't earn their keep in the casting reference and never appeared in the runtime picker. Removing them improves alignment.
-- **Templates:** Reusable starting points for next non-tech hire. Each follows the same structural shape as tech charters (Identity, What I Own, How I Work, Boundaries, Voice, Model, Collaboration) but role-specific. `{Name}` placeholder for casting to fill.
-
-**Files affected:**
-- Commit `10f659bf`: `.squad/templates/casting-reference.md`, `.github/agents/squad.agent.md`
-- Commit `db12a997`: `.squad/templates/non-tech-charters/` (8 files: README + 7 role templates)
-
-**Invariants preserved:** One universe per assignment, casting algorithm (size_fit + shape_fit + resonance_fit + LRU), charter shape across team, `{Name}` placeholder literal.
-
-
----
-
-## 2026-05-15: Keyser — UI bundle: ceremonies padding, Consult width, project-switcher category preserve, sidebar reorder, Reconnecting badge fix
-
-**Author:** Keyser
-**Date:** 2026-05-15
-**Status:** Shipped (5 commits in Wave 9)
-
-**Commits:**
-1. **`8b3f7197`** — Fluent2 spacing on CeremonyList page (padding canon compliance)
-2. **`16414e90`** — Widened Consult page layout
-3. **`d72fd8a7`** — Project switcher preserves category + System nav anchored to bottom (sidebar reorder)
-4. **`5673d57b`** — Reconnecting badge alignment + cancelled stale reconnect timer (root cause: client-side state machine, NOT server)
-
-**Team conventions ratified:**
-
-### 1. Project switcher preserves the active category
-When the user switches projects via `foo ▾` dropdown, the destination preserves the route segment (category). Examples: `/projects/foo/board` → `/projects/bar/board`; `/projects/foo/flow` → `/projects/bar/flow`.
-
-Recognised categories (in `Layout.tsx` `PROJECT_SCOPED_SEGMENTS`): dashboard, board, flow, agents, skills, tools, mcp-servers, ceremonies, costs, settings, inbox, consult, diagnostics.
-
-**Action for other agents:** Any new project-scoped top-level segment must be added to `PROJECT_SCOPED_SEGMENTS` in `Layout.tsx`.
-
-### 2. Fluent2 page padding canon
-Page content padding is `tokens.spacingVerticalXXL` (24 px) + `tokens.spacingHorizontalXXL` (24 px).
-
-**Anti-pattern A:** Single-axis token for both axes — always use both tokens explicitly.
-
-**Anti-pattern B:** List scroll containers missing padding — any `flex: 1; overflow: auto` div wrapping a DataGrid or list needs padding tokens, else content slams edges.
-
-```
-List body convention:
-paddingTop: tokens.spacingVerticalL (not XXL — header above handles spacing)
-paddingBottom: tokens.spacingVerticalXXL
-paddingLeft: tokens.spacingHorizontalXXL
-paddingRight: tokens.spacingHorizontalXXL
-```
-
-**Audit candidates:** Skills, Tools, MCP Servers, Agents, Costs pages should be checked for same violations.
-
-### 3. Sidebar bottom-anchor pattern
-For pinning a nav section (SYSTEM, settings) to the visual bottom of the sidebar: drop a `<div style={{ flex: 1 }} />` spacer in `NavDrawerBody`. No CSS overrides needed — Fluent's flex column + DrawerBody flex already handle it.
-
-**Root cause note:** Reconnecting badge alignment + stale timer were a **client-side state machine bug, NOT a server issue**. No Hockney handoff needed.
-
----
-
-## 2026-05-15: Hockney — MCP server extended (11 tools) + diagnostics path resolver
-
-**Author:** Hockney
-**Date:** 2026-05-15
-**Status:** Shipped (local commits only — not pushed)
-
-**Scope:** Two parallel asks from Ahmed (queued in Wave 8):
-
-1. 🔌 **MCP Phase 1 starter tools** — Extend the existing `createMcpServer()` factory in `packages/server/src/mcp/server.ts` with 4 new tools: `list_projects`, `list_inbox`, `capture` (wrapping Conjure classifier), `get_routing`. Total tool count now **11** across stdio + HTTP `/mcp` transports. README with `.copilot/mcp-config.json` install snippet added at `packages/server/src/mcp/README.md`.
-
-2. 🩺 **Diagnostics false-negative fix** — Bug: `projects.path` for foo already pointed AT `.squad/` (not the parent), so `join(path, '.squad')` was double-nesting to `.squad/.squad/`, causing all 4 inner collection checks to fail. Solution: `resolveSquadDir()` helper tolerates both layouts, returns ONE clear error when project path is wrong instead of cascading missing-collection errors.
-
-**MCP tool details:**
-
-| Tool             | Wraps                                                      | Transport |
-|------------------|------------------------------------------------------------|-----------|
-| `list_projects`  | `db.select().from(projects)` + `resolveSquadDir()` per row | stdio, HTTP |
-| `list_inbox`     | `inboxService.listInboxItems()`                           | stdio, HTTP |
-| `capture`        | Conjure classify → issue creation if intent='issue'        | stdio, HTTP |
-| `get_routing`    | `resolveSquadDir()` + `readFile('.squad/routing.md')`      | stdio, HTTP |
-
-Naming: kept the Phase 18 convention (bare names, no `squadboard.*` prefix) for consistency within the factory.
-
-**Diagnostics resolver:**
-
-`resolveSquadDir(storedPath): ResolvedSquadDir | UnresolvedSquadDir`
-- Resolves to absolute path first (defensive against relative CWD pivots).
-- If basename is `.squad/` AND exists → use as-is.
-- Else if `<path>/.squad/` exists → use that.
-- Else → `{ ok: false, reason }` with actionable diagnostic.
-
-Applied to:
-- `checkSquadDirShape()` (the reported bug)
-- `checkDiskWriteable()` (same double-nesting bug, was silently writing wrong dir)
-- `mcp/server.ts → handleGetRouting()` (new, uses same helper)
-
-**Files touched:**
-- `packages/server/src/services/diagnostics.ts` — +`resolveSquadDir()` + types; rewrote `checkSquadDirShape`; updated `checkDiskWriteable`.
-- `packages/server/src/mcp/server.ts` — +4 TOOLS, +4 handlers, +4 switch cases, imports.
-- `packages/server/src/mcp/README.md` — new install/usage guide.
-
-**Commits:**
-- `85dd8780` — Diagnostics false-negative fix
-- `1838253d` — MCP Phase 1 starter tools
-
-**Verification:** `cd packages/server && npx tsc --noEmit` → clean (exit 0, 0 errors). Resolver verified offline against all live `projects.path` values; foo resolves correctly.
-
-**Follow-ups (not in this commit):**
-- **`projects.path` migration.** Unify both layouts; until then, all consumers should use `resolveSquadDir()`.
-- **Auth on MCP HTTP transport.** Local-only fine for hacking; problem if Squadboard runs on shared port.
-- **`capture` for non-issue intents.** Currently return `draft_only`; could support full materialisation with more inputs (Phase 2).
-- **`list_inbox` filters.** Add `userId`, `since`, `until`, search (Phase 2).
-
-
----
-
-# Chore Logged: Stream L — package squadboard as Electron desktop app
-
-**Chore ID:** chore-2026-05-15-stream-l-package-squadboard-as-electron-desktop-app
-**Date:** 2026-05-15
-**Effort:** large
-**Component:** tooling
-**Assigned to:** Hockney
-**Spec:** docs/chores/chore-2026-05-15-stream-l-package-squadboard-as-electron-desktop-app.md
-
----
-
-# Chore Logged: Unify page-loading experience to match ceremonies pattern
-
-**Chore ID:** chore-2026-05-15-unify-page-loading-experience-to-match-ceremonies-pattern
-**Date:** 2026-05-15
-**Effort:** medium
-**Component:** ui
-**Assigned to:** Keyser
-**Spec:** docs/chores/chore-2026-05-15-unify-page-loading-experience-to-match-ceremonies-pattern.md
-
----
-
-# Directive: Unify page-loading experience (Wave 11 polish)
-
-**Captured:** 2026-05-15T13:16:54-07:00
-**By:** Ahmed Sabbour (via Copilot)
-**What:** Unify the page-loading experience across the app to function like the ceremonies loading experience (with a visible indicator). Today different pages have inconsistent or missing loading affordances; the ceremonies page has the canonical pattern — adopt it everywhere.
-**Why:** Wave 11 polish — perceived performance + visual consistency. Captured for team memory.
-
----
-
-# Directive: Package squadboard as Electron desktop app
-
-**Captured:** 2026-05-15T13:38:36-07:00
-**By:** Ahmed Sabbour (via Copilot)
-**What:** Package squadboard as an Electron desktop app. Reference installation/packaging pattern: https://github.com/jmanuelcorral/squadcenter — adopt a similar approach for installer artifacts, auto-update, and first-run UX.
-**Why:** Lowers the install bar from "have node + pnpm + run dev server" to "double-click an installer." Captured for team memory.
-
----
-
-# Directive: Cast a Team modal hotfix (Stream M) — HIGH PRIORITY
-
-**From:** Ahmed (live-bug report w/ screenshot)
-**Captured:** 2026-05-15 16:10 (post-Wave 11A)
-**Priority:** HIGH (front of queue, ahead of Streams F/G/H/I/J/K/L)
-
-## Symptoms
-
-1. Red error at bottom of "Cast a Team" / "Hire Team" modal: `Unexpected token '<', "<!doctype "... is not valid JSON`
-2. Clicking ANY role label (Developer, PM, Marketing, etc.) checks/unchecks the **Lead** checkbox specifically — not the role clicked.
-
-## Root causes (verified live this session)
-
-- **Bug 1:** `POST /api/projects/:projectId/agents/hire-team/propose` and `/hire-team/confirm` are called by client `useHireTeamPropose`/`useHireTeamConfirm` but **no handler is defined in `packages/server/src/routes/agents.ts`**. Express's SPA catch-all returns `index.html`, client `apiFetch` does `JSON.parse('<!doctype ...')` and throws. Confirmed via live curl returning `<!doctype html>`.
-- **Bug 2:** `<Field label="Required roles">` wraps 16 `<Checkbox>` siblings; Fluent's `<Field>` binds htmlFor to its first form control (Lead, the first item in `ROLE_OPTIONS`), so OS-level label clicks all route to the Lead `<input>`.
-
-## Decisions taken
-
-- Stream M added to plan with 4 todos (M1-M4) — see `.squad/squadboard/plans/wave-10.md` Stream M.
-- Promoted ahead of all Streams F/G/H/I/J/K/L (which remain lower-priority backlog).
-- Sequencing: M1 first (server routes), then M2 + M3 in parallel (defensive apiFetch + UI fix), then M4 (regression e2e).
-- Owners: Hockney (M1), Keyser (M2 + M3), Kujan (M4).
-
-## Acceptance
-
-See plan acceptance items 81-85.
-
-## Wave 11A status
-
-Of 7 dispatched: 2 silent-success (McManus L1 architecture decision + Keyser K1 PageLoading component); 5 timed out without writing files (Hockney/Verbal/Fenster/Kobayashi/Kujan). The 9 stuck `in_progress` todos have been reset to `pending` for re-dispatch in smaller batches (max 3 fresh spawns per wave going forward to avoid CAPI rate limit).
-
----
-
-# Wave 10 Verification Gate — E1 Close-Out
-
-**Date:** 2026-05-15  
-**Author:** Kujan (QA/Tester)  
-**Wave:** 10  
-**Commit:** c9c2c44c
-**Status:** PASS
-
-## Summary
-
-Completed the Wave 10 E1 gate: build, e2e, AC smoke-walk, stray-file cleanup, and commit. Two regressions were found and fixed. All 21 ACs verified. Commit is clean.
-
-## Decisions for Coordinator
-
-### D1 — Route-mount auditing should be part of Wave Definition of Done
-
-**Context:** Three routers (`teamPortabilityRouter`, `projectPortabilityRouter`, `templatesRouter`) were imported in `index.ts` but never mounted with `app.use()`. The server silently fell through to the SPA fallback, returning HTML instead of JSON. Tests failed with `SyntaxError: Unexpected token '<'`. This is a common, hard-to-debug class of error.
-
-**Recommendation:** Add "check `index.ts` for imported-but-unmounted routers" to the Wave DoD checklist.
-
-### D2 — Column seeding is required before issue creation in any fresh-project test
-
-**Context:** `POST /api/squad/create` creates a project with zero `column_meta` rows. Any `createIssue()` call on such a project fails with "Column X does not exist for this project". The fix is to call `GET /api/projects/:id/columns` first, which auto-seeds 5 default columns via `seedDefaults()`.
-
-**Recommendation:** Document this in a test-fixture helper (`helpers/setupProject.ts`) so future spec writers don't rediscover it.
-
-### D3 — WSL inotify + tsx watch is broken on Windows-mapped paths
-
-**Context:** The project lives at `/home/asabbour/GitWSL/EMU/foo` — a Windows filesystem mounted into WSL2. `tsx watch` uses inotify for file-change detection, which does not fire for cross-FS writes.
-
-**Recommendation:** Move project into native WSL2 home or use polling mode via `CHOKIDAR_USEPOLLING=true`.
-
-### D4 — UI browser tests are environment-broken (not Wave 10 regressions)
-
-**Context:** Tests in 01–04 specs fail with `element not found` / timeouts due to environment issues, not code.
-
-**Recommendation:** Mark them `test.skip` with a comment pointing to this decision if they continue to fail in CI.
-
-## Wave 10 Final Gate Result
-
-| Criterion | Status |
-|-----------|--------|
-| Build (cli, server, client) | ✅ GREEN |
-| Unit tests | ✅ N/A (no runner configured) |
-| E2E B7 (team-portability) | ✅ 3/3 |
-| E2E B8 (consult-send guards) | ✅ 3/3 |
-| E2E B9 (disabled-agent) | ✅ 5/5 |
-| E2E UI tests (01–04) | ⚠️ pre-existing env failures |
-| 21 AC smoke-walk | ✅ all pass |
-| Stray files | ✅ cleaned / gitignored |
-| CHANGELOG.md | ✅ updated |
-
-**Gate decision: PASS**
-
----
-
-# Stream L Architecture — Electron packaging model
-
-**Date:** 2026-05-15
-**By:** McManus (architect) at request of Ahmed Sabbour
-**Status:** DECISION — Architecture ratified
-
-## Decision: Option B — Server as a child process supervised by Electron main
-
-**Rationale:**
-
-Squadboard's server is a substantial Node process. Option B preserves crash isolation: the main process is a thin supervisor that can restart the server child transparently. More importantly, Option B preserves headless parity by construction. `packages/server/dist/index.js` is the same artifact whether spawned by `electron/main.ts` or by `pnpm --filter server start`. No conditional branches in server code.
-
-**What this means concretely:**
-
-**Main process:** spawn/supervise server, health-poll, restart on crash, window mgmt, auto-update, IPC bridge, graceful shutdown.
-
-**Renderer:** Load existing client build, all data access via `http://localhost:<port>`, WebSocket for live updates.
-
-**Server lifecycle:** Main spawns as `utilityProcess.fork()` with env vars, server boots normally, logs to `app.getPath('userData')/logs/`, on crash main restarts with backoff.
-
-**embedded-postgres:** Data dir via `SQUADBOARD_DATA_DIR` env var. Binaries copied outside `app.asar` by `electron-builder`. Single 3-line helper in `postgres.ts` for binary resolution.
-
-**MCP:** Spawned by server (not main). Inherits Electron's Node runtime. No special handling.
-
-**Single-instance lock:** `app.requestSingleInstanceLock()` prevents multiple Electron instances fighting over postgres.
-
-**Headless parity:** `squadboard serve` unaffected. Zero Electron dependencies in `packages/server/`. Electron wrapper is separate `packages/electron/` workspace package.
-
-## Downstream Stream L items
-
-- **L2 (electron scaffold):** Implement `ServerSupervisor` (spawn, health-poll, restart, log rotation).
-- **L4 (postgres bundling):** `resolvePgBinaries()` helper in server; `electron-builder` extraResources config.
-- **L5 (MCP under Electron):** Automatic via inherited runtime.
-- **L6 (first-run UX):** Frameless splash window polling `/api/health`.
-- **L8 (auto-update):** Graceful server shutdown before update + relaunch.
-
-## Rejected alternatives
-
-- **Option A:** Crash isolation lost; code coupling with Electron in server.
-- **Option C:** Sandboxed renderer, requires Node bridges for all server APIs.
-
-## Open questions for L2
-
-- Verify `utilityProcess` supports env var passthrough; fallback to `fork()` if needed.
-- Port allocation: use dynamic port discovery (portfinder or net.createServer probe).
-- Dev mode: spawn via `tsx` for live reload, `dist/index.js` in production.
-- Log rotation: recommend 5 files × 10 MB.
-
----
-
-# Wave 10 E3 — Coordinator Close-Out Symmetry
-
-**Date:** 2026-05-15T13:09:47-07:00  
-**By:** Scribe (per E3 task orchestration)  
-**Status:** DECISION — Ratified in coordinator playbook
-
-## What
-
-Extended the coordinator playbook and dogfood playbook to document **close-out symmetry** for squadboard dogfood work:
-
-1. When Ahmed captures a directive on **intake** via `capture(prompt)`, call `capture()` again on **completion** with a closing summary.
-2. Close-out format: `done: {one-line summary} (sha={commit-sha}) [PR #N if applicable]`
-3. Example workflow:
-   - **Intake:** `capture("Fix hover resize on project tiles — broken since PR #39")`
-   - **Completion:** `capture("done: Fixed hover resize on tiles (sha=abc123def) — see PR #42")`
+0. PRE-CHECK: Stat decisions.md size + count inbox files
+1. DECISIONS ARCHIVE: HARD GATE — `>= 20480` → archive older-than-30-days; `>= 51200` → archive older-than-7-days. NO additional aggressive policy unless the source rule changes.
+2. DECISION INBOX: Merge inbox/* → decisions.md, delete, dedupe
+3. ORCHESTRATION LOG: One file per agent in spawn manifest
+4. SESSION LOG: Brief topic summary
+5. CROSS-AGENT HISTORY: Append updates to affected agents' history.md
+6. HISTORY SUMMARIZATION: HARD GATE at 15360 bytes
+7. GIT COMMIT: Allowed-paths whitelist, individual `git add -- <path>`, `-F` message, no broad globs
+8. HEALTH REPORT
 
 ## Why
 
-**Symmetry:** The dogfood loop has a clear entry point but was missing a clear exit. This closes the loop so squadboard's own development flow mirrors external users: Capture on intake → card on board, Mark done on completion → card in done column.
+Source-of-truth single point: squad.agent.md is the authoritative spec for Scribe behavior. The SDK is the LIBRARY-IFIED version of that spec. If the gate logic is buggy/insufficient, the FIX goes upstream into squad.agent.md FIRST, then the SDK mirrors it. The SDK never silently diverges from the agent spec — that would split Scribe into two implementations.
 
-**Visible progress:** Coordinator can show Ahmed at session end what landed on board vs. what shipped.
+This is the "Scribe stays one agent" principle: one source of truth for the algorithm, multiple callers (CLI / daemon / button).
 
-## Implementation Notes
+## Consequence
 
-- No MCP changes required; existing `capture` tool works for both.
-- Coordinator includes first 60 characters of original prompt as anchor for future "find by prefix" logic.
-- Until MCP has "find existing card by prefix", each call creates new card; coordinator manually dedups.
-- Future: `find_issue_by_prefix` or `update_issue_by_match` tool will transition original card to done.
-
-## Scope
-
-- `.github/agents/squad.agent.md` — Extended with close-out symmetry section.
-- `.squad/dogfood.md` — Added "Close-out flow" section with examples and future enhancement notes.
-- `.squad/agents/scribe/history.md` — Updated with E3 learning entry.
-- `packages/server/src/mcp/server.ts` — Verified `capture` tool exists; documented enhancement path in dogfood.md.
-
-## Status
-
-Docs-and-playbook-only. No follow-up PRs or code changes required.
-
+Kobayashi mid-task received this clarification via write_agent follow-up before he shipped an "improved" archive gate.
 
 ---
 
-# Decision: F1 — Restore Templates nav link
+# 2026-05-15T22:12:00-07:00: Decision — Standalone Coordinator = Autonomous Daemon (Q6)
 
-**By:** Fenster (UX Designer)  
-**Date:** 2026-05-15T17:29:06-07:00  
-**Task:** f1-templates-nav
-
-## What was missing
-
-The Templates page (`packages/client/src/pages/Templates.tsx`) existed and the route was registered in App.tsx at `projects/:id/ceremonies/templates`, but there was no nav entry in the sidebar — Ahmed couldn't find it.
+**By:** Ahmed (via Copilot Coordinator)
+**Resolves:** Q6 (standalone coordinator model: Manual-only / Autonomous-daemon / Hybrid)
 
 ## Decision
 
-**Icon:** `DocumentBulletList24Regular` — a document with a bullet list is the canonical representation of workflow templates in Fluent 2. Added as a new import alongside existing icon imports.
+**B — Autonomous daemon.** When squadboard runs standalone (no CLI coordinator), a background daemon process drives the ceremony cadence.
 
-**Label:** `"Templates"` — all existing nav items use short single-word labels (Dashboard, Board, Flow, Agents, Skills, Tools, Ceremonies, Costs) or a two-word compound noun (MCP Servers). "Templates" is short and unambiguous.
+## Architecture
 
-**Segment:** `ceremonies/templates` — the route is nested under ceremonies (`projects/:id/ceremonies/templates`). Using the full sub-path as the segment means `handleNavItemSelect` correctly navigates to `/projects/:id/ceremonies/templates`. The segment-length sort in `getSelectedValue()` ensures the Templates item is highlighted (length 20) when on the templates page, not the Ceremonies item (length 9).
+```
+┌─────────────────────────────────────────────┐
+│  squadboard-daemon (process)                │
+│  ┌──────────────────────────────────────┐   │
+│  │ Scheduler (cron-like)                │   │
+│  │  - every N hours                     │   │
+│  │  - every N merged PRs                │   │
+│  │  - every N closed cards              │   │
+│  └────────────────┬─────────────────────┘   │
+│                   │ triggers                 │
+│  ┌────────────────▼─────────────────────┐   │
+│  │ Ceremony invoker                     │   │
+│  │  - resolves ceremony from registry   │   │
+│  │  - calls SDK (squadboard.scribe.…)   │   │
+│  │  - logs result                       │   │
+│  └────────────────┬─────────────────────┘   │
+│                   │                          │
+│  ┌────────────────▼─────────────────────┐   │
+│  │ Commit/push loop                     │   │
+│  │  - stage Scribe outputs              │   │
+│  │  - commit                            │   │
+│  │  - push (if configured)              │   │
+│  └──────────────────────────────────────┘   │
+└─────────────────────────────────────────────┘
+```
 
-**Position:** OPERATIONS group, between Ceremonies and Costs. Templates are workflow artefacts tied to the ceremonies/ritual concept — logical sibling of Ceremonies. Placed immediately after it so the visual grouping is clear.
+## Detection rules (daemon is standalone-only)
 
-## Change surface
+The daemon MUST be a no-op when any of these conditions hold:
+- `SQUADBOARD_COORDINATOR=cli` set (explicit CLI mode)
+- CLI coordinator heartbeat detected (e.g., file lock at `~/.squadboard/coord.lock` updated in the last 5 min)
+- `DATABASE_URL` points to a non-local PG (hosted mode — separate orchestrator likely)
 
-Single file: `packages/client/src/components/Layout.tsx`
+Otherwise, the daemon runs the schedule. This prevents double-fire when the user is actively coordinating via CLI.
 
-1. Added `DocumentBulletList24Regular` to the `@fluentui/react-icons` import block.
-2. Inserted one nav item object into the OPERATIONS group's `items` array.
+## Manual override (Q9 reframed)
 
-No routing changes needed — the route already exists in App.tsx.
+The "End Wave" button on the project page becomes a **manual trigger** that forces the ceremony immediately, ignoring the schedule. Useful when:
+- The user wants to ship a wave before the next schedule tick
+- The daemon is paused/disabled and the user wants a one-shot
+- Power-user override
+
+## Implications
+
+- **Q7 unblocked:** `q7-coord-daemon-scaffold` is now Wave-14 candidate. Scope: process harness + scheduler + ceremony invoker + commit/push loop + detection guards.
+- **Q9 reframed:** `q9-end-wave-button` is the manual override on top of the daemon, not the primary mechanism. Lower priority than q7.
+- **Q8 still primary:** Both the daemon (q7) and the button (q9) call into the same SDK function (`squadboard.scribe.closeOut()` from q8). q8 must ship first or alongside q7.
+- **Defaults:** daemon-on by default for standalone, off in CLI mode. User can `squadboard daemon disable` to opt out.
 
 ---
 
-# Decision: hire-team/propose + hire-team/confirm response shapes
+# 2026-05-15T22:05:00-07:00: Decision — Keep PGlite as default
 
-**By:** Hockney  
-**Date:** 2026-05-15T17:29:06-07:00  
-**Task:** m1-hire-team-routes
+**By:** Ahmed (via Copilot Coordinator)
+**Supersedes:** `.squad/decisions/inbox/copilot-correction-2026-05-15T22-00-pg-misread.md` (resolved)
+
+## Decision
+
+**Default local database stays PGlite** (`@electric-sql/pglite@0.4.5`, in-process WASM PostgreSQL).
 
 ## Context
 
-The Cast-Team modal (`HireTeamModal.tsx`) was crashing with "Unexpected token '<'" because
-Express's SPA catch-all was returning `index.html` for two unimplemented POST routes:
-- `POST /api/projects/:projectId/agents/hire-team/propose`
-- `POST /api/projects/:projectId/agents/hire-team/confirm`
+Ahmed reviewed the three options (revert to embedded-postgres / keep PGlite / BYO-only PostgreSQL) after I surfaced my misread of his original "no use embedded pg" directive. He picked **keep PGlite**.
 
-## Decisions
+## Rationale (per Ahmed's pick)
 
-### 1. Propose response shape
+- PGlite IS PostgreSQL — same SQL surface, same schema features (gen_random_uuid, JSONB, enums, ON CONFLICT, partial indexes), all 17/17 verified by Hockney's spike (commit `ca257838`).
+- Local-first single-user kanban fits PGlite's single-connection model.
+- Electron/standalone packaging is dramatically simpler with no per-platform Postgres binaries.
+- `DATABASE_URL` still routes to real PostgreSQL for cloud/team/multi-user deployments — production unaffected.
 
-Chose `{ ok: true, data: { members: CastedMember[] } }` matching the client's
-`HireTeamProposeResult` interface (`packages/client/src/api/agents.ts:228`). The
-`CastedMember` type is passed through as-is from `castTeam()` in `casting-engine.ts` — 
-no additional mapping needed because `enrich()` already stamps `agentName`, `suggestedRoleId`,
-`suggestedRoleTitle`, and `extendedRole` onto each member.
+## Implications
 
-### 2. Confirm response shape
-
-Chose `{ ok: true, data: { created: Agent[], errors: { agentName: string; error: string }[] } }`
-matching `HireTeamConfirmResult` in `packages/client/src/api/agents.ts:233`. The modal destructures
-`result.created.length` and `result.errors.map(e => ...)` — so returning the full DB row array
-in `created` (not just a count) is the correct interpretation of the client interface.
-
-### 3. Error strategy for confirm
-
-Per-member errors are collected and returned in the envelope rather than aborting or throwing 500.
-This lets the modal render partial results (e.g. "3 of 5 hired; 2 already existed"). Same pattern
-used by the image-attachment route which collects per-file errors.
-
-### 4. Charter + Persona for confirmed members
-
-`writeCharter()` writes the standard role charter; then `buildPersonaSection(member)` appends the
-character's personality/backstory as a `## Persona` section. This gives the casted agent richer
-context than a vanilla hire while reusing existing helpers (no new code paths).
-
-### 5. Extended role mapping
-
-The route does NOT manually call `EXTENDED_ROLE_TO_BASE_ROLE` — `castTeam()` already does that
-internally via `resolveBaseRole()`. Callers pass raw role strings; the casting engine handles all
-normalisation.
-
-## Alternatives considered
-
-- **Zod validation:** Not yet used anywhere in `agents.ts`; added tight runtime checks inline to stay
-  consistent with the file's existing style (matches `formulate` and `team/formulate` handlers).
-- **Separate confirm helper:** Considered extracting shared agent-create logic into a helper, but the
-  POST `/` handler is short enough that inlining a minimal subset (minus KEBAB_RE validation on the
-  incoming agentName) is cleaner for now. Future refactor welcome.
+- Commit `ca257838` (the PGlite swap) is now ratified.
+- `db/.deprecated/postgres.ts` can be deleted in a future cleanup wave — no rollback planned.
+- `@sabbour/squadboard` distribution story: zero-config (`npx`), 5MB WASM, no port collisions, no native binary downloads.
+- Document `DATABASE_URL` override clearly in the install docs so teams/cloud users know the upgrade path.
+- **Wave 14 priority:** ship `q1-followup-data-migration` — foo's 166 bulk-ported cards are stranded in the legacy `~/.squadboard/data/` embedded-PG cluster and invisible to the new PGlite cluster. Migrator must export from legacy cluster → import into PGlite cluster on first boot.
 
 ---
 
-# Decision: M2 apiFetch Content-Type Guard + M3 Cast-Team Label-Toggle Fix
+# 2026-05-15T22:00:00-07:00: Correction — PG directive parse error
 
-**Date:** 2026-05-15  
-**Agent:** Keyser (Frontend)  
-**Commit:** c7dde255
+**By:** Copilot (Coordinator), correcting prior interpretation
+**Requested by:** Ahmed
 
----
+## What I got wrong
 
-## M2 — apiFetch Content-Type Guard
+On 2026-05-15T19:50 I captured Ahmed's "no use embedded pg" as the directive "do not use embedded Postgres" and dispatched Hockney to swap `embedded-postgres` for **PGlite** (commit `ca257838`). The actual meaning was: **"No — use PostgreSQL (and not SQLite)"** — i.e., Ahmed was rejecting the hypothetical SQLite alternative I had floated, not rejecting embedded-Postgres.
 
-**Problem:** When Express serves `index.html` for a missing API route, `JSON.parse('<!doctype...')` throws cryptic "Unexpected token '<'" with no context.
+## What this means
 
-**Decision:** Check `content-type` header on **both** error and success paths in `apiFetch`:
+- The Wave 13 PGlite swap was based on a misinterpretation.
+- However, **PGlite IS PostgreSQL** — it is the PostgreSQL source code compiled to WebAssembly. It speaks identical SQL, supports the same features (gen_random_uuid, JSONB, enums, ON CONFLICT, partial indexes — all 17/17 verified in Hockney's spike). Semantically Ahmed's intent ("use PostgreSQL") is still satisfied.
+- The implementation runtime, however, is different from what we had (`embedded-postgres` is a Node module that downloads + runs the real PostgreSQL binary; PGlite is the WASM in-process variant).
 
-- **Error path (`!res.ok`):** Read body, check `content-type`. If not `application/json`, throw a diagnostic message including the status, actual content-type, and first 200 chars of the body. If it is JSON, throw the existing `API ${status}: ${body}` message.
-- **Success path (after `res.text()`):** Same guard — if content-type is not `application/json`, throw the same friendly error before calling `JSON.parse`.
+## Three real options for Ahmed
 
-**Effect:** HTML-200 and HTML-4xx/5xx responses both produce human-readable errors pointing at the missing endpoint or server restart need.
+| Option | Default UX | Cloud UX | Tradeoffs |
+|---|---|---|---|
+| **A. Revert to `embedded-postgres`** | npm install downloads PG binary per platform; server spawns localhost:54321 | DATABASE_URL → cloud PG | Real PG runtime locally. ~50MB. Per-platform binaries. Port-collision risk. Largest Stream-L (Electron) packaging risk re-introduced. |
+| **B. Keep PGlite** (current state, `ca257838`) | npm install pulls 5MB WASM; runs in-process | DATABASE_URL → cloud PG | Real PostgreSQL semantically. No per-platform binaries. Single connection (fine for solo-user kanban; problematic for multi-user). |
+| **C. BYO PostgreSQL only** | User installs PostgreSQL themselves; squadboard connects via DATABASE_URL or fails to boot | Same as A/B | True real-PG, full multi-connection. Worst zero-config UX — `npx @sabbour/squadboard init` now requires a separate install step. |
 
----
+DATABASE_URL override has always worked across A/B/C — production / cloud / shared-instance deployments connect to real Postgres regardless of which default we pick.
 
-## M3 — HireTeamModal Checkbox Label-Toggle Bug
+## Recommendation
 
-**Problem:** Clicking any role label (Developer, PM, Marketing, etc.) checked/unchecked the **Lead** checkbox only.
+**B (keep PGlite) for the default zero-config experience**, because:
+- Squadboard is local-first and primarily single-user; PGlite's single-connection model fits.
+- The Stream-L (Electron) packaging story is dramatically simpler (no per-platform binaries).
+- Schema is unchanged — exact same Drizzle definitions, exact same SQL, exact same migrations.
+- We still document + support DATABASE_URL → real Postgres for teams/cloud.
 
-**Root cause:** `<Field label="Required roles (optional)" hint="...">` wraps all 16 `<Checkbox>` siblings. Fluent's `<Field>` generates a single `htmlFor` pointing at its first form child (`lead`). The OS routes all label clicks to that single input.
+**If Ahmed wants A**, the revert is mechanical: `git revert ca257838`, restore `db/postgres.ts` from `db/.deprecated/postgres.ts`, drop `@electric-sql/pglite` from deps, re-add `embedded-postgres`. ~30 minutes of work.
 
-**Decision:**
-1. **Replace `<Field>` with `<fieldset>` + `<legend>`** — semantically correct for a group of checkboxes, no single `htmlFor` binding. Styled to match Fluent2 Field typography (`font-size: 14px`, `font-weight: 400`, `color: colorNeutralForeground1`). Hint text rendered as a `<span>` below the checkboxes.
-2. **Add explicit `id={`role-${r.id}`}` to each `<Checkbox>`** — makes each label↔input binding unambiguous even if Fluent's internal `useId()` collides under concurrent renders.
-3. **Add `import.meta.env.DEV` uniqueness invariant** after `ROLE_OPTIONS` — throws during development if any two roles share the same `id`, preventing the bug from being reintroduced.
+**If Ahmed wants C**, document BYO + remove the embedded default entirely. Slightly more work because seed/dev scripts assume a one-command boot.
 
-**Note:** Used `import.meta.env.DEV` instead of `process.env.NODE_ENV` — the client is a Vite app and doesn't have `@types/node`; `process` is not in scope.
+## Action
 
----
-
-# Verification Report: M4 — Cast-a-Team E2E Regression
-
-**By:** Kujan (Verifier)  
-**Date:** 2026-05-15T17:45:00-07:00  
-**Task:** m4-cast-team-e2e  
-**Status:** ✅ PASSED — 4/4 tests green
+Pending Ahmed's direction. Until he picks, treat commit `ca257838` as provisional.
 
 ---
 
-## What M1/M2/M3 Fixed
+# 2026-05-15T19:39:32-07:00: Hockney — PGlite replaces embedded-postgres in server
 
-### M1 (Hockney, commit 8967ac72)
-Added two missing POST routes in `packages/server/src/routes/agents.ts`:
-- `POST /api/projects/:projectId/agents/hire-team/propose` → `{ ok: true, data: { members: CastedMember[] } }`
-- `POST /api/projects/:projectId/agents/hire-team/confirm` → `{ ok: true, data: { created: Agent[], errors: [...] } }`
+**Author:** Hockney
+**Date:** 2026-05-15T19:39:32-07:00
+**Status:** Implemented
+**Wave:** Wave 13 (Q1 PGlite migration spike + swap)
 
-Before M1, Express's SPA catch-all served `index.html` for both routes, causing `JSON.parse('<!doctype...')` → "Unexpected token '<'" crash on the client.
+Ahmed directed that the standalone server must move off `embedded-postgres`. The coordinator's agreed replacement: **PGlite** (`@electric-sql/pglite`) — pure-WASM Postgres, ~5 MB, no per-platform native binaries, in-process, Drizzle has first-class `drizzle-orm/pglite` adapter.
 
-### M2 (Keyser, commit c7dde255)
-Added Content-Type guard in `packages/client/src/api/client.ts` (`apiFetch`):
-- Both success and error paths check `content-type` before calling `JSON.parse`
-- If not `application/json`, throws a human-readable diagnostic (status, actual content-type, first 200 chars) instead of a cryptic parse error
+## What Changed
 
-### M3 (Keyser, commit c7dde255)
-Fixed `HireTeamModal.tsx` checkbox label-toggle bug:
-- Root cause: `<Field>` wraps all 16 `<Checkbox>` siblings and emits a single `htmlFor` pointing at `role-lead`; every label click routed to Lead
-- Fix: replaced `<Field>` with `<fieldset>`/`<legend>` (semantically correct for checkbox groups) + added explicit `id={`role-${r.id}`}` to every `<Checkbox>`
-- Added DEV-only invariant to throw if any two roles share the same id
+### Files added / modified
 
----
+| File | Action | Summary |
+|------|--------|---------|
+| `packages/server/src/db/pglite.ts` | **NEW** | PGlite engine: `startPglite()`, `stopPglite()`, `createPoolAdapter()`, shutdown handlers. `startEmbeddedPostgres` re-exported as alias for backward compat. |
+| `packages/server/src/db/index.ts` | **MODIFIED** | Drizzle driver swapped from `drizzle-orm/node-postgres` to `drizzle-orm/pglite`. `_pool` is now always `PoolLike` (PGlite adapter or wrapped pg.Pool). `initDb()` branches on `PGLITE_SENTINEL` vs real connection string. |
+| `packages/server/src/index.ts` | **MODIFIED** | Import updated: `postgres.js` → `pglite.js`; `startEmbeddedPostgres` → `startPglite`. |
+| `packages/server/src/cli/bulk-import.ts` | **MODIFIED** | Same import/call update. |
+| `packages/server/src/mcp/index.ts` | **MODIFIED** | Same import update. |
+| `packages/server/src/scripts/seed-wave10-backlog.ts` | **MODIFIED** | Same import update. |
+| `packages/server/src/db/.deprecated/postgres.ts` | **MOVED** | Old embedded-postgres code preserved in `.deprecated/` (not compiled). |
+| `packages/server/src/scripts/pglite-spike.ts` | **NEW** | Feasibility spike script (17 tests, all pass). |
+| `packages/server/package.json` | **MODIFIED** | Added `@electric-sql/pglite ^0.4.5`. Removed `embedded-postgres`. `pg` retained for DATABASE_URL external-Postgres fallback. |
 
-## Regression Test: `packages/e2e/tests/10-cast-team.spec.ts`
-
-Four sub-tests in `test.describe('Cast-a-Team modal — M1/M2/M3 regression suite')`:
-
-| # | Test | Regression guarded |
-|---|------|--------------------|
-| 1 | "Cast a Team button is visible on the agents page" | Smoke — ensures the Hire Team trigger button renders |
-| 2 | "Opening Cast a Team modal shows role checkboxes without crashing" | M2: no "Unexpected token" in DOM; modal heading + ≥3 role labels visible |
-| 3 | "Clicking a non-Lead role label toggles only that role (M3 regression)" | M3: `label[for="role-developer"]` click flips Developer only; Lead unchanged; repeated for PM |
-| 4 | "Submitting the form calls /hire-team/propose and surfaces a member list (M1 regression)" | M1: `/hire-team/propose` returns HTTP 200 + `content-type: application/json`; M2: no "Unexpected token" error |
-
----
-
-## Playwright Run Output
+### Drizzle driver swap
 
 ```
-Running 4 tests using 1 worker
-
-  ✓  1 › Cast a Team button is visible on the agents page (1.9s)
-  ✓  2 › Opening Cast a Team modal shows role checkboxes without crashing (2.0s)
-  ✓  3 › Clicking a non-Lead role label toggles only that role (M3 regression) (2.4s)
-  ✓  4 › Submitting the form calls /hire-team/propose and surfaces a member list (M1 regression) (2.5s)
-
-  4 passed (9.9s)
+Before:  import { drizzle } from 'drizzle-orm/node-postgres';  (Pool-based)
+After:   import { drizzle } from 'drizzle-orm/pglite';          (PGlite-direct)
 ```
 
----
+When `DATABASE_URL` is set (CI / cloud), a real `pg.Pool` is still created, passed to `drizzle-orm/node-postgres`, and wrapped in a `PoolLike` adapter so `getPool()` callers remain unchanged.
 
-## Side Fix: fixtures.ts
+### Key design decisions
 
-Added `createProjectViaApi()` helper to `packages/e2e/tests/fixtures.ts`. The existing UI-based `createProject()` function is unreliable in this WSL/headless Chromium environment (Fluent v9 controlled inputs don't reliably respond to Playwright `fill()` in headless mode). Tests 07–09 had already adopted the API-based pattern; `10-cast-team.spec.ts` follows the same pattern. The `createProject()` UI-based helper is preserved for contexts where it does work.
+1. **`query()` vs `exec()` routing**: PGlite's `query()` uses the extended query (prepared statement) protocol and rejects multi-statement SQL. The pool adapter detects param-less calls and routes them through `pglite.exec()` (simple protocol, multi-statement OK). Parameterized calls (`query(sql, params)`) use `pglite.query()` for safety.
 
----
+2. **`rowCount` ↔ `affectedRows` mapping**: PGlite returns `affectedRows`; pg returns `rowCount`. The adapter maps them transparently. Sweeper code that reads `.rowCount` continues to work.
 
-## Gate Decision
+3. **Data directory**: `~/.squadboard/data/pglite/` — keeps the parent dir unchanged; the `pglite` subdir reserves space for a one-time migrator (see Open follow-ups).
 
-**PASS** — M1, M2, and M3 regressions are all covered and green. The Cast-a-Team flow is protected against:
-1. Missing server routes (HTML-instead-of-JSON crash)
-2. Client-side JSON parse errors surfacing as cryptic "Unexpected token '<'" messages
-3. Label-click routing all clicks to Lead checkbox (wrong `htmlFor` binding)
+## PGlite version pinned
+
+`@electric-sql/pglite@0.4.5`
+
+## Schema compatibility table (spike results)
+
+| Feature | Status | Notes |
+|---------|--------|-------|
+| `gen_random_uuid()` as column DEFAULT | ✅ PASS | Bundled pgcrypto in PGlite |
+| `TIMESTAMPTZ` columns | ✅ PASS | Full round-trip |
+| `JSONB` columns (`DEFAULT '{}'::jsonb`, `DEFAULT '[]'::jsonb`) | ✅ PASS | |
+| Custom ENUM types via `DO $$ BEGIN CREATE TYPE … END $$` | ✅ PASS | |
+| `ON DELETE CASCADE` foreign keys | ✅ PASS | Cascade verified by deleting parent |
+| `ALTER TYPE … ADD VALUE IF NOT EXISTS` inside `DO $$ BEGIN … END $$` | ✅ PASS | |
+| `CREATE INDEX … WHERE …` (partial indexes) | ✅ PASS | |
+| `CREATE UNIQUE INDEX … WHERE scope = 'system'` (partial unique index) | ✅ PASS | |
+| `INSERT … ON CONFLICT (slug) WHERE scope = 'system' DO UPDATE` | ✅ PASS | Partial-index conflict, upsert, re-ran to exercise both paths |
+| `DO $$ BEGIN ALTER TABLE … ADD CONSTRAINT … EXCEPTION WHEN duplicate_object THEN NULL END $$` | ✅ PASS | |
+| `IF EXISTS (SELECT 1 FROM information_schema.tables …)` | ✅ PASS | |
+| `SELECT … FROM pg_type WHERE typname = '…'` | ✅ PASS | |
+| `ALTER TABLE … ALTER COLUMN … TYPE TEXT USING status::TEXT` + `DROP TYPE` | ✅ PASS | Dynamic-columns migration |
+| `BYTEA` column type | ✅ PASS | |
+| `NUMERIC(10, 2)` / `NUMERIC(12, 6)` / `NUMERIC(5, 4)` | ✅ PASS | |
+| Positional `$1`/`$2` parameterized queries | ✅ PASS | |
+| `affectedRows` (pg's `rowCount` equivalent) | ✅ PASS | Mapped in pool adapter |
+| Multi-statement SQL blocks (DDL migrations) | ✅ PASS | Requires `exec()` not `query()` — handled in adapter |
+
+**Total: 17/17 PASS. Zero incompatibilities.**
+
+One behavioral difference discovered and handled: PGlite `query()` uses the extended protocol (single statement only). Multi-statement DDL blocks must go through `exec()`. The pool adapter automatically routes based on whether params are provided.
+
+## Data-migration story (deferred)
+
+Existing users with data in the old `~/.squadboard/data/` embedded-postgres cluster are not automatically migrated. A one-time migrator is deferred (see Open follow-ups). On first boot with an empty `~/.squadboard/data/pglite/`, the server runs `bootstrapSchema()` as normal — fresh start. Existing data stays in the old dir untouched.
+
+## Known PGlite limitations to watch
+
+| Concern | Detail |
+|---------|--------|
+| **Single connection** | PGlite is in-process with no real connection pooling. `pool.connect()` returns a thin wrapper over the same instance. Concurrent transactions are serialized. For squadboard's current single-process architecture this is fine. |
+| **No network access** | PGlite can't be queried by external tools (psql, pgAdmin). Use `drizzle-kit studio` or add a diagnostic route. |
+| **WASM startup ~400ms** | Acceptable for a local server; not suitable for Lambda/edge cold starts. |
+| **Memory footprint** | PGlite keeps the entire DB in WASM memory. For very large boards this could grow; monitor with `process.memoryUsage()`. |
+| **`BEGIN`/`COMMIT`/`ROLLBACK` via exec()** | Callers using `client.query('BEGIN')` / `client.query('COMMIT')` will route through `exec()` (no params). PGlite handles these correctly as single-statement SQL. |
+| **No `FOR UPDATE SKIP LOCKED` parallel** | PGlite is single-connection; `SELECT … FOR UPDATE SKIP LOCKED` works but concurrent callers serialize naturally. The stepper invariant is safe. |
+
+## Open follow-ups
+
+### q1-followup-data-migration (file as SQL todo)
+
+**Title:** One-time migrator: embedded-postgres → PGlite
+
+**Description:** On first boot of the new server, check if `~/.squadboard/data/postgres/` exists (legacy embedded-postgres cluster). If so:
+1. Start the old cluster on a temporary port (or use `pg_dump` directly against the cluster directory).
+2. Pipe the dump into PGlite via `exec()`.
+3. Rename `~/.squadboard/data/postgres/` to `~/.squadboard/data/postgres.legacy` to prevent re-migration.
+This unblocks users who have existing squadboard board data from the embedded-postgres era (issue history, projects, agents, ceremonies).
+
+**Priority:** Medium (blocks users with pre-migration data).
+**Owner:** Hockney
+**Blocked by:** Nothing (PGlite is now live; migrator can land in Wave 14).
+

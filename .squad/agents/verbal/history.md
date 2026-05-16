@@ -65,3 +65,20 @@ The spam loop defensive guards shipped (3 guards: dedup, sweep backoff, concurre
 ## Team update (2026-05-15T16:09:55Z — Wave 3)
 
 Consult stream wiring (r2, commit 546081cb): 3 SessionEventType events (consult.request/response/error) now emit on existing `'event'` channel with standard routing via emitSessionEvent(). SDK listeners registered in squad-stream.ts with flexible fallback key sequences; forward-compatible for SDK evolution. AgentActivityFeed renders consult rows inline (left/right aligned, 💬?/💬↩/💬⚠ icons). Pattern: consult event types in Phase 5 live session are distinct from Phase 17 standalone consult mode (which uses consult:<sessionId> routing).
+
+---
+
+## Wave 14 — q7-coordinator-server-agent queued
+
+**Date:** 2026-05-15T22:14:50-07:00  
+**Spawned by:** Copilot Coordinator  
+**Task:** q7-coordinator-server-agent  
+
+Dispatched in Wave 14: Standalone coordinator daemon. Q6=B (autonomous daemon model) now ratified. Daemon will:
+- Schedule ceremony cadence (cron-like)
+- Invoke ceremonies via Scribe SDK
+- Commit/push outputs
+- Detect standalone-only conditions (avoid double-fire with CLI)
+
+Manual override button (q9) will be built on top as Wave 15 follow-up.
+

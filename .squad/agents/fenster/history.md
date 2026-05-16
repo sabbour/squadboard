@@ -181,3 +181,12 @@
 **Status:** 1/1 done. Typecheck clean.
 
 **Follow-ups:** Ahmed to nod on preset-save UI and "unanimous approval" label rename consideration.
+
+---
+
+## Wave 14 — q9 wave button reframed as post-daemon UX
+
+**Date:** 2026-05-15T22:14:50-07:00  
+
+Note: q9-end-wave-button reframed from primary to manual-override. After q7 (autonomous daemon) ships, q9 becomes the UI for forcing an immediate ceremony, ignoring the schedule. Lower priority than q7.
+
