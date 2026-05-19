@@ -15,7 +15,10 @@ Add to `~/.copilot/mcp-config.json`:
   "mcpServers": {
     "squadboard": {
       "command": "node",
-      "args": ["/absolute/path/to/packages/cli/dist/index.js", "mcp"]
+      "args": ["/absolute/path/to/packages/cli/dist/index.js", "mcp"],
+      "env": {
+        "SQUADBOARD_SQUAD_STORAGE_PROVIDER": "postgresql"
+      }
     }
   }
 }
@@ -24,6 +27,14 @@ Add to `~/.copilot/mcp-config.json`:
 Replace `/absolute/path/to` with the full path to your Squadboard repository.
 
 Restart Copilot CLI. Squadboard tools are now available to agents.
+
+You can also generate the repo-local config:
+
+```bash
+squadboard init --write-mcp-config
+```
+
+That config makes Copilot CLI plus `squad.agent.md` use Squadboard as the broker for PostgreSQL-backed Squad state. Add `--squad-storage fs` only when you want filesystem `.squad/` fallback.
 
 ### VS Code
 
@@ -102,6 +113,7 @@ export SQUADBOARD_DEFAULT_PROJECT_ID="550e8400-e29b-41d4-a716-446655440000"
       "command": "node",
       "args": ["/path/to/packages/cli/dist/index.js", "mcp"],
       "env": {
+        "SQUADBOARD_SQUAD_STORAGE_PROVIDER": "postgresql",
         "SQUADBOARD_DEFAULT_PROJECT_ID": "550e8400-e29b-41d4-a716-446655440000"
       }
     }

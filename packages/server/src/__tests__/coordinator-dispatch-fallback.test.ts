@@ -28,7 +28,7 @@ function makeInput(id = "i-fallback"): CoordinatorInput {
       title: "Fallback test issue",
       body: "Test body",
       labels: ["test"],
-      column: "To Do",
+      column: "Ready",
       parentId: null,
       priority: 1,
       createdAt: "2024-01-01T00:00:00.000Z",

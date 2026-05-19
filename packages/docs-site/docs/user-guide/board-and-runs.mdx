@@ -1,0 +1,76 @@
+---
+title: Board and runs
+description: Work with cards, run agents, monitor live output, and understand run state.
+---
+
+import {ClipboardTaskListLtrRegular, FlashRegular, ChartMultipleRegular} from '@fluentui/react-icons';
+import {IconCard, IconGrid, Screenshot, ScreenshotGrid} from '../../src/components/FluentDoc';
+
+# Board and runs
+
+The board is where Spark turns intent into durable work. A card can start as a rough request, become a routed task, attach to an agent run, and remain visible after the run has completed.
+
+<IconGrid>
+  <IconCard icon={ClipboardTaskListLtrRegular} title="Cards">Hold launch intent, notes, labels, owners, and status.</IconCard>
+  <IconCard icon={FlashRegular} title="Runs">Attach execution and streamed output to the card that caused it.</IconCard>
+  <IconCard icon={ChartMultipleRegular} title="History">Keep routing decisions and lifecycle state queryable later.</IconCard>
+</IconGrid>
+
+<ScreenshotGrid>
+  <Screenshot src="/img/scenarios/spark-03-board-plan.png" alt="Spark board with launch-planning work." caption="Use the board to decide what is ready for routing and what still needs shaping." />
+  <Screenshot src="/img/scenarios/spark-04-new-card.png" alt="New Spark issue card dialog." caption="Create cards with enough context for future routing, not just a short title." />
+  <Screenshot src="/img/scenarios/spark-05-board-after-create.png" alt="Spark board after creating a launch-note card." caption="New cards become part of the shared project state immediately." />
+</ScreenshotGrid>
+
+## Board model
+
+Each project owns a kanban board with cards, labels, comments, assignees, and delivery state. Cards can be moved manually or by automation such as GitHub events, workflow completion, or close-out.
+
+Squadboard aligns with upstream Squad's project-board model: the visible board is a projection over workflow state, and the **Ready** state is where work becomes eligible for automated pickup. The stored status is `ready`, so product language, APIs, and MCP tools use the same word.
+
+| Squad board state | Squadboard semantic | What happens |
+| --- | --- | --- |
+| Backlog | `backlog` | Captured or deferred work; not automatically dispatched. |
+| Needs Research | `custom` or a project-specific research column | Clarification, spike, or Consult work before the card becomes Ready. |
+| Ready | `ready` | Coordinator and Ralph-equivalent loops can pick up the card. |
+| In Progress | `in_progress` | Runtime-owned; an active or pending run must exist. |
+| Review / Done | `review` / `done` | Human, peer, or ceremony review completes the inner loop before optional GitHub sync. |
+
+## Starting work
+
+For normal board work, put the card in **Ready**. The ready pickup loop starts the run automatically, moves the card to **In Progress** while the agent is active, then moves it to review when the run ends.
+
+Manual starts are for explicit workflow/debug contexts outside the ready-column pickup loop:
+
+1. Open a card.
+2. Attach or run a workflow from the detail panel.
+3. Pick an agent only when you want to override routing.
+4. Watch the live run drawer.
+
+Automatic pickup:
+
+1. Put a card in **Ready**.
+2. Ensure the project has active agents.
+3. Let the pickup sweep and coordinator create an `issue_run`.
+
+## Outputs
+
+Outputs are the artifacts a run produced for the card: files, links, notes, or structured JSON. They are separate from the run log. Use the run log to understand what happened minute by minute; use **Outputs** when you want the result that should be reviewed, approved, linked from a ceremony, or carried forward into the next card.
+
+## Run states
+
+| State | Meaning |
+| --- | --- |
+| `pending` | Run is queued and waiting for execution |
+| `running` | Worker is active and sending heartbeats |
+| `completed` | Output was recorded and state advanced |
+| `failed` | Run failed or lease expired |
+| `cancelled` | Run was stopped intentionally |
+
+## Workspace modes
+
+Squadboard can run work in scratch space, a directory workspace, or a git worktree. Worktree-backed runs include branch and cleanup metadata when available.
+
+## Audit trail
+
+Routing decisions, skipped dispatches, monitor decisions, close-outs, and state transitions should be visible as durable records rather than hidden prompt behavior.

@@ -248,7 +248,7 @@ function FlowToolbar({ workflowName, stepCount, reviewCount, onRefresh }: FlowTo
     >
       <span>{stepCount} step{stepCount === 1 ? '' : 's'}</span>
       {reviewCount > 0 && <span>· {reviewCount} review event{reviewCount === 1 ? '' : 's'}</span>}
-      {!workflowName && <span style={{ color: tokens.colorNeutralForeground3 }}>(no workflow attached)</span>}
+      {!workflowName && <span style={{ color: tokens.colorNeutralForeground3 }}>(default Work Pickup run)</span>}
       <button
         type="button"
         onClick={onRefresh}

@@ -3,14 +3,20 @@ import { apiFetch } from './client.ts'
 
 export interface Agent {
   id: string
+  projectId?: string | null
   name: string
   role: string
-  model?: string
+  model?: string | null
   status: 'active' | 'disabled' | 'retired'
+  agentKind?: 'squad' | 'copilot'
+  origin?: AgentOrigin
+  readOnly?: boolean
   charterPath: string
   createdAt: string
   updatedAt: string
 }
+
+export type AgentOrigin = 'project' | 'virtual-copilot' | 'human'
 
 export interface AgentWithHistory extends Agent {
   historyExcerpt?: string
@@ -35,7 +41,9 @@ const unwrap = <T>(r: Envelope<T>): T => r.data
 export function useAgents(projectId: string) {
   return useQuery<Agent[]>({
     queryKey: ['agents', projectId],
-    queryFn: () => apiFetch<Envelope<Agent[]>>(`/api/projects/${projectId}/agents`).then(unwrap),
+    queryFn: () => apiFetch<Envelope<Agent[]>>(
+      `/api/projects/${projectId}/agents`,
+    ).then(unwrap),
     enabled: Boolean(projectId),
   })
 }
@@ -56,11 +64,11 @@ export function useActiveAgents(projectId: string) {
   return { ...query, data }
 }
 
-export function useAgent(projectId: string, agentId: string) {
+export function useAgent(projectId: string, agentId: string, options: { enabled?: boolean } = {}) {
   return useQuery<AgentWithHistory>({
     queryKey: ['agents', projectId, agentId],
     queryFn: () => apiFetch<Envelope<AgentWithHistory>>(`/api/projects/${projectId}/agents/${agentId}`).then(unwrap),
-    enabled: Boolean(projectId) && Boolean(agentId),
+    enabled: (options.enabled ?? true) && Boolean(projectId) && Boolean(agentId),
   })
 }
 

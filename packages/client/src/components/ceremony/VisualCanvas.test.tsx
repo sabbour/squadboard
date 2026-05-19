@@ -6,6 +6,7 @@
  *   2. No auto-connect: palette click with no selection → step appended to end.
  *   3. Edge delete: onEdgesDelete moves target step to end.
  *   4. Reconnect: onReconnect delegates to the same reorder logic as onConnect.
+ *   5. Fan-out child authoring: selected fan-out nodes can add child steps visually.
  *
  * Strategy: mock @xyflow/react so the canvas renders in jsdom without a real
  * SVG/WebGL environment. Capture the ReactFlow props on each render so we can
@@ -195,5 +196,34 @@ describe('VisualCanvas — H3 smarter connection', () => {
     expect(nextSteps).toHaveLength(2)
     expect(nextSteps[0].kind).toBe('fan_out')
     expect(nextSteps[1].kind).toBe('agent_run')
+  })
+
+  it('adds an agent_run child to a selected fan_out node from the visual property panel', async () => {
+    const onChange = vi.fn()
+    const fanOutStep: CeremonyStep = {
+      kind: 'fan_out',
+      split_by: 'agents',
+      merge_strategy: 'all',
+      mode: 'serial',
+      steps: [],
+      extras: {},
+    }
+    const user = userEvent.setup()
+
+    render(<VisualCanvas projectId="p1" header={HEADER} steps={[fanOutStep]} onChange={onChange} />)
+
+    act(() => {
+      ;(capturedRFProps.onNodeClick as AnyFn)(null, { id: 'step-0' })
+    })
+
+    await user.click(screen.getByRole('button', { name: /add agent run child/i }))
+
+    expect(onChange).toHaveBeenCalledOnce()
+    const [nextSteps] = onChange.mock.calls[0] as [CeremonyStep[]]
+    expect(nextSteps).toHaveLength(1)
+    expect(nextSteps[0].kind).toBe('fan_out')
+    if (nextSteps[0].kind !== 'fan_out') throw new Error('Expected fan_out')
+    expect(nextSteps[0].steps).toHaveLength(1)
+    expect(nextSteps[0].steps[0].kind).toBe('agent_run')
   })
 })

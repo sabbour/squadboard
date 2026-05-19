@@ -23,9 +23,9 @@ const COLUMN_DEFAULTS: Array<{
     isDefault: true,
   },
   {
-    columnId: 'todo',
-    label: 'To Do',
-    description: 'Committed work, ready to pick up. The next thing on deck.',
+    columnId: 'ready',
+    label: 'Ready',
+    description: 'Committed work that the coordinator and Ralph monitor may pick up next.',
     color: '#1f6feb',
     position: 1,
     semantic: 'ready',

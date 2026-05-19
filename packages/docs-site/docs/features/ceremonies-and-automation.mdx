@@ -1,0 +1,34 @@
+---
+title: Ceremonies and automation
+description: Triggered workflows, schedules, lifecycle close-out, and Ralph monitor automation.
+---
+
+import {ChartMultipleRegular, ArrowSyncRegular, ClipboardRegular} from '@fluentui/react-icons';
+import {IconCard, IconGrid, Screenshot, ScreenshotGrid} from '../../src/components/FluentDoc';
+
+# Ceremonies and automation
+
+Ceremonies are named processes that wrap workflow graphs in a trigger and metadata model.
+
+<IconGrid>
+  <IconCard icon={ChartMultipleRegular} title="Ceremonies">Reusable rituals for review, triage, close-out, and readiness.</IconCard>
+  <IconCard icon={ArrowSyncRegular} title="Triggers">Manual, scheduled, GitHub event, and agent-signal entry points.</IconCard>
+  <IconCard icon={ClipboardRegular} title="Close-out">Scribe records health, summaries, and next-wave hints through automation paths.</IconCard>
+</IconGrid>
+
+<ScreenshotGrid>
+  <Screenshot src="/img/scenarios/spark-09-templates-ceremonies.png" alt="Spark ceremony templates page." caption="Reusable ceremony templates help projects start from known rituals." />
+  <Screenshot src="/img/scenarios/spark-11-ceremonies.png" alt="Spark ceremonies page." caption="Project ceremonies have visible triggers, versions, and lifecycle state." />
+</ScreenshotGrid>
+
+## Capability summary
+
+| Capability | What it gives you |
+| --- | --- |
+| Ceremony templates | Repeatable project rituals that can be reviewed before deployment. |
+| Triggered workflows | Manual, scheduled, GitHub-event, and agent-signal entry points. |
+| Lifecycle automation | Scribe close-out, run recovery, review timeouts, and Ready pickup happen through server loops. |
+| Ralph-equivalent monitor | Opt-in project monitor that looks at Ready work before GitHub follow-up signals. |
+| Visual designer | Mainstream linear and fan-out workflow editing, with YAML review for advanced graphs. |
+
+For operating details, use [Ceremonies and workflows](../user-guide/ceremonies-workflows.md), [Built-in templates and defaults](../user-guide/built-ins.mdx), and [Coordinator loops](../user-guide/coordinator-loops.mdx).

@@ -8,7 +8,7 @@
  * FIRST, then this file is synced to match. This is the "one algorithm,
  * multiple callers" principle.
  *
- * It is the single convergence point for all three caller
+ * It is the single convergence point for the caller
  * paths that need to trigger a Scribe close-out:
  *
  *   1. CLI coordinator (squad.agent.md prompt) — existing behaviour; will
@@ -17,9 +17,6 @@
  *
  *   2. Standalone autonomous daemon (q7, built by Verbal) — calls closeOut()
  *      on a cron/event cadence. Sets push: true when a remote is configured.
- *
- *   3. Manual "End Wave" button on the project page (q9, Wave 15) — calls
- *      closeOut() on demand, bypassing the daemon schedule.
  *
  * Pluggability: each step below delegates to a named primitive (exported
  * from ./primitives.ts) so Auditor, future ceremonies, or tests can compose
@@ -77,7 +74,7 @@ export interface CloseOutOptions {
   /**
    * Whether to push after commit.
    * Default: false. The daemon (q7) sets this to true when a remote is
-   * configured; the CLI coordinator and the manual button leave it false.
+   * configured; the CLI coordinator leaves it false.
    */
   push?: boolean;
   /**

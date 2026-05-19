@@ -1,0 +1,82 @@
+---
+title: Squad Apps
+description: Package complete Squadboard projects as installable apps.
+---
+
+import {ArrowUploadRegular, DocumentCopyRegular, ShieldRegular} from '@fluentui/react-icons';
+import {IconCard, IconGrid, Screenshot, ScreenshotGrid} from '../../src/components/FluentDoc';
+
+# Squad Apps
+
+A Squad App is a portable, self-describing package that can stand up a Squadboard project in one step. It packages the parts of a multi-agent workflow that normally live across `.squad/`, the database, and project configuration.
+
+<IconGrid>
+  <IconCard icon={ArrowUploadRegular} title="Install an operating model">Bring in team, board, ceremonies, skills, tools, and seed work together.</IconCard>
+  <IconCard icon={DocumentCopyRegular} title="Review before use">Inspect manifests and templates before running imported automation.</IconCard>
+  <IconCard icon={ShieldRegular} title="Treat imports carefully">Prompt instructions and tool recipes are code-adjacent configuration.</IconCard>
+</IconGrid>
+
+<ScreenshotGrid>
+  <Screenshot src="/img/scenarios/spark-10-templates-projects.png" alt="Spark project template import page." caption="Project templates and Squad Apps are reviewed from the Templates surface." />
+  <Screenshot src="/img/scenarios/spark-09-templates-ceremonies.png" alt="Spark ceremony template page." caption="An app can include reusable ceremonies as part of the package." />
+  <Screenshot src="/img/scenarios/spark-11-ceremonies.png" alt="Spark ceremonies after import." caption="Imported ceremonies become normal project automation." />
+</ScreenshotGrid>
+
+## What a Squad App can include
+
+- project metadata and README content
+- kanban columns and default board setup
+- project agents and charters
+- ceremonies and workflows
+- skills using SKILL.md format
+- tools and MCP server recipes
+- routing rules
+- seed issues
+
+## Squad App vs template vs upstream Squad plugin
+
+| Artifact | Scope | Best for |
+| --- | --- | --- |
+| Template | One saved team, workflow, ceremony, or project bundle | Reusing local Squadboard artifacts |
+| Squad App | Complete installable project package | Shipping a full operating model with team, board, ceremonies, skills, and seed backlog |
+| Squad plugin | Individual skill/tool/instruction convention from upstream [Squad](https://github.com/bradygaster/squad) | Sharing capabilities across agents and clients |
+
+Squad Apps can contain SKILL.md files that follow the upstream Squad plugin convention. That lets an app bundle a full project while still sharing individual skills with Squad-compatible tooling.
+
+## Canonical layout
+
+```text
+.squadapp/
+  squadapp.json
+  README.md
+  project.json
+  team/
+  ceremonies/
+  workflows/
+  skills/
+  tools/
+  mcp/
+  routing/
+  issues/
+```
+
+`squadapp.json` is the required manifest. Other directories are optional and are merged into the installed project when present.
+
+## Manifest essentials
+
+```json
+{
+  "schemaVersion": 1,
+  "appId": "my-squad-app",
+  "version": "1.0.0",
+  "name": "My Squad App",
+  "kind": "project-template",
+  "requires": {
+    "squadboard": ">=0.1.0"
+  }
+}
+```
+
+Supported `kind` values include `project-template`, `skills-pack`, `team-preset`, and `ceremony-pack`.
+
+See the canonical repository spec in `docs/squadapp-spec.md` for the complete field reference.

@@ -32,15 +32,13 @@ The ceremony is immediately inserted into the `workflows` table with `origin = '
 - **Step library:** Searchable catalogue of built-in step kinds with documentation and example configurations.
 - **Code tab:** Switch to a code editor view of the ceremony YAML (visual ↔ code round-trip).
 
-## YAML Editor
-
-**Status: Coming in W29+**
+## YAML Editor / API Import
 
 YAML editing workflow:
 
-1. **Export:** Use `GET /ceremonies/:id/yaml` to export a ceremony to canonical YAML (already shipped in CER-3).
+1. **Export:** Use `GET /ceremonies/:id/yaml` to export a ceremony to canonical YAML.
 2. **Edit locally:** Edit the `.workflow.yaml` file in your editor, commit to `.squad/ceremonies/`.
-3. **Re-import:** Use `POST /ceremonies/import-yaml` with the updated YAML (already shipped in CER-3).
+3. **Re-import:** Use `POST /ceremonies/import-yaml` with the updated YAML.
 
 ### Advantages of YAML Authoring
 
@@ -49,9 +47,7 @@ YAML editing workflow:
 - Templating: define ceremony "templates" to share across projects.
 - Batch operations: import multiple ceremonies via script.
 
-## Built-in Seeding (CER-2)
-
-**Status: In design (W29)**
+## Built-in Seeding
 
 When a new project is created, three ceremonies are auto-seeded:
 
@@ -81,15 +77,19 @@ The `deriveOrigin()` function checks signals in this order (most-specific first)
    - Indicates the ceremony came from a bundled template.
 
 2. **`sourceYamlPath` is set** → `origin = 'yaml-import'`
-   - Indicates the ceremony was loaded from `.squad/ceremonies/ceremony-name.workflow.yaml`.
-   - Reserved for future YAML import feature; not yet active.
+    - Indicates the ceremony was loaded from `.squad/ceremonies/ceremony-name.workflow.yaml`.
+    - Used by YAML/API import surfaces.
 
 3. **`parentNarrativeId` is set** → `origin = 'conjure-llm'`
    - Indicates the ceremony was auto-generated from narrative prose (e.g., a team decision doc).
    - Active signal today for Phase 11 prose→ceremony translation.
 
 4. **None of the above** → `origin = 'user-created'`
-   - Fallback: the ceremony was authored manually (visual editor, API, or Code tab).
+    - Fallback: the ceremony was authored manually (visual editor, API, or Code tab).
+
+Close-out ceremonies also expose lifecycle metadata in route responses:
+current run, worktree path, branch, started/ended timestamps, close-out report
+path, and cleanup status when those values are available.
 
 ### Origin Labels in the UI
 

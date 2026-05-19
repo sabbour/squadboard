@@ -3,7 +3,7 @@
  *
  * Calls createIssue() per row with per-row try/catch so a single bad row never
  * aborts the batch. The inertness invariant is enforced here: only 'backlog' and
- * 'done' are permitted status values. Any active status ('todo', 'in_progress',
+ * 'done' are permitted status values. Any active status ('ready', 'in_progress',
  * 'in_review') is a hard error encoded in both the TypeScript type AND a runtime
  * check — BulkImportInvariantError.
  *

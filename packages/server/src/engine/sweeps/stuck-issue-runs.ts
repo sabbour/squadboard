@@ -21,6 +21,9 @@ import { sweepReviewTimeouts } from '../../services/review-timeout-sweep.js';
 
 export const stuckIssueRunsSweep: Sweep = {
   id: 'stuck-issue-runs',
+  label: 'Stuck runs',
+  description: 'Reclaims expired leases, orphaned workflow runs, and review timeouts so work can continue.',
+  scope: 'project',
   intervalMs: 30_000,
   enabled: true,
 

@@ -1,0 +1,56 @@
+---
+title: Importing
+description: Import templates, bundles, and Squad Apps into Squadboard projects.
+---
+
+import {ArrowUploadRegular, DocumentCopyRegular, SettingsRegular} from '@fluentui/react-icons';
+import {IconCard, IconGrid, Screenshot, ScreenshotGrid} from '../../src/components/FluentDoc';
+
+# Importing
+
+Squadboard has two related import paths:
+
+1. **Templates** import or instantiate saved local artifacts such as teams and project templates.
+2. **Squad Apps** normalize a full `.squadapp/` package into the same project/bundle structures Squadboard uses at runtime.
+
+<IconGrid>
+  <IconCard icon={ArrowUploadRegular} title="Apply a package">Install built-ins, saved templates, or Squad Apps.</IconCard>
+  <IconCard icon={DocumentCopyRegular} title="Inspect the result">Review imported project state before running work.</IconCard>
+  <IconCard icon={SettingsRegular} title="Save what works">Export a known-good project as a template later.</IconCard>
+</IconGrid>
+
+<ScreenshotGrid>
+  <Screenshot src="/img/scenarios/spark-10-templates-projects.png" alt="Spark project templates page." caption="Project imports create or update a full operating model." />
+  <Screenshot src="/img/scenarios/spark-09-templates-ceremonies.png" alt="Spark ceremony templates page." caption="Ceremony imports are smaller building blocks inside a project." />
+  <Screenshot src="/img/scenarios/spark-16-settings-portability.png" alt="Spark portability settings." caption="Portability controls save reusable project state after you refine it." />
+</ScreenshotGrid>
+
+## Built-in project bundles
+
+The server scans `bundles/` and exposes built-in project bundles through:
+
+| Endpoint | Purpose |
+| --- | --- |
+| `GET /api/templates/builtin-projects` | List built-in project bundles |
+| `POST /api/templates/builtin-projects/:bundleId/apply` | Apply a built-in bundle to create a project |
+
+Use built-ins when you want a known-good starting point with a team, board, ceremonies, and seed backlog.
+
+## Saved templates
+
+Projects can be saved as templates and later instantiated:
+
+| Endpoint | Purpose |
+| --- | --- |
+| `POST /api/projects/:id/save-as-template` | Save a project template |
+| `POST /api/projects/instantiate-template/:templateId` | Create a new project from a saved template |
+
+Teams and workflows have parallel save/import flows. The Templates page exposes drag-import zones for team and project JSON.
+
+## Import safety
+
+Imports should be treated as code-adjacent configuration. Review agents, ceremonies, skills, tools, MCP server recipes, and routing rules before running imported work.
+
+## Relationship to Squad
+
+Imported skills can use the same SKILL.md convention as upstream [Squad](https://github.com/bradygaster/squad). Imported project teams still land in `.squad/` so Copilot CLI + Squad and Squadboard can share the operating model.

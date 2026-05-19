@@ -6,6 +6,8 @@ import { safeRelativeTime } from '../../utils/dates.ts'
 import StatusBadge from './StatusBadge.tsx'
 import CharterEditor from './CharterEditor.tsx'
 import AgentCapabilities from './AgentCapabilities.tsx'
+import { getAgentOriginBadge, isReadOnlyAgent } from './agent-origin.ts'
+import { formatAgentDisplayName } from './display-name.ts'
 
 interface AgentDetailPanelProps {
   projectId: string
@@ -34,12 +36,21 @@ type Tab = 'overview' | 'charter' | 'capabilities'
 export default function AgentDetailPanel({ projectId, agent, onClose }: AgentDetailPanelProps) {
   const [tab, setTab] = useState<Tab>('overview')
   const panelRef = useRef<HTMLDivElement>(null)
-  const { data: detail } = useAgent(projectId, agent.id)
+  const readOnlyAgent = isReadOnlyAgent(agent)
+  const { data: detail } = useAgent(projectId, agent.id, { enabled: !readOnlyAgent })
   const updateAgent = useUpdateAgent(projectId)
 
   const current = detail ?? agent
+  const currentReadOnly = isReadOnlyAgent(current)
+  const originBadge = getAgentOriginBadge(current)
+  const tabs: Tab[] = currentReadOnly ? ['overview'] : ['overview', 'charter', 'capabilities']
   const avatarBg = getAvatarColor(current.name)
   const initials = getInitials(current.name)
+  const displayName = formatAgentDisplayName(current.name)
+
+  useEffect(() => {
+    if (currentReadOnly && tab !== 'overview') setTab('overview')
+  }, [currentReadOnly, tab])
 
   useEffect(() => {
     function handleKey(e: KeyboardEvent) {
@@ -62,7 +73,7 @@ export default function AgentDetailPanel({ projectId, agent, onClose }: AgentDet
   function handleRetire() {
     if (
       !window.confirm(
-        `Retire ${current.name}? Retired agents are hidden from pickers and listings by default — they remain on disk and can be re-enabled later if needed.`,
+        `Retire ${displayName}? Retired agents are hidden from pickers and listings by default — they remain on disk and can be re-enabled later if needed.`,
       )
     ) {
       return
@@ -128,11 +139,25 @@ export default function AgentDetailPanel({ projectId, agent, onClose }: AgentDet
 
           {/* Name + role */}
           <div style={{ flex: 1, minWidth: 0 }}>
-            <Subtitle2 style={{ display: 'block', color: tokens.colorNeutralForeground1 }}>{current.name}</Subtitle2>
+            <Subtitle2 style={{ display: 'block', color: tokens.colorNeutralForeground1 }}>{displayName}</Subtitle2>
             <Caption1 style={{ display: 'block', color: tokens.colorNeutralForeground3, marginTop: tokens.spacingVerticalXXS }}>{current.role}</Caption1>
           </div>
 
           <StatusBadge status={current.status} />
+          <span
+            title={originBadge.title}
+            style={{
+              fontSize: '11px',
+              padding: '2px 8px',
+              borderRadius: '12px',
+              background: originBadge.background,
+              color: originBadge.color,
+              border: `1px solid ${originBadge.border}`,
+              flexShrink: 0,
+            }}
+          >
+            {originBadge.label}
+          </span>
 
           <button
             onClick={onClose}
@@ -160,7 +185,7 @@ export default function AgentDetailPanel({ projectId, agent, onClose }: AgentDet
             borderBottom: '1px solid var(--border)',
           }}
         >
-          {(['overview', 'charter', 'capabilities'] as Tab[]).map((t) => (
+          {tabs.map((t) => (
             <button
               key={t}
               onClick={() => setTab(t)}
@@ -186,6 +211,23 @@ export default function AgentDetailPanel({ projectId, agent, onClose }: AgentDet
         <div style={{ flex: 1, overflowY: 'auto', padding: '20px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
           {tab === 'overview' && (
             <>
+              {/* Model */}
+              {currentReadOnly && (
+                <div
+                  style={{
+                    padding: '10px 12px',
+                    borderRadius: '6px',
+                    background: 'rgba(121,192,255,0.10)',
+                    border: '1px solid rgba(121,192,255,0.25)',
+                    color: 'var(--text-muted)',
+                    fontSize: '12px',
+                    lineHeight: 1.5,
+                  }}
+                >
+                  {originBadge.title}. Squadboard will not edit, disable, retire, or write charter files for this member.
+                </div>
+              )}
+
               {/* Model */}
               <div>
                 <p style={labelStyle}>Model</p>
@@ -269,11 +311,11 @@ export default function AgentDetailPanel({ projectId, agent, onClose }: AgentDet
             </>
           )}
 
-          {tab === 'charter' && (
+          {!currentReadOnly && tab === 'charter' && (
             <CharterEditor projectId={projectId} agentId={current.id} />
           )}
 
-          {tab === 'capabilities' && (
+          {!currentReadOnly && tab === 'capabilities' && (
             <AgentCapabilities projectId={projectId} agentId={current.id} />
           )}
         </div>
@@ -292,7 +334,11 @@ export default function AgentDetailPanel({ projectId, agent, onClose }: AgentDet
             flexShrink: 0,
           }}
         >
-          {current.status === 'active' && (
+          {currentReadOnly ? (
+            <Caption1 style={{ color: tokens.colorNeutralForeground3 }}>
+              Read-only roster entry; no project lifecycle actions are available.
+            </Caption1>
+          ) : current.status === 'active' && (
             <button
               onClick={() => setStatus('disabled')}
               disabled={updateAgent.isPending}
@@ -313,7 +359,7 @@ export default function AgentDetailPanel({ projectId, agent, onClose }: AgentDet
             </button>
           )}
 
-          {current.status !== 'active' && (
+          {!currentReadOnly && current.status !== 'active' && (
             <button
               onClick={() => setStatus('active')}
               disabled={updateAgent.isPending}
@@ -334,7 +380,7 @@ export default function AgentDetailPanel({ projectId, agent, onClose }: AgentDet
             </button>
           )}
 
-          {current.status === 'disabled' && (
+          {!currentReadOnly && current.status === 'disabled' && (
             <button
               onClick={handleRetire}
               disabled={updateAgent.isPending}

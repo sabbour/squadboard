@@ -1,0 +1,2489 @@
+# Squadboard full documentation
+
+All docs pages concatenated for LLM ingestion.
+
+## Architecture
+
+Source: /squadboard/docs/developer-guide/architecture
+
+# Architecture
+
+Squadboard is a local-first control plane for multi-agent work. It complements upstream [Squad](https://github.com/bradygaster/squad): Squad remains the Copilot CLI driver and `.squad/` convention source, while Squadboard persists board state, decisions, runs, ceremonies, imports, and audit records.
+
+## Topology
+
+```mermaid
+flowchart LR
+  User[User / PM / Engineer] --> UI[React + Vite UI]
+  Copilot[Copilot CLI + Squad] --> MCP[Squadboard MCP server]
+  UI --> API[Express API + WebSocket]
+  MCP --> API
+  API --> DB[(Embedded Postgres-compatible store)]
+  API --> FS[Project .squad/ directory]
+  API --> SDK[Squad SDK bridge]
+  API --> GitHub[GitHub API]
+  SDK --> Agents[Project agents]
+```
+
+## Compared with upstream Squad architecture
+
+Upstream Squad is chat-first: the coordinator reads a request, spawns agents, agents read `.squad/` memory, Scribe merges decisions, and Ralph watches work. Squadboard keeps those concepts but moves the durable control plane into the server and UI.
+
+| Upstream Squad component | Squadboard counterpart |
+| --- | --- |
+| Coordinator routing engine | Deterministic prefilters plus bounded LLM coordinator decisions |
+| Agents with charters and memory | Project agents imported from or mirrored to `.squad/`, spawned through the server bridge |
+| `.squad/` memory | Shared repository files plus PostgreSQL-backed board/run/audit state |
+| Scribe | Shared close-out service and directive capture into `.squad/decisions/inbox/` |
+| Ralph | Opt-in Ready-column monitor plus GitHub follow-up signals when sync is configured |
+| GitHub issue board | Local semantic board first; GitHub sync is optional |
+
+The key difference is timing. Squadboard supports the multi-agent inner loop before GitHub: capture, shape, route, run, review, and approve can all happen locally before a PR or GitHub issue exists.
+
+## Inner-loop sequence
+
+```mermaid
+sequenceDiagram
+  autonumber
+  actor User
+  participant UI as Squadboard UI / MCP
+  participant Board as Local board
+  participant Coord as Coordinator gates
+  participant SDK as SquadClient bridge
+  participant Agent as Agent session
+  participant Review as Review / ceremony
+  participant GitHub as Optional GitHub sync
+
+  User->>UI: Capture ambiguous work
+  UI->>Board: Create or shape card
+  User->>Board: Move card to Ready
+  Board->>Coord: Evaluate ready pickup
+  Coord->>SDK: Start eligible agent run
+  SDK->>Agent: Spawn with charter, memory, skills, tools, MCP context
+  Agent-->>Board: Stream output and artifacts
+  Board->>Review: Approve, request changes, or close out
+  Review-->>GitHub: Open/sync when shipping policy says so
+```
+
+## Coordinator sequence
+
+```mermaid
+sequenceDiagram
+  actor User
+  participant Board as Squadboard UI or MCP
+  participant API as Server API
+  participant Coord as Coordinator
+  participant LLM as Bounded LLM
+  participant Agent as Project Agent
+
+  User->>Board: Create card or capture directive
+  Board->>API: Persist issue / inbox item
+  API->>Coord: Build coordinator input
+  Coord->>Coord: Apply deterministic prefilters
+  alt Concrete routing case
+    Coord-->>API: Dispatch or skip decision
+  else Ambiguous role fit
+    Coord->>LLM: Ask for schema-bound decision
+    LLM-->>Coord: Validated decision
+  end
+  API->>Agent: Spawn with charter, workspace, skills, MCP context
+  Agent-->>API: Run events and result
+  API-->>Board: Live status and close-out metadata
+```
+
+## Import sequence
+
+```mermaid
+sequenceDiagram
+  actor User
+  participant UI as Templates / Import UI
+  participant API as Template routes
+  participant Loader as Bundle loader
+  participant FS as .squad/ project files
+  participant DB as Database
+
+  User->>UI: Apply built-in bundle or upload template JSON
+  UI->>API: POST apply/import
+  API->>Loader: Validate schema and normalize artifacts
+  Loader->>FS: Write agents, ceremonies, skills, MCP config
+  Loader->>DB: Create project, board, issues, templates
+  API-->>UI: Return project/import result
+```
+
+## Engine invariants
+
+1. `agent_run` is the LLM execution boundary.
+2. The stepper is the sole spawner.
+3. Lease and heartbeat are authoritative liveness.
+4. Output validation happens after session completion and before recording.
+5. Fan-out materializes child workflow state atomically.
+
+## Important services
+
+| Service | Purpose |
+| --- | --- |
+| `coordinator/input-builder.ts` | Build normalized routing input |
+| `coordinator/prefilters.ts` | Deterministic routing gates |
+| `services/coordinator-routing-log.ts` | Persist non-dispatch decisions |
+| `sdk/spawn-prompt.ts` | Build Copilot CLI + Squad coexistence prompt context |
+| `services/directive-capture.ts` | Write decision inbox capture |
+| `services/scribe-closeout.ts` | Run close-out and expose metadata |
+| `services/ralph-monitor.ts` | Opt-in autonomous work monitor |
+| `services/bundle-loader.ts` | Apply bundles, templates, and Squad App-derived project artifacts |
+| `services/worktree-lifecycle.ts` | Track and clean safe worktrees |
+
+## Audit invariant
+
+Every automated coordinator action should produce an audit event or decision record with source, source detail, input hash or idempotency key, result, and reason.
+
+## Contributing docs
+
+Source: /squadboard/docs/developer-guide/contributing-docs
+
+# Contributing docs
+
+## Edit docs
+
+Docs site pages live in `packages/docs-site/docs`.
+
+Use this command for local development:
+
+```bash
+pnpm docs:dev
+```
+
+## Build docs
+
+```bash
+pnpm docs:build
+```
+
+The build runs `scripts/generate-llms.mjs` first, then Docusaurus.
+
+## LLM entry points
+
+Generated files live under `packages/docs-site/static`:
+
+- `llms.txt`
+- `llms-full.txt`
+
+Do not edit generated files by hand. Edit the docs pages and rerun the generator.
+
+## Writing style
+
+- Prefer task-oriented pages over architecture essays.
+- State defaults and safety boundaries.
+- Keep limitations explicit.
+- Link to the nearest runnable command when possible.
+- Avoid copying external docs. Use external docs only as information-architecture references.
+
+## Validation checklist
+
+```bash
+pnpm docs:build
+git diff --check
+```
+
+## Developer Guide
+
+Source: /squadboard/docs/developer-guide/index
+
+Use these pages when you need to understand the codebase or extend Squadboard itself.
+
+<IconGrid>
+  <IconCard icon={SettingsRegular} title="Architecture" to="/developer-guide/architecture">
+    Review the local-first app, server sweeps, coordinator, and agent-run lifecycle.
+  </IconCard>
+  <IconCard icon={DocumentCopyRegular} title="Contributing docs" to="/developer-guide/contributing-docs">
+    Update the documentation site and regenerate docs assets safely.
+  </IconCard>
+</IconGrid>
+
+## Agents and workspaces
+
+Source: /squadboard/docs/features/agents-and-workspaces
+
+# Agents and workspaces
+
+Squadboard treats agents as durable project participants with explicit origin and execution context.
+
+<IconGrid>
+  <IconCard icon={BotRegular} title="Project agents">Agents live with project context and can be shared through `.squad/`.</IconCard>
+  <IconCard icon={SparkleRegular} title="Consult">Ambiguous decisions can be explored before they mutate project state.</IconCard>
+  <IconCard icon={SettingsRegular} title="Workspaces">Scratch, directory, and worktree strategies isolate parallel runs.</IconCard>
+</IconGrid>
+
+<ScreenshotGrid>
+  <Screenshot src="/img/scenarios/spark-06-agents.png" alt="Spark project agents." caption="Agent roles and expertise are visible before routing work." />
+  <Screenshot src="/img/scenarios/spark-08-consult.png" alt="Spark Consult page." caption="Consult remains proposal-driven; it is not a hidden project mutation path." />
+</ScreenshotGrid>
+
+## Capability summary
+
+| Capability | What it gives you |
+| --- | --- |
+| Project agents | Repository-owned roles, charters, expertise, and origin metadata. |
+| Consult | Proposal-driven brainstorming with project agents or raw models before state changes. |
+| Spawn context | Charter, workspace, requester, history, skills, MCP/tool context, and validation expectations. |
+| Workspace isolation | Scratch, directory, and worktree strategies for parallel runs with auditable cleanup metadata. |
+
+For operating details, use [Agents, skills, tools, and MCP servers](../user-guide/agents-skills.mdx), [MCP integration](../user-guide/mcp.mdx), and [Squad integration](../user-guide/squad-integration.mdx).
+
+## Board and runs
+
+Source: /squadboard/docs/features/board-and-runs
+
+# Board and runs
+
+Each project owns a durable board and run history. Cards are the stable objects that deterministic automation can inspect, route, skip, and audit.
+
+<IconGrid>
+  <IconCard icon={ClipboardTaskListLtrRegular} title="Board state">Cards carry title, body, status, labels, owners, comments, and parent links.</IconCard>
+  <IconCard icon={FlashRegular} title="Run actions">Manual or coordinator-selected runs attach execution to a card.</IconCard>
+  <IconCard icon={ChartMultipleRegular} title="Audit history">Routing, monitor decisions, and lifecycle changes remain queryable.</IconCard>
+</IconGrid>
+
+<ScreenshotGrid>
+  <Screenshot src="/img/scenarios/spark-03-board-plan.png" alt="Spark board before adding a launch-note card." caption="Backlog cards hold launch work until the team is ready to route it." />
+  <Screenshot src="/img/scenarios/spark-05-board-after-create.png" alt="Spark board after adding a launch-note card." caption="New work becomes durable board state before an agent starts." />
+</ScreenshotGrid>
+
+## Board model
+
+| Capability | What it gives you |
+| --- | --- |
+| Durable cards | Title, body, status, labels, assignees, comments, parent links, and history remain queryable. |
+| Ready pickup | The visible **Ready** column is also the stored `ready` status, so code, MCP tools, and the UI all use the same word. |
+| Runtime-owned progress | In Progress is owned by active or pending runs instead of manual drag-and-drop alone. |
+| Audit trail | Routing decisions and skipped dispatches are recorded instead of hidden in prompt text. |
+| Semantic columns | Automation follows `backlog`, `ready`, `in_progress`, `review`, `done`, or `custom` semantics, not display labels. |
+
+## Relationship to Squad project boards
+
+Upstream Squad treats labels as the state machine and GitHub Project boards as a read-mostly projection. Squadboard uses the same idea locally before work reaches GitHub: board state is durable, column semantics drive automation, and GitHub labels are only required when you enable GitHub sync.
+
+| Squad project-board concept | Squadboard behavior |
+| --- | --- |
+| `go:no` / backlog | Keep in Backlog until the work is scoped enough to route. |
+| `go:needs-research` | Use Consult, a Spike ceremony, or a custom research column before Ready. |
+| `go:yes` and no `squad:*` assignment | Move to Ready; the coordinator can assign the best agent. |
+| `go:yes` plus `squad:{member}` | Ready card with an explicit assignee; Ralph-equivalent pickup can dispatch it. |
+| Issue closed / PR merged | Done column or accepted output, optionally mirrored to GitHub. |
+
+For operating details, use [Board and runs](../user-guide/board-and-runs.mdx), [Coordinator loops](../user-guide/coordinator-loops.mdx), and [Squad integration](../user-guide/squad-integration.mdx).
+
+## Ceremonies and automation
+
+Source: /squadboard/docs/features/ceremonies-and-automation
+
+# Ceremonies and automation
+
+Ceremonies are named processes that wrap workflow graphs in a trigger and metadata model.
+
+<IconGrid>
+  <IconCard icon={ChartMultipleRegular} title="Ceremonies">Reusable rituals for review, triage, close-out, and readiness.</IconCard>
+  <IconCard icon={ArrowSyncRegular} title="Triggers">Manual, scheduled, GitHub event, and agent-signal entry points.</IconCard>
+  <IconCard icon={ClipboardRegular} title="Close-out">Scribe records health, summaries, and next-wave hints through automation paths.</IconCard>
+</IconGrid>
+
+<ScreenshotGrid>
+  <Screenshot src="/img/scenarios/spark-09-templates-ceremonies.png" alt="Spark ceremony templates page." caption="Reusable ceremony templates help projects start from known rituals." />
+  <Screenshot src="/img/scenarios/spark-11-ceremonies.png" alt="Spark ceremonies page." caption="Project ceremonies have visible triggers, versions, and lifecycle state." />
+</ScreenshotGrid>
+
+## Capability summary
+
+| Capability | What it gives you |
+| --- | --- |
+| Ceremony templates | Repeatable project rituals that can be reviewed before deployment. |
+| Triggered workflows | Manual, scheduled, GitHub-event, and agent-signal entry points. |
+| Lifecycle automation | Scribe close-out, run recovery, review timeouts, and Ready pickup happen through server loops. |
+| Ralph-equivalent monitor | Opt-in project monitor that looks at Ready work before GitHub follow-up signals. |
+| Visual designer | Mainstream linear and fan-out workflow editing, with YAML review for advanced graphs. |
+
+For operating details, use [Ceremonies and workflows](../user-guide/ceremonies-workflows.md), [Built-in templates and defaults](../user-guide/built-ins.mdx), and [Coordinator loops](../user-guide/coordinator-loops.mdx).
+
+## Copilot CLI + Squad coexistence
+
+Source: /squadboard/docs/features/copilot-squad-coexistence
+
+# Copilot CLI + Squad coexistence
+
+Squadboard is not trying to replace Copilot CLI or upstream [Squad](https://github.com/bradygaster/squad). The goal is coexistence: the CLI can remain the interactive place where ambiguous work is discussed, while Squadboard becomes the durable place where cards, routing decisions, runs, ceremonies, and audit records live.
+
+## Deterministic routing
+
+The server handles concrete cases before asking an LLM:
+
+- named-agent requests
+- blocked parent issues
+- human-only operations such as credentials, signing, billing, and organization-level secrets
+- all-agents-busy ambiguity
+- backlog no-match gates
+- thin issue ambiguity
+- circuit-breaker lockouts
+
+## LLM role
+
+The LLM is reserved for ambiguity: semantic role fit, charter interpretation, summarization, and converting fuzzy instructions into structured proposals.
+
+## Spawn fidelity
+
+Server-spawned agents receive charter, team root, requester, workspace path/mode, history and decision-reading instructions, assigned skills, MCP context, drop-box guidance, and validation expectations.
+
+See [Copilot CLI + Squad coexistence](../user-guide/copilot-squad-coexistence.md) for the operating model.
+
+## Integrations
+
+Source: /squadboard/docs/features/integrations
+
+# Integrations
+
+Squadboard exposes product state and orchestration through integration surfaces instead of requiring direct database access.
+
+<IconGrid>
+  <IconCard icon={ArrowSyncRegular} title="GitHub">Issue, PR, check, review, and activity signals can update project state.</IconCard>
+  <IconCard icon={PlugConnectedRegular} title="MCP">Copilot CLI, VS Code, and services call explicit board and run tools.</IconCard>
+  <IconCard icon={ArrowUploadRegular} title="Imports">Templates, bundles, and Squad Apps package reusable operating models.</IconCard>
+</IconGrid>
+
+<ScreenshotGrid>
+  <Screenshot src="/img/scenarios/spark-13-mcp-list.png" alt="Spark MCP servers page." caption="MCP servers are project-visible tool bridges." />
+  <Screenshot src="/img/scenarios/spark-17-settings-github.png" alt="Spark GitHub integration settings." caption="GitHub integration is configured from project settings." />
+  <Screenshot src="/img/scenarios/spark-10-templates-projects.png" alt="Spark project template import page." caption="Project imports can seed a full operating model." />
+</ScreenshotGrid>
+
+## Capability summary
+
+| Surface | What it is for |
+| --- | --- |
+| GitHub | Mirror issue/PR signals, checks, review state, and merge outcomes into project state. |
+| MCP | Let Copilot CLI, VS Code, and services call explicit board, run, capture, and status tools. |
+| SDK and CLI | Script project operations, Scribe primitives, bundle import/export, and local development tasks. |
+| Squad Apps | Package a board, team, ceremonies, skills, tools, routing rules, and docs as an installable project model. |
+| PostgreSQL | Store Squadboard product state and optionally Squad state in a shared database. Multiple compatible processes can share the same database when pointing to the same PostgreSQL instance via `DATABASE_URL`. |
+
+For operating details, use [Squad integration](../user-guide/squad-integration.mdx), [MCP integration](../user-guide/mcp.mdx), [Squad Apps](../user-guide/squad-apps.mdx), [Importing](../user-guide/importing.mdx), and [Storage provider alignment](../user-guide/storage-provider.mdx).
+
+## Feature overview
+
+Source: /squadboard/docs/features/overview
+
+# Features
+
+Squadboard combines a durable work board, deterministic orchestration, and LLM-assisted ambiguity handling. The feature set is grouped by how users experience the product.
+
+<IconGrid>
+  <IconCard icon={ClipboardTaskListLtrRegular} title="Core orchestration">Board cards, routing decisions, agent runs, and audit history.</IconCard>
+  <IconCard icon={ChartMultipleRegular} title="Automation">Ceremonies, schedules, lifecycle close-out, and opt-in monitor decisions.</IconCard>
+  <IconCard icon={PlugConnectedRegular} title="Integrations">GitHub, MCP, SDK, CLI, imports, and Squad Apps.</IconCard>
+  <IconCard icon={SettingsRegular} title="Operations">Project settings, portability, costs, health, and reliability surfaces.</IconCard>
+</IconGrid>
+
+<ScreenshotGrid>
+  <Screenshot src="/img/scenarios/spark-03-board-plan.png" alt="Spark board with launch-planning work." caption="The board is the operational center for project work." />
+  <Screenshot src="/img/scenarios/spark-06-agents.png" alt="Spark project agents." caption="Project agents and charters keep role context explicit." />
+  <Screenshot src="/img/scenarios/spark-11-ceremonies.png" alt="Spark ceremonies list." caption="Ceremonies make recurring project rituals durable." />
+  <Screenshot src="/img/scenarios/spark-13-mcp-list.png" alt="Spark MCP servers page." caption="MCP connects external clients through explicit tool surfaces." />
+</ScreenshotGrid>
+
+| Area | Start here |
+| --- | --- |
+| Core orchestration | [Workflow engine](./workflow-engine.md), [Copilot CLI + Squad coexistence](./copilot-squad-coexistence.md), [Board and runs](./board-and-runs.mdx) |
+| Automation | [Ceremonies and automation](./ceremonies-and-automation.mdx), [Agents and workspaces](./agents-and-workspaces.mdx) |
+| Integrations | [GitHub, MCP, SDK, and CLI](./integrations.mdx), [Storage provider alignment](../user-guide/storage-provider.mdx), [Squad tools and hooks](../user-guide/squad-tools-hooks.mdx) |
+| Operations | [Reliability and real-time UI](./reliability-and-ui.md), [Configuration](../user-guide/configuration.mdx), [Security](../user-guide/security.md) |
+
+## What is included now
+
+- Durable workflow runs with lease and heartbeat recovery.
+- Server-owned coordinator routing with deterministic prefilters.
+- Agent run context that mirrors the Copilot CLI + Squad driver experience.
+- Board, run drawer, activity feed, and WebSocket event updates.
+- Ceremonies, schedules, GitHub event triggers, and lifecycle automation.
+- Scribe close-out through daemon/coordinator lifecycle paths.
+- Ralph-style monitor decisions for opted-in projects.
+- MCP and SDK entry points for Copilot CLI, VS Code, scripts, and services.
+- A local-first multi-agent inner loop that can run before work is mirrored to GitHub.
+
+## Design principle
+
+Squadboard should make deterministic decisions in code whenever the answer is concrete, and use LLM calls only for semantic ambiguity such as role fit, summarization, and interpreting human instructions.
+
+## Reliability and real-time UI
+
+Source: /squadboard/docs/features/reliability-and-ui
+
+# Reliability and real-time UI
+
+Squadboard is local-first, but it still treats orchestration as durable system state.
+
+## Persistence
+
+- Local database-backed projects, cards, runs, events, and settings.
+- Versioned migrations.
+- Backup and restore flows for project state.
+- Health and close-out reports under `.squad/` where available.
+
+## Real-time UI
+
+- Live run drawer for agent output.
+- Activity feed for workflow, routing, approval, retry, and completion events.
+- Optimistic UI updates reconciled with server state.
+- Project-scoped WebSocket fan-out.
+
+## Operational posture
+
+Failures should surface as visible state: failed runs, skipped dispatch records, dead ceremony triggers, audit findings, and monitor idle decisions.
+
+## Heartbeat and sweeps
+
+The Heartbeat page shows the background sweeps that keep a project moving:
+
+- what each sweep does
+- how often it runs
+- whether it is enabled or paused
+- its last run result and errors
+- a recent activity timeline seeded from server history and live WebSocket ticks
+
+Project Heartbeat pages show project context while preserving system-level sweeps that are not tied to a single project, such as stale browser presence cleanup.
+
+## Current alpha limits
+
+Source: /squadboard/docs/features/roadmap-gaps
+
+# Current alpha limits
+
+The current alpha focuses on Copilot CLI + Squad coexistence, durable orchestration, and local-first operation. Some capabilities are intentionally constrained until the product has more dogfood evidence and clearer policy controls.
+
+## Current limits
+
+- Ralph can recommend and log follow-up actions for GitHub issues and PRs that were not created by Ready-column pickup. It does not automatically merge PRs or apply fixes yet; those actions still require explicit human approval.
+- When two agents look similarly qualified, Squadboard records the selected agent and rationale in routing history so reviewers can audit why the assignment happened.
+- Visual workflow editing covers common linear and fan-out authoring, while advanced branching still falls back to YAML.
+
+## Future areas
+
+- Advanced fan-out patterns and dynamic child counts.
+- External webhook listener for `wait_event` callbacks.
+- Cost-tracking dashboards and burndown charts.
+- Agent leaderboard and performance views.
+- Cloud backup targets and audit log export.
+- Multi-tenant RBAC.
+
+## Workflow engine
+
+Source: /squadboard/docs/features/workflow-engine
+
+# Workflow engine
+
+The workflow engine owns long-running work and keeps it recoverable.
+
+## Durable runs
+
+- Row-locked stepper so only one executor advances a run at a time.
+- Lease and heartbeat liveness for crash recovery.
+- Workflow state stored in the local database instead of ephemeral prompts.
+- Lifecycle metadata for run state, workspace paths, branch names, and cleanup.
+
+## Step catalog
+
+Common step kinds include:
+
+- `agent_run`
+- `peer_review`
+- `approve`
+- `fan_out`
+- `branch`
+- `route`
+- `retry_wrap`
+- `wait_event`
+- `wait_timer`
+- `github_pr`
+- `github_pr_wait_merged`
+
+## Safety behavior
+
+Retries, waits, fan-out, and approvals are deterministic engine behavior. Agents can suggest what should happen next, but the server records and validates the transition.
+
+## Getting Started
+
+Source: /squadboard/docs/getting-started/index
+
+Start here if you are setting up Squadboard for the first time or evaluating the alpha workflow with the Spark project. Read the pages in order if you want one continuous path: install locally, finish the quickstart, then continue into the Spark tutorials.
+
+The tutorials follow the same operating flow throughout: create Spark, review the team, delegate cards by moving them to Ready, approve the work that needs judgment, and watch the board, ceremonies, and MCP surfaces stay in sync.
+
+<IconGrid>
+  <IconCard icon={FolderRegular} title="Install" to="/getting-started/installation">
+    Set up the local-first app, server, docs package, and database.
+  </IconCard>
+  <IconCard icon={SparkleRegular} title="Quickstart" to="/getting-started/quickstart">
+    Create Spark, capture work, assign an agent, and watch the board advance.
+  </IconCard>
+  <IconCard icon={ClipboardTaskListLtrRegular} title="Tutorials" to="/getting-started/tutorials">
+    Walk through complete end-to-end scenarios with screenshots from the same Spark workspace.
+  </IconCard>
+</IconGrid>
+
+After the tutorials, move into the [Product Guide](/features/overview) to understand the underlying board, runs, ceremonies, imports, and Copilot CLI + Squad coexistence model.
+
+## Installation
+
+Source: /squadboard/docs/getting-started/installation
+
+# Installation
+
+## Prerequisites
+
+- Node.js 20 or newer
+- pnpm 8 or newer
+- Git
+- Optional: GitHub CLI if you want GitHub sync and PR automation
+
+## Install from source
+
+```bash
+git clone https://github.com/sabbour/squadboard.git
+cd squadboard
+pnpm install
+```
+
+## Start the app
+
+```bash
+pnpm run dev
+```
+
+This starts the Express/WebSocket backend and the React/Vite frontend. The frontend is available at `http://localhost:5173`.
+
+Squad state uses PostgreSQL by default. Existing `.squad/` files are imported once into an empty DB-backed project. Use `pnpm run dev:fs` if you intentionally want repository `.squad/` files to remain the live state store.
+
+## Start the docs site
+
+```bash
+pnpm docs:dev
+```
+
+The Docusaurus site is mounted with `baseUrl: /docs/`, so local links match the production shape used by the hosted docs.
+
+## Production builds
+
+Build everything:
+
+```bash
+pnpm build
+```
+
+Build only the docs site:
+
+```bash
+pnpm docs:build
+```
+
+Serve the built docs:
+
+```bash
+pnpm docs:serve
+```
+
+## Optional MCP setup
+
+Build the CLI, then point your MCP client at the local command:
+
+```json
+{
+  "mcpServers": {
+    "squadboard": {
+      "command": "node",
+      "args": ["/absolute/path/to/squadboard/packages/cli/dist/index.js", "mcp"],
+      "env": {
+        "SQUADBOARD_SQUAD_STORAGE_PROVIDER": "postgresql"
+      }
+    }
+  }
+}
+```
+
+Set `SQUADBOARD_DEFAULT_PROJECT_ID` if you want project-scoped tools to work without passing a project ID every time.
+
+To create the Copilot CLI config from the CLI, run `squadboard init --write-mcp-config` in the repository. It writes `.copilot/mcp-config.json` with the default PostgreSQL provider; add `--squad-storage fs` if you want filesystem fallback.
+
+## Learning path
+
+Source: /squadboard/docs/getting-started/learning-path
+
+# Learning path
+
+## I want to run Squadboard locally
+
+1. [Installation](./installation.md)
+2. [Quickstart tutorial](./quickstart.mdx)
+3. [Board and Runs](../user-guide/board-and-runs.mdx)
+4. [MCP Integration](../user-guide/mcp.mdx)
+
+## I want Squadboard to coexist with Copilot CLI + Squad
+
+1. [Copilot CLI + Squad coexistence](../user-guide/copilot-squad-coexistence.md)
+2. [Squad Integration](../user-guide/squad-integration.mdx)
+3. [Scribe and Ralph](../user-guide/scribe-ralph.md)
+4. [Architecture](../developer-guide/architecture.md)
+
+## I want to design workflows
+
+1. [Ceremonies and Workflows](../user-guide/ceremonies-workflows.md)
+2. [Squad Apps](../user-guide/squad-apps.mdx)
+3. [Importing](../user-guide/importing.mdx)
+4. [GitHub Integration](../user-guide/github.md)
+5. [Security](../user-guide/security.md)
+
+## I am debugging or extending Squadboard
+
+1. [Architecture](../developer-guide/architecture.md)
+2. [Contributing Docs](../developer-guide/contributing-docs.md)
+3. [Troubleshooting](../reference/troubleshooting.md)
+4. [FAQ](../reference/faq.md)
+
+## Quickstart
+
+Source: /squadboard/docs/getting-started/quickstart
+
+# Quickstart
+
+The shortest path through Squadboard. In about ten minutes you will:
+
+1. Create the **Spark** project.
+2. Confirm the team that will pick up work.
+3. Capture a launch idea and shape it into a card.
+4. Move the card to **Ready** and watch Squadboard pick it up automatically.
+5. Inspect the run.
+6. Run a ceremony to close the loop.
+
+This is the same Spark loop the [tutorials](./tutorials/index.mdx) walk through in detail. Do the quickstart first to get the shape; do the tutorials when you want to understand each step deeply.
+
+If Squadboard is not installed yet, do [Installation](./installation.md) first.
+
+## 1. Create Spark
+
+Open Squadboard. On the **Projects** page, create a new project named `Spark` and point it at a repository folder. If the folder already has `.squad/`, Squadboard reads it; if not, choose the **Default Software Project** template and it will scaffold the basics.
+
+<Screenshot src="/img/scenarios/spark-01-projects.png" alt="Squadboard Projects page with the Spark project listed." caption="Spark is the project you will reuse across the quickstart and every tutorial." />
+
+Open Spark. The dashboard is the cockpit — confirm the repository path is right before you move anything.
+
+<Screenshot src="/img/scenarios/spark-02-dashboard.png" alt="The Spark dashboard with project identity and board health." caption="If the project path is wrong here, fix it before you queue work." />
+
+## 2. Confirm the team
+
+Open **Agents**. Every agent needs a name, a role, and a charter — those are what the coordinator uses to assign work, not the name alone.
+
+<Screenshot src="/img/scenarios/spark-06-agents.png" alt="Spark Agents page showing the launch lead and integration engineer with roles and expertise." caption="Two agents are enough for the quickstart: a launch lead and an integration engineer." />
+
+If a role is missing, click **Cast Team** and accept the proposal. Five minutes here saves bad assignments later.
+
+## 3. Capture and shape a card
+
+Open the **Board**. You should see five columns: **Backlog → Ready → In Progress → In Review → Done**.
+
+<Screenshot src="/img/scenarios/spark-03-board-plan.png" alt="Spark board with Backlog and Ready columns visible." caption="Backlog is for ideas being shaped. Ready is the pickup boundary." />
+
+Click **Create issue** and fill in a card. Title it with a concrete outcome; write a body that explains user impact and what evidence to link when the work is done.
+
+<Screenshot src="/img/scenarios/spark-04-new-card.png" alt="New Spark card dialog being filled out for the launch-note publish work." caption="The body should be specific enough to route but ambiguous enough to leave the agent room to interpret." />
+
+Example body:
+
+```md
+Publish a short Spark launch note that explains how Squadboard relates to upstream Squad
+and where imports live.
+
+When done, link the published file and update the tutorial copy if the UI moved.
+```
+
+Save. The card lands in **Backlog**.
+
+<Screenshot src="/img/scenarios/spark-05-board-after-create.png" alt="Spark board after the launch-note card lands in Backlog beside the existing launch checklist." caption="Nothing automated runs against Backlog. The card waits for you to decide it is ready." />
+
+## 4. Move to Ready — pickup is automatic
+
+Drag the card from **Backlog** into **Ready**. This is the only step that triggers execution.
+
+When the card enters Ready, Squadboard runs deterministic gates, picks the best agent from the roster you reviewed in step 2, creates an issue run, and starts it. The card moves into **In Progress** under the runtime's control. There is no separate play button.
+
+<Screenshot src="/img/scenarios/spark-19-ready-pickup.png" alt="Spark board after Ready pickup assigns the card automatically." caption="The Ready card now shows the assigned agent and an active run." />
+
+## 5. Inspect the run
+
+Click the card. The right-hand panel shows the issue run: which agent picked it up, the prompt context, the model output, and any tool calls.
+
+Use this to confirm three things: the right agent was chosen, the prompt included the context you expected, and the output matches the outcome you wrote in step 3. If the assignment was wrong, fix the role or charter in **Agents** — do not override the assignment by hand.
+
+<Screenshot src="/img/scenarios/spark-20-run-detail.png" alt="Spark card detail panel showing the active Work Pickup run and assigned agent." caption="The run detail is where you inspect the assignment, run state, and output before moving the card forward." />
+
+## 6. Close the loop with a ceremony
+
+Open **Ceremonies** and run **Spark Launch Review**. The ceremony walks its workflow steps (route → agent_run → approve), summarizes the runs you just produced, and records the handoff.
+
+<Screenshot src="/img/scenarios/spark-11-ceremonies.png" alt="Spark Ceremonies page listing the Spark Launch Review ceremony." caption="Ceremonies give recurring rituals a durable trigger, version, and run history." />
+
+That's the full loop: capture → shape → Ready → pickup → run → review.
+
+## Where to go next
+
+- Do the [tutorials](./tutorials/index.mdx) for each step in depth.
+- Wire Copilot CLI and GitHub to the same Spark via [Tutorial 4](./tutorials/connect-tools).
+- Read [Board and Runs](../user-guide/board-and-runs.mdx) to understand the pickup and run lifecycle in detail.
+
+## 2. Cast and review the team
+
+Source: /squadboard/docs/getting-started/tutorials/cast-the-team
+
+# 2. Cast and review the team
+
+Spark needs a small, project-specific team — not a generic pool of assistants. In this tutorial, you will review who is on the roster, fill any role gaps with **Cast Team**, and use **Consult** to think out loud before you commit anything to the board.
+
+This tutorial assumes you completed [Tutorial 1](./connect-spark.mdx) and have Spark open.
+
+## Why this matters
+
+When you move a card to Ready (next tutorial), Squadboard's coordinator decides who picks it up. That decision uses *agent role + charter + skills + labels on the card*, not the agent's name. A roster with thin or missing roles produces bad assignments — so give it five minutes here before queuing work.
+
+## 1. Open the roster
+
+Open **Agents**. Spark from Tutorial 1 should have at least a launch lead and an integration owner already present (either from the template or from your existing `.squad/`).
+
+<Screenshot src="/img/scenarios/spark-06-agents.png" alt="Spark Agents page listing the launch lead and integration engineer with roles and expertise." caption="Each agent needs a name, a role, and expertise. Names alone are not enough for assignment." />
+
+For each agent, confirm:
+
+1. **Name** is stable and easy to reference in cards and labels.
+2. **Role** describes an outcome (Launch lead, Integration engineer), not just a technology.
+3. **Expertise** covers the recurring decisions Spark will make.
+
+If any agent is missing a role or charter, fix it now. Charters live under `.squad/` and are shared with upstream Squad and Copilot CLI — edits here are durable.
+
+## 2. Fill role gaps with Cast Team
+
+If Spark is missing a role you know it needs — say a reviewer or a docs lead — click **Cast Team**. Cast Team turns "what team should Spark have?" into a reviewable proposal you can edit before accepting.
+
+<Screenshot src="/img/scenarios/spark-07-team-casting.png" alt="Cast Team dialog suggesting a proposed Spark roster." caption="Cast Team is a draft proposal. Accept the parts that fit, edit the charters, and discard the rest." />
+
+Accept only the roles you actually need. A small team with sharp charters routes better than a big team with vague ones.
+
+## 3. Use Consult when the work is still ambiguous
+
+Before queuing a card, you often want to think it through with an agent or with a raw model. That is what **Consult** is for. It is exploration; nothing it produces changes Spark until you create a card or accept a proposal.
+
+Open **Consult → New consult**, pick **Model** (or a specific Spark agent), and ask a narrow question. For example:
+
+```text
+Spark needs a launch note that explains Squadboard's relationship to upstream Squad.
+What are the three points the launch lead should cover, and what tone should it use?
+```
+
+<Screenshot src="/img/scenarios/spark-08-consult.png" alt="Spark Consult page in Model mode with a launch-note prompt drafted." caption="Consult is for brainstorming. The board is for durable execution. Decide which one you need before opening." />
+
+Rules of thumb:
+
+- Use **Consult** when the right answer depends on judgment, tone, or incomplete information.
+- Use a **board card** when the answer needs durable execution, audit trail, and a run history.
+- When Consult produces something good, promote it: copy the wording into a new board card so the work becomes trackable.
+
+## What you should have now
+
+- A Spark roster where every agent has a name, role, and charter.
+- A casting decision recorded (either "current roster is fine" or "added X via Cast Team").
+- A Consult conversation that helped you sharpen the next card — or a confirmed plan to skip Consult and go straight to the board.
+
+Continue with [3. Run the Spark launch wave →](./run-the-launch-wave.mdx) to capture work, move it into Ready, watch automatic pickup, and inspect what the agent produced.
+
+## 1. Connect Spark
+
+Source: /squadboard/docs/getting-started/tutorials/connect-spark
+
+# 1. Connect Spark
+
+Spark is the project you will use for every tutorial that follows. This page gets Spark created and pointed at a repository, no matter which starting point you have. By the end, you should be looking at the Spark dashboard with a healthy board ready for the next tutorial.
+
+If you have not installed Squadboard yet, follow [Installation](../installation.md) first, then come back here.
+
+## Pick your starting point
+
+Choose the path that matches what you already have. All three converge on the same Spark project.
+
+<IconGrid>
+  <IconCard icon={FolderAddRegular} title="A. New repo with Squad initialized">Best when you already ran <code>squad init</code> in a fresh repo and want Squadboard to give that team a board.</IconCard>
+  <IconCard icon={DocumentCopyRegular} title="B. Empty workspace + project template">Best when you have nothing yet and want sensible defaults: backlog → ready → in progress → in review → done, plus example ceremonies.</IconCard>
+  <IconCard icon={BranchRegular} title="C. Existing repo already running Squad">Best when the repo has a populated <code>.squad/</code>, agents, and history you do not want Squadboard to overwrite.</IconCard>
+</IconGrid>
+
+## 1. Create the project
+
+Open Squadboard. The first screen is **Projects** — the boundary for every board card, agent, ceremony, run, MCP server, and integration you create.
+
+<Screenshot src="/img/scenarios/spark-01-projects.png" alt="Squadboard Projects page with the Spark project listed." caption="Every tutorial uses one project named Spark. Reuse it; do not create a second project per tutorial." />
+
+Click **New project**, name it `Spark`, and pick the repository folder:
+
+- **Path A or C** — choose the existing repository that already owns `.squad/`. Squadboard reads that folder as the operating model; it will not overwrite the agents, decisions, or history that are already there.
+- **Path B** — pick an empty folder, then choose the **Default Software Project** template. Squadboard scaffolds `.squad/` with a roster, routing rules, casting state, and example ceremonies.
+
+Either way, Spark now exists.
+
+## 2. Read the dashboard before touching anything
+
+Open Spark from the project list. The dashboard is the cockpit: project identity, board state, recent runs, and automation status all in one place. Confirm the project name and repository path match what you intended before you move work around.
+
+<Screenshot src="/img/scenarios/spark-02-dashboard.png" alt="The Spark dashboard showing project identity and board health." caption="The dashboard is the first sanity check. If the repository path is wrong here, fix it before adding cards." />
+
+## 3. Confirm the board exists with the expected columns
+
+Open **Board**. You should see five columns — **Backlog → Ready → In Progress → In Review → Done**. Template- and existing-repo paths may already have cards; the new-repo path will be empty except for any seeded launch work.
+
+<Screenshot src="/img/scenarios/spark-03-board-plan.png" alt="Spark board with backlog and ready columns visible." caption="Ready is intentionally a separate column. It is the pickup boundary — moving a card there starts work automatically (Tutorial 3)." />
+
+You do not need to add a card yet. The board is just here so you know where work will live.
+
+## 4. (Optional) Import a Squad App for more than defaults
+
+Squad Apps package reusable team + ceremonies + skills + tool recipes + seed work as one unit. Use them when the default template is too thin for the project you are running.
+
+Open **Templates** and switch to the **Projects** tab to see what is available.
+
+<Screenshot src="/img/scenarios/spark-10-templates-projects.png" alt="Project templates available for Spark, including the default software project and additional Squad Apps." caption="Project-level imports can carry team, board layout, ceremonies, skills, tools, MCP recipes, and seed backlog. Read the manifest before applying." />
+
+Before applying any import, check:
+
+1. Which agents and charters will be added.
+2. Which skills or tool instructions will be injected into agent prompts.
+3. Whether MCP servers or GitHub settings need secrets you have not configured yet.
+4. What seed work will appear on the Spark board.
+
+For the rest of these tutorials, the default software template is enough. Heavier imports (launch-readiness, integration-validation) are reviewed in [Tutorial 4](./connect-tools.mdx).
+
+## What you should have now
+
+- A Spark project visible on the Projects page.
+- A dashboard pointed at the repository you intended.
+- A board with the standard five columns.
+- (Optional) An imported Squad App you reviewed before applying.
+
+Continue with [2. Cast and review the team →](./cast-the-team.mdx) to give Spark a roster the coordinator can actually route work to.
+
+## 4. Connect Copilot CLI, Squad, and MCP
+
+Source: /squadboard/docs/getting-started/tutorials/connect-tools
+
+# 4. Connect Copilot CLI, Squad, and MCP
+
+Spark works on its own. It becomes a lot more useful once the same project state is reachable from Copilot CLI, upstream Squad, and (when you are ready) GitHub. This tutorial wires the outer surfaces around the loop you ran in Tutorial 3.
+
+## How these three pieces fit together
+
+Squadboard is the **multi-agent inner loop** — capture, shape, route, run, review — that happens *before* work reaches GitHub.
+
+- **Upstream [Squad](https://github.com/bradygaster/squad)** owns the on-disk operating convention: agents, charters, decisions, ceremonies all live in `.squad/`. Squadboard reads and writes that folder; it does not replace it.
+- **Copilot CLI** uses MCP to call Spark's tools (`capture`, `create_issue`, `run_agent`, `get_run_status`) instead of editing the database directly.
+- **GitHub** is the outer loop — issues, pull requests, checks, review signals — that reflects work *after* the inner loop has done its job.
+
+:::note Shared storage status
+By default, Squadboard stores Squad state in **PostgreSQL** (the same database that stores product state). Existing `.squad/` files are imported once into an empty DB-backed project. Filesystem `.squad/` mode is still available as an explicit fallback.
+
+**Quick setup:**
+```bash
+pnpm run dev
+```
+
+This uses Squadboard's embedded PostgreSQL database (PGlite) by default and imports any existing `.squad/` files on startup (one-time). **Four approaches:**
+1. **Embedded PostgreSQL (zero-config)** — Run `pnpm run dev`, `pnpm run dev:postgresql`, or `squadboard init`; PGlite handles everything.
+2. **External PostgreSQL (multi-machine)** — Override with `DATABASE_URL` pointing to a shared instance; multiple compatible processes can share state directly.
+3. **MCP bridge (portable)** — Squadboard exposes tools; Copilot CLI calls them instead of direct DB access (works with stock Copilot CLI).
+4. **Filesystem fallback** — Run `pnpm run dev:fs` or `squadboard init --squad-storage fs` when `.squad/` files should remain the live state store.
+
+See [Storage provider — Configuration recipes](../../user-guide/storage-provider.mdx#configuration-recipes-for-shared-storage) for concrete examples and when to use each.
+:::
+
+## 1. Add an MCP server for the bridge
+
+Open **MCP Servers**. This page lists every external tool bridge Spark exposes.
+
+<Screenshot src="/img/scenarios/spark-13-mcp-list.png" alt="Spark MCP Servers page listing configured bridges." caption="MCP entries make external tool access explicit and reviewable instead of ambient." />
+
+Click **New MCP server** and fill in a recognizable name plus the endpoint your client will use:
+
+- For local Copilot CLI, use the stdio CLI command from [MCP integration](../../user-guide/mcp.mdx) instead of an HTTP URL.
+- For a hosted MCP gateway, paste the HTTP endpoint and any required credential ID.
+
+<Screenshot src="/img/scenarios/spark-14-mcp-dialog.png" alt="New MCP server dialog being filled out with a name and endpoint for the Spark bridge." caption="Keep tool access narrow. Give the launch agent only the tools Spark needs — do not share unrelated machine-level capabilities." />
+
+Save. The bridge appears in the list and is immediately callable by clients pointed at it.
+
+### What Copilot CLI can now do against Spark
+
+With the MCP bridge in place, a developer in Copilot CLI can:
+
+- Drop a freeform note into the Spark **Inbox** with `capture`.
+- Create a structured card with `create_issue` (it lands in Backlog so a human can still shape it).
+- Trigger a run with `run_agent` and check progress with `get_run_status`.
+
+The result of every call shows up on the Spark board with the same audit trail as if you had clicked through the UI. Copilot CLI does not need (and should not have) direct database access.
+
+## 2. Connect GitHub as the outer loop
+
+When the team is ready for issues, pull requests, checks, and review signals to flow back into Spark, connect GitHub. Open **Settings**.
+
+<Screenshot src="/img/scenarios/spark-15-settings-general.png" alt="Spark Settings — General tab — showing project identity and runtime defaults." caption="General settings live with the rest of Spark navigation because they affect the same operating loop as the board and ceremonies." />
+
+Switch to the **GitHub** tab and connect the repository, install the app, and configure label and webhook routing.
+
+<Screenshot src="/img/scenarios/spark-17-settings-github.png" alt="Spark Settings — GitHub Integration tab — showing repository connection and webhook configuration." caption="Connect GitHub only after the inner loop is healthy. GitHub should reinforce the loop, not bypass it." />
+
+Once connected:
+
+- GitHub issues with matching labels become Spark cards.
+- Spark runs that produce PRs link back from the card.
+- Check and review state flows back into the board so ceremonies can act on it.
+
+For the policy and webhook details, see [GitHub integration](../../user-guide/github.md).
+
+## 3. Save Spark as a template (portability)
+
+If Spark turned into a launch loop you want to reuse — same team shape, same ceremonies, same board structure — save it as a template before you tear it down or move on.
+
+Open **Settings → Portability**.
+
+<Screenshot src="/img/scenarios/spark-16-settings-portability.png" alt="Spark Settings — Portability tab — with the Save as template action visible." caption="Portability turns the Spark operating model into something another project can start from on day one." />
+
+Click **Save as template**. The export includes:
+
+- Board column structure.
+- Agents, roles, and charters.
+- Ceremonies and their workflows.
+- Skills and tool instructions.
+- MCP recipes (with credential placeholders, never the secrets).
+
+Anyone starting a new project can pick this template in step 1 of [Tutorial 1](./connect-spark.mdx) and skip straight to capturing work.
+
+## What you have now
+
+- An MCP server entry that lets Copilot CLI work against Spark without direct DB access.
+- GitHub connected (optional) so the outer loop reinforces the inner loop.
+- Spark saved as a reusable template.
+
+## Where to go next
+
+- **Operate it daily.** [Board and Runs](../../user-guide/board-and-runs.mdx) and [Ceremonies and Workflows](../../user-guide/ceremonies-workflows.md) cover the day-to-day mechanics.
+- **Understand the architecture.** [Coordinator loops](../../user-guide/coordinator-loops.mdx) and [Architecture](../../developer-guide/architecture.md) explain how pickup, runs, and circuit breakers work under the hood.
+- **Coexist deliberately.** [Copilot CLI + Squad coexistence](../../user-guide/copilot-squad-coexistence.md) goes deeper on the boundary between the three tools sharing `.squad/`.
+- **Audit safety.** [Security](../../user-guide/security.md) covers MCP tool scopes, approvals, and credential handling.
+
+## Tutorials
+
+Source: /squadboard/docs/getting-started/tutorials/index
+
+# Tutorials
+
+These tutorials form **one continuous Spark project**. Do them in order. Each builds on the state created by the one before it — agents from Tutorial 2 do the work in Tutorial 3, MCP in Tutorial 4 connects back to the runs you watched in Tutorial 3.
+
+If you only have 10 minutes, do the [Quickstart](../quickstart.mdx) instead. It is the same loop in compressed form.
+
+<IconGrid>
+  <IconCard icon={FolderAddRegular} title="1. Connect Spark" to="/getting-started/tutorials/connect-spark">
+    Create the project and point it at a repository — new repo with Squad, project template, or existing Squad repo.
+  </IconCard>
+  <IconCard icon={PeopleRegular} title="2. Cast and review the team" to="/getting-started/tutorials/cast-the-team">
+    Give Spark a small roster with real charters, and use Consult to think before you commit.
+  </IconCard>
+  <IconCard icon={ArrowSyncRegular} title="3. Run the Spark launch wave" to="/getting-started/tutorials/run-the-launch-wave">
+    Capture work → Backlog → Ready → automatic pickup → inspect the run → ceremony close-out.
+  </IconCard>
+  <IconCard icon={PlugConnectedRegular} title="4. Connect Copilot CLI, Squad, and MCP" to="/getting-started/tutorials/connect-tools">
+    Wire MCP for Copilot CLI, connect GitHub for the outer loop, and save Spark as a reusable template.
+  </IconCard>
+</IconGrid>
+
+When a tutorial references a concept you want to understand more deeply (the coordinator's pickup gates, the workflow engine, the storage layout), jump to the matching [Product Guide](../../features/overview.mdx) page and then come back to the next step.
+
+## 3. Run the Spark launch wave
+
+Source: /squadboard/docs/getting-started/tutorials/run-the-launch-wave
+
+# 3. Run the Spark launch wave
+
+This is the end-to-end. You will take one rough launch idea from "I need a thing" all the way to "an agent ran, produced output, and a ceremony recorded the handoff." Every step uses the Spark project from Tutorials 1 and 2.
+
+The flow is one continuous loop:
+
+> **Inbox capture → backlog card → Ready → automatic pickup → run executes → inspect output → ceremony closes the wave.**
+
+No manual "play" button. Once a card lands in Ready, Squadboard does the rest.
+
+## 1. Capture the raw request in the Inbox
+
+Real launch work rarely arrives as a clean ticket. The **Inbox** is where freeform notes, Copilot CLI captures, and MCP-submitted ideas land before they become structured cards. They keep the user's original wording so nothing is lost in translation.
+
+Open **Inbox**. You should see a launch-note request that still reads like a human note.
+
+<Screenshot src="/img/scenarios/spark-12-inbox.png" alt="Spark Inbox showing a freeform launch-note request waiting to be shaped." caption="The Inbox preserves raw intent. Shape it into a card when you understand the outcome — not before." />
+
+Read the request. Decide whether the outcome is clear enough to become a card.
+
+## 2. Shape it into a backlog card
+
+Open the **Board** and click **Create issue**. Title the card with a concrete outcome and write the body so the agent who picks it up knows what to produce.
+
+<Screenshot src="/img/scenarios/spark-04-new-card.png" alt="New Spark card dialog being filled out for the launch-note publish work." caption="A card body should explain user-facing outcome, related context (Squad, integrations), and what evidence to link when the work is done." />
+
+A useful Spark card body covers:
+
+1. **The user-facing outcome.** What changes for someone reading this?
+2. **The context.** What `.squad/`, upstream Squad, or integration relationship matters?
+3. **The evidence.** What artifact (PR, file, message) should be linked when the work is complete.
+
+Leave appropriate ambiguity. Deterministic things (project, status, labels, assignee, audit) belong to Squadboard. Ambiguous things (wording, tone, interpretation) belong to the agent. Do not over-specify either.
+
+Save the card. It lands in **Backlog**.
+
+<Screenshot src="/img/scenarios/spark-05-board-after-create.png" alt="Spark board after creating the launch-note card; it sits in Backlog beside the existing launch checklist." caption="Cards live in Backlog while they are still being shaped. Nothing automated runs against Backlog." />
+
+## 3. Move the card to Ready — automatic pickup starts
+
+Drag the card from **Backlog** into **Ready**. This is the only deliberate action that triggers execution.
+
+When a card enters Ready, Squadboard:
+
+1. Runs deterministic gates (project rules, dependency checks).
+2. Selects an assignee using role, charter, skills, labels, parent links, and recent run state — not just a name match.
+3. Creates an **issue run** and starts it.
+4. Moves the card into **In Progress** under the runtime's control.
+
+You do not click play. There is no play button for the normal Ready path — In Progress is runtime state, not a status you set manually.
+
+<Screenshot src="/img/scenarios/spark-19-ready-pickup.png" alt="Spark board after the Ready card has been picked up and assigned automatically." caption="The Ready card now shows the assigned agent and an active run. Squadboard chose the assignee from the roster you reviewed in Tutorial 2." />
+
+## 4. Inspect the run and its output
+
+Click the card to open its detail view. The right-hand panel shows the issue run: which agent picked it up, when, the prompt context Squadboard composed, the model output, any tool calls, and the final artifact reference.
+
+This is the part most teams overlook. The run detail is where you confirm that:
+
+- The **right agent** was picked. (If not, fix the role or charter in Tutorial 2 — do not override the assignment by hand.)
+- The **prompt context** included the card body, parent links, and project rules you expected.
+- The **output** matches the outcome you wrote in step 2.
+
+<Screenshot src="/img/scenarios/spark-20-run-detail.png" alt="Spark card detail panel showing the active Work Pickup run and assigned agent." caption="Open the picked-up card to inspect the run state, selected agent, run plan, and output without leaving the board." />
+
+If you need to understand the deeper mechanics later, read [Board and Runs](../../user-guide/board-and-runs.mdx) and [Coordinator loops](../../user-guide/coordinator-loops.mdx).
+
+## 5. Close the wave with a ceremony
+
+Once a run produces output, you want a repeatable way to review it, summarize it, and hand it off. That is what **ceremonies** are for. Spark ships with a launch-review ceremony you can run on demand or on a schedule.
+
+Open **Ceremonies**. You should see **Spark Launch Review**.
+
+<Screenshot src="/img/scenarios/spark-11-ceremonies.png" alt="Spark Ceremonies page listing the Spark Launch Review ceremony." caption="Ceremonies give recurring rituals a durable trigger, version, and run history — they are not chat sessions." />
+
+Click into **Spark Launch Review** and run it. The ceremony walks its workflow steps (route → agent_run → approve) using the runs you just produced as input. The output becomes part of the project record.
+
+Other ceremonies worth knowing about:
+
+- **Scribe close-out** — required, runs automatically when a card reaches Done. You cannot delete it.
+- **Work Pickup** — required, the default plan that picks up Ready cards when no label-triggered plan matches. You cannot delete it.
+- **Sprint planning / retro / RFC review** — optional templates included by the default project template.
+
+You can review the visual flow of any ceremony before activating it.
+
+<Screenshot src="/img/scenarios/spark-09-templates-ceremonies.png" alt="Ceremony templates page showing the step sequence of each available ceremony." caption="Always preview a ceremony — especially imported ones — before attaching it. The preview shows what tools and approvals it will use." />
+
+## 6. Watch cost as part of operations
+
+Open **Costs** after a few runs and ceremonies have executed. Cost belongs next to operations, not buried in settings — surprising bills come from work patterns you did not notice early enough.
+
+<Screenshot src="/img/scenarios/spark-18-costs.png" alt="Spark Costs page showing per-run and per-ceremony model usage." caption="Use Costs to spot which cards or ceremonies are burning the most model usage and decide whether the pattern is worth it." />
+
+## What you just did
+
+- Captured ambiguous work in the Inbox.
+- Shaped it into a Backlog card with clear outcome and evidence.
+- Moved it to Ready — and pickup, assignment, and the run started automatically.
+- Inspected the run detail to confirm the right agent and right output.
+- Ran a ceremony to record the handoff.
+- Watched cost to keep the loop honest.
+
+Continue with [4. Connect Copilot CLI, Squad, and MCP →](./connect-tools.mdx) to make the same flow accessible from outside Squadboard.
+
+## Squadboard documentation
+
+Source: /squadboard/docs/
+
+# Squadboard documentation
+
+Squadboard is a local-first workflow board for running multi-agent work with deterministic orchestration. It gives a [Squad](https://github.com/bradygaster/squad)-style team a durable board, auditable routing, real-time run visibility, and coexistence surfaces for Copilot CLI workflows.
+
+The product shape is simple: bring in a team, delegate Ready work, approve risky steps, and watch the inner loop happen before the work needs to reach GitHub.
+
+## Install
+
+```bash
+git clone https://github.com/sabbour/squadboard.git
+cd squadboard
+pnpm install
+pnpm run dev
+```
+
+Open `http://localhost:5173` for the app. The backend runs on `http://localhost:3000`.
+
+## What is Squadboard?
+
+Squadboard is not just a kanban board and not just an agent runner. It is the system of record for multi-agent work:
+
+- Cards, labels, parent links, and run history live in a local database.
+- Ready-column pickup lets agents start work before a GitHub issue or PR exists.
+- Deterministic prefilters own concrete routing decisions before an LLM is asked for semantic judgment.
+- Agents run with a rich spawn prompt: charter, team root, requester, workspace, skills, MCP context, and validation expectations.
+- Scribe close-out, directive capture, ceremonies, worktree cleanup, and Ralph-style monitoring are auditable server actions.
+
+## Quick links
+
+| Topic | Where to start |
+| --- | --- |
+| Install locally | [Installation](./getting-started/installation.md) |
+| Run the first loop | [Quickstart](./getting-started/quickstart.mdx) |
+| Pick a path through the docs | [Learning Path](./getting-started/learning-path.md) |
+| Browse product capabilities | [Features](./features/overview.mdx) |
+| Configure projects and runtime | [Configuration](./user-guide/configuration.mdx) |
+| Use with Copilot CLI + Squad | [Copilot CLI + Squad coexistence](./user-guide/copilot-squad-coexistence.md) |
+| Understand upstream Squad | [Squad Integration](./user-guide/squad-integration.mdx) |
+| Understand PostgreSQL StorageProvider | [Storage Provider Alignment](./user-guide/storage-provider.mdx) |
+| Map tools and hooks | [Squad Tools and Hooks](./user-guide/squad-tools-hooks.mdx) |
+| Import Squad Apps and templates | [Squad Apps](./user-guide/squad-apps.mdx) |
+| Use ceremonies and workflows | [Ceremonies and Workflows](./user-guide/ceremonies-workflows.md) |
+| Connect MCP clients | [MCP Integration](./user-guide/mcp.mdx) |
+| Sync with GitHub | [GitHub Integration](./user-guide/github.md) |
+| See the architecture | [Architecture](./developer-guide/architecture.md) |
+| Troubleshoot | [Troubleshooting](./reference/troubleshooting.md) |
+
+## Feature areas
+
+The [Features](./features/overview.mdx) section has subsections for core orchestration, automation, integrations, and operations:
+
+- **Durable workflow engine** - lease and heartbeat liveness, deterministic stepper, retries, fan-out, branches, waits, approvals, and output validation.
+- **Copilot CLI + Squad coexistence** - shared coordinator input, deterministic preflight rules, circuit-breaker visibility, confidence post-processing, and LLM fallback only for ambiguity.
+- **Agent workspace isolation** - scratch, directory, or git worktree strategies keep parallel work from colliding.
+- **Scribe and directive memory** - capture directives into `.squad/decisions/inbox/` and run close-out through daemon/coordinator lifecycle automation.
+- **Opt-in Ralph monitor** - prioritize untriaged issues, member-label pickup, assigned work, CI/review states, approved PRs, and drafts.
+- **MCP surface** - expose board, run, capture, routing, and project operations to Copilot CLI, VS Code, and HTTP clients.
+- **Squad Apps and imports** - package teams, ceremonies, skills, MCP config, routing, and seed issues into portable project artifacts.
+
+## For LLMs and coding agents
+
+Machine-readable entry points are generated before every docs build:
+
+- `/docs/llms.txt` - curated index of doc pages and descriptions.
+- `/docs/llms-full.txt` - all docs pages concatenated into one markdown file.
+
+## FAQ
+
+Source: /squadboard/docs/reference/faq
+
+# FAQ
+
+## Is Squadboard a replacement for Copilot CLI or Squad?
+
+No. Squadboard is the durable orchestration layer. Copilot CLI and upstream [Squad](https://github.com/bradygaster/squad) can still be the interactive driver surface.
+
+## How does Squadboard coexist with Copilot CLI and Squad?
+
+Squadboard keeps Copilot CLI and upstream [Squad](https://github.com/bradygaster/squad) useful as interactive driver surfaces, while Squadboard stores the durable state: cards, routing decisions, run history, imported `.squad/` context, ceremonies, MCP tools, and audit records.
+
+## Is Squadboard production-ready?
+
+No. Squadboard is alpha software. Expect breaking changes, incomplete flows, and areas that still need validation. Keep human review in the loop.
+
+## Is Ralph enabled by default?
+
+No. Ralph monitor is opt-in per project.
+
+## Does Ralph require GitHub?
+
+No. Squadboard's Ralph-equivalent monitor is board-first. It looks at cards in the Ready semantic column and can dispatch assigned work there. GitHub signals such as CI failures, review feedback, and draft PRs are additional inputs when GitHub sync is configured.
+
+## Is visual ceremony design done?
+
+Not fully. The visual designer covers common linear flows, route/agent/approval steps, and fan-out child authoring. Advanced branching, dynamic fan-out, nested retry wrappers, and unusual external wait-event patterns still require YAML review in the alpha.
+
+## Can Squadboard be a Squad StorageProvider through PostgreSQL?
+
+Yes. Squadboard now defaults to a **PostgreSQL-backed StorageProvider adapter** that stores Squad state (agents, decisions, skills, etc.) in the same PostgreSQL database that Squadboard uses for product state. Multiple compatible processes can share the same database when pointing to the same PostgreSQL instance.
+
+**Quick start:**
+```bash
+pnpm run dev
+```
+
+This uses the embedded PostgreSQL database (PGlite) by default—no external setup needed. Squadboard will import any existing `.squad/` files into the database on startup (one-time import).
+
+**Using the CLI:**
+```bash
+squadboard start --squad-storage postgresql
+# or use the alias:
+squadboard start --postgresql-storage
+```
+
+**Filesystem fallback:**
+```bash
+pnpm run dev:fs
+squadboard start --squad-storage fs
+```
+
+**Configure Copilot CLI / `squad.agent.md` through MCP:**
+```bash
+squadboard init --write-mcp-config
+```
+
+This writes a `.copilot/mcp-config.json` entry that starts `squadboard mcp` with PostgreSQL-backed Squad state. Stock Copilot CLI and `squad.agent.md` should use the Squadboard MCP bridge for shared state unless the upstream CLI has a documented direct PostgreSQL provider configuration.
+
+**For shared multi-process setup with external PostgreSQL:**
+```bash
+DATABASE_URL=postgresql://user:password@host:port/squadboard pnpm run dev
+```
+
+**Important boundary:** Squad CLI or Copilot CLI agents configured to use PostgreSQL can see the shared state **only if they point to the same `DATABASE_URL`** and have a compatible StorageProvider implementation. External agents using filesystem `.squad/` files cannot directly access the database without an explicit configuration change or MCP bridge. 
+
+If external agents need to see state, you must explicitly export it back to `.squad/` files in Git, or route them through Squadboard's MCP bridge.
+
+**Configuration options:**
+- **Squadboard + Squad/Copilot (direct DB):** Both point to `DATABASE_URL` and use a compatible, documented upstream PostgreSQL StorageProvider config. The Squad SDK supports provider injection, but a separate CLI must expose a config surface before Squadboard can force it.
+- **Squadboard + stock Copilot CLI (MCP mode):** Copilot CLI calls Squadboard MCP tools instead of direct DB access (no upstream StorageProvider needed). This is the **portable choice**.
+
+See [Storage provider — Configuration recipes](../user-guide/storage-provider.mdx#configuration-recipes-for-shared-storage) for concrete examples.
+
+## Are Squadboard MCP tools registered as Squad tools?
+
+Today they are MCP tools exposed by Squadboard. When embedding them into upstream Squad, they should be registered as a `squadboard` tool bundle so Squad's hook pipeline can apply policy before write tools run.
+
+## Does every directive become a board card?
+
+No. Issue-like directives can become cards. Decision or memory directives can be captured into `.squad/decisions/inbox/`.
+
+## What are Squad Apps?
+
+Squad Apps are installable project packages. They can include project metadata, board columns, team members, ceremonies, workflows, skills, tools, MCP server recipes, routing rules, seed issues, and README content.
+
+## Where do docs live?
+
+The Docusaurus docs site lives in `packages/docs-site`. The repository also contains internal planning and product docs under the root `docs/` directory.
+
+## How are LLM docs generated?
+
+`pnpm --filter @sabbour/squadboard-docs generate:llms` scans the Docusaurus docs and writes `static/llms.txt` plus `static/llms-full.txt`.
+
+## Reference
+
+Source: /squadboard/docs/reference/index
+
+These pages are for quick lookup when you already know the workflow and need a specific answer.
+
+<IconGrid>
+  <IconCard icon={DocumentCopyRegular} title="FAQ" to="/reference/faq">
+    Short answers about local-first operation, upstream Squad, autonomy, and alpha expectations.
+  </IconCard>
+  <IconCard icon={WrenchRegular} title="Troubleshooting" to="/reference/troubleshooting">
+    Diagnose product runtime issues such as stuck runs, GitHub sync, and MCP connectivity.
+  </IconCard>
+</IconGrid>
+
+## Troubleshooting
+
+Source: /squadboard/docs/reference/troubleshooting
+
+# Troubleshooting
+
+## MCP tools need a project ID
+
+Set `SQUADBOARD_DEFAULT_PROJECT_ID` in the MCP config environment or pass `projectId` in the tool call.
+
+## The coordinator does not dispatch
+
+Check:
+
+- `COORDINATOR_DISPATCH_ENABLED`
+- project agents are active
+- parent issues are not blocking
+- the issue is not too thin
+- routing log entries for deterministic skip or ambiguity
+
+## Ralph is idle
+
+Ralph must be enabled for the project. If enabled, inspect the monitor status route and audit records to see the last decision and next candidate.
+
+## Worktree cleanup did not delete a branch
+
+Cleanup is intentionally conservative. It only removes safe worktrees and safe `squad/*` branches when policy allows.
+
+## Agents and skills
+
+Source: /squadboard/docs/user-guide/agents-skills
+
+# Agents and skills
+
+Squadboard treats the project roster as shared repository state. The canonical team lives under the project's `.squad/` directory so Copilot CLI, upstream [Squad](https://github.com/bradygaster/squad), and Squadboard all see the same team conventions.
+
+<IconGrid>
+  <IconCard icon={BotRegular} title="Project agents">Runnable project participants with charters and expertise.</IconCard>
+  <IconCard icon={PeopleRegular} title="Casting">Proposal flows help define missing roles without hiding the final roster.</IconCard>
+  <IconCard icon={LibraryRegular} title="Skills">Reusable SKILL.md-style instructions can be assigned to agents.</IconCard>
+</IconGrid>
+
+<ScreenshotGrid>
+  <Screenshot src="/img/scenarios/spark-06-agents.png" alt="Spark agents page." caption="Agent roles and expertise make future routes understandable." />
+  <Screenshot src="/img/scenarios/spark-07-team-casting.png" alt="Spark team-casting dialog." caption="Casting turns a team gap into an editable proposal." />
+  <Screenshot src="/img/scenarios/spark-08-consult.png" alt="Spark Consult page." caption="Consult lets the team explore ambiguity before changing project state." />
+</ScreenshotGrid>
+
+## Agent origins
+
+| Origin | Meaning |
+| --- | --- |
+| `project` | Project-local agent from `.squad/agents/` |
+| `virtual-copilot` | Virtual Copilot/system member used for dispatcher-style work |
+| `human` | Human collaborator represented in review, approval, or handoff state |
+
+Origin metadata appears in server APIs and UI badges so users can tell whether a participant is runnable, read-only, or human-owned.
+
+## Project agents
+
+Project agents can have charters, history files, roles, focus areas, capabilities, and assigned skills. Because they live in project state, they can be versioned, reviewed, and imported through Squadboard templates or Squad Apps.
+
+## Consult
+
+Consult remains a brainstorming surface. Use it with a project agent or raw model to explore ambiguity, draft options, and create proposals. Consult does not mutate project state until a user explicitly accepts a proposal.
+
+## Skills
+
+Skills are reusable prompt addenda and capabilities. Assigned skills are injected into spawn prompts so agents see the relevant operating instructions at run time. Squad Apps can include `skills/<key>/SKILL.md` files using the same SKILL.md convention used by upstream Squad plugins.
+
+## MCP tools
+
+MCP tool context can be included in the agent prompt. Keep tool assignment narrow and project-specific so agents have the right capabilities without broad ambient authority.
+
+## Board and runs
+
+Source: /squadboard/docs/user-guide/board-and-runs
+
+# Board and runs
+
+The board is where Spark turns intent into durable work. A card can start as a rough request, become a routed task, attach to an agent run, and remain visible after the run has completed.
+
+<IconGrid>
+  <IconCard icon={ClipboardTaskListLtrRegular} title="Cards">Hold launch intent, notes, labels, owners, and status.</IconCard>
+  <IconCard icon={FlashRegular} title="Runs">Attach execution and streamed output to the card that caused it.</IconCard>
+  <IconCard icon={ChartMultipleRegular} title="History">Keep routing decisions and lifecycle state queryable later.</IconCard>
+</IconGrid>
+
+<ScreenshotGrid>
+  <Screenshot src="/img/scenarios/spark-03-board-plan.png" alt="Spark board with launch-planning work." caption="Use the board to decide what is ready for routing and what still needs shaping." />
+  <Screenshot src="/img/scenarios/spark-04-new-card.png" alt="New Spark issue card dialog." caption="Create cards with enough context for future routing, not just a short title." />
+  <Screenshot src="/img/scenarios/spark-05-board-after-create.png" alt="Spark board after creating a launch-note card." caption="New cards become part of the shared project state immediately." />
+</ScreenshotGrid>
+
+## Board model
+
+Each project owns a kanban board with cards, labels, comments, assignees, and delivery state. Cards can be moved manually or by automation such as GitHub events, workflow completion, or close-out.
+
+Squadboard aligns with upstream Squad's project-board model: the visible board is a projection over workflow state, and the **Ready** state is where work becomes eligible for automated pickup. The stored status is `ready`, so product language, APIs, and MCP tools use the same word.
+
+| Squad board state | Squadboard semantic | What happens |
+| --- | --- | --- |
+| Backlog | `backlog` | Captured or deferred work; not automatically dispatched. |
+| Needs Research | `custom` or a project-specific research column | Clarification, spike, or Consult work before the card becomes Ready. |
+| Ready | `ready` | Coordinator and Ralph-equivalent loops can pick up the card. |
+| In Progress | `in_progress` | Runtime-owned; an active or pending run must exist. |
+| Review / Done | `review` / `done` | Human, peer, or ceremony review completes the inner loop before optional GitHub sync. |
+
+## Starting work
+
+For normal board work, put the card in **Ready**. The ready pickup loop starts the run automatically, moves the card to **In Progress** while the agent is active, then moves it to review when the run ends.
+
+Manual starts are for explicit workflow/debug contexts outside the ready-column pickup loop:
+
+1. Open a card.
+2. Attach or run a workflow from the detail panel.
+3. Pick an agent only when you want to override routing.
+4. Watch the live run drawer.
+
+Automatic pickup:
+
+1. Put a card in **Ready**.
+2. Ensure the project has active agents.
+3. Let the pickup sweep and coordinator create an `issue_run`.
+
+## Outputs
+
+Outputs are the artifacts a run produced for the card: files, links, notes, or structured JSON. They are separate from the run log. Use the run log to understand what happened minute by minute; use **Outputs** when you want the result that should be reviewed, approved, linked from a ceremony, or carried forward into the next card.
+
+## Run states
+
+| State | Meaning |
+| --- | --- |
+| `pending` | Run is queued and waiting for execution |
+| `running` | Worker is active and sending heartbeats |
+| `completed` | Output was recorded and state advanced |
+| `failed` | Run failed or lease expired |
+| `cancelled` | Run was stopped intentionally |
+
+## Workspace modes
+
+Squadboard can run work in scratch space, a directory workspace, or a git worktree. Worktree-backed runs include branch and cleanup metadata when available.
+
+## Audit trail
+
+Routing decisions, skipped dispatches, monitor decisions, close-outs, and state transitions should be visible as durable records rather than hidden prompt behavior.
+
+## Built-in templates and defaults
+
+Source: /squadboard/docs/user-guide/built-ins
+
+# Built-in templates and defaults
+
+Squadboard includes built-in starting points so a new project can become useful before you author every ceremony or team pattern by hand.
+
+<IconGrid>
+  <IconCard icon={ClipboardTaskListLtrRegular} title="Ceremony templates">Repeatable launch, review, close-out, and planning loops that can be reviewed before deployment.</IconCard>
+  <IconCard icon={PeopleRegular} title="Team templates">Reusable role sets for common project shapes, including coordinator, implementer, reviewer, and documentation roles.</IconCard>
+  <IconCard icon={SettingsRegular} title="Project templates">Portable project defaults for board columns, routing assumptions, ceremonies, skills, and integration setup.</IconCard>
+</IconGrid>
+
+## Review before deploying
+
+Open **Templates** from the project navigation. Use **Review** to inspect a ceremony, team, or project template before you apply it to Spark. Applying a template should be an explicit deployment decision, not a blind import.
+
+<ScreenshotGrid>
+  <Screenshot src="/img/scenarios/spark-09-templates-ceremonies.png" alt="Spark ceremony templates with review and use actions" caption="Ceremony templates can be reviewed before opening the new ceremony flow." />
+  <Screenshot src="/img/scenarios/spark-10-templates-projects.png" alt="Spark project templates" caption="Project templates package setup defaults for reuse." />
+</ScreenshotGrid>
+
+## Built-in ceremonies
+
+Built-in ceremonies are normal Squadboard ceremonies once deployed. They can run on issue entry, schedules, manual triggers, or project lifecycle events depending on their template configuration.
+
+The built-in ceremony catalog is intentionally small in the alpha. Use **Review** before applying one so you can see the exact YAML, prompts, approvers, and timeouts.
+
+| Ceremony | Use it when | What it does |
+| --- | --- | --- |
+| **Simple Review** | You want the smallest useful loop for normal work. | Routes the card, runs the assigned agent, then asks a lead to approve the result. |
+| **Bug Fix** | A card is a defect or regression. | Reproduces the bug, implements the fix, verifies the fix, then sends the result through lead approval. |
+| **RFC / Proposal** | The next step is a decision, not code. | Drafts an RFC, gathers concerns, then requires each listed reviewer to approve. |
+| **Spike** | The team needs research before implementation. | Routes the work, investigates within a time box, writes findings, then asks a lead to review those findings. |
+| **Pair-Programming Session** | Two agents should build on the same context. | Routes the work, runs a first pass, runs a second pass that improves it, then asks for final review. |
+| **Sprint Planning** | You are about to choose the next sprint objective and Ready backlog. | Collects candidate work, drafts a sprint plan, and asks the lead to commit the plan. |
+| **Sprint Retro** | A sprint or focused work cycle has just ended. | Gathers evidence, identifies process themes, and accepts follow-up improvements. |
+
+Squadboard also has an SDK-backed **Scribe close-out** path. It is not a YAML template in the ceremony catalog because it is wired to daemon and coordinator lifecycle events. Use it to summarize completed work, record health/report paths, capture follow-up directives, and clean up run metadata.
+
+## Built-in teams and projects
+
+Team templates give you a consistent roster shape without hiding the details. After applying one, review agent names, roles, charters, skills, and tool access before moving cards into Ready.
+
+Project templates are broader. They can bring in board structure, ceremonies, and integration defaults. The default software project includes Simple Review, Bug Fix, RFC, Sprint Planning, and Sprint Retro so a team can plan, execute, review, and improve without authoring ceremonies first. Review the payload first, apply it to the target `.squad/` workspace, then adjust anything that is specific to your project.
+
+## Ceremonies and workflows
+
+Source: /squadboard/docs/user-guide/ceremonies-workflows
+
+# Ceremonies and workflows
+
+## Mental model
+
+A ceremony is a named process. A workflow is the step graph that runs inside it.
+
+```text
+Ceremony
+  trigger: explicit run, cron, GitHub event, or agent signal
+  workflow: versioned steps
+  metadata: owner, status, origin
+```
+
+## Trigger types
+
+| Trigger | Use |
+| --- | --- |
+| `manual` | User explicitly runs a ceremony |
+| `cron` | Scheduled recurring work |
+| `github-event` | GitHub issue, PR, push, or comment event |
+| `agent-signal` | Lifecycle event such as before/after batch |
+
+## Step kinds
+
+Common workflow steps include:
+
+- `agent_run`
+- `peer_review`
+- `approve`
+- `fan_out`
+- `branch`
+- `route`
+- `retry_wrap`
+- `wait_event`
+- `wait_timer`
+- `github_pr`
+- `github_pr_wait_merged`
+
+## Visual designer status
+
+The visual ceremony designer covers common authoring flows: linear steps, route-to-agent runs, approval gates, and adding child steps under fan-out nodes. It is not fully done for every workflow shape. Advanced branching, dynamic fan-out counts, nested retry wrappers, and complex external `wait_event` callbacks still require YAML review.
+
+The safe authoring loop is:
+
+1. Draft or import the ceremony.
+2. Use the visual designer for common changes.
+3. Inspect the generated YAML before deploying.
+4. Test with non-production cards before enabling schedules or automation.
+
+## Automated close-out
+
+Scribe close-out is triggered by daemon and coordinator lifecycle paths rather than a separate user button. Close-out responses can include:
+
+- current run ID
+- worktree path
+- branch
+- started and ended timestamps
+- close-out report path
+- health path
+- cleanup status
+
+## YAML
+
+Ceremonies can be exported and imported as canonical YAML. Keep executable ceremony YAML in `.squad/ceremonies/` when you want it versioned with the project.
+
+## Configuration
+
+Source: /squadboard/docs/user-guide/configuration
+
+# Configuration
+
+Use configuration to make runtime defaults, integrations, costs, and portability visible to the project owner.
+
+<IconGrid>
+  <IconCard icon={SettingsRegular} title="Runtime">Set server, database, model, and dispatch defaults.</IconCard>
+  <IconCard icon={ArrowSyncRegular} title="Integrations">Configure GitHub and MCP from explicit project surfaces.</IconCard>
+  <IconCard icon={MoneyRegular} title="Cost">Choose how model usage is accounted for and reviewed.</IconCard>
+</IconGrid>
+
+<ScreenshotGrid>
+  <Screenshot src="/img/scenarios/spark-15-settings-general.png" alt="Spark general settings." caption="Project settings capture runtime and repository-level defaults." />
+  <Screenshot src="/img/scenarios/spark-17-settings-github.png" alt="Spark GitHub settings." caption="GitHub configuration is project-level so automation can stay opt-in." />
+  <Screenshot src="/img/scenarios/spark-18-costs.png" alt="Spark costs page." caption="The cost view helps teams tune model usage as work runs." />
+</ScreenshotGrid>
+
+## Runtime
+
+The app runs as a local monorepo during development:
+
+```bash
+pnpm run dev
+```
+
+The backend defaults to `http://localhost:3000`; the frontend defaults to `http://localhost:5173`.
+
+## Database
+
+Squadboard uses embedded Postgres-compatible storage by default. For an external database, set `DATABASE_URL`:
+
+```bash
+export DATABASE_URL="postgresql://user:pass@host:5432/squadboard"
+```
+
+Squad state also defaults to the PostgreSQL-backed provider. Use `pnpm run dev:fs`, `squadboard init --squad-storage fs`, or `SQUADBOARD_SQUAD_STORAGE_PROVIDER=fs` only when you want repository `.squad/` files to stay as the live state store.
+
+## Project defaults
+
+Useful environment variables:
+
+| Variable | Purpose |
+| --- | --- |
+| `SQUADBOARD_DEFAULT_PROJECT_ID` | Default project for MCP tools and capture flows |
+| `SQUADBOARD_SQUAD_STORAGE_PROVIDER` | `postgresql` (default) or `fs` filesystem fallback for Squad state |
+| `SQUADBOARD_COST_MODEL` | Use `usd` or `gh_multipliers` cost accounting |
+| `COORDINATOR_DISPATCH_ENABLED` | Set `0` to disable coordinator dispatch |
+| `COORDINATOR_MODEL` | Primary model for bounded coordinator judgment |
+| `COORDINATOR_MODEL_FALLBACKS` | Comma-separated fallback model chain |
+
+## GitHub
+
+Projects can use a personal access token or GitHub App credentials. Configure GitHub from the UI or via `PUT /api/projects/:projectId/github`.
+
+## Ralph monitor
+
+Ralph autonomy is project-level opt-in. Disabled projects never run autonomous monitor actions.
+
+## Docs site
+
+The Docusaurus package lives in `packages/docs-site`.
+
+```bash
+pnpm docs:dev
+pnpm docs:build
+pnpm docs:serve
+```
+
+`prebuild` and `prestart` regenerate `llms.txt` and `llms-full.txt`.
+
+## Coordinator loops
+
+Source: /squadboard/docs/user-guide/coordinator-loops
+
+# Coordinator loops
+
+Squadboard uses deterministic server loops for repeatable control flow and reserves LLM calls for ambiguity.
+
+<IconGrid>
+  <IconCard icon={ClipboardTaskListLtrRegular} title="Ready pickup">Cards in columns marked with the Ready semantic are picked up automatically.</IconCard>
+  <IconCard icon={SparkleRegular} title="Bounded judgment">The coordinator asks an LLM only when role fit or summarization requires interpretation.</IconCard>
+  <IconCard icon={ArrowSyncRegular} title="Lifecycle loops">Run advancement, ceremonies, close-out, GitHub sync, and Ralph decisions are audited loops.</IconCard>
+</IconGrid>
+
+<Screenshot src="/img/scenarios/spark-19-ready-pickup.png" alt="Spark board with Ready work assigned by automatic pickup" caption="Ready is the automatic pickup column. Moving work there starts the coordinator path." />
+
+## Ready pickup loop
+
+1. A card enters a column whose semantic type is **ready**.
+2. The pickup sweep loads the card, labels, parent links, project rules, agent roles, skills, and recent run state.
+3. Deterministic gates run first: blocked parents, unavailable agents, backlog constraints, thin issue checks, and circuit-breaker lockouts.
+4. If one agent is clearly eligible, Squadboard creates the issue run without a semantic LLM decision.
+5. If role fit is ambiguous, the coordinator uses a schema-bound LLM decision and writes the result to the routing log.
+6. The workflow-step sweep claims the pending run and starts execution.
+
+## Board state rules
+
+Ready means ready to run. In Progress means an active run exists. Squadboard should not require a play button for ordinary Ready pickup, and it should not allow a manual move into In Progress when no run is active.
+
+## Close-out and continuation
+
+When work reaches review or delivery, lifecycle loops can trigger Scribe-style close-out and ceremony work. Ralph-style monitoring is opt-in alpha automation that can choose the next eligible work item, but every decision should remain visible through audit records rather than hidden background action.
+
+## Where upstream Squad fits
+
+The coordinator reads the same project/team concepts that upstream [Squad](https://github.com/bradygaster/squad) uses: `.squad/` conventions, agent charters, decisions, skills, and MCP recipes. Squadboard adds durable database state and deterministic loops around those conventions.
+
+## Copilot CLI + Squad coexistence
+
+Source: /squadboard/docs/user-guide/copilot-squad-coexistence
+
+# Copilot CLI + Squad coexistence
+
+Coexistence means Squadboard should preserve the useful parts of the current Copilot CLI + [Squad](https://github.com/bradygaster/squad) driver loop while moving long-lived state into a product surface. The right agent still gets context, work is still routed consistently, directives are still captured, close-out still runs, and project state remains inspectable after the chat session ends.
+
+Squadboard does **not** try to clone every chat interaction byte-for-byte. It moves durable control flow into the server while keeping the LLM where it helps most: interpreting ambiguity.
+
+## Architecture model
+
+1. **Deterministic preflight** owns data plumbing, dependencies, availability, lockouts, circuit breakers, and thin-issue checks.
+2. **Bounded LLM judgment** handles semantic ambiguity, charter interpretation, role fit, and summarization.
+3. **Deterministic post-processing** validates schema, enforces confidence floors, normalizes decisions, and writes audit output.
+4. **Durable orchestration** owns sweeps, GitHub events, Scribe close-out, worktree cleanup, health reporting, and UI controls.
+
+## What Squadboard mirrors from Squad
+
+| Squad driver behavior | Squadboard deterministic equivalent |
+| --- | --- |
+| Read `.squad/` team conventions | Sync project agents, charters, routing, ceremonies, and skills from project state |
+| Decide who should work | Build shared coordinator input, apply deterministic prefilters, then use bounded LLM routing only for ambiguity |
+| Spawn an agent with context | Build a spawn prompt with charter, team root, requester, workspace mode/path, history, decisions, skills, MCP context, and validation expectations |
+| Capture coordinator directives | Write idempotent entries to the project inbox and `.squad/decisions/inbox/` |
+| Run Scribe close-out | Use the server Scribe close-out service from daemon/coordinator lifecycle signals |
+| Keep working through Ralph | Use opt-in Ralph monitor decisions and audit records rather than silent background action |
+
+## Coordinator input
+
+The shared coordinator input builder includes:
+
+- issue labels and priority
+- `issue_links` parent lineage and blocked parent state
+- project rules and routing configuration
+- agent charter expertise, cached keywords, and focus areas
+- recent run and availability state
+
+Deterministic prefilters cover named-agent requests, blocked parents, human-only operations, all-agents-busy ambiguity, backlog no-match gates, thin issues, and circuit-breaker skip decisions.
+
+## Human-only operations
+
+A human-only operation is work the coordinator must not assign to an agent automatically because it touches high-trust project controls. Current examples include publishing authentication changes, code signing, billing configuration, and organization-level secret rotation. Squadboard leaves those cards queued with a visible skip reason so a project owner can decide what to do next.
+
+## Current alpha limits
+
+- Ralph can recommend and log follow-up actions for GitHub issues and PRs that were not created by Ready-column pickup. It does not automatically merge PRs or apply fixes yet; those actions still require explicit human approval.
+- When two agents look similarly qualified, Squadboard records the selected agent and rationale in routing history so reviewers can audit why the assignment happened.
+
+See [Squad integration](./squad-integration.mdx) for the boundary between upstream Squad and Squadboard.
+
+## GitHub integration
+
+Source: /squadboard/docs/user-guide/github
+
+# GitHub integration
+
+## Authentication
+
+Squadboard supports personal access tokens and GitHub Apps.
+
+Personal access token:
+
+```bash
+curl -X PUT http://localhost:3000/api/projects/{projectId}/github \
+  -H "Content-Type: application/json" \
+  -d '{"authType":"pat","token":"ghp_xxxxx","owner":"org","repo":"repo"}'
+```
+
+GitHub App:
+
+```json
+{
+  "authType": "app",
+  "appId": "123456",
+  "installationId": "78901234",
+  "privateKey": "-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----",
+  "owner": "org",
+  "repo": "repo"
+}
+```
+
+## Workflow actions
+
+GitHub-aware workflow steps can:
+
+- name and push branches
+- open PRs
+- comment on PRs
+- wait for PR merge
+- record PR state on cards
+
+## Activity feed
+
+GitHub events are persisted, emitted on the internal event bus, and can enrich future agent prompts with recent PR or issue context.
+
+## Ralph monitor inputs
+
+Ralph can prioritize:
+
+- untriaged issues with squad labels
+- `squad:{member}` labels
+- assigned issues needing pickup
+- CI failures on tracked PRs
+- review feedback or requested changes
+- approved PRs
+- draft PRs needing attention
+
+For GitHub work that did not start from Ready-column pickup, Ralph can recommend and log the next action. It does not automatically merge PRs or apply fixes yet; those actions still require explicit human approval.
+
+## Importing
+
+Source: /squadboard/docs/user-guide/importing
+
+# Importing
+
+Squadboard has two related import paths:
+
+1. **Templates** import or instantiate saved local artifacts such as teams and project templates.
+2. **Squad Apps** normalize a full `.squadapp/` package into the same project/bundle structures Squadboard uses at runtime.
+
+<IconGrid>
+  <IconCard icon={ArrowUploadRegular} title="Apply a package">Install built-ins, saved templates, or Squad Apps.</IconCard>
+  <IconCard icon={DocumentCopyRegular} title="Inspect the result">Review imported project state before running work.</IconCard>
+  <IconCard icon={SettingsRegular} title="Save what works">Export a known-good project as a template later.</IconCard>
+</IconGrid>
+
+<ScreenshotGrid>
+  <Screenshot src="/img/scenarios/spark-10-templates-projects.png" alt="Spark project templates page." caption="Project imports create or update a full operating model." />
+  <Screenshot src="/img/scenarios/spark-09-templates-ceremonies.png" alt="Spark ceremony templates page." caption="Ceremony imports are smaller building blocks inside a project." />
+  <Screenshot src="/img/scenarios/spark-16-settings-portability.png" alt="Spark portability settings." caption="Portability controls save reusable project state after you refine it." />
+</ScreenshotGrid>
+
+## Built-in project bundles
+
+The server scans `bundles/` and exposes built-in project bundles through:
+
+| Endpoint | Purpose |
+| --- | --- |
+| `GET /api/templates/builtin-projects` | List built-in project bundles |
+| `POST /api/templates/builtin-projects/:bundleId/apply` | Apply a built-in bundle to create a project |
+
+Use built-ins when you want a known-good starting point with a team, board, ceremonies, and seed backlog.
+
+## Saved templates
+
+Projects can be saved as templates and later instantiated:
+
+| Endpoint | Purpose |
+| --- | --- |
+| `POST /api/projects/:id/save-as-template` | Save a project template |
+| `POST /api/projects/instantiate-template/:templateId` | Create a new project from a saved template |
+
+Teams and workflows have parallel save/import flows. The Templates page exposes drag-import zones for team and project JSON.
+
+## Import safety
+
+Imports should be treated as code-adjacent configuration. Review agents, ceremonies, skills, tools, MCP server recipes, and routing rules before running imported work.
+
+## Relationship to Squad
+
+Imported skills can use the same SKILL.md convention as upstream [Squad](https://github.com/bradygaster/squad). Imported project teams still land in `.squad/` so Copilot CLI + Squad and Squadboard can share the operating model.
+
+## MCP integration
+
+Source: /squadboard/docs/user-guide/mcp
+
+# MCP integration
+
+Squadboard exposes board, project, run, capture, and routing tools through Model Context Protocol.
+
+<IconGrid>
+  <IconCard icon={PlugConnectedRegular} title="Connect clients">Use MCP from Copilot CLI, VS Code, or service clients.</IconCard>
+  <IconCard icon={WrenchRegular} title="Expose tools">Make board and run operations available without direct database access.</IconCard>
+  <IconCard icon={ClipboardTaskListLtrRegular} title="Capture work">Turn driver directives into inbox items, cards, or decision files.</IconCard>
+</IconGrid>
+
+<ScreenshotGrid>
+  <Screenshot src="/img/scenarios/spark-13-mcp-list.png" alt="Spark MCP servers page." caption="Project MCP servers are visible and configurable." />
+  <Screenshot src="/img/scenarios/spark-14-mcp-dialog.png" alt="New MCP server dialog." caption="Server recipes describe the specific bridge a client should use." />
+</ScreenshotGrid>
+
+## Copilot CLI
+
+Add Squadboard to `~/.copilot/mcp-config.json`:
+
+```json
+{
+  "mcpServers": {
+    "squadboard": {
+      "command": "node",
+      "args": ["/absolute/path/to/squadboard/packages/cli/dist/index.js", "mcp"],
+      "env": {
+        "SQUADBOARD_SQUAD_STORAGE_PROVIDER": "postgresql",
+        "SQUADBOARD_DEFAULT_PROJECT_ID": "project-uuid"
+      }
+    }
+  }
+}
+```
+
+Or let the CLI create a repo-local config:
+
+```bash
+squadboard init --write-mcp-config
+```
+
+This config makes Copilot CLI and `squad.agent.md` use Squadboard as the broker for PostgreSQL-backed Squad state. Use `squadboard init --squad-storage fs --write-mcp-config` only when you want filesystem `.squad/` fallback.
+
+## VS Code
+
+Add a project-level `.vscode/mcp.json`:
+
+```json
+{
+  "servers": {
+    "squadboard": {
+      "type": "stdio",
+      "command": "node",
+      "args": ["packages/cli/dist/index.js", "mcp"]
+    }
+  }
+}
+```
+
+## Core tools
+
+| Tool | Purpose |
+| --- | --- |
+| `list_projects` | List Squadboard projects |
+| `list_issues` | List board cards |
+| `create_issue` | Create a card |
+| `update_issue` | Update a card |
+| `run_agent` | Trigger an agent run |
+| `get_run_status` | Read run status and output |
+| `list_agents` | List active, disabled, retired, or all agents |
+| `list_inbox` | List capture inbox items |
+| `capture` | Capture freeform work or done messages |
+| `slash_command` | Execute a `/squadboard` command |
+| `get_routing` | Read project routing metadata |
+
+GitHub run tools are also available for worktree-backed runs: branch push, PR open/comment/merge, workflow dispatch, workflow polling, workflow listing, default-branch lookup, branch listing, and authenticated-user lookup.
+
+When using upstream Squad, register these as a `squadboard` tool bundle or MCP server recipe so Squad hooks can enforce policy before write tools run. See [Squad tools and hooks](./squad-tools-hooks.mdx).
+
+## Capture loop
+
+Use `capture` for both issue-like work and done messages:
+
+```bash
+capture --prompt "Add a Docusaurus docs site" --hint issue
+capture --prompt "done: Docusaurus docs site builds cleanly"
+```
+
+## Scribe and Ralph
+
+Source: /squadboard/docs/user-guide/scribe-ralph
+
+# Scribe and Ralph
+
+## Scribe close-out
+
+Scribe is the background session logger and close-out helper. Daemon, coordinator, and ceremony lifecycle paths converge on the shared Scribe close-out service.
+
+Close-out can record:
+
+- completion summaries
+- health/report paths
+- directive close-out capture
+- branch and worktree lifecycle metadata
+- next-wave hints
+
+Close-out is intended to be idempotent: running it again without new work should not create duplicate state.
+
+## Directive capture
+
+Directive capture writes durable markdown into `.squad/decisions/inbox/`. MCP capture is fail-open: the markdown and database path should succeed even when auxiliary MCP capture is unavailable.
+
+## Ralph-equivalent monitor
+
+Ralph is the opt-in autonomous work monitor. In upstream Squad, Ralph watches GitHub issues and PRs. In Squadboard, the Ralph-equivalent loop is **board-first**: it looks at the project board's **Ready** semantic column and only uses GitHub signals when the project has GitHub sync configured.
+
+This is the core Squadboard design decision: the multi-agent inner loop happens before work reaches GitHub. A card can be captured, shaped, assigned, run, reviewed, and approved inside Squadboard. GitHub becomes a sync and shipping surface, not the first place work has to exist.
+
+States:
+
+| State | Meaning |
+| --- | --- |
+| `active` | Monitor can pick the next eligible action |
+| `paused` | Monitor is temporarily disabled |
+| `idle` | Monitor ran and found no action |
+| `stopped` | Monitor is off |
+
+Priority order:
+
+1. unassigned cards in the Ready column
+2. Ready-column cards with an assignee or `squad:{member}` label
+3. CI failures
+4. review feedback
+5. approved and green PRs
+6. draft PRs
+
+Every decision, including no-action idle transitions, should be audited.
+
+## Ready work monitor ceremony
+
+Use this ceremony pattern when you want a Ralph-like loop without requiring GitHub:
+
+```text
+Ready work monitor
+  trigger: schedule, agent signal, or project monitor sweep
+  scan: cards where column semantic = ready
+  gates: no active run, project autonomy enabled, agent is active, no blocked parent
+  action: create an issue_run for assigned work, or record a routing decision for unassigned work
+  result: run moves card to In Progress; review/approval moves it toward Done
+```
+
+When GitHub is connected, the same monitor can also surface CI failures, review feedback, draft PRs, and approved PRs. Those are follow-up signals; they do not replace the Ready-column pickup path.
+
+```mermaid
+sequenceDiagram
+  autonumber
+  participant Board as Squadboard board
+  participant Ralph as Ralph-equivalent monitor
+  participant Coord as Coordinator gates
+  participant Agent as Assigned agent
+  participant Review as Review ceremony
+  participant GitHub as Optional GitHub sync
+
+  Board->>Ralph: Card enters Ready
+  Ralph->>Coord: Check active run, assignee, labels, parents, availability
+  Coord-->>Ralph: Dispatch, route, skip, or ask for clarification
+  Ralph->>Agent: Create issue_run for eligible work
+  Agent-->>Board: Output and run events
+  Board->>Review: Review/approval before shipping
+  Review-->>GitHub: Open PR or sync issue only when configured
+```
+
+## Security
+
+Source: /squadboard/docs/user-guide/security
+
+# Security
+
+## Local-first default
+
+Squadboard is designed to run locally by default. The database, `.squad/` files, generated reports, and decision inbox entries stay on the machine unless you configure external services.
+
+## GitHub credentials
+
+Use GitHub Apps when possible for fine-grained permissions. Personal access tokens are supported but should be scoped narrowly.
+
+Private keys and tokens are sensitive. Do not commit them to source control.
+
+## MCP trust boundary
+
+Stdio MCP runs as a subprocess of the local client. HTTP MCP should use HTTPS and token auth outside localhost development. Only expose MCP tools that a project actually needs.
+
+## Worktrees and branches
+
+Cleanup only removes safe worktrees and safe `squad/*` branches. Path operations should fail closed when a path is unsafe or ambiguous.
+
+## LLM boundaries
+
+The LLM does not own hard safety decisions. Deterministic code owns dependency gates, circuit breakers, availability, audit writing, path safety, and schema validation.
+
+## Responsible AI stance
+
+Squadboard is alpha software. Keep human review on code changes, GitHub writes, imports, and any workflow that affects shared repositories. Use it for bounded assistance and auditable orchestration, not unchecked production automation.
+
+## Squad Apps
+
+Source: /squadboard/docs/user-guide/squad-apps
+
+# Squad Apps
+
+A Squad App is a portable, self-describing package that can stand up a Squadboard project in one step. It packages the parts of a multi-agent workflow that normally live across `.squad/`, the database, and project configuration.
+
+<IconGrid>
+  <IconCard icon={ArrowUploadRegular} title="Install an operating model">Bring in team, board, ceremonies, skills, tools, and seed work together.</IconCard>
+  <IconCard icon={DocumentCopyRegular} title="Review before use">Inspect manifests and templates before running imported automation.</IconCard>
+  <IconCard icon={ShieldRegular} title="Treat imports carefully">Prompt instructions and tool recipes are code-adjacent configuration.</IconCard>
+</IconGrid>
+
+<ScreenshotGrid>
+  <Screenshot src="/img/scenarios/spark-10-templates-projects.png" alt="Spark project template import page." caption="Project templates and Squad Apps are reviewed from the Templates surface." />
+  <Screenshot src="/img/scenarios/spark-09-templates-ceremonies.png" alt="Spark ceremony template page." caption="An app can include reusable ceremonies as part of the package." />
+  <Screenshot src="/img/scenarios/spark-11-ceremonies.png" alt="Spark ceremonies after import." caption="Imported ceremonies become normal project automation." />
+</ScreenshotGrid>
+
+## What a Squad App can include
+
+- project metadata and README content
+- kanban columns and default board setup
+- project agents and charters
+- ceremonies and workflows
+- skills using SKILL.md format
+- tools and MCP server recipes
+- routing rules
+- seed issues
+
+## Squad App vs template vs upstream Squad plugin
+
+| Artifact | Scope | Best for |
+| --- | --- | --- |
+| Template | One saved team, workflow, ceremony, or project bundle | Reusing local Squadboard artifacts |
+| Squad App | Complete installable project package | Shipping a full operating model with team, board, ceremonies, skills, and seed backlog |
+| Squad plugin | Individual skill/tool/instruction convention from upstream [Squad](https://github.com/bradygaster/squad) | Sharing capabilities across agents and clients |
+
+Squad Apps can contain SKILL.md files that follow the upstream Squad plugin convention. That lets an app bundle a full project while still sharing individual skills with Squad-compatible tooling.
+
+## Canonical layout
+
+```text
+.squadapp/
+  squadapp.json
+  README.md
+  project.json
+  team/
+  ceremonies/
+  workflows/
+  skills/
+  tools/
+  mcp/
+  routing/
+  issues/
+```
+
+`squadapp.json` is the required manifest. Other directories are optional and are merged into the installed project when present.
+
+## Manifest essentials
+
+```json
+{
+  "schemaVersion": 1,
+  "appId": "my-squad-app",
+  "version": "1.0.0",
+  "name": "My Squad App",
+  "kind": "project-template",
+  "requires": {
+    "squadboard": ">=0.1.0"
+  }
+}
+```
+
+Supported `kind` values include `project-template`, `skills-pack`, `team-preset`, and `ceremony-pack`.
+
+See the canonical repository spec in `docs/squadapp-spec.md` for the complete field reference.
+
+## Squad integration
+
+Source: /squadboard/docs/user-guide/squad-integration
+
+# Squad integration
+
+Squadboard is designed to complement upstream [Squad](https://github.com/bradygaster/squad), not replace it. Squad provides the Copilot CLI driver conventions and `.squad/` team model; Squadboard provides durable product state, UI, automation, imports, and audit trails.
+
+<IconGrid>
+  <IconCard icon={FolderRegular} title=".squad/ stays shared">Charters, decisions, skills, and conventions remain repository-owned.</IconCard>
+  <IconCard icon={ClipboardTaskListLtrRegular} title="Board state is durable">Cards and runs are queryable after the chat session ends.</IconCard>
+  <IconCard icon={PlugConnectedRegular} title="MCP connects clients">Copilot CLI and VS Code can interact through explicit tools.</IconCard>
+</IconGrid>
+
+<ScreenshotGrid>
+  <Screenshot src="/img/scenarios/spark-01-projects.png" alt="Spark project entry in Squadboard." caption="A Squadboard project points at the repository workspace that owns `.squad/`." />
+  <Screenshot src="/img/scenarios/spark-13-mcp-list.png" alt="Spark MCP server configuration." caption="MCP is the bridge for Copilot CLI, VS Code, and services that need board tools." />
+  <Screenshot src="/img/scenarios/spark-03-board-plan.png" alt="Spark board state." caption="Driver directives can become durable board state rather than remaining in a single chat." />
+</ScreenshotGrid>
+
+## Responsibilities
+
+| Layer | Owns |
+| --- | --- |
+| Squad | Copilot CLI driver behavior, `.squad/` team conventions, agent-oriented prompts, and SKILL.md-style plugin conventions |
+| Squadboard | Durable board state, deterministic coordinator decisions, run history, ceremonies, imports, GitHub sync, MCP tools, and UI/audit surfaces |
+
+The integration goal is coexistence: work that the Squad driver can understand should also be representable as durable Squadboard state.
+
+## Architecture
+
+```mermaid
+flowchart LR
+  User[User] --> CLI[Copilot CLI + upstream Squad]
+  User --> UI[Squadboard UI]
+  CLI --> MCP[Squadboard MCP tools]
+  UI --> API[Squadboard API]
+  MCP --> API
+  API --> DB[(Shared PostgreSQL database state)]
+  API --> FS[Repository .squad/ files]
+  API --> Coordinator[Deterministic coordinator loops]
+  Coordinator --> Runs[Agent runs]
+  Runs --> FS
+  Runs --> DB
+  API --> GitHub[GitHub sync]
+```
+
+The important split is ownership: upstream Squad keeps the repository-native team conventions and Copilot CLI driver style; Squadboard turns those conventions into durable project state, repeatable loops, and auditable run history.
+
+## Use of Squad SDK integration
+
+Squadboard does use upstream Squad's integration surface when it runs agents. The server bridge builds a Squad-compatible spawn prompt, then creates a session through `@bradygaster/squad-sdk/client`'s `SquadClient`. That means the web board is not pretending to be Copilot CLI; it is a durable operator surface that delegates execution through the Squad client adapter.
+
+| Upstream integration concept | Squadboard implementation |
+| --- | --- |
+| `SquadClient` connection/session lifecycle | `packages/server/src/sdk/squad-client.ts` |
+| Spawn prompt context | `packages/server/src/sdk/spawn-prompt.ts` |
+| Run bridge and output capture | `packages/server/src/sdk/bridge.ts` |
+| Tool surface for external clients | Squadboard MCP stdio/HTTP server |
+
+## How data moves
+
+1. A user works in Copilot CLI with Squad, VS Code, or another MCP-capable client.
+2. The Squadboard MCP server exposes tools such as `capture`, `create_issue`, `run_agent`, and `get_run_status`.
+3. Directives from the driver can become Squadboard inbox entries, board cards, or `.squad/decisions/inbox/` decision files.
+4. Squadboard can spawn project agents with context compatible with the Squad team conventions.
+5. Close-out writes auditable results back to board/run state.
+
+```mermaid
+sequenceDiagram
+  autonumber
+  actor User
+  participant Squad as Upstream Squad / Copilot CLI
+  participant MCP as Squadboard MCP
+  participant API as Squadboard API
+  participant Coord as Coordinator loop
+  participant Agent as Assigned agent
+  participant Memory as .squad/ + board state
+
+  User->>Squad: Describe ambiguous launch work
+  Squad->>MCP: capture directive or create board card
+  MCP->>API: Persist inbox/card with project context
+  API->>Memory: Write durable state
+  Coord->>API: Pick Ready-column work
+  API->>Coord: Return labels, parents, rules, roles, and recent runs
+  Coord->>Agent: Start run with Squad-compatible context
+  Agent->>Memory: Deliver changes, evidence, and close-out notes
+  API->>Squad: Run status remains queryable through MCP
+```
+
+## What stays shared
+
+- `.squad/agents/` charters
+- `.squad/decisions/inbox/` team memory
+- routing and ceremony conventions
+- SKILL.md-style skills
+- MCP server recipes
+
+## What is deterministic in Squadboard
+
+Squadboard owns repeatable control flow: dependency gates, availability checks, circuit-breaker decisions, schema validation, routing logs, close-out metadata, and worktree cleanup. LLM calls stay bounded to ambiguity such as semantic role fit and summarization.
+
+## Setup pointers
+
+Use the [MCP integration](./mcp.mdx) guide to connect Copilot CLI or VS Code to Squadboard. Use [Copilot CLI + Squad coexistence](./copilot-squad-coexistence.md) to understand how Squadboard maps driver behavior to durable server state.
+
+## Squad tools and hooks
+
+Source: /squadboard/docs/user-guide/squad-tools-hooks
+
+# Squad tools and hooks
+
+Upstream Squad exposes a `ToolRegistry` and hook pipeline. Squadboard currently exposes its integration surface through MCP tools. The two models should converge through an adapter: Squad can register a `squadboard` tool namespace, while Squadboard keeps MCP as the stable cross-client protocol.
+
+## Current Squadboard MCP tools
+
+| Tool | Purpose |
+| --- | --- |
+| `list_projects` | Discover projects and resolved `.squad/` paths. |
+| `list_issues` | Read board cards, optionally by column. |
+| `create_issue` | Create a board card directly. |
+| `update_issue` | Patch title, body, status, assignee, or labels. |
+| `run_agent` | Trigger an agent run for a card. |
+| `get_run_status` | Read run status, output, model usage, and cost. |
+| `list_agents` | Read available project agents and lifecycle status. |
+| `list_inbox` | Read captured/directive inbox items. |
+| `capture` | Capture freeform directives or `done:` close-out messages. |
+| `slash_command` | Execute `/squadboard` command handlers. |
+| `get_routing` | Read project routing metadata. |
+
+GitHub-oriented tools such as `github_push_branch`, `github_open_pr`, `github_comment_issue`, workflow dispatch/polling, and PR merge helpers are also present for run/worktree workflows.
+
+## Should these be registered in Squad's tools-and-hooks layer?
+
+Yes, when running inside upstream Squad, the MCP tools should be presented as registered Squad tools or a tool bundle. That gives Squad agents a familiar policy surface while keeping Squadboard responsible for durable board state.
+
+Recommended mapping:
+
+| Squad concept | Squadboard mapping |
+| --- | --- |
+| `ToolRegistry` | Register the MCP-backed `squadboard.*` tool bundle. |
+| Pre-tool hooks | Enforce project policy before write tools such as `create_issue`, `update_issue`, `run_agent`, and GitHub actions. |
+| Post-tool hooks | Record audit events, close-out notes, or follow-up cards after writes. |
+| Built-in `decision` / `memory` tools | Prefer `capture` for durable Squadboard inbox and `.squad/decisions/inbox/` writes. |
+
+The current implementation is MCP-first. A direct upstream Squad `ToolRegistry` adapter is not part of this slice.
+
+## Storage provider alignment
+
+Source: /squadboard/docs/user-guide/storage-provider
+
+# Storage provider alignment
+
+Upstream Squad has a `StorageProvider` interface for team state such as sessions, decisions, agent memories, and event logs. Squadboard now defaults to a **PostgreSQL-backed adapter** so Squad state flows through the same database that Squadboard uses for product state. Multiple compatible processes can share the same database when pointing to the same PostgreSQL instance.
+
+## Storage split: default provider vs filesystem fallback
+
+### Default behavior (PostgreSQLStorageProvider + PGlite)
+
+By default, Squadboard reads and writes Squad state through `PostgreSQLStorageProvider`, backed by **PGlite** (embedded PostgreSQL) for local development:
+
+| State | Owner |
+| --- | --- |
+| Product state | PGlite (embedded PostgreSQL) at `~/.squadboard/data/` |
+| Team conventions | PostgreSQL `squad_storage` table after one-time import from `.squad/` |
+| Agent runs and audit records | PGlite database plus `.squad/` close-out artifacts |
+| GitHub state | Optional sync layer, only when configured |
+
+PGlite is a pure-WASM implementation of PostgreSQL—it provides the same SQL features as standalone PostgreSQL (JSON columns, enums, UUIDs, etc.) and requires no external binaries or setup.
+
+This gives local development a real PostgreSQL-compatible provider without requiring a running database. Existing `.squad/` files are imported into an empty DB-backed project once on startup; after that, PostgreSQL is the active Squad state store until you explicitly choose filesystem fallback.
+
+### Filesystem fallback
+
+Use filesystem mode when you intentionally want repository `.squad/` files to stay as the live state store:
+
+```bash
+pnpm run dev:fs
+# or
+squadboard init --squad-storage fs
+# or
+squadboard start --squad-storage fs
+```
+
+This changes the split:
+
+| State | Owner (with filesystem fallback) |
+| --- | --- |
+| Squad state (agents, decisions, etc.) | Repository `.squad/` files via `FSStorageProvider` |
+| Squadboard product state | PostgreSQL database |
+| Repository `.squad/` files | Live state and portable Git artifact |
+| GitHub state | Optional sync layer, only when configured |
+
+Filesystem mode is the compatibility fallback. Non-canonical provider names such as `pglite` also fall back to filesystem; `pglite` is the database engine, not a StorageProvider selector.
+
+## Sync boundary: understanding what is NOT shared
+
+**PostgreSQL state is database-backed but requires compatible configuration.** It does NOT automatically establish sync in these scenarios:
+
+1. **External Squad CLI or Copilot CLI agents** cannot directly access Squadboard's database without being configured to use the same PostgreSQL instance. They default to `.squad/` files on disk.
+2. **Cross-machine sync** is not automatic unless external agents point to the same `DATABASE_URL` or use Squadboard's MCP bridge.
+3. **Other team members** see `.squad/` files in the repo unless they configure `DATABASE_URL` to the shared PostgreSQL instance, or unless Squadboard exports state back to `.squad/`.
+
+Sync must be established by explicit bridges:
+
+- **Filesystem bridge** – Squadboard → export state back to `.squad/` files (for repository portability and multi-machine access).
+- **PostgreSQL configuration** – external Squad CLI, Copilot, or other tools point `DATABASE_URL` to the same PostgreSQL instance as Squadboard. This requires a compatible PostgreSQL StorageProvider adapter in the external tool.
+- **MCP bridge** – external Squad CLI, Copilot CLI, or VS Code call Squadboard tools (which read/write the shared database through the Squadboard process).
+- **GitHub bridge** – opt in to issue, PR, and workflow sync.
+
+## When to use each
+
+### Use PostgreSQLStorageProvider (default)
+- Squadboard is the **primary source of truth** for squad orchestration.
+- You want one database-backed state store for cards, runs, agents, decisions, and ceremonies.
+- Multiple compatible processes (Squad CLI, Copilot, Squadboard) can share the same database by pointing to the same PostgreSQL instance.
+- You want local embedded PGlite for single-process workflows, or an external PostgreSQL instance that all agents can reach via `DATABASE_URL`.
+
+### Use FSStorageProvider (fallback)
+- Team shares a Git repository; `.squad/` is version-controlled and portable.
+- Squad CLI runs on different machines (CI, local dev, cloud agents) without database access.
+- You want state changes visible in `git diff` and reviewed in PRs.
+
+## Configuration recipes for shared storage
+
+### Recipe 1: Quick start — zero-config PostgreSQL launch
+
+**For an existing Squad repo (where `.squad/` exists):**
+
+```bash
+pnpm run dev
+```
+
+That's it. Squadboard will:
+1. Use the embedded PostgreSQL database automatically (`@electric-sql/pglite`)
+2. Detect your `.squad/` directory
+3. Import your existing agents, decisions, and ceremonies into the PostgreSQL database on startup (one-time)
+4. Store all future Squad state in the `squad_storage` table alongside Squadboard product state
+
+After the one-time import on startup, changes in Squadboard do not sync back to `.squad/` files. You can always export state back to `.squad/` later for portability.
+
+For explicit automation, `pnpm run dev:postgresql` is equivalent and makes the provider choice obvious.
+
+**For a fresh Squadboard (no existing `.squad/`):**
+
+```bash
+pnpm run dev
+```
+
+The embedded PostgreSQL database handles everything; no external database setup required. No state to import, so you start fresh in the database.
+
+**Using the CLI:**
+
+```bash
+squadboard init
+# explicit form:
+squadboard start --squad-storage postgresql
+# or use the alias:
+squadboard start --postgresql-storage
+```
+
+**Server only (no client):**
+
+```bash
+pnpm --filter @sabbour/squadboard dev:postgresql
+```
+
+### Recipe 1A: Configure Copilot CLI and `squad.agent.md` through MCP
+
+Stock Copilot CLI and the `squad.agent.md` coordinator prompt do not inject JavaScript `StorageProvider` instances directly. The portable default is to make Squadboard the state broker through MCP:
+
+```bash
+squadboard init --write-mcp-config
+# or inspect the config first:
+squadboard init --print-mcp-config
+```
+
+`--write-mcp-config` merges a `squadboard` entry into `.copilot/mcp-config.json` with:
+
+```json
+{
+  "mcpServers": {
+    "squadboard": {
+      "command": "squadboard",
+      "args": ["mcp"],
+      "env": {
+        "SQUADBOARD_SQUAD_STORAGE_PROVIDER": "postgresql"
+      }
+    }
+  }
+}
+```
+
+With that config, Copilot plus `squad.agent.md` should use Squadboard MCP tools (`capture`, `create_issue`, `run_agent`, `get_run_status`, `get_routing`) for shared state instead of editing `.squad/` files directly. Add `SQUADBOARD_DEFAULT_PROJECT_ID` to the same `env` block if you want project-scoped tools to run without passing a project ID.
+
+### Recipe 1B: Filesystem fallback
+
+```bash
+pnpm run dev:fs
+# or
+squadboard init --squad-storage fs
+```
+
+Use this for Git-first workflows where `.squad/` files should remain the live state store.
+
+### Recipe 1C: Override with an external (shared) PostgreSQL instance
+
+If you need to share Squad state across multiple machines or processes, point `DATABASE_URL` to your external PostgreSQL instance:
+
+```bash
+DATABASE_URL=postgresql://user:password@host:port/squadboard pnpm run dev
+```
+
+Squadboard will connect to the external database and use it for both product and Squad state.
+
+### Recipe 1D: Understanding the embedded database (PGlite)
+
+By default, Squadboard ships with **PGlite** (`@electric-sql/pglite`)—a pure-WASM implementation of PostgreSQL that runs in-process with no external binary dependencies. It stores data at `~/.squadboard/data/` and provides the exact same SQL features (JSON columns, enums, UUIDs, etc.) as standalone PostgreSQL.
+
+**When PGlite is used:**
+- You run `pnpm run dev`, `pnpm run dev:postgresql`, `squadboard init`, or `squadboard start --squad-storage postgresql`
+- Squad state and product state both live in the PGlite database
+- No external PostgreSQL installation or setup needed—download and run
+
+**When to use an external PostgreSQL instance instead:**
+- You need to share state across multiple machines or processes
+- You have a team database that all agents can reach via `DATABASE_URL`
+- You prefer to manage PostgreSQL separately from Squadboard
+
+PGlite handles single-user, local-first workflows perfectly; for multi-user or cloud deployments, override with `DATABASE_URL` pointing to an external PostgreSQL instance.
+
+### Recipe 2: External agents with shared PostgreSQL (advanced)
+
+If you're running external Squad CLI or Copilot CLI agents that need to see the same Squad state as Squadboard, they must be configured to use the same PostgreSQL instance **and have compatible StorageProvider implementations**.
+
+```bash
+# Squadboard side
+DATABASE_URL=postgresql://user:password@host:port/squadboard pnpm run dev
+
+# External Squad CLI or Copilot CLI side (requires compatible build)
+export DATABASE_URL=postgresql://user:password@host:port/squadboard
+export SQUAD_STORAGE_PROVIDER=postgresql  # only if your upstream build documents this
+squad chat
+```
+
+**Caveat:** This requires that your external CLI build has a compatible PostgreSQL StorageProvider implementation and a documented provider-selection config. The Squad SDK supports provider injection in code (`SquadState.create(provider, rootDir)` / `SquadState.fromStorage(provider, rootDir)`), but a separate CLI process must expose its own config surface before Squadboard can force it to use that provider. Stock Copilot CLI does not have direct DB provider injection—use **Recipe 3** (MCP bridge mode) instead for full portability.
+
+### Recipe 3: Copilot CLI via Squadboard MCP bridge (works with stock CLI)
+
+The most portable option—use stock Copilot CLI and let Squadboard be the database broker:
+
+```bash
+# Squadboard side: start with default PostgreSQL storage
+pnpm run dev
+# MCP server listens on stdio or HTTP (configure in Squadboard UI under "MCP Servers")
+
+# Copilot CLI side: no database configuration needed
+export COPILOT_MCP=http://localhost:3000/mcp  # or stdio command from Squadboard MCP page
+copilot
+# Use capture, create_issue, run_agent, get_run_status tools to interact with shared state
+```
+
+In this mode, Copilot CLI calls explicit Squadboard tools instead of reading/writing the database directly. Work stays visible in Squadboard's board and run history.
+
+## Portability and export/import
+
+Regardless of which StorageProvider is active, Squadboard always supports:
+
+- **Export Squad state to `.squad/` files** – write a snapshot for repository commits or cross-machine handoff.
+- **Import `.squad/` files from a Git repository** – restore a prior state or migrate from another Squadboard instance.
+
+This ensures your squad definition and decisions can always move between Squadboard instances and match the canonical `.squad/` format.

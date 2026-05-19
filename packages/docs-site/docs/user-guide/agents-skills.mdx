@@ -1,0 +1,49 @@
+---
+title: Agents and skills
+description: Manage project agents, virtual Copilot members, human collaborators, and reusable skills.
+---
+
+import {BotRegular, PeopleRegular, LibraryRegular} from '@fluentui/react-icons';
+import {IconCard, IconGrid, Screenshot, ScreenshotGrid} from '../../src/components/FluentDoc';
+
+# Agents and skills
+
+Squadboard treats the project roster as shared repository state. The canonical team lives under the project's `.squad/` directory so Copilot CLI, upstream [Squad](https://github.com/bradygaster/squad), and Squadboard all see the same team conventions.
+
+<IconGrid>
+  <IconCard icon={BotRegular} title="Project agents">Runnable project participants with charters and expertise.</IconCard>
+  <IconCard icon={PeopleRegular} title="Casting">Proposal flows help define missing roles without hiding the final roster.</IconCard>
+  <IconCard icon={LibraryRegular} title="Skills">Reusable SKILL.md-style instructions can be assigned to agents.</IconCard>
+</IconGrid>
+
+<ScreenshotGrid>
+  <Screenshot src="/img/scenarios/spark-06-agents.png" alt="Spark agents page." caption="Agent roles and expertise make future routes understandable." />
+  <Screenshot src="/img/scenarios/spark-07-team-casting.png" alt="Spark team-casting dialog." caption="Casting turns a team gap into an editable proposal." />
+  <Screenshot src="/img/scenarios/spark-08-consult.png" alt="Spark Consult page." caption="Consult lets the team explore ambiguity before changing project state." />
+</ScreenshotGrid>
+
+## Agent origins
+
+| Origin | Meaning |
+| --- | --- |
+| `project` | Project-local agent from `.squad/agents/` |
+| `virtual-copilot` | Virtual Copilot/system member used for dispatcher-style work |
+| `human` | Human collaborator represented in review, approval, or handoff state |
+
+Origin metadata appears in server APIs and UI badges so users can tell whether a participant is runnable, read-only, or human-owned.
+
+## Project agents
+
+Project agents can have charters, history files, roles, focus areas, capabilities, and assigned skills. Because they live in project state, they can be versioned, reviewed, and imported through Squadboard templates or Squad Apps.
+
+## Consult
+
+Consult remains a brainstorming surface. Use it with a project agent or raw model to explore ambiguity, draft options, and create proposals. Consult does not mutate project state until a user explicitly accepts a proposal.
+
+## Skills
+
+Skills are reusable prompt addenda and capabilities. Assigned skills are injected into spawn prompts so agents see the relevant operating instructions at run time. Squad Apps can include `skills/<key>/SKILL.md` files using the same SKILL.md convention used by upstream Squad plugins.
+
+## MCP tools
+
+MCP tool context can be included in the agent prompt. Keep tool assignment narrow and project-specific so agents have the right capabilities without broad ambient authority.

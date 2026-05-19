@@ -1,0 +1,30 @@
+apiVersion: squad.io/v1
+kind: Ceremony
+metadata:
+  name: sprint-retro
+  displayName: Sprint Retro
+  description: Review what happened, extract themes, and capture process improvements for the next sprint.
+spec:
+  trigger:
+    type: manual
+  steps:
+    - id: gather-sprint-evidence
+      kind: agent-task
+      label: Gather sprint evidence
+      agent: "@lead"
+      prompt: "Review completed cards, run history, review notes, incidents, and unresolved follow-ups from the sprint. Highlight what actually happened."
+      timeout: 45m
+    - id: identify-retro-themes
+      kind: agent-task
+      label: Identify retro themes
+      agent: "@lead"
+      prompt: "Group the evidence into what went well, what slowed the team down, and concrete experiments or process improvements for the next sprint."
+      timeout: 45m
+    - id: accept-follow-ups
+      kind: approve
+      label: Accept follow-ups
+      approvers:
+        - "@lead"
+      request_changes_policy: first
+      timeout: 24h
+      timeoutAction: notify

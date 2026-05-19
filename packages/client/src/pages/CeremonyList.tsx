@@ -2,11 +2,10 @@
  * CeremonyList.tsx — Fluent2 DataGrid list of ceremonies for a project.
  *
  * Columns: Name (clickable), Trigger (Badge), Kind (Badge), Created (relative + Tooltip).
- * Toolbar: Review-drafts subtle button with CounterBadge + End wave button + primary New-ceremony button.
+ * Toolbar: Review-drafts subtle button with CounterBadge + primary New-ceremony button.
  * Empty state: centred card with CTA when no ceremonies exist.
  */
 
-import { useState } from 'react'
 import { useParams, useNavigate } from 'react-router'
 import { useProject } from '../api/projects.ts'
 import {
@@ -14,11 +13,10 @@ import {
   useDraftCeremonies,
   type Ceremony,
 } from '../api/ceremonies.ts'
-import { apiFetch } from '../api/client.ts'
 import PageHeader from '../components/layout/PageHeader.tsx'
 import { TriggerBadge, KindBadge, ScopeBadge, OriginBadge } from '../components/ceremony/CeremonyBadges.tsx'
 import { safeRelativeTime, safeAbsoluteTime } from '../utils/dates.ts'
-import { ActionLoading, PageLoading } from '../components/loading/index.tsx'
+import { PageLoading } from '../components/loading/index.tsx'
 import {
   Button,
   Caption1,
@@ -36,17 +34,8 @@ import {
   TableCellLayout,
   createTableColumn,
   type TableColumnDefinition,
-  Dialog,
-  DialogTrigger,
-  DialogSurface,
-  DialogTitle,
-  DialogBody,
-  DialogContent,
-  DialogActions,
-  MessageBar,
-  MessageBarBody,
 } from '@fluentui/react-components'
-import { Add16Regular, Flag20Regular, ChartMultiple20Regular } from '@fluentui/react-icons'
+import { Add16Regular, ChartMultiple20Regular } from '@fluentui/react-icons'
 
 const columns: TableColumnDefinition<Ceremony>[] = [
   createTableColumn<Ceremony>({
@@ -99,36 +88,6 @@ export default function CeremonyList() {
   const { data: drafts } = useDraftCeremonies(projectId)
   const draftCount = drafts?.length ?? 0
 
-  // End Wave state
-  const [endWaveOpen, setEndWaveOpen] = useState(false)
-  const [endWaveRunning, setEndWaveRunning] = useState(false)
-  const [endWaveToast, setEndWaveToast] = useState<{ kind: 'success' | 'error'; msg: string } | null>(null)
-
-  async function handleEndWave() {
-    setEndWaveRunning(true)
-    setEndWaveToast({ kind: 'success', msg: 'Running Scribe close-out…' })
-    setEndWaveOpen(false)
-    try {
-      const result = await apiFetch<{ ok: boolean; result?: { commitSha?: string } }>(
-        `/api/projects/${projectId}/ceremonies/invoke`,
-        {
-          method: 'POST',
-          body: JSON.stringify({ ceremonySlug: 'scribe-close-out', context: { projectId } }),
-        },
-      )
-      const sha = result?.result?.commitSha
-      setEndWaveToast({
-        kind: 'success',
-        msg: sha ? `Wave closed — commit ${sha.slice(0, 7)}` : 'Wave closed',
-      })
-    } catch (err) {
-      setEndWaveToast({ kind: 'error', msg: err instanceof Error ? err.message : 'End wave failed' })
-    } finally {
-      setEndWaveRunning(false)
-      setTimeout(() => setEndWaveToast(null), 8000)
-    }
-  }
-
   const toolbar = (
     <div style={{ display: 'flex', alignItems: 'center', gap: tokens.spacingHorizontalS }}>
       {draftCount > 0 && (
@@ -149,16 +108,6 @@ export default function CeremonyList() {
           onClick={() => navigate(`/projects/${projectId}/ceremonies/audit`)}
         >
           Audit
-        </Button>
-      </Tooltip>
-      <Tooltip content="Manually trigger end-of-wave Scribe close-out" relationship="description">
-        <Button
-          appearance="subtle"
-          icon={endWaveRunning ? <ActionLoading label="Ending wave…" /> : <Flag20Regular />}
-          disabled={endWaveRunning}
-          onClick={() => setEndWaveOpen(true)}
-        >
-          End wave
         </Button>
       </Tooltip>
       <Button
@@ -229,43 +178,6 @@ export default function CeremonyList() {
         background: tokens.colorNeutralBackground1,
       }}
     >
-      {/* End Wave confirmation dialog */}
-      <Dialog open={endWaveOpen} onOpenChange={(_, d) => { if (!endWaveRunning) setEndWaveOpen(d.open) }}>
-        <DialogSurface>
-          <DialogBody>
-            <DialogTitle>End the current wave?</DialogTitle>
-            <DialogContent>
-              <Body1>
-                This will run Scribe close-out: merge inbox decisions into{' '}
-                <strong>decisions.md</strong>, archive old history, and commit. Takes ~30 seconds.
-              </Body1>
-            </DialogContent>
-            <DialogActions>
-              <DialogTrigger disableButtonEnhancement>
-                <Button appearance="secondary" disabled={endWaveRunning}>Cancel</Button>
-              </DialogTrigger>
-              <Button
-                appearance="primary"
-                icon={endWaveRunning ? <ActionLoading label="Ending wave…" /> : <Flag20Regular />}
-                disabled={endWaveRunning}
-                onClick={() => void handleEndWave()}
-              >
-                End wave
-              </Button>
-            </DialogActions>
-          </DialogBody>
-        </DialogSurface>
-      </Dialog>
-
-      {/* End Wave toast */}
-      {endWaveToast && (
-        <div style={{ padding: '8px 24px 0' }}>
-          <MessageBar intent={endWaveToast.kind === 'success' ? 'success' : 'error'}>
-            <MessageBarBody>{endWaveToast.msg}</MessageBarBody>
-          </MessageBar>
-        </div>
-      )}
-
       <PageHeader
         eyebrow={project?.name?.toUpperCase()}
         title="Ceremonies"

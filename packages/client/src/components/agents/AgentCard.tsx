@@ -1,5 +1,7 @@
 import { useState } from 'react'
 import { type Agent } from '../../api/agents.ts'
+import { getAgentOriginBadge } from './agent-origin.ts'
+import { formatAgentDisplayName } from './display-name.ts'
 
 interface AgentCardProps {
   agent: Agent
@@ -27,6 +29,8 @@ export default function AgentCard({ agent, onClick, muted = false }: AgentCardPr
   const [hovered, setHovered] = useState(false)
   const avatarBg = getAvatarColor(agent.name)
   const initials = getInitials(agent.name)
+  const originBadge = getAgentOriginBadge(agent)
+  const displayName = formatAgentDisplayName(agent.name)
 
   // Wave 10 B9: three-state legend instead of binary active/!active.
   // Active = green, Disabled = amber (paused, recoverable), Retired = gray
@@ -90,7 +94,7 @@ export default function AgentCard({ agent, onClick, muted = false }: AgentCardPr
               whiteSpace: 'nowrap',
             }}
           >
-            {agent.name}
+            {displayName}
           </div>
           <div
             style={{
@@ -119,6 +123,21 @@ export default function AgentCard({ agent, onClick, muted = false }: AgentCardPr
         />
       </div>
 
+      <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+        <span
+          title={originBadge.title}
+          style={{
+            alignSelf: 'flex-start',
+            fontSize: '11px',
+            padding: '2px 8px',
+            borderRadius: '12px',
+            background: originBadge.background,
+            color: originBadge.color,
+            border: `1px solid ${originBadge.border}`,
+          }}
+        >
+          {originBadge.label}
+        </span>
       {/* Model badge */}
       {agent.model && (
         <span
@@ -136,6 +155,7 @@ export default function AgentCard({ agent, onClick, muted = false }: AgentCardPr
           {agent.model}
         </span>
       )}
+      </div>
     </button>
   )
 }

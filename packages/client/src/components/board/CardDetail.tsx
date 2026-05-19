@@ -43,7 +43,7 @@ interface CardDetailProps {
   initialTab?: Tab
 }
 
-type Tab = 'overview' | 'runs' | 'deliverables' | 'flow'
+type Tab = 'overview' | 'runs' | 'outputs' | 'flow'
 
 export default function CardDetail({ projectId, issue, onClose, initialTab }: CardDetailProps) {
   const panelRef = useRef<HTMLDivElement>(null)
@@ -79,7 +79,7 @@ export default function CardDetail({ projectId, issue, onClose, initialTab }: Ca
 
   const COLUMN_LABELS: Record<string, string> = {
     backlog: 'Backlog',
-    todo: 'Todo',
+    ready: 'Ready',
     in_progress: 'In Progress',
     in_review: 'In Review',
     done: 'Done',
@@ -154,7 +154,7 @@ export default function CardDetail({ projectId, issue, onClose, initialTab }: Ca
 
           {/* Tabs */}
           <div style={{ display: 'flex', padding: '0 20px', gap: '2px' }}>
-            {(['overview', 'runs', 'deliverables', 'flow'] as Tab[]).map((tab) => {
+            {(['overview', 'runs', 'outputs', 'flow'] as Tab[]).map((tab) => {
               let label: string
               if (tab === 'overview') label = 'Overview'
               else if (tab === 'runs')
@@ -163,8 +163,8 @@ export default function CardDetail({ projectId, issue, onClose, initialTab }: Ca
               else
                 label =
                   deliverables && deliverables.length > 0
-                    ? `Deliverables (${deliverables.length})`
-                    : 'Deliverables'
+                    ? `Outputs (${deliverables.length})`
+                    : 'Outputs'
               return (
                 <button
                   key={tab}
@@ -203,7 +203,9 @@ export default function CardDetail({ projectId, issue, onClose, initialTab }: Ca
                 {issue.assignee && (
                   <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                     <Avatar name={issue.assignee.name} avatarUrl={issue.assignee.avatarUrl} size={20} />
-                    <Caption1 style={{ color: tokens.colorNeutralForeground2 }}>{issue.assignee.name}</Caption1>
+                    <Caption1 style={{ color: tokens.colorNeutralForeground2 }}>
+                      {issue.assignee.name}{issue.assignee.role ? ` — ${issue.assignee.role}` : ''}
+                    </Caption1>
                   </div>
                 )}
                 <Caption1 style={{ color: tokens.colorNeutralForeground2 }}>
@@ -305,11 +307,11 @@ export default function CardDetail({ projectId, issue, onClose, initialTab }: Ca
                 </div>
               )}
 
-              {/* Workflow section */}
+              {/* Run plan section */}
               <div>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
                   <Caption1 as="p" style={{ display: 'block', color: tokens.colorNeutralForeground2, textTransform: 'uppercase', letterSpacing: '0.05em', margin: 0 }}>
-                    Workflow
+                    Run plan
                   </Caption1>
                   <button
                     onClick={() => setShowAttachModal(true)}
@@ -322,7 +324,7 @@ export default function CardDetail({ projectId, issue, onClose, initialTab }: Ca
                       padding: 0,
                     }}
                   >
-                    {issue.attachedWorkflowId ? 'Change' : '+ Attach'}
+                    {issue.attachedWorkflowId ? 'Change plan' : 'Choose plan'}
                   </button>
                 </div>
 
@@ -340,7 +342,7 @@ export default function CardDetail({ projectId, issue, onClose, initialTab }: Ca
                   >
                     <div>
                       <Body1Strong style={{ display: 'block', color: tokens.colorNeutralForeground1, margin: 0 }}>
-                        <Settings20Regular style={{ verticalAlign: 'middle', marginRight: '4px' }} />{issue.attachedWorkflowName ?? 'Workflow'}
+                        <Settings20Regular style={{ verticalAlign: 'middle', marginRight: '4px' }} />{issue.attachedWorkflowName ?? 'Run plan'}
                       </Body1Strong>
                       {workflowRun && (
                         <Caption1 style={{ display: 'block', color: tokens.colorNeutralForeground2, margin: '2px 0 0' }}>
@@ -364,12 +366,26 @@ export default function CardDetail({ projectId, issue, onClose, initialTab }: Ca
                           opacity: startWorkflow.isPending ? 0.5 : 1,
                         }}
                       >
-                        Start Workflow
+                        Start plan
                       </button>
                     )}
                   </div>
                 ) : (
-                  <Caption1 style={{ color: tokens.colorNeutralForeground2 }}>No workflow attached.</Caption1>
+                  <div
+                    style={{
+                      background: tokens.colorNeutralBackground2,
+                      border: `1px dashed ${tokens.colorNeutralStroke1}`,
+                      borderRadius: '6px',
+                      padding: '10px 12px',
+                    }}
+                  >
+                    <Body1Strong style={{ display: 'block', color: tokens.colorNeutralForeground1, margin: 0 }}>
+                      <Settings20Regular style={{ verticalAlign: 'middle', marginRight: '4px' }} />Default plan: Work Pickup
+                    </Body1Strong>
+                    <Caption1 style={{ display: 'block', color: tokens.colorNeutralForeground2, marginTop: '2px' }}>
+                      Runs automatically when this card enters Ready. Label rules can choose a more specific plan.
+                    </Caption1>
+                  </div>
                 )}
 
                 {/* Review panels for approve steps */}
@@ -400,13 +416,13 @@ export default function CardDetail({ projectId, issue, onClose, initialTab }: Ca
                 />
               )}
 
-              {/* Deliverable Intent (O4) */}
+              {/* Expected output metadata (O4) */}
               <Accordion collapsible defaultOpenItems={issue.deliverableType && issue.deliverableType !== 'none' ? ['deliverable'] : []}>
                 <AccordionItem value="deliverable">
                   <AccordionHeader>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                       <Caption1 style={{ textTransform: 'uppercase', letterSpacing: '0.05em', color: tokens.colorNeutralForeground2 }}>
-                        Deliverable
+                        Expected output
                       </Caption1>
                       {issue.deliverableType && issue.deliverableType !== 'none' && (
                         <Badge
@@ -426,6 +442,9 @@ export default function CardDetail({ projectId, issue, onClose, initialTab }: Ca
                   </AccordionHeader>
                   <AccordionPanel>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 12, paddingTop: 8 }}>
+                      <Caption1 style={{ color: tokens.colorNeutralForeground3 }}>
+                        Describe the result this card should produce, such as a PR, doc, deployment, asset, or decision.
+                      </Caption1>
                       <Field label="Type">
                         <Dropdown
                           value={issue.deliverableType ?? 'none'}
@@ -467,7 +486,7 @@ export default function CardDetail({ projectId, issue, onClose, initialTab }: Ca
                               <Option value="rejected">Rejected</Option>
                             </Dropdown>
                           </Field>
-                          <Field label="Link" hint="URL of the artifact when ready (PR, doc, deployment, …)">
+                          <Field label="Output link" hint="URL of the result when ready (PR, doc, deployment, asset, or decision record).">
                             <Input
                               value={issue.deliverableLink ?? ''}
                               placeholder="https://…"
@@ -517,7 +536,7 @@ export default function CardDetail({ projectId, issue, onClose, initialTab }: Ca
             <RunHistory projectId={projectId} issueId={issue.id} />
           )}
 
-          {activeTab === 'deliverables' && (
+          {activeTab === 'outputs' && (
             <DeliverableList projectId={projectId} issueId={issue.id} />
           )}
 

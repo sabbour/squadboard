@@ -1,0 +1,33 @@
+---
+title: Agents and workspaces
+description: Agent origins, skill addenda, Consult behavior, and workspace isolation.
+---
+
+import {BotRegular, SparkleRegular, SettingsRegular} from '@fluentui/react-icons';
+import {IconCard, IconGrid, Screenshot, ScreenshotGrid} from '../../src/components/FluentDoc';
+
+# Agents and workspaces
+
+Squadboard treats agents as durable project participants with explicit origin and execution context.
+
+<IconGrid>
+  <IconCard icon={BotRegular} title="Project agents">Agents live with project context and can be shared through `.squad/`.</IconCard>
+  <IconCard icon={SparkleRegular} title="Consult">Ambiguous decisions can be explored before they mutate project state.</IconCard>
+  <IconCard icon={SettingsRegular} title="Workspaces">Scratch, directory, and worktree strategies isolate parallel runs.</IconCard>
+</IconGrid>
+
+<ScreenshotGrid>
+  <Screenshot src="/img/scenarios/spark-06-agents.png" alt="Spark project agents." caption="Agent roles and expertise are visible before routing work." />
+  <Screenshot src="/img/scenarios/spark-08-consult.png" alt="Spark Consult page." caption="Consult remains proposal-driven; it is not a hidden project mutation path." />
+</ScreenshotGrid>
+
+## Capability summary
+
+| Capability | What it gives you |
+| --- | --- |
+| Project agents | Repository-owned roles, charters, expertise, and origin metadata. |
+| Consult | Proposal-driven brainstorming with project agents or raw models before state changes. |
+| Spawn context | Charter, workspace, requester, history, skills, MCP/tool context, and validation expectations. |
+| Workspace isolation | Scratch, directory, and worktree strategies for parallel runs with auditable cleanup metadata. |
+
+For operating details, use [Agents, skills, tools, and MCP servers](../user-guide/agents-skills.mdx), [MCP integration](../user-guide/mcp.mdx), and [Squad integration](../user-guide/squad-integration.mdx).

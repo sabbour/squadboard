@@ -3,8 +3,8 @@
 > "We build Squadboard with Squadboard."
 
 This document describes the end-to-end cycle by which work captured in the
-Squadboard inbox flows through an AI agent, lands on GitHub, and feeds
-information back into the next agent invocation — closing the loop.
+Squadboard inbox flows through durable routing, agent execution, GitHub, Scribe
+close-out, and decision memory — closing the loop.
 
 ---
 
@@ -15,8 +15,8 @@ Ahmed (human)
   │
   │  "capture: <feature/bug description>"
   ▼
-Squadboard Inbox
-  │  (POST /api/inbox, MCP `capture` tool, or CLI)
+Squadboard Inbox + .squad/decisions/inbox
+  │  (POST /api/inbox, directive capture API, MCP `capture` tool, or CLI)
   │
   ▼
 Conjure classifier
@@ -26,10 +26,8 @@ Conjure classifier
 Issue created in Squadboard project
   │
   ▼
-Routing engine (3-tier)
-  │  Tier 1: keyword match
-  │  Tier 2: scored rules
-  │  Tier 3: LLM routing
+Coordinator
+  │  deterministic prefilters + bounded LLM routing
   │
   ▼
 Ceremony dispatcher
@@ -38,12 +36,12 @@ Ceremony dispatcher
   │
   ▼
 Agent invocation
-  │  Agent reads issue body + external_gh_context
-  │  (external_gh_context contains recent GH events — see G6.6)
+  │  Agent receives spawn prompt with charter, team root, decisions/history,
+  │  skills, MCP context, workspace path/mode, and external_gh_context
   │  Agent works: writes code, commits, pushes
   │
   ▼
-GitHub (optional)
+GitHub + Ralph monitor (optional)
   │  git push → opens PR
   │  PR reviewed / merged
   │  Workflow dispatched / completed
@@ -58,13 +56,13 @@ GitHub Webhook → POST /api/projects/:id/github/webhook
   │    PR merged  → card moves to semantic='done', deliverable_status='accepted'
   │    Label 'blocked' → card moves to semantic='blocked'
   │
-  └─► enrichRunExternalContext (G6.6)
+  └─► enrichRunExternalContext + Scribe close-out
         │  finds active issue_runs tied to the GH issue/PR
         │  appends event to issue_runs.external_gh_context
         │
         ▼
       Next agent invocation sees:
-        issue body + prior output + recent GH events
+        issue body + prior output + recent GH events + decision memory
         → agent is fully contextualised without manual handoff
 ```
 
@@ -72,27 +70,32 @@ GitHub Webhook → POST /api/projects/:id/github/webhook
 
 ## Key phases
 
-### 1. Capture (`squadboard inbox capture`)
+### 1. Capture (`squadboard inbox capture`, directive capture, or MCP)
 
-Ahmed writes a task description. The Conjure classifier converts it to a
-structured issue body (title, acceptance criteria, size estimate). The issue
-lands in the project backlog.
+Ahmed writes a task description or implementation directive. The Conjure
+classifier converts issue-like work to a structured card, while directive
+capture can also write idempotent markdown into `.squad/decisions/inbox/`.
 
 **Relevant code:**
 - `packages/server/src/routes/inbox.ts` — `POST /api/inbox`
 - `packages/server/src/services/conjure-classifier.ts`
+- `packages/server/src/services/directive-capture.ts` — decision inbox files and idempotency
 - `packages/server/src/mcp/server.ts` — `capture` MCP tool
 
 ---
 
 ### 2. Routing → Ceremony → Run
 
-The routing engine reads `routing.md` (per-project) and assigns the issue to an
-agent and ceremony. The ceremony dispatcher creates an `issue_runs` row and
-hands off to the agent executor.
+The coordinator builds a real input from labels, parent links, priority,
+project rules, agent capabilities, and recent run state. Deterministic
+prefilters handle concrete rules before the LLM is asked for semantic role fit.
+The ceremony dispatcher creates an `issue_runs` row and hands off to the agent
+executor.
 
 **Relevant code:**
-- `packages/server/src/engine/router.ts`
+- `packages/server/src/coordinator/input-builder.ts`
+- `packages/server/src/coordinator/prefilters.ts`
+- `packages/server/src/services/coordinator-routing-log.ts`
 - `packages/server/src/services/ceremony-dispatcher.ts`
 - `packages/server/src/services/ceremony-scheduler.ts`
 
@@ -100,9 +103,11 @@ hands off to the agent executor.
 
 ### 3. Agent execution
 
-The agent (e.g. Verbal, Hockney, Keyser) reads the issue body and any
-`external_gh_context` already attached to the run. It works, commits, and
-optionally pushes a branch or opens a PR using the git-ops helpers.
+The agent (e.g. Verbal, Hockney, Keyser) receives the issue, charter, team root,
+requester, workspace path/mode, decision/history instructions, assigned skills,
+MCP context, validation expectations, and any `external_gh_context` already
+attached to the run. It works, commits, and optionally pushes a branch or opens
+a PR using the git-ops helpers.
 
 **Relevant code:**
 - `packages/server/src/services/github-git-ops.ts` — `pushBranch`, `createPr`,
@@ -111,6 +116,7 @@ optionally pushes a branch or opens a PR using the git-ops helpers.
 - MCP tools: `github_push_branch`, `github_open_pr`, `github_dispatch_workflow`,
   `github_poll_workflow_run`, `github_list_workflows`, `github_get_default_branch`,
   `github_list_branches`, `github_whoami`
+- `packages/server/src/sdk/spawn-prompt.ts` — server-side spawn prompt builder
 
 ---
 
@@ -167,33 +173,30 @@ events from `github_events` joined with `issue_runs` git state. The
 ## Sequence diagram (compact)
 
 ```
-Human  →  Inbox  →  Issue  →  Router  →  Ceremony  →  Agent
-                                                         │
-                                                    git push / PR
-                                                         │
-                                                    GitHub Webhook
-                                                         │
-                                           ┌─────────────┴──────────────┐
-                                           │ Card side-effects (G6.3)   │
-                                           │ Enrich run context (G6.6)  │
-                                           └─────────────┬──────────────┘
-                                                         │
-                                                  Next agent turn
-                                              (sees webhook events)
+Human → Inbox/Decisions → Issue → Coordinator → Ceremony → Agent
+                                                              │
+                                                         git push / PR
+                                                              │
+                                                         GitHub Webhook
+                                                              │
+                                       ┌──────────────────────┴──────────────────────┐
+                                       │ Card side-effects + context enrichment      │
+                                       │ Scribe close-out + Ralph monitor decisions  │
+                                       └──────────────────────┬──────────────────────┘
+                                                              │
+                                                       Next agent turn
+                                      (sees webhook events + decision memory)
 ```
 
 ---
 
 ## Follow-ups / known gaps
 
-- **Real-time feed**: the activity endpoint is polling-based; a future item could
-  push events via WebSocket using the existing `event-bus`.
+- **Ralph live actions**: non-pickup GitHub actions are currently prioritized and
+  audited; live auto-merge/remediation remains policy-gated future work.
 - **Context window limits**: `external_gh_context` is capped at 20 events to
   avoid large prompts; a summarisation step could help for long-lived issues.
-- **Dogfood project bootstrap**: the Squadboard project itself is not yet
-  mirrored to GitHub — that wiring (setting `githubSyncEnabled=true` + webhook)
-  completes the loop from spec to GitHub.
 
 ---
 
-_Last updated: 2026-05-16 (Wave 21, Stream G closure)_
+_Last updated: 2026-05-18 (coordinator parity certification)_

@@ -11,7 +11,7 @@ Squadboard provides a unified loading component family in `src/components/loadin
 | `<PageLoading />` | Entire page is not ready (no content to show) | Route-level data fetch |
 | `<SectionLoading />` | A card or panel section is loading; rest of page is interactive | Tab body, member list |
 | `<InlineLoading />` | Next to a label or inside body text | Micro-status indicator |
-| `<ActionLoading />` | Inside a `<Button icon={…}>` while an action is pending | Save, Cast Team, End wave |
+| `<ActionLoading />` | Inside a `<Button icon={…}>` while an action is pending | Save, Cast Team, Run ceremony |
 
 All components are re-exported from the barrel:
 

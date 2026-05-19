@@ -1,4 +1,4 @@
-import { db } from '../db/index.js';
+import { getDb } from '../db/index.js';
 import { agents } from '../db/schema.js';
 import { eq, and, like } from 'drizzle-orm';
 import { readFile } from 'node:fs/promises';
@@ -35,7 +35,8 @@ export async function backfillCharterContent(squadRoot: string): Promise<Backfil
 
   try {
     // Query all agents where charterContent is empty
-    const emptyCharterAgents = await db()
+    const db = getDb();
+    const emptyCharterAgents = await db
       .select()
       .from(agents)
       .where(like(agents.charterContent, ''));
@@ -63,7 +64,7 @@ export async function backfillCharterContent(squadRoot: string): Promise<Backfil
 
         const content = await readFile(charterPath, 'utf-8');
 
-        await db()
+        await db
           .update(agents)
           .set({ charterContent: content })
           .where(eq(agents.id, agent.id));

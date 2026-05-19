@@ -16,6 +16,7 @@ import path from 'node:path';
 import { eq, desc } from 'drizzle-orm';
 import { getDb, getPool, schema } from '../../db/index.js';
 import { computeCharterHash } from '../charter-compiler.js';
+import { normalizeSquadPath } from '../setup-lifecycle.js';
 import { writeTemplateMirror } from './template-storage.js';
 import { exportCeremonyAsYaml } from '../ceremony-yaml-export.js';
 import { importCeremonyFromYaml } from '../ceremony-yaml-import.js';
@@ -271,8 +272,9 @@ export async function importProject(
 ): Promise<string> {
   const pool = getPool();
   const client = await pool.connect();
+  const squadPath = normalizeSquadPath(newSquadPath);
 
-  const agentsDir = path.join(newSquadPath, 'agents');
+  const agentsDir = path.join(squadPath, 'agents');
   await fs.mkdir(agentsDir, { recursive: true });
 
   // Hoisted so they're accessible after the transaction block
@@ -287,7 +289,7 @@ export async function importProject(
       INSERT INTO projects (name, path, default_model)
       VALUES ($1, $2, $3)
       RETURNING id
-    `, [newProjectName, newSquadPath, payload.meta.defaultModel ?? null]);
+    `, [newProjectName, squadPath, payload.meta.defaultModel ?? null]);
     projectId = pRes.rows[0].id;
 
     // Skills.

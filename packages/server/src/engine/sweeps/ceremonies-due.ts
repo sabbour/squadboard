@@ -12,6 +12,9 @@ import { sweepDueSchedules } from '../../services/ceremony-scheduler.js';
 
 export const ceremoniesDueSweep: Sweep = {
   id: 'ceremonies-due',
+  label: 'Ceremonies',
+  description: 'Checks scheduled ceremonies and starts any due ceremony runs.',
+  scope: 'project',
   intervalMs: 5_000,
   enabled: true,
 

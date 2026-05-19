@@ -1,0 +1,27 @@
+apiVersion: squad.io/v1
+kind: Ceremony
+metadata:
+  name: scribe-close-out
+  displayName: Scribe Close-Out
+  description: Required project ceremony for merging decisions, updating logs, and keeping Squad memory tidy after work finishes.
+spec:
+  trigger:
+    type: agent-signal
+    signalName: wave.closeout
+  steps:
+    - id: collect-wave-state
+      kind: agent-task
+      agent: scribe
+      prompt: |
+        Collect completed work, pending decisions, orchestration notes, and run summaries for this wave.
+        Preserve unresolved follow-ups instead of deleting them.
+    - id: update-squad-memory
+      kind: agent-task
+      agent: scribe
+      prompt: |
+        Merge accepted decisions into .squad/decisions.md, update the orchestration log, and leave
+        a clear next-wave handoff for Copilot CLI and upstream Squad.
+    - id: publish-close-out
+      kind: notify
+      target: project-timeline
+

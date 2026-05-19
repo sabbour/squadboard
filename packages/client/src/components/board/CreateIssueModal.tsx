@@ -20,7 +20,7 @@ interface CreateIssueModalProps {
 
 const COLUMNS: { id: ColumnId; label: string }[] = [
   { id: 'backlog', label: 'Backlog' },
-  { id: 'todo', label: 'Todo' },
+  { id: 'ready', label: 'Ready' },
   { id: 'in_progress', label: 'In Progress' },
   { id: 'in_review', label: 'In Review' },
   { id: 'done', label: 'Done' },

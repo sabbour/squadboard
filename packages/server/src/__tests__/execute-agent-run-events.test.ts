@@ -182,6 +182,7 @@ function makeInput(overrides: Partial<AgentRunInput> = {}): AgentRunInput {
       id:          'agent-001',
       name:        'TestAgent',
       charterPath: '/agents/test/charter.md',
+      charterContent: 'You are a test agent.',
       historyPath: null,
       charterHash: null,
       agentKind:   'squad',

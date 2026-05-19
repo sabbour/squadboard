@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react'
-import { Checkmark20Regular } from '@fluentui/react-icons'
+import { Checkmark20Regular, ChevronDown20Regular, Play20Regular } from '@fluentui/react-icons'
 import { useActiveAgents } from '../../api/agents.ts'
 import { useStartRun, useCancelRun, useIssueRuns, type IssueRun } from '../../api/runs.ts'
 
@@ -66,6 +66,10 @@ export default function RunButton({ projectId, issueId, onRunStarted }: RunButto
     void cancelRun.mutate({ runId: activeRun.id, issueId })
   }
 
+  function agentLabel(agent: { name: string; role?: string | null }) {
+    return agent.role ? `${agent.name} — ${agent.role}` : agent.name
+  }
+
   // Running state
   if (activeRun) {
     return (
@@ -121,6 +125,7 @@ export default function RunButton({ projectId, issueId, onRunStarted }: RunButto
 
   // Normal state: dropdown + Run button — `agents` is already active-only.
   const activeAgents = agents ?? []
+  const selectedAgent = activeAgents.find((a) => a.id === selectedAgentId)
 
   return (
     <div ref={dropdownRef} style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: '4px' }}>
@@ -142,9 +147,9 @@ export default function RunButton({ projectId, issueId, onRunStarted }: RunButto
             }}
           >
             {selectedAgentId
-              ? (activeAgents.find((a) => a.id === selectedAgentId)?.name ?? 'Agent')
-              : (activeAgents[0]?.name ?? 'Agent')}
-            <span style={{ fontSize: '9px' }}>▾</span>
+              ? (selectedAgent ? agentLabel(selectedAgent) : 'Agent')
+              : (activeAgents[0] ? agentLabel(activeAgents[0]) : 'Agent')}
+            <ChevronDown20Regular style={{ width: '12px', height: '12px' }} />
           </button>
 
           {open && (
@@ -157,7 +162,7 @@ export default function RunButton({ projectId, issueId, onRunStarted }: RunButto
                 background: 'var(--bg)',
                 border: '1px solid var(--border)',
                 borderRadius: '6px',
-                minWidth: '140px',
+                minWidth: '220px',
                 zIndex: 50,
                 overflow: 'hidden',
                 boxShadow: '0 4px 12px rgba(0,0,0,0.5)',
@@ -181,7 +186,12 @@ export default function RunButton({ projectId, issueId, onRunStarted }: RunButto
                   onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.background = '#388bfd22' }}
                   onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.background = selectedAgentId === agent.id ? '#388bfd22' : 'none' }}
                 >
-                  {agent.name}
+                  <span style={{ display: 'block', fontWeight: 600 }}>{agent.name}</span>
+                  {agent.role && (
+                    <span style={{ display: 'block', color: 'var(--text-muted)', fontSize: '11px', marginTop: '2px' }}>
+                      {agent.role}
+                    </span>
+                  )}
                 </button>
               ))}
             </div>
@@ -210,7 +220,8 @@ export default function RunButton({ projectId, issueId, onRunStarted }: RunButto
           transition: 'opacity 0.15s, background 0.15s',
         }}
       >
-        {startRun.isPending ? 'Starting…' : '▶ Run'}
+        {!startRun.isPending && <Play20Regular style={{ width: '12px', height: '12px' }} />}
+        {startRun.isPending ? 'Starting…' : 'Run'}
       </button>
     </div>
   )

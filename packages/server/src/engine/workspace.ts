@@ -2,8 +2,19 @@ import os from 'node:os';
 import path from 'node:path';
 import { execSync } from 'node:child_process';
 import { mkdir, rm } from 'node:fs/promises';
+import {
+  deriveCleanupMetadata,
+  type LifecycleCleanupMetadata,
+} from '../services/worktree-lifecycle.js';
 
 export type WorkspaceStrategy = 'scratch' | 'dir' | 'worktree';
+
+export interface ResolvedWorkspaceLifecycle {
+  workspacePath: string;
+  workspaceStrategy: WorkspaceStrategy;
+  branch: string | null;
+  cleanup: LifecycleCleanupMetadata;
+}
 
 /** Allowed workspace roots for git operations — must match one of these prefixes. */
 const ALLOWED_WORKSPACE_ROOTS = [
@@ -54,12 +65,13 @@ export function deriveSquadBranchName(agentName: string, issueTitle: string): st
  * worktree → git worktree  : ~/.squadboard/worktrees/<repoName>-run-<issueRunId>
  *            Branch name follows squad/{agent}/{slug} convention when agentName + issueTitle are provided.
  */
-export async function resolveWorkspace(
+export async function resolveWorkspaceLifecycle(
   issueRunId: string,
   strategy: WorkspaceStrategy,
   opts?: { agentName?: string; issueTitle?: string },
-): Promise<string> {
+): Promise<ResolvedWorkspaceLifecycle> {
   let workspacePath: string;
+  let branch: string | null = null;
 
   switch (strategy) {
     case 'scratch':
@@ -90,7 +102,7 @@ export async function resolveWorkspace(
       workspacePath = path.join(worktreesRoot, `${repoName}-run-${issueRunId}`);
 
       // Use squad convention when we have the metadata; fall back to run-id slug
-      const branch =
+      branch =
         opts?.agentName && opts?.issueTitle
           ? deriveSquadBranchName(opts.agentName, opts.issueTitle)
           : `squad/run-${issueRunId}`;
@@ -116,7 +128,26 @@ export async function resolveWorkspace(
       throw new Error(`Unknown workspace strategy: ${strategy as string}`);
   }
 
-  return workspacePath;
+  return {
+    workspacePath,
+    workspaceStrategy: strategy,
+    branch,
+    cleanup: deriveCleanupMetadata({
+      status: 'running',
+      workspaceStrategy: strategy,
+      workspacePath,
+      worktreeExists: true,
+    }),
+  };
+}
+
+export async function resolveWorkspace(
+  issueRunId: string,
+  strategy: WorkspaceStrategy,
+  opts?: { agentName?: string; issueTitle?: string },
+): Promise<string> {
+  const lifecycle = await resolveWorkspaceLifecycle(issueRunId, strategy, opts);
+  return lifecycle.workspacePath;
 }
 
 /**

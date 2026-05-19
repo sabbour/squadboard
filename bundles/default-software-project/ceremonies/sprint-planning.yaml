@@ -1,0 +1,23 @@
+name: Sprint Planning
+description: Review goals, select Ready work, identify risks, and publish a sprint plan.
+steps:
+  - type: agent_run
+    label: Collect candidate work
+    agent: Lead
+    prompt: |
+      Review the project goal, current backlog, recent decisions, and open risks.
+      Summarize the candidate work that should be considered for the next sprint.
+    timeout: 45m
+  - type: agent_run
+    label: Draft sprint plan
+    agent: Lead
+    prompt: |
+      Propose a sprint plan: objective, selected cards, likely owners, risks,
+      dependencies, and what should stay out of scope.
+    timeout: 45m
+  - type: approve
+    label: Commit the plan
+    approvers: [Lead]
+    request_changes_policy: first
+    timeout: 24h
+    timeoutAction: notify

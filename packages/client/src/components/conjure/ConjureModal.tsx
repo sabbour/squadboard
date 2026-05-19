@@ -105,7 +105,7 @@ interface ServerClassifyResponse {
 function heuristicClassify(prose: string): { intent: ConjureIntent; confidence: number } | null {
   const lower = prose.toLowerCase().trimStart()
   if (/^(bug:|fix:|task:)/i.test(prose)) return { intent: 'issue', confidence: 0.95 }
-  if (/^(hire |recruit )/i.test(lower)) {
+  if (/^(cast |recruit )/i.test(lower)) {
     const intent: ConjureIntent = /\bteam\b/.test(lower) ? 'team' : 'agent'
     return { intent, confidence: 0.92 }
   }
@@ -448,7 +448,7 @@ export default function ConjureModal({
 
             <DialogContent className={styles.body}>
               <Textarea
-                placeholder="What do you want to create? (e.g. 'fix the login button on Safari', 'hire a QA agent', 'add a daily standup ceremony')"
+                placeholder="What do you want to create? (e.g. 'fix the login button on Safari', 'cast a QA agent', 'add a daily standup ceremony')"
                 autoFocus
                 value={prose}
                 onChange={(_, data) => {

@@ -1,4 +1,4 @@
-import { pgTable, uuid, text, timestamp, integer, boolean, pgEnum, primaryKey, numeric, jsonb, uniqueIndex, index, bigserial, customType } from 'drizzle-orm/pg-core';
+import { pgTable, uuid, text, timestamp, integer, boolean, pgEnum, primaryKey, numeric, jsonb, uniqueIndex, index, bigserial, bigint, customType } from 'drizzle-orm/pg-core';
 
 // Bytea custom type — stores binary data (images, blobs) in PostgreSQL BYTEA columns.
 // The pg driver delivers bytea columns as Node.js Buffer objects, so no conversion needed.
@@ -37,6 +37,14 @@ export const projects = pgTable('projects', {
   // 'usd' = legacy token-derived USD, 'gh_multipliers' = GitHub Copilot
   // premium-request multipliers. Null falls back to env SQUADBOARD_COST_MODEL.
   costModel: text('cost_model'),
+  // Ralph-style autonomous monitor. Disabled by default; state is ignored while
+  // ralph_autonomy_enabled=false so projects never opt into autonomous work by accident.
+  ralphAutonomyEnabled: boolean('ralph_autonomy_enabled').notNull().default(false),
+  ralphAutoMergeEnabled: boolean('ralph_auto_merge_enabled').notNull().default(false),
+  ralphMonitorState: text('ralph_monitor_state').notNull().default('stopped'),
+  ralphMonitorLastAction: jsonb('ralph_monitor_last_action').$type<unknown>(),
+  ralphMonitorNextAction: jsonb('ralph_monitor_next_action').$type<unknown>(),
+  ralphMonitorLastDecisionAt: timestamp('ralph_monitor_last_decision_at', { withTimezone: true }),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 });
@@ -315,6 +323,29 @@ export type WorkflowRun = typeof workflowRuns.$inferSelect;
 export type NewWorkflowRun = typeof workflowRuns.$inferInsert;
 export type StepRun = typeof stepRuns.$inferSelect;
 export type NewStepRun = typeof stepRuns.$inferInsert;
+
+// ---------------------------------------------------------------------------
+// Ralph autonomous monitor audit trail
+// ---------------------------------------------------------------------------
+
+export const ralphMonitorEvents = pgTable('ralph_monitor_events', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  projectId: uuid('project_id').notNull().references(() => projects.id, { onDelete: 'cascade' }),
+  state: text('state').notNull(),
+  decision: text('decision').notNull(),
+  action: text('action').notNull(),
+  reason: text('reason').notNull(),
+  selectedKind: text('selected_kind'),
+  targetType: text('target_type'),
+  targetId: text('target_id'),
+  payload: jsonb('payload').notNull().default({}),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+}, (t) => ({
+  projectCreatedIdx: index('ralph_monitor_events_project_created_idx').on(t.projectId, t.createdAt),
+}));
+
+export type RalphMonitorEvent = typeof ralphMonitorEvents.$inferSelect;
+export type NewRalphMonitorEvent = typeof ralphMonitorEvents.$inferInsert;
 
 // ---------------------------------------------------------------------------
 // Peer review audit trail — Demo 9
@@ -867,6 +898,9 @@ export const consultSessions = pgTable('consult_sessions', {
   // Only set when mode='agent'. NULL after agent deletion (snapshot below).
   agentId: uuid('agent_id').references(() => agents.id, { onDelete: 'set null' }),
   agentName: text('agent_name'),
+  // 'project' for normal roster agents, 'virtual-copilot' for the @copilot
+  // dispatcher, and 'model' for raw model mode.
+  agentOrigin: text('agent_origin').notNull().default('project'),
   model: text('model'),
   status: consultStatusEnum('status').notNull().default('active'),
   sdkSessionId: text('sdk_session_id'),
@@ -1165,3 +1199,42 @@ export const migrationLog = pgTable(
 
 export type MigrationLogRow  = typeof migrationLog.$inferSelect;
 export type NewMigrationLog  = typeof migrationLog.$inferInsert;
+
+// ---------------------------------------------------------------------------
+// Squad StorageProvider — PostgreSQL-backed persistence.
+// Default for Squadboard-backed Squad state; use SQUADBOARD_SQUAD_STORAGE_PROVIDER=fs
+// only when repository .squad/ files should remain the live store.
+//
+// Default is 'postgresql' (PostgreSQLStorageProvider over this table). The
+// filesystem provider remains an explicit fallback for portability.
+//
+// Schema matches migration 0009_squad_storage.sql (landed by Kobayashi):
+//   scope      — project UUID (or 'global' for unscoped callers); lets
+//                multiple projects share one DB without path collisions.
+//   path       — POSIX-normalised path relative to the project .squad/
+//                root; never starts with '/'.
+//   content    — file body as text (empty string for directory nodes).
+//   size_bytes — byte count; returned by stat().
+//   updated_at — last-write timestamp; returned as mtime by stat().
+//
+// Composite PK (scope, path) is the authoritative lookup key for all
+// StorageProvider operations (read/write/exists/delete/list).
+// ---------------------------------------------------------------------------
+export const squadStorage = pgTable(
+  'squad_storage',
+  {
+    scope:     text('scope').notNull(),
+    path:      text('path').notNull(),
+    content:   text('content').notNull().default(''),
+    sizeBytes: bigint('size_bytes', { mode: 'number' }).notNull().default(0),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    pk:        primaryKey({ columns: [t.scope, t.path] }),
+    // Covering index for list() prefix-scans across an entire scope
+    scopeIdx:  index('idx_squad_storage_scope').on(t.scope),
+  }),
+);
+
+export type SquadStorageRow    = typeof squadStorage.$inferSelect;
+export type NewSquadStorageRow = typeof squadStorage.$inferInsert;

@@ -1,7 +1,7 @@
 /**
- * sweep-pickup-todos-coordinator.test.ts — W29 MC-7
+ * sweep-pickup-ready-coordinator.test.ts — W29 MC-7
  *
- * Tests for coordinator dispatch integration in the pickup-todos sweep.
+ * Tests for coordinator dispatch integration in the pickup-ready sweep.
  *
  * Priority order under test:
  *   1. Tier-1: coordinator dispatch (COORDINATOR_DISPATCH_ENABLED=true, default)
@@ -32,10 +32,15 @@ const mockDb = { select: mockSelect, insert: mockInsert };
 vi.mock('../db/index.js', () => ({
   getDb: () => mockDb,
   schema: {
-    issues:    { __table: 'issues' },
-    issueRuns: { __table: 'issue_runs', id: 'issue_runs.id' },
-    agents:    { __table: 'agents' },
-    projects:  { __table: 'projects' },
+    issues:    { __table: 'issues', id: 'issues.id', status: 'issues.status', archived: 'issues.archived' },
+    issueRuns: { __table: 'issue_runs', id: 'issue_runs.id', issueId: 'issue_runs.issue_id', agentId: 'issue_runs.agent_id', status: 'issue_runs.status', createdAt: 'issue_runs.created_at', startedAt: 'issue_runs.started_at', completedAt: 'issue_runs.completed_at' },
+    agents:    { __table: 'agents', id: 'agents.id', projectId: 'agents.project_id', status: 'agents.status', name: 'agents.name', role: 'agents.role', charterContent: 'agents.charter_content', charterHash: 'agents.charter_hash' },
+    projects:  { __table: 'projects', id: 'projects.id', name: 'projects.name', description: 'projects.description' },
+    issueLabels: { issueId: 'issue_labels.issue_id', labelId: 'issue_labels.label_id' },
+    labels: { id: 'labels.id', name: 'labels.name' },
+    agentKeywords: { agentId: 'agent_keywords.agent_id', keywords: 'agent_keywords.keywords', focusAreas: 'agent_keywords.focus_areas' },
+    issueLinks: { childIssueId: 'issue_links.child_issue_id', parentIssueId: 'issue_links.parent_issue_id', linkType: 'issue_links.link_type' },
+    routingRules: { projectId: 'routing_rules.project_id', rawRule: 'routing_rules.raw_rule', priority: 'routing_rules.priority' },
   },
 }));
 
@@ -47,6 +52,56 @@ vi.mock('../engine/router.js', () => ({
 const mockDispatchViaCoordinator = vi.fn();
 vi.mock('../coordinator/index.js', () => ({
   dispatchViaCoordinator: (...args: unknown[]) => mockDispatchViaCoordinator(...args),
+  buildCoordinatorInput: (params: {
+    issue: { id: string; title: string; body?: string | null; status: string; createdAt: Date };
+    labels: string[];
+    project: { id: string; name: string; description?: string | null };
+    agents: Array<{ id: string; name: string; role: string; charterHash?: string | null; charterContent: string }>;
+    busyAgentIds?: Set<string>;
+    recentRuns?: unknown[];
+    parentIssueIds?: string[];
+    blockedParentIssueIds?: string[];
+    projectRules?: string;
+  }) => ({
+    issue: {
+      id: params.issue.id,
+      title: params.issue.title,
+      body: params.issue.body ?? null,
+      labels: params.labels,
+      column: params.issue.status,
+      parentId: params.parentIssueIds?.[0] ?? null,
+      blockedParentIds: params.blockedParentIssueIds ?? [],
+      priority: null,
+      createdAt: params.issue.createdAt.toISOString(),
+    },
+    candidateAgents: params.agents.map((agent) => ({
+      name: agent.name,
+      role: agent.role,
+      charterHash: agent.charterHash ?? '',
+      charterContent: agent.charterContent,
+      capabilities: [],
+      available: !params.busyAgentIds?.has(agent.id),
+    })),
+    project: { id: params.project.id, name: params.project.name, rules: params.projectRules ?? '' },
+    recentRuns: params.recentRuns ?? [],
+  }),
+  capabilityMapFromAgentKeywords: () => new Map(),
+  filterBlockedAgents: (input: { candidateAgents: Array<{ name: string }> }, blocked: Set<string>) => {
+    const candidateAgents = input.candidateAgents.filter((agent) => !blocked.has(agent.name));
+    if (candidateAgents.length === 0 && input.candidateAgents.length > 0) {
+      return { input, decision: { kind: 'skip', reason: 'blocked' } };
+    }
+    return { input: { ...input, candidateAgents }, decision: null };
+  },
+  applyDeterministicPrefilters: () => null,
+  buildDeterministicCoordinatorMeta: () => ({
+    model: 'deterministic-prefilter',
+    promptTokens: 0,
+    completionTokens: 0,
+    durationMs: 0,
+    cacheHit: false,
+    inputHash: 'a'.repeat(64),
+  }),
 }));
 
 const mockIsCoordinatorDispatchEnabled = vi.fn();
@@ -57,6 +112,9 @@ vi.mock('../config/coordinator-env.js', () => ({
 // MC-10: mock the decision-log service so the sweep test doesn't need a DB update chain.
 vi.mock('../services/coordinator-decision-log.js', () => ({
   persistCoordinatorDecision: vi.fn().mockResolvedValue(undefined),
+}));
+vi.mock('../services/coordinator-routing-log.js', () => ({
+  persistCoordinatorRoutingDecision: vi.fn().mockResolvedValue(undefined),
 }));
 
 vi.mock('drizzle-orm', () => ({
@@ -71,7 +129,7 @@ vi.mock('drizzle-orm', () => ({
   gte:     (col: unknown, val: unknown)              => ({ __gte: [col, val] }),
 }));
 
-import { pickupTodosSweep } from '../engine/sweeps/pickup-todos.js';
+import { pickupReadySweep } from '../engine/sweeps/pickup-ready.js';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -85,6 +143,7 @@ function sel(rows: unknown[]) {
   const p = Promise.resolve(rows);
   const chain: Record<string, unknown> = {
     from:    vi.fn(() => chain),
+    innerJoin: vi.fn(() => chain),
     where:   vi.fn(() => chain),
     orderBy: vi.fn(() => chain),
     limit:   vi.fn().mockResolvedValue(rows),
@@ -102,7 +161,7 @@ const ISSUE_1 = {
   projectId: 'proj-1111-0000-0000-0000-000000000001',
   title: 'Fix the login bug',
   body: 'Users cannot log in with email',
-  status: 'todo',
+  status: 'ready',
   createdAt: NOW,
 };
 
@@ -122,40 +181,52 @@ const AGENT_FENSTER = {
   charterHash: 'cafebabe',
 };
 
-const PROJECT_ROW = [{ id: ISSUE_1.projectId, name: 'Squadboard' }];
+const PROJECT_ROW = [{ id: ISSUE_1.projectId, name: 'Squadboard', description: 'Ship safely' }];
 
 /**
  * Wires up a standard "coordinator-enabled, single issue, single project" scenario.
  * Returns the mockSelect chain to allow custom overrides via mockReturnValueOnce.
  *
  * DB call order (coordinator enabled):
- *   0: todoIssues
+ *   0: readyIssues
  *   1: coveredRunRows (pending/running check)
  *   2: activeAgents
  *   3: projectRow (with .limit)
  *   4: busyAgentRows
- *   5: recentRunRows (for coordinator, with .limit)
+ *   5: agentKeywordRows
+ *   6: issue label rows
+ *   7: parent rows
+ *   8: routingRuleRows
+ *   9: circuitBreakerFailures
+ *   10: recentRunRows (for coordinator, with .limit)
  *   ... then coordinator is called ...
- *   6: circuitBreakerFailures (if targetAgentId resolved)
  *   [insert if not tripped]
  */
 function setupStandardMocks(opts: {
-  todoIssues?: unknown[];
+  readyIssues?: unknown[];
   coveredRuns?: unknown[];
   activeAgents?: unknown[];
   projectRow?: unknown[];
   busyAgents?: unknown[];
+  agentKeywords?: unknown[];
+  labelRows?: unknown[];
+  parentRows?: unknown[];
+  routingRules?: unknown[];
   recentRuns?: unknown[];
   circuitBreakerFailures?: unknown[];
 } = {}) {
   mockSelect
-    .mockReturnValueOnce(sel(opts.todoIssues   ?? [ISSUE_1]))
+    .mockReturnValueOnce(sel(opts.readyIssues   ?? [ISSUE_1]))
     .mockReturnValueOnce(sel(opts.coveredRuns  ?? []))
     .mockReturnValueOnce(sel(opts.activeAgents ?? [AGENT_VERBAL]))
     .mockReturnValueOnce(sel(opts.projectRow   ?? PROJECT_ROW))
     .mockReturnValueOnce(sel(opts.busyAgents   ?? []))
-    .mockReturnValueOnce(sel(opts.recentRuns   ?? []))
-    .mockReturnValueOnce(sel(opts.circuitBreakerFailures ?? []));
+    .mockReturnValueOnce(sel(opts.agentKeywords ?? []))
+    .mockReturnValueOnce(sel(opts.labelRows ?? []))
+    .mockReturnValueOnce(sel(opts.parentRows ?? []))
+    .mockReturnValueOnce(sel(opts.routingRules ?? []))
+    .mockReturnValueOnce(sel(opts.circuitBreakerFailures ?? []))
+    .mockReturnValueOnce(sel(opts.recentRuns   ?? []));
 }
 
 function makeDispatchResult(decision: object) {
@@ -194,7 +265,7 @@ beforeEach(() => {
 // Tests
 // ---------------------------------------------------------------------------
 
-describe('pickup-todos sweep — coordinator dispatch (W29 MC-7)', () => {
+describe('pickup-ready sweep — coordinator dispatch (W29 MC-7)', () => {
 
   // -----------------------------------------------------------------------
   // 1. Coordinator dispatches → tier 1 used
@@ -205,7 +276,7 @@ describe('pickup-todos sweep — coordinator dispatch (W29 MC-7)', () => {
       makeDispatchResult({ kind: 'dispatch', agent: 'verbal', rationale: 'best match for login', confidence: 0.92 }),
     );
 
-    const result = await pickupTodosSweep.run();
+    const result = await pickupReadySweep.run();
 
     expect(result.acted).toBe(1);
     expect(result.errors).toBe(0);
@@ -239,13 +310,18 @@ describe('pickup-todos sweep — coordinator dispatch (W29 MC-7)', () => {
       .mockReturnValueOnce(sel([AGENT_VERBAL]))
       .mockReturnValueOnce(sel(PROJECT_ROW))
       .mockReturnValueOnce(sel([]))
+      .mockReturnValueOnce(sel([]))
+      .mockReturnValueOnce(sel([]))
+      .mockReturnValueOnce(sel([]))
+      .mockReturnValueOnce(sel([]))
+      .mockReturnValueOnce(sel([]))
       .mockReturnValueOnce(sel([]));  // recentRuns for coordinator
 
     mockDispatchViaCoordinator.mockResolvedValue(
       makeDispatchResult({ kind: 'skip', reason: 'duplicate effort — already handled in PR #42' }),
     );
 
-    const result = await pickupTodosSweep.run();
+    const result = await pickupReadySweep.run();
 
     expect(result.acted).toBe(0);
     expect(result.errors).toBe(0);
@@ -259,13 +335,18 @@ describe('pickup-todos sweep — coordinator dispatch (W29 MC-7)', () => {
   it('3. coordinator ambiguous → falls through to tier-2, inserts tier=2 run', async () => {
     // Need extra select call for circuit breaker after tier-2 resolves
     mockSelect
-      .mockReturnValueOnce(sel([ISSUE_1]))           // todoIssues
+      .mockReturnValueOnce(sel([ISSUE_1]))           // readyIssues
       .mockReturnValueOnce(sel([]))                  // coveredRuns
       .mockReturnValueOnce(sel([AGENT_VERBAL]))      // activeAgents
       .mockReturnValueOnce(sel(PROJECT_ROW))         // projectRow
       .mockReturnValueOnce(sel([]))                  // busyAgents
+      .mockReturnValueOnce(sel([]))                  // agentKeywords
+      .mockReturnValueOnce(sel([]))                  // labels
+      .mockReturnValueOnce(sel([]))                  // parents
+      .mockReturnValueOnce(sel([]))                  // routingRules
+      .mockReturnValueOnce(sel([]))                  // circuit breaker
       .mockReturnValueOnce(sel([]))                  // recentRuns (coordinator)
-      .mockReturnValueOnce(sel([]));                 // circuit breaker (after tier-2)
+      ;
 
     mockDispatchViaCoordinator.mockResolvedValue(
       makeDispatchResult({ kind: 'ambiguous', suggestedAgents: ['verbal', 'fenster'], question: 'Who owns login?' }),
@@ -276,7 +357,7 @@ describe('pickup-todos sweep — coordinator dispatch (W29 MC-7)', () => {
       reasoning: 'keyword: login matched verbal',
     });
 
-    const result = await pickupTodosSweep.run();
+    const result = await pickupReadySweep.run();
 
     expect(result.acted).toBe(1);
     expect(mockDispatchViaCoordinator).toHaveBeenCalledOnce();
@@ -301,6 +382,10 @@ describe('pickup-todos sweep — coordinator dispatch (W29 MC-7)', () => {
       .mockReturnValueOnce(sel(PROJECT_ROW))
       .mockReturnValueOnce(sel([]))
       .mockReturnValueOnce(sel([]))
+      .mockReturnValueOnce(sel([]))
+      .mockReturnValueOnce(sel([]))
+      .mockReturnValueOnce(sel([]))
+      .mockReturnValueOnce(sel([]))
       .mockReturnValueOnce(sel([]));   // circuit breaker
 
     mockDispatchViaCoordinator.mockRejectedValue(new Error('LLM timeout'));
@@ -310,7 +395,7 @@ describe('pickup-todos sweep — coordinator dispatch (W29 MC-7)', () => {
       reasoning: 'keyword fallback after coordinator error',
     });
 
-    const result = await pickupTodosSweep.run();
+    const result = await pickupReadySweep.run();
 
     expect(result.acted).toBe(1);
     expect(result.errors).toBe(0); // coordinator error is non-fatal
@@ -331,13 +416,17 @@ describe('pickup-todos sweep — coordinator dispatch (W29 MC-7)', () => {
     mockIsCoordinatorDispatchEnabled.mockReturnValue(false);
 
     // With flag OFF: no recentRuns query, no coordinator call
-    // DB calls: todoIssues, coveredRuns, activeAgents, projectRow, busyAgents,
-    //           circuit breaker (after tier-2)
+    // DB calls: readyIssues, coveredRuns, activeAgents, projectRow, busyAgents,
+    //           agentKeywords, labels, parents, routingRules, circuit breaker
     mockSelect
       .mockReturnValueOnce(sel([ISSUE_1]))
       .mockReturnValueOnce(sel([]))
       .mockReturnValueOnce(sel([AGENT_VERBAL]))
       .mockReturnValueOnce(sel(PROJECT_ROW))
+      .mockReturnValueOnce(sel([]))
+      .mockReturnValueOnce(sel([]))
+      .mockReturnValueOnce(sel([]))
+      .mockReturnValueOnce(sel([]))
       .mockReturnValueOnce(sel([]))
       .mockReturnValueOnce(sel([]));   // circuit breaker
 
@@ -347,7 +436,7 @@ describe('pickup-todos sweep — coordinator dispatch (W29 MC-7)', () => {
       reasoning: 'keyword: bug matched verbal',
     });
 
-    const result = await pickupTodosSweep.run();
+    const result = await pickupReadySweep.run();
 
     expect(result.acted).toBe(1);
     expect(mockDispatchViaCoordinator).not.toHaveBeenCalled();
@@ -364,9 +453,9 @@ describe('pickup-todos sweep — coordinator dispatch (W29 MC-7)', () => {
   // 6. Circuit breaker trips even after coordinator-decided agent (tier 1)
   // -----------------------------------------------------------------------
   it('6. circuit breaker trips after coordinator dispatches to same agent 3x (tier=1 → blocked)', async () => {
-    const failedRun1 = { id: 'run-fail-1' };
-    const failedRun2 = { id: 'run-fail-2' };
-    const failedRun3 = { id: 'run-fail-3' };
+    const failedRun1 = { id: 'run-fail-1', agentId: AGENT_VERBAL.id };
+    const failedRun2 = { id: 'run-fail-2', agentId: AGENT_VERBAL.id };
+    const failedRun3 = { id: 'run-fail-3', agentId: AGENT_VERBAL.id };
 
     setupStandardMocks({
       circuitBreakerFailures: [failedRun1, failedRun2, failedRun3],
@@ -376,12 +465,12 @@ describe('pickup-todos sweep — coordinator dispatch (W29 MC-7)', () => {
       makeDispatchResult({ kind: 'dispatch', agent: 'verbal', rationale: 'best match', confidence: 0.88 }),
     );
 
-    const result = await pickupTodosSweep.run();
+    const result = await pickupReadySweep.run();
 
     // Circuit breaker should have tripped — no run inserted
     expect(result.acted).toBe(0);
     expect(result.errors).toBe(0);
-    expect(mockDispatchViaCoordinator).toHaveBeenCalledOnce();
+    expect(mockDispatchViaCoordinator).not.toHaveBeenCalled();
     expect(mockInsert).not.toHaveBeenCalled();
   });
 
@@ -396,6 +485,10 @@ describe('pickup-todos sweep — coordinator dispatch (W29 MC-7)', () => {
       .mockReturnValueOnce(sel(PROJECT_ROW))
       .mockReturnValueOnce(sel([]))
       .mockReturnValueOnce(sel([]))
+      .mockReturnValueOnce(sel([]))
+      .mockReturnValueOnce(sel([]))
+      .mockReturnValueOnce(sel([]))
+      .mockReturnValueOnce(sel([]))
       .mockReturnValueOnce(sel([]));   // circuit breaker
 
     mockDispatchViaCoordinator.mockResolvedValue(
@@ -407,7 +500,7 @@ describe('pickup-todos sweep — coordinator dispatch (W29 MC-7)', () => {
       reasoning: 'keyword fallback',
     });
 
-    const result = await pickupTodosSweep.run();
+    const result = await pickupReadySweep.run();
 
     expect(result.acted).toBe(1);
     expect(mockResolveRouteTier2).toHaveBeenCalledOnce();
@@ -417,12 +510,12 @@ describe('pickup-todos sweep — coordinator dispatch (W29 MC-7)', () => {
   });
 
   // -----------------------------------------------------------------------
-  // Additional: no todo issues → short-circuit, acted=0
+  // Additional: no ready issues → short-circuit, acted=0
   // -----------------------------------------------------------------------
-  it('no todo issues → returns immediately with acted=0', async () => {
-    mockSelect.mockReturnValueOnce(sel([])); // todoIssues empty
+  it('no ready issues → returns immediately with acted=0', async () => {
+    mockSelect.mockReturnValueOnce(sel([])); // readyIssues empty
 
-    const result = await pickupTodosSweep.run();
+    const result = await pickupReadySweep.run();
 
     expect(result.acted).toBe(0);
     expect(result.errors).toBe(0);
@@ -441,13 +534,17 @@ describe('pickup-todos sweep — coordinator dispatch (W29 MC-7)', () => {
       .mockReturnValueOnce(sel(PROJECT_ROW))
       .mockReturnValueOnce(sel([]))
       .mockReturnValueOnce(sel([]))
+      .mockReturnValueOnce(sel([]))
+      .mockReturnValueOnce(sel([]))
+      .mockReturnValueOnce(sel([]))
+      .mockReturnValueOnce(sel([]))
       .mockReturnValueOnce(sel([]));
 
     mockDispatchViaCoordinator.mockResolvedValue(
       makeDispatchResult({ kind: 'dispatch', agent: 'verbal', rationale: 'coordinator ok with empty charter', confidence: 0.7 }),
     );
 
-    const result = await pickupTodosSweep.run();
+    const result = await pickupReadySweep.run();
 
     expect(result.acted).toBe(1);
     const [input] = mockDispatchViaCoordinator.mock.calls[0] as [{ candidateAgents: Array<{ charterContent: string; charterHash: string }> }];
@@ -461,12 +558,12 @@ describe('pickup-todos sweep — coordinator dispatch (W29 MC-7)', () => {
   // -----------------------------------------------------------------------
   // Additional: all issues already covered → short-circuit, no dispatch
   // -----------------------------------------------------------------------
-  it('all todo issues already covered by pending/running runs → no dispatch', async () => {
+  it('all ready issues already covered by pending/running runs → no dispatch', async () => {
     mockSelect
-      .mockReturnValueOnce(sel([ISSUE_1]))                         // todoIssues
+      .mockReturnValueOnce(sel([ISSUE_1]))                         // readyIssues
       .mockReturnValueOnce(sel([{ issueId: ISSUE_1.id }]));       // coveredRuns
 
-    const result = await pickupTodosSweep.run();
+    const result = await pickupReadySweep.run();
 
     expect(result.acted).toBe(0);
     expect(mockDispatchViaCoordinator).not.toHaveBeenCalled();

@@ -310,6 +310,21 @@ function CanvasInner({ projectId, header, steps, onChange, disabled }: VisualCan
     [graph, onChange, disabled],
   )
 
+  const addFanOutChild = useCallback(
+    (graphNodeId: string, kind: StepKind) => {
+      if (disabled) return
+      const node = graph.nodes.find((n) => n.id === graphNodeId)
+      if (!node || node.parentId || node.step.kind !== 'fan_out') return
+
+      const nextChildren = [...node.step.steps, blankStep(kind)]
+      const nextSteps = topLevelSteps(graph).slice()
+      nextSteps[node.index] = { ...node.step, steps: nextChildren }
+      onChange(nextSteps)
+      setSelectedNodeId(`${node.id}.child-${nextChildren.length - 1}`)
+    },
+    [graph, onChange, disabled],
+  )
+
   const onConnect = useCallback(
     (connection: Connection) => {
       if (disabled) return
@@ -523,6 +538,7 @@ function CanvasInner({ projectId, header, steps, onChange, disabled }: VisualCan
               step={selectedGraphNode.step}
               agents={agents}
               onChange={(next) => updateStepAt(selectedGraphNode.id, next)}
+              onAddFanOutChild={(kind) => addFanOutChild(selectedGraphNode.id, kind)}
               disabled={disabled}
             />
           </>

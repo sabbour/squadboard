@@ -1,0 +1,46 @@
+---
+title: Board and runs
+description: Project board, cards, run history, live output, and audit state.
+---
+
+import {ClipboardTaskListLtrRegular, FlashRegular, ChartMultipleRegular} from '@fluentui/react-icons';
+import {IconCard, IconGrid, Screenshot, ScreenshotGrid} from '../../src/components/FluentDoc';
+
+# Board and runs
+
+Each project owns a durable board and run history. Cards are the stable objects that deterministic automation can inspect, route, skip, and audit.
+
+<IconGrid>
+  <IconCard icon={ClipboardTaskListLtrRegular} title="Board state">Cards carry title, body, status, labels, owners, comments, and parent links.</IconCard>
+  <IconCard icon={FlashRegular} title="Run actions">Manual or coordinator-selected runs attach execution to a card.</IconCard>
+  <IconCard icon={ChartMultipleRegular} title="Audit history">Routing, monitor decisions, and lifecycle changes remain queryable.</IconCard>
+</IconGrid>
+
+<ScreenshotGrid>
+  <Screenshot src="/img/scenarios/spark-03-board-plan.png" alt="Spark board before adding a launch-note card." caption="Backlog cards hold launch work until the team is ready to route it." />
+  <Screenshot src="/img/scenarios/spark-05-board-after-create.png" alt="Spark board after adding a launch-note card." caption="New work becomes durable board state before an agent starts." />
+</ScreenshotGrid>
+
+## Board model
+
+| Capability | What it gives you |
+| --- | --- |
+| Durable cards | Title, body, status, labels, assignees, comments, parent links, and history remain queryable. |
+| Ready pickup | The visible **Ready** column is also the stored `ready` status, so code, MCP tools, and the UI all use the same word. |
+| Runtime-owned progress | In Progress is owned by active or pending runs instead of manual drag-and-drop alone. |
+| Audit trail | Routing decisions and skipped dispatches are recorded instead of hidden in prompt text. |
+| Semantic columns | Automation follows `backlog`, `ready`, `in_progress`, `review`, `done`, or `custom` semantics, not display labels. |
+
+## Relationship to Squad project boards
+
+Upstream Squad treats labels as the state machine and GitHub Project boards as a read-mostly projection. Squadboard uses the same idea locally before work reaches GitHub: board state is durable, column semantics drive automation, and GitHub labels are only required when you enable GitHub sync.
+
+| Squad project-board concept | Squadboard behavior |
+| --- | --- |
+| `go:no` / backlog | Keep in Backlog until the work is scoped enough to route. |
+| `go:needs-research` | Use Consult, a Spike ceremony, or a custom research column before Ready. |
+| `go:yes` and no `squad:*` assignment | Move to Ready; the coordinator can assign the best agent. |
+| `go:yes` plus `squad:{member}` | Ready card with an explicit assignee; Ralph-equivalent pickup can dispatch it. |
+| Issue closed / PR merged | Done column or accepted output, optionally mirrored to GitHub. |
+
+For operating details, use [Board and runs](../user-guide/board-and-runs.mdx), [Coordinator loops](../user-guide/coordinator-loops.mdx), and [Squad integration](../user-guide/squad-integration.mdx).

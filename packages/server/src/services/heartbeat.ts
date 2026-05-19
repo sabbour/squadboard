@@ -56,6 +56,8 @@ export interface RecentSweepsQuery {
   since?: number;
   /** Cap the number of returned entries (most recent first). */
   limit?: number;
+  /** When set, only hide events that explicitly report other project ids. */
+  projectId?: string;
 }
 
 export function getRecentSweeps(query: RecentSweepsQuery = {}): {
@@ -65,7 +67,14 @@ export function getRecentSweeps(query: RecentSweepsQuery = {}): {
 } {
   const since = query.since ?? 0;
   const limit = query.limit ?? RING_CAPACITY;
-  const filtered = ring.filter((e) => e.seq > since).slice(-limit);
+  const filtered = ring
+    .filter((e) => e.seq > since)
+    .filter((e) => {
+      if (!query.projectId) return true;
+      const projectIds = e.result?.projectIds;
+      return !projectIds?.length || projectIds.includes(query.projectId);
+    })
+    .slice(-limit);
   const cursor = ring.length > 0 ? ring[ring.length - 1].seq : 0;
   return { sweeps: filtered, cursor, capacity: RING_CAPACITY };
 }
@@ -82,7 +91,7 @@ export interface HeartbeatSnapshot {
   };
 }
 
-export function getHeartbeatSnapshot(): HeartbeatSnapshot {
+export function getHeartbeatSnapshot(projectId?: string): HeartbeatSnapshot {
   const status = heartbeat.getStatus();
   // The sweep registry currently has no public `running` accessor; infer it
   // from the presence of any registered sweeps that have a `nextRunAt` (set
@@ -93,7 +102,7 @@ export function getHeartbeatSnapshot(): HeartbeatSnapshot {
     lastTickAt: status.lastTickAt ?? null,
     lastError:  status.lastError ?? null,
     sweeps:     status.sweeps,
-    recent:     getRecentSweeps({ limit: 50 }),
+    recent:     getRecentSweeps({ limit: 50, projectId }),
   };
 }
 

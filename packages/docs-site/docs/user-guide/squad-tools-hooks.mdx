@@ -1,0 +1,41 @@
+---
+title: Squad tools and hooks
+description: How Squadboard MCP tools map to upstream Squad ToolRegistry and hook concepts.
+---
+
+# Squad tools and hooks
+
+Upstream Squad exposes a `ToolRegistry` and hook pipeline. Squadboard currently exposes its integration surface through MCP tools. The two models should converge through an adapter: Squad can register a `squadboard` tool namespace, while Squadboard keeps MCP as the stable cross-client protocol.
+
+## Current Squadboard MCP tools
+
+| Tool | Purpose |
+| --- | --- |
+| `list_projects` | Discover projects and resolved `.squad/` paths. |
+| `list_issues` | Read board cards, optionally by column. |
+| `create_issue` | Create a board card directly. |
+| `update_issue` | Patch title, body, status, assignee, or labels. |
+| `run_agent` | Trigger an agent run for a card. |
+| `get_run_status` | Read run status, output, model usage, and cost. |
+| `list_agents` | Read available project agents and lifecycle status. |
+| `list_inbox` | Read captured/directive inbox items. |
+| `capture` | Capture freeform directives or `done:` close-out messages. |
+| `slash_command` | Execute `/squadboard` command handlers. |
+| `get_routing` | Read project routing metadata. |
+
+GitHub-oriented tools such as `github_push_branch`, `github_open_pr`, `github_comment_issue`, workflow dispatch/polling, and PR merge helpers are also present for run/worktree workflows.
+
+## Should these be registered in Squad's tools-and-hooks layer?
+
+Yes, when running inside upstream Squad, the MCP tools should be presented as registered Squad tools or a tool bundle. That gives Squad agents a familiar policy surface while keeping Squadboard responsible for durable board state.
+
+Recommended mapping:
+
+| Squad concept | Squadboard mapping |
+| --- | --- |
+| `ToolRegistry` | Register the MCP-backed `squadboard.*` tool bundle. |
+| Pre-tool hooks | Enforce project policy before write tools such as `create_issue`, `update_issue`, `run_agent`, and GitHub actions. |
+| Post-tool hooks | Record audit events, close-out notes, or follow-up cards after writes. |
+| Built-in `decision` / `memory` tools | Prefer `capture` for durable Squadboard inbox and `.squad/decisions/inbox/` writes. |
+
+The current implementation is MCP-first. A direct upstream Squad `ToolRegistry` adapter is not part of this slice.

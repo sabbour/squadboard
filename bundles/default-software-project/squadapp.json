@@ -5,7 +5,7 @@
   "version": "1.0.0",
   "name": "Default Software Project",
   "displayName": "Default Software Project",
-  "description": "A balanced starter for software teams: 5-column kanban, 4 role-skeleton agents, 3 essential ceremonies, and routing rules covering the most common issue flows. Agents are cast as generic role skeletons — Init Mode will re-cast them with project-specific names and charters when applied.",
+  "description": "A balanced starter for software teams: Backlog/Ready/In Progress/In Review/Done kanban, 4 role-skeleton agents, 5 ceremony examples, and routing rules covering the most common issue flows. Required Scribe and Work Pickup ceremonies are added automatically to every project. Agents are cast as generic role skeletons — Init Mode will re-cast them with project-specific names and charters when applied.",
   "kind": "project-template",
   "author": "Squadboard team",
   "license": "MIT",
@@ -27,24 +27,24 @@
   "kanban": {
     "columns": [
       {
-        "slug": "inbox",
-        "label": "Inbox",
+        "slug": "backlog",
+        "label": "Backlog",
         "order": 0
       },
       {
-        "slug": "triaged",
-        "label": "Triaged",
+        "slug": "ready",
+        "label": "Ready",
         "order": 1
       },
       {
-        "slug": "in-progress",
+        "slug": "in_progress",
         "label": "In Progress",
         "order": 2,
         "wip_limit": 3
       },
       {
-        "slug": "review",
-        "label": "Review",
+        "slug": "in_review",
+        "label": "In Review",
         "order": 3
       },
       {
@@ -53,7 +53,7 @@
         "order": 4
       }
     ],
-    "defaultColumn": "inbox"
+    "defaultColumn": "backlog"
   },
   "team": [
     {
@@ -89,7 +89,7 @@
       "trigger": {
         "kind": "on_issue_entry",
         "config": {
-          "column": "review"
+          "column": "in_review"
         }
       },
       "workflowPath": "ceremonies/simple-review.yaml"
@@ -117,6 +117,30 @@
         }
       },
       "workflowPath": "ceremonies/rfc.yaml"
+    },
+    {
+      "id": "sprint-planning",
+      "name": "Sprint Planning",
+      "scope": "project",
+      "trigger": {
+        "kind": "manual",
+        "config": {
+          "cadence": "sprint"
+        }
+      },
+      "workflowPath": "ceremonies/sprint-planning.yaml"
+    },
+    {
+      "id": "sprint-retro",
+      "name": "Sprint Retro",
+      "scope": "project",
+      "trigger": {
+        "kind": "manual",
+        "config": {
+          "cadence": "sprint"
+        }
+      },
+      "workflowPath": "ceremonies/sprint-retro.yaml"
     }
   ],
   "skills": [
@@ -161,7 +185,9 @@
     "ceremonies": [
       "ceremonies/simple-review.yaml",
       "ceremonies/bug-fix.yaml",
-      "ceremonies/rfc.yaml"
+      "ceremonies/rfc.yaml",
+      "ceremonies/sprint-planning.yaml",
+      "ceremonies/sprint-retro.yaml"
     ],
     "skills": [
       "skills/git-workflow/SKILL.md",

@@ -26,7 +26,7 @@ function makeSingleIssueInput(issueId: string): CoordinatorBatchInput["issues"][
       title: `Issue ${issueId}`,
       body: "Do the thing",
       labels: ["feature"],
-      column: "To Do",
+      column: "Ready",
       parentId: null,
       priority: 1,
       createdAt: "2024-01-01T00:00:00.000Z",

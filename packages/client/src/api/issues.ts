@@ -14,6 +14,7 @@ export interface Label {
 export interface Assignee {
   id: string
   name: string
+  role?: string
   avatarUrl?: string
 }
 
@@ -24,7 +25,7 @@ export interface Issue {
   body?: string
   column: ColumnId
   labels: Label[]
-  assignee?: Assignee
+  assignee?: Assignee | null
   commentCount: number
   createdAt: string
   updatedAt: string

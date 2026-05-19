@@ -104,7 +104,7 @@ export function buildMenu(win: BrowserWindow): void {
         },
         {
           label: 'View Documentation',
-          click: () => shell.openExternal('https://github.com/asabbour/squadboard#readme'),
+          click: () => shell.openExternal('https://github.com/sabbour/squadboard#readme'),
         },
         {
           label: 'Open Logs Folder',

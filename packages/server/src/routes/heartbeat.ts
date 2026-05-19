@@ -22,24 +22,28 @@ import { getHeartbeatSnapshot, getRecentSweeps } from '../services/heartbeat.js'
 const router = Router();
 
 /** GET /api/heartbeat — legacy alias of /status. */
-router.get('/', (_req: Request, res: Response): void => {
-  res.json(getHeartbeatSnapshot());
+router.get('/', (req: Request, res: Response): void => {
+  const projectId = typeof req.query['projectId'] === 'string' ? req.query['projectId'] : undefined;
+  res.json(getHeartbeatSnapshot(projectId));
 });
 
 /** GET /api/heartbeat/status — full snapshot for the Heartbeat page. */
-router.get('/status', (_req: Request, res: Response): void => {
-  res.json(getHeartbeatSnapshot());
+router.get('/status', (req: Request, res: Response): void => {
+  const projectId = typeof req.query['projectId'] === 'string' ? req.query['projectId'] : undefined;
+  res.json(getHeartbeatSnapshot(projectId));
 });
 
 /** GET /api/heartbeat/sweeps?since=N&limit=M — incremental ring buffer. */
 router.get('/sweeps', (req: Request, res: Response): void => {
   const sinceRaw = req.query['since'];
   const limitRaw = req.query['limit'];
+  const projectId = typeof req.query['projectId'] === 'string' ? req.query['projectId'] : undefined;
   const since = typeof sinceRaw === 'string' ? Number(sinceRaw) : undefined;
   const limit = typeof limitRaw === 'string' ? Number(limitRaw) : undefined;
   res.json(getRecentSweeps({
     since: Number.isFinite(since) ? since : undefined,
     limit: Number.isFinite(limit) ? limit : undefined,
+    projectId,
   }));
 });
 

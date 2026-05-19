@@ -34,6 +34,28 @@ export interface CreateInboxItemInput {
   suggestedProjectId?: string | null
 }
 
+export interface CaptureDirectiveInput {
+  projectId: string
+  directive: string
+  sourceType?: string | null
+  sourceId?: string | null
+  phase?: 'intake' | 'closeout' | null
+  title?: string | null
+  createdBy?: string | null
+  userName?: string | null
+  callMcp?: boolean
+}
+
+export interface CaptureDirectiveResult {
+  idempotencyKey: string
+  directiveHash: string
+  phase: 'intake' | 'closeout'
+  markdown: { filePath: string; status: 'created' | 'deduped' }
+  inbox: { itemId: string; status: string; created: boolean }
+  mcp: { status: 'succeeded' | 'failed' | 'skipped'; result?: unknown; error?: string }
+  audit: Array<{ step: string; status: string; detail?: string; error?: string }>
+}
+
 export interface UpdateInboxItemInput {
   formulatedTitle?: string
   formulatedBody?: string
@@ -96,6 +118,21 @@ export function useCreateInboxItem() {
       }),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ['inbox'] })
+    },
+  })
+}
+
+export function useCaptureDirective() {
+  const qc = useQueryClient()
+  return useMutation<CaptureDirectiveResult, Error, CaptureDirectiveInput>({
+    mutationFn: (input) =>
+      apiFetch<CaptureDirectiveResult>('/api/inbox/directive-captures', {
+        method: 'POST',
+        body: JSON.stringify(input),
+      }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['inbox'] })
+      void qc.invalidateQueries({ queryKey: ['issues'] })
     },
   })
 }

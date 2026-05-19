@@ -1,0 +1,92 @@
+---
+title: Quickstart
+description: Ten minutes from install to a Spark card that an agent picked up automatically — the same loop the tutorials expand on.
+---
+
+import {Screenshot, ScreenshotGrid} from '@site/src/components/FluentDoc';
+
+# Quickstart
+
+The shortest path through Squadboard. In about ten minutes you will:
+
+1. Create the **Spark** project.
+2. Confirm the team that will pick up work.
+3. Capture a launch idea and shape it into a card.
+4. Move the card to **Ready** and watch Squadboard pick it up automatically.
+5. Inspect the run.
+6. Run a ceremony to close the loop.
+
+This is the same Spark loop the [tutorials](./tutorials/index.mdx) walk through in detail. Do the quickstart first to get the shape; do the tutorials when you want to understand each step deeply.
+
+If Squadboard is not installed yet, do [Installation](./installation.md) first.
+
+## 1. Create Spark
+
+Open Squadboard. On the **Projects** page, create a new project named `Spark` and point it at a repository folder. If the folder already has `.squad/`, Squadboard reads it; if not, choose the **Default Software Project** template and it will scaffold the basics.
+
+<Screenshot src="/img/scenarios/spark-01-projects.png" alt="Squadboard Projects page with the Spark project listed." caption="Spark is the project you will reuse across the quickstart and every tutorial." />
+
+Open Spark. The dashboard is the cockpit — confirm the repository path is right before you move anything.
+
+<Screenshot src="/img/scenarios/spark-02-dashboard.png" alt="The Spark dashboard with project identity and board health." caption="If the project path is wrong here, fix it before you queue work." />
+
+## 2. Confirm the team
+
+Open **Agents**. Every agent needs a name, a role, and a charter — those are what the coordinator uses to assign work, not the name alone.
+
+<Screenshot src="/img/scenarios/spark-06-agents.png" alt="Spark Agents page showing the launch lead and integration engineer with roles and expertise." caption="Two agents are enough for the quickstart: a launch lead and an integration engineer." />
+
+If a role is missing, click **Cast Team** and accept the proposal. Five minutes here saves bad assignments later.
+
+## 3. Capture and shape a card
+
+Open the **Board**. You should see five columns: **Backlog → Ready → In Progress → In Review → Done**.
+
+<Screenshot src="/img/scenarios/spark-03-board-plan.png" alt="Spark board with Backlog and Ready columns visible." caption="Backlog is for ideas being shaped. Ready is the pickup boundary." />
+
+Click **Create issue** and fill in a card. Title it with a concrete outcome; write a body that explains user impact and what evidence to link when the work is done.
+
+<Screenshot src="/img/scenarios/spark-04-new-card.png" alt="New Spark card dialog being filled out for the launch-note publish work." caption="The body should be specific enough to route but ambiguous enough to leave the agent room to interpret." />
+
+Example body:
+
+```md
+Publish a short Spark launch note that explains how Squadboard relates to upstream Squad
+and where imports live.
+
+When done, link the published file and update the tutorial copy if the UI moved.
+```
+
+Save. The card lands in **Backlog**.
+
+<Screenshot src="/img/scenarios/spark-05-board-after-create.png" alt="Spark board after the launch-note card lands in Backlog beside the existing launch checklist." caption="Nothing automated runs against Backlog. The card waits for you to decide it is ready." />
+
+## 4. Move to Ready — pickup is automatic
+
+Drag the card from **Backlog** into **Ready**. This is the only step that triggers execution.
+
+When the card enters Ready, Squadboard runs deterministic gates, picks the best agent from the roster you reviewed in step 2, creates an issue run, and starts it. The card moves into **In Progress** under the runtime's control. There is no separate play button.
+
+<Screenshot src="/img/scenarios/spark-19-ready-pickup.png" alt="Spark board after Ready pickup assigns the card automatically." caption="The Ready card now shows the assigned agent and an active run." />
+
+## 5. Inspect the run
+
+Click the card. The right-hand panel shows the issue run: which agent picked it up, the prompt context, the model output, and any tool calls.
+
+Use this to confirm three things: the right agent was chosen, the prompt included the context you expected, and the output matches the outcome you wrote in step 3. If the assignment was wrong, fix the role or charter in **Agents** — do not override the assignment by hand.
+
+<Screenshot src="/img/scenarios/spark-20-run-detail.png" alt="Spark card detail panel showing the active Work Pickup run and assigned agent." caption="The run detail is where you inspect the assignment, run state, and output before moving the card forward." />
+
+## 6. Close the loop with a ceremony
+
+Open **Ceremonies** and run **Spark Launch Review**. The ceremony walks its workflow steps (route → agent_run → approve), summarizes the runs you just produced, and records the handoff.
+
+<Screenshot src="/img/scenarios/spark-11-ceremonies.png" alt="Spark Ceremonies page listing the Spark Launch Review ceremony." caption="Ceremonies give recurring rituals a durable trigger, version, and run history." />
+
+That's the full loop: capture → shape → Ready → pickup → run → review.
+
+## Where to go next
+
+- Do the [tutorials](./tutorials/index.mdx) for each step in depth.
+- Wire Copilot CLI and GitHub to the same Spark via [Tutorial 4](./tutorials/connect-tools).
+- Read [Board and Runs](../user-guide/board-and-runs.mdx) to understand the pickup and run lifecycle in detail.

@@ -15,6 +15,21 @@ Deterministic, durable orchestration with recovery guarantees.
 
 ---
 
+## Coordinator Parity
+
+Durable server-owned equivalents for the Copilot CLI + [Squad](https://github.com/bradygaster/squad) driver loop.
+
+- **Coordinator input parity** — Labels, parent links, priority, project rules, agent capabilities, recent run state, and routing rules feed one shared coordinator input builder.
+- **Deterministic preflight/post-processing** — Named-agent routing, blocked parents, busy-agent ambiguity, backlog gating, thin issues, Ahmed-only operations, circuit-breaker skips, and confidence floors run outside the LLM and write visible routing decisions.
+- **Spawn prompt fidelity** — Agent runs receive charter, team root, requester, current time, workspace path/mode, history and decisions read instructions, assigned skill addenda, MCP context, drop-box guidance, and validation expectations.
+- **Directive memory loop** — Directives can be captured into `.squad/decisions/inbox/` with idempotency and fail-open MCP auditing.
+- **Scribe close-out** — Daemon, coordinator, and ceremony lifecycle paths converge on the Scribe close-out service and expose close-out result metadata.
+- **Opt-in Ralph monitor** — Disabled by default; when enabled, prioritizes untriaged squad issues, member-label pickup, assigned work, CI failures, review feedback, approved PRs, and drafts with audit output.
+
+Known limit: Ralph's non-pickup GitHub actions are audited/planned rather than live auto-merged.
+
+---
+
 ## Project Bundles
 
 Ship a complete project (board + ceremonies + team + skills + tools + MCP) as a single artifact.
@@ -37,9 +52,9 @@ Named triggered processes with 5 curated built-in templates.
 
 ---
 
-## GitHub Integration (Wave 16 + W17 in progress)
+## GitHub Integration
 
-Bi-directional sync with GitHub repositories.
+Bi-directional sync and work monitoring with GitHub repositories.
 
 **Phase 1 (W16 — shipped):**
 - **Branch convention** — Automatically name and push feature branches from the board: `fix/{issueId}`, `feature/{issueId}`.
@@ -48,10 +63,10 @@ Bi-directional sync with GitHub repositories.
 - **Create PR** — Open PR from pushed branch; block subsequent steps until merge.
 - **Card badges** — Show PR status (open, draft, merged) on kanban card.
 
-**Phase 2 (W17 in progress — Verbal):**
 - **Comment on PR** — `github_comment` step.
 - **Merge PR** — `github_pr_merge` step with merge strategy (squash, rebase, merge commit).
-- **Settings panel** — UI for GitHub sync config (token, repo, branch strategy).
+- **Settings panel** — UI/API for GitHub sync config (PAT or GitHub App, repo, branch strategy).
+- **Ralph monitor decisions** — Opt-in audit of CI failures, review feedback, approved PRs, and draft PRs.
 
 ---
 
@@ -107,7 +122,8 @@ Freeform prompt router with intent classification.
 - **Intent detection** — Classifies prompt as: project | issue | team | agent | skill | tool.
 - **Draft or create** — For issue intents, creates board card immediately. For other intents, returns draft + routing hint for user confirmation.
 - **Done prefix** — `capture "done: Fixed login bug (sha=abc123)"` → closes matching card by fuzzy title match.
-- **Dogfood loop** — Every Copilot CLI directive auto-captured to Squadboard inbox. Coordinator fragments detect and call `capture` on directive end.
+- **Dogfood loop** — Copilot CLI directives can be captured to the Squadboard inbox. Coordinator fragments detect implementation directives and call `capture` on directive end.
+- **Directive inbox** — Capture can also write idempotent decision-memory files to `.squad/decisions/inbox/`.
 
 ---
 
@@ -118,9 +134,10 @@ Customize board structure, fields, and automation.
 - **Column templates** — Custom statuses beyond default (backlog, todo, in_progress, in_review, done).
 - **Custom fields** — Add project-level metadata (priority, estimate, owner, component, target release).
 - **Team management** — Add agents, assign capabilities, enable/disable per-project.
+- **Agent origins** — Distinguish project, virtual Copilot, and human members in API/UI metadata.
 - **Skill registry** — Declare reusable skills (`code-review`, `architecture-audit`) that agents can run.
 - **Tool registry** — Bind MCP tools or shell scripts to projects.
-- **GitHub settings panel** — Configure auth (PAT or GitHub App), repo, branch strategy (in progress W17).
+- **GitHub settings panel** — Configure auth (PAT or GitHub App), repo, and branch strategy.
 
 ---
 
@@ -145,9 +162,9 @@ Customize board structure, fields, and automation.
 
 ---
 
-## What's Not Yet Shipped
+## Remaining Gaps
 
-**Wave 18+ roadmap items:**
+Items still intentionally outside the current first-slice parity claim:
 - Workflow Editor UI (visual step builder; roadmap Demo 11)
 - Advanced fan-out patterns (conditional parallelism, dynamic child count)
 - Webhook listener (for external `wait_event` callbacks)
@@ -155,6 +172,7 @@ Customize board structure, fields, and automation.
 - Agent leaderboard (runs completed, avg cost, success rate)
 - Burndown charts (sprint velocity)
 - Custom merge strategies for PRs (squash-and-sign, fast-forward)
+- Live Ralph auto-merge/remediation for non-pickup GitHub actions
 - Scheduled backup to cloud storage (S3, Azure Blob)
 - RBAC for multi-tenant setups (read-only, edit, admin roles)
 - Audit log exports (CSV, JSON)

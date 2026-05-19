@@ -14,7 +14,6 @@
 import { useRef, useState } from 'react'
 import { useParams } from 'react-router'
 import {
-  Body1,
   Body1Strong,
   Button,
   Caption1,
@@ -47,6 +46,7 @@ import {
 import FormulatePanel from '../components/formulate/FormulatePanel.tsx'
 import PageHeader from '../components/layout/PageHeader.tsx'
 import EmptyState from '../components/layout/EmptyState.tsx'
+import { PageLoading } from '../components/loading/index.tsx'
 
 const KEBAB_RE = /^[a-z][a-z0-9-]*$/
 
@@ -95,6 +95,21 @@ export default function Skills() {
     } catch (err) {
       setImportMessage({ kind: 'error', text: err instanceof Error ? err.message : 'Import failed' })
     }
+  }
+
+  if (isLoading) {
+    return (
+      <PageLoading
+        header={
+          <PageHeader
+            eyebrow={project?.name}
+            title="Skills"
+            description="Prompt-augmentation snippets agents can be assigned to specialise their behaviour."
+          />
+        }
+        label="Loading skills…"
+      />
+    )
   }
 
   return (
@@ -151,7 +166,6 @@ export default function Skills() {
             <Button size="small" appearance="subtle" onClick={() => setImportMessage(null)}>Dismiss</Button>
           </div>
         )}
-        {isLoading && <Body1 style={{ color: tokens.colorNeutralForeground3 }}>Loading…</Body1>}
         {!isLoading && skills.length === 0 && (
           /* Wave 10 C5: Ceremonies-style empty state with the full Skills triplet
              (Browse curated + New + Import). Stream D's Import.md and curated

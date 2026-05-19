@@ -38,6 +38,7 @@ export interface CreateConsultSessionInput {
   mode: ConsultMode;
   agentId?: string | null;
   agentName?: string | null;
+  agentOrigin?: string | null;
   model?: string | null;
   name?: string | null;
   forkedFromSessionId?: string | null;
@@ -106,6 +107,7 @@ export async function createConsultSession(input: CreateConsultSessionInput): Pr
       mode: input.mode,
       agentId: input.mode === 'agent' ? (input.agentId ?? null) : null,
       agentName: input.mode === 'agent' ? (input.agentName ?? null) : null,
+      agentOrigin: input.mode === 'agent' ? (input.agentOrigin ?? 'project') : 'model',
       model: input.model ?? null,
       name: input.name ?? null,
       forkedFromSessionId: input.forkedFromSessionId ?? null,

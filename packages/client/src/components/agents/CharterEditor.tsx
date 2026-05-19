@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { Checkmark20Regular } from '@fluentui/react-icons'
 import { useAgentCharter, useUpdateCharter } from '../../api/agents.ts'
+import { useUnsavedChangesWarning } from '../../hooks/useUnsavedChangesWarning.ts'
 
 interface CharterEditorProps {
   projectId: string
@@ -12,6 +13,7 @@ export default function CharterEditor({ projectId, agentId }: CharterEditorProps
   const updateCharter = useUpdateCharter(projectId, agentId)
   const [value, setValue] = useState('')
   const [dirty, setDirty] = useState(false)
+  useUnsavedChangesWarning(dirty)
 
   useEffect(() => {
     if (data?.content !== undefined) {

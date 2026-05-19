@@ -12,7 +12,7 @@
  * Idempotency: TODO — add LRU dedupe per (signalName, contextKey) within a
  * short window (see ceremony-dispatcher.ts for reference pattern).
  *
- * Wiring: callers (e.g. pickup-todos sweep, batch coordinator) call emitSignal
+ * Wiring: callers (e.g. pickup-ready sweep, batch coordinator) call emitSignal
  * directly before/after their batch operation. This module does NOT self-register
  * any listeners; it is a pure service that callers invoke explicitly.
  */
@@ -35,7 +35,7 @@ import { spawnCeremonyRun } from './ceremony-scheduler.js';
  * Documented in full in docs/ceremonies/triggers.md — "Standardized signal names".
  */
 export type WellKnownSignal =
-  | 'before-batch'      // emitted before a batch of issue_runs is spawned (e.g. pickup-todos sweep)
+  | 'before-batch'      // emitted before a batch of issue_runs is spawned (e.g. pickup-ready sweep)
   | 'after-batch'       // emitted after the batch starts
   | 'before-run'        // emitted before a single issue_run starts
   | 'after-run'         // emitted after a single issue_run completes (any status)

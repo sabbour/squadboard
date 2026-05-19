@@ -12,7 +12,6 @@ import { useRef, useState } from 'react'
 import { useParams } from 'react-router'
 import {
   Badge,
-  Body1,
   Body1Strong,
   Button,
   Caption1,
@@ -45,6 +44,7 @@ import {
 } from '../api/mcp.ts'
 import PageHeader from '../components/layout/PageHeader.tsx'
 import EmptyState from '../components/layout/EmptyState.tsx'
+import { PageLoading } from '../components/loading/index.tsx'
 
 interface FormState {
   name: string
@@ -110,6 +110,21 @@ export default function McpServers() {
     })
   }
 
+  if (isLoading) {
+    return (
+      <PageLoading
+        header={
+          <PageHeader
+            eyebrow={project?.name}
+            title="MCP Servers"
+            description="Model Context Protocol gateways. Header values are AES-256-GCM encrypted at rest with a per-project key."
+          />
+        }
+        label="Loading MCP servers…"
+      />
+    )
+  }
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
       <PageHeader
@@ -163,7 +178,6 @@ export default function McpServers() {
             <Button size="small" appearance="subtle" onClick={() => setImportMessage(null)}>Dismiss</Button>
           </div>
         )}
-        {isLoading && <Body1 style={{ color: tokens.colorNeutralForeground3 }}>Loading…</Body1>}
         {!isLoading && servers.length === 0 && (
           /* Wave 10 C5: Ceremonies-style empty state. Stream D's import-json
              flow is preserved as the secondary action. */

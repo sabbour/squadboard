@@ -44,6 +44,7 @@ export default function App() {
         <Route path="diagnostics" element={<Diagnostics />} />
         <Route path="heartbeat" element={<Heartbeat />} />
         <Route path="projects/:id/diagnostics" element={<Diagnostics />} />
+        <Route path="projects/:id/heartbeat" element={<Heartbeat />} />
         <Route path="projects/:id" element={<Navigate to="dashboard" replace />} />
         <Route path="projects/:id/dashboard" element={<Dashboard />} />
         <Route path="projects/:id/inbox" element={<Inbox />} />

@@ -14,8 +14,9 @@ factory:
 
 ## Tools
 
-11 tools are registered (Phase 18 dropped the `squadboard_` prefix — the
-server name `squadboard` already namespaces).
+11 core tools are registered (Phase 18 dropped the `squadboard_` prefix — the
+server name `squadboard` already namespaces), plus GitHub run tools for
+worktree-backed push/PR/workflow operations.
 
 | Tool             | What it does                                                                                     |
 |------------------|--------------------------------------------------------------------------------------------------|
@@ -88,11 +89,22 @@ Add this entry to `~/.copilot/mcp-config.json` (or your project-local
   "mcpServers": {
     "squadboard": {
       "command": "node",
-      "args": ["/abs/path/to/squadboard/packages/server/dist/mcp/index.js"]
+      "args": ["/abs/path/to/squadboard/packages/server/dist/mcp/index.js"],
+      "env": {
+        "SQUADBOARD_SQUAD_STORAGE_PROVIDER": "postgresql"
+      }
     }
   }
 }
 ```
+
+You can also have the packaged CLI write the repo-local Copilot config:
+
+```bash
+squadboard init --write-mcp-config
+```
+
+This is the recommended way for Copilot CLI plus `squad.agent.md` to use Squadboard as the broker for PostgreSQL-backed Squad state. Use `--squad-storage fs` only for filesystem `.squad/` fallback.
 
 For local development (no build step required) you can point at
 `tsx` instead:
@@ -107,6 +119,7 @@ For local development (no build step required) you can point at
         "/abs/path/to/squadboard/packages/server/src/mcp/index.ts"
       ],
       "env": {
+        "SQUADBOARD_SQUAD_STORAGE_PROVIDER": "postgresql",
         "SQUADBOARD_DEFAULT_PROJECT_ID": "${SQUADBOARD_DEFAULT_PROJECT_ID}"
       }
     }
@@ -182,7 +195,7 @@ then starts the MCP server on stdio. Logs go to **stderr** to keep
 
 ```bash
 # Start the main server first:
-pnpm --filter @sabbour/squadboard-server dev
+pnpm --filter @sabbour/squadboard dev
 
 # Then in another shell:
 curl -s http://localhost:3000/mcp/health | jq .

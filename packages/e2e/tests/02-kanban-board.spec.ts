@@ -21,7 +21,7 @@ test.describe('Demo 2 — Kanban board', () => {
   test('Board renders five kanban columns', async ({ page }) => {
     await page.goto(`/projects/${projectId}/board`)
 
-    const columns = ['Backlog', 'Todo', 'In Progress', 'In Review', 'Done']
+    const columns = ['Backlog', 'Ready', 'In Progress', 'In Review', 'Done']
     for (const col of columns) {
       await expect(page.getByText(col).first()).toBeVisible()
     }

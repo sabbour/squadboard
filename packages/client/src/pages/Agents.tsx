@@ -385,7 +385,7 @@ export default function Agents() {
         }
         description={activeTab === 'routing'
           ? 'Routing rules, recent decisions, and keyword tuning across the squad.'
-          : 'Hired agents on this project — their roles, models, and capabilities.'}
+          : 'Cast agents on this project — their roles, models, and capabilities.'}
         actions={
           <>
             {activeTab === 'routing' && (
@@ -489,7 +489,7 @@ export default function Agents() {
                   onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.background = 'var(--bg)' }}
                 >
                   <People20Regular />
-                  Hire Team
+                  Cast Team
                 </button>
                 <button
                   onClick={() => setShowHireModal(true)}
@@ -510,7 +510,7 @@ export default function Agents() {
                   onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.background = '#238636' }}
                 >
                   <span style={{ fontSize: '16px', lineHeight: 1 }}>+</span>
-                  Hire Agent
+                  Cast Agent
                 </button>
               </>
             )}
@@ -610,7 +610,7 @@ export default function Agents() {
         />
       )}
 
-      {/* Hire modal */}
+      {/* Cast agent modal */}
       {showHireModal && (
         <HireAgentModal
           projectId={projectId}
@@ -618,7 +618,7 @@ export default function Agents() {
         />
       )}
 
-      {/* Hire Team modal */}
+      {/* Cast team modal */}
       {showHireTeamModal && (
         <HireTeamModal
           projectId={projectId}

@@ -46,11 +46,13 @@ import {
 import {
   DocumentArrowDown20Regular,
   Delete20Regular,
+  Eye20Regular,
   Play20Regular,
 } from '@fluentui/react-icons'
 import { useCeremonyTemplates } from '../api/ceremonies.ts'
 import {
   useTemplates,
+  useTemplate,
   useDeleteTemplate,
   useImportTeam,
   useImportProject,
@@ -64,6 +66,7 @@ import {
 } from '../api/templates.ts'
 import { safeRelativeTime } from '../utils/dates.ts'
 import PageHeader from '../components/layout/PageHeader.tsx'
+import { ceremonyYamlToGraph, topLevelSteps } from '../services/ceremony-graph.ts'
 
 const useStyles = makeStyles({
   grid: {
@@ -197,6 +200,117 @@ function ApplyTemplateDialog({
   )
 }
 
+function PreviewTemplateDialog({
+  open,
+  title,
+  description,
+  content,
+  isLoading = false,
+  onClose,
+}: {
+  open: boolean
+  title: string
+  description?: string | null
+  content?: string
+  isLoading?: boolean
+  onClose: () => void
+}) {
+  return (
+    <Dialog open={open} onOpenChange={(_, d) => { if (!d.open) onClose() }}>
+      <DialogSurface style={{ maxWidth: 720 }}>
+        <DialogBody>
+          <DialogTitle>Review template</DialogTitle>
+          <DialogContent style={{ display: 'flex', flexDirection: 'column', gap: tokens.spacingVerticalM }}>
+            <div>
+              <Subtitle1>{title}</Subtitle1>
+              {description && (
+                <Caption1 style={{ color: tokens.colorNeutralForeground3 }}>
+                  {description}
+                </Caption1>
+              )}
+            </div>
+            {isLoading ? (
+              <div style={{ display: 'flex', alignItems: 'center', gap: tokens.spacingHorizontalS }}>
+                <Spinner size="tiny" />
+                <Caption1 style={{ color: tokens.colorNeutralForeground3 }}>Loading template details…</Caption1>
+              </div>
+            ) : (
+              <>
+                <TemplateFlowPreview content={content} />
+                <pre style={{
+                  margin: 0,
+                  maxHeight: 320,
+                  overflow: 'auto',
+                  padding: tokens.spacingHorizontalM,
+                  borderRadius: tokens.borderRadiusMedium,
+                  background: tokens.colorNeutralBackground3,
+                  color: tokens.colorNeutralForeground1,
+                  fontSize: '12px',
+                  lineHeight: 1.5,
+                  whiteSpace: 'pre-wrap',
+                }}>
+                  {content ?? 'No template payload available.'}
+                </pre>
+              </>
+            )}
+          </DialogContent>
+          <DialogActions>
+            <Button appearance="secondary" onClick={onClose}>Close</Button>
+          </DialogActions>
+        </DialogBody>
+      </DialogSurface>
+    </Dialog>
+  )
+}
+
+function TemplateFlowPreview({ content }: { content?: string }) {
+  if (!content) return null
+  try {
+    const graph = ceremonyYamlToGraph(content)
+    const steps = topLevelSteps(graph)
+    if (steps.length === 0) return null
+    return (
+      <div
+        style={{
+          display: 'flex',
+          gap: tokens.spacingHorizontalS,
+          overflowX: 'auto',
+          padding: tokens.spacingHorizontalS,
+          border: `1px solid ${tokens.colorNeutralStroke2}`,
+          borderRadius: tokens.borderRadiusMedium,
+          background: tokens.colorNeutralBackground2,
+        }}
+        aria-label="Ceremony visual preview"
+      >
+        {steps.map((step, index) => (
+          <div key={`${step.kind}-${index}`} style={{ display: 'flex', alignItems: 'center', gap: tokens.spacingHorizontalS }}>
+            {index > 0 && <span style={{ color: tokens.colorNeutralForeground3 }}>→</span>}
+            <div
+              style={{
+                minWidth: 140,
+                maxWidth: 220,
+                padding: `${tokens.spacingVerticalS} ${tokens.spacingHorizontalM}`,
+                border: `1px solid ${tokens.colorBrandStroke2}`,
+                borderRadius: tokens.borderRadiusMedium,
+                background: tokens.colorNeutralBackground1,
+              }}
+            >
+              <Caption1 style={{ display: 'block', color: tokens.colorNeutralForeground3, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                {step.kind.replace(/_/g, ' ')}
+              </Caption1>
+              <Body1 style={{ display: 'block', color: tokens.colorNeutralForeground1, fontWeight: 600, whiteSpace: 'normal' }}>
+                {step.label || `Step ${index + 1}`}
+              </Body1>
+            </div>
+          </div>
+        ))}
+      </div>
+    )
+  } catch {
+    return null
+  }
+}
+
 // ---------------------------------------------------------------------------
 // User template grid (Workflows / Teams / Projects)
 // ---------------------------------------------------------------------------
@@ -216,7 +330,9 @@ function TemplateGrid({
   const instantiateProject = useInstantiateProjectTemplate()
   const instantiateWorkflow = useInstantiateWorkflowTemplate(projectId)
   const [applyTarget, setApplyTarget] = useState<TemplateSummary | null>(null)
+  const [previewTarget, setPreviewTarget] = useState<TemplateSummary | null>(null)
   const [applyError, setApplyError] = useState<string | null>(null)
+  const { data: previewDetail, isLoading: isPreviewLoading } = useTemplate(previewTarget?.id ?? '')
   // Stream D — D7: "Mine" filter limits to templates whose projectId === the
   // currently-open project (i.e. ones the user actually saved here). "All"
   // continues to surface globals + every project's templates.
@@ -368,6 +484,14 @@ function TemplateGrid({
                   Apply
                 </Button>
                 <Button
+                  appearance="secondary"
+                  size="small"
+                  icon={<Eye20Regular />}
+                  onClick={() => setPreviewTarget(tpl)}
+                >
+                  Review
+                </Button>
+                <Button
                   appearance="subtle"
                   size="small"
                   icon={<Delete20Regular />}
@@ -389,6 +513,16 @@ function TemplateGrid({
           templateName={applyTarget.name}
           onApply={(name, squadPath) => void handleApply(applyTarget, name, squadPath)}
           onClose={() => setApplyTarget(null)}
+        />
+      )}
+      {previewTarget && (
+        <PreviewTemplateDialog
+          open
+          title={previewTarget.name}
+          description={previewTarget.description}
+          isLoading={isPreviewLoading}
+          content={previewDetail ? JSON.stringify(previewDetail.payload, null, 2) : undefined}
+          onClose={() => setPreviewTarget(null)}
         />
       )}
     </>
@@ -586,6 +720,7 @@ function CeremonyTemplatesTab() {
   const queryClient = useQueryClient()
   const { id: projectId = '' } = useParams<{ id: string }>()
   const { data: templates, isLoading, isError, error } = useCeremonyTemplates()
+  const [previewTarget, setPreviewTarget] = useState<(NonNullable<typeof templates>[number]) | null>(null)
 
   function handleRetry() {
     void queryClient.invalidateQueries({ queryKey: ['ceremony-templates'] })
@@ -645,16 +780,34 @@ function CeremonyTemplatesTab() {
               ))}
             </div>
           )}
-          <Button
-            appearance="outline"
-            size="small"
-            style={{ alignSelf: 'flex-end', marginTop: tokens.spacingVerticalXS }}
-            onClick={() => navigate(`/projects/${projectId}/ceremonies/new?template=${tpl.slug}`)}
-          >
-            Use template
-          </Button>
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: tokens.spacingHorizontalS, marginTop: tokens.spacingVerticalXS }}>
+            <Button
+              appearance="secondary"
+              size="small"
+              icon={<Eye20Regular />}
+              onClick={() => setPreviewTarget(tpl)}
+            >
+              Review
+            </Button>
+            <Button
+              appearance="outline"
+              size="small"
+              onClick={() => navigate(`/projects/${projectId}/ceremonies/new?template=${tpl.slug}`)}
+            >
+              Use template
+            </Button>
+          </div>
         </div>
       ))}
+      {previewTarget && (
+        <PreviewTemplateDialog
+          open
+          title={previewTarget.name}
+          description={previewTarget.description}
+          content={previewTarget.yamlContent ?? 'This built-in template is reviewed in the ceremony editor before deployment.'}
+          onClose={() => setPreviewTarget(null)}
+        />
+      )}
     </div>
   )
 }
@@ -705,7 +858,7 @@ export default function Templates() {
         <Caption1 style={{ color: tokens.colorNeutralForeground2 }}>
           A <strong>Ceremony</strong> is a named, triggered process your team runs — for example "Bug Fix",
           "RFC Review", or "End-of-Wave Close-Out." Each ceremony has a <em>trigger</em> (a schedule,
-          an issue label, a manual button) and an execution graph that runs when the trigger fires.
+          an issue label, an explicit UI action) and an execution graph that runs when the trigger fires.
         </Caption1>
         <Caption1 style={{ color: tokens.colorNeutralForeground2 }}>
           <strong>Ceremony Templates</strong> are pre-built starting points for common team processes.

@@ -1,0 +1,2544 @@
+{
+  "timestamp": "2026-05-19T21-11-09-413Z",
+  "tables": {
+    "_migration_log": [
+      {
+        "column": "version",
+        "type": "integer",
+        "nullable": false
+      },
+      {
+        "column": "filename",
+        "type": "text",
+        "nullable": false
+      },
+      {
+        "column": "checksum",
+        "type": "text",
+        "nullable": false
+      },
+      {
+        "column": "applied_at",
+        "type": "timestamp with time zone",
+        "nullable": false
+      }
+    ],
+    "agent_keywords": [
+      {
+        "column": "agent_id",
+        "type": "uuid",
+        "nullable": false
+      },
+      {
+        "column": "keywords",
+        "type": "text",
+        "nullable": false
+      },
+      {
+        "column": "focus_areas",
+        "type": "text",
+        "nullable": false
+      },
+      {
+        "column": "updated_at",
+        "type": "timestamp with time zone",
+        "nullable": false
+      }
+    ],
+    "agent_mcp_servers": [
+      {
+        "column": "agent_id",
+        "type": "uuid",
+        "nullable": false
+      },
+      {
+        "column": "mcp_server_id",
+        "type": "uuid",
+        "nullable": false
+      },
+      {
+        "column": "assigned_at",
+        "type": "timestamp with time zone",
+        "nullable": false
+      }
+    ],
+    "agent_skills": [
+      {
+        "column": "agent_id",
+        "type": "uuid",
+        "nullable": false
+      },
+      {
+        "column": "skill_id",
+        "type": "uuid",
+        "nullable": false
+      },
+      {
+        "column": "assigned_at",
+        "type": "timestamp with time zone",
+        "nullable": false
+      }
+    ],
+    "agent_tools": [
+      {
+        "column": "agent_id",
+        "type": "uuid",
+        "nullable": false
+      },
+      {
+        "column": "tool_id",
+        "type": "uuid",
+        "nullable": false
+      },
+      {
+        "column": "assigned_at",
+        "type": "timestamp with time zone",
+        "nullable": false
+      }
+    ],
+    "agents": [
+      {
+        "column": "id",
+        "type": "uuid",
+        "nullable": false
+      },
+      {
+        "column": "project_id",
+        "type": "uuid",
+        "nullable": false
+      },
+      {
+        "column": "name",
+        "type": "text",
+        "nullable": false
+      },
+      {
+        "column": "role",
+        "type": "text",
+        "nullable": false
+      },
+      {
+        "column": "model",
+        "type": "text",
+        "nullable": true
+      },
+      {
+        "column": "status",
+        "type": "USER-DEFINED",
+        "nullable": false
+      },
+      {
+        "column": "charter_path",
+        "type": "text",
+        "nullable": false
+      },
+      {
+        "column": "history_path",
+        "type": "text",
+        "nullable": true
+      },
+      {
+        "column": "charter_hash",
+        "type": "text",
+        "nullable": true
+      },
+      {
+        "column": "created_at",
+        "type": "timestamp with time zone",
+        "nullable": false
+      },
+      {
+        "column": "updated_at",
+        "type": "timestamp with time zone",
+        "nullable": false
+      },
+      {
+        "column": "agent_kind",
+        "type": "text",
+        "nullable": false
+      },
+      {
+        "column": "charter_content",
+        "type": "text",
+        "nullable": false
+      }
+    ],
+    "ceremony_github_fires": [
+      {
+        "column": "id",
+        "type": "uuid",
+        "nullable": false
+      },
+      {
+        "column": "ceremony_slug",
+        "type": "text",
+        "nullable": false
+      },
+      {
+        "column": "delivery_id",
+        "type": "text",
+        "nullable": false
+      },
+      {
+        "column": "fired_at",
+        "type": "timestamp with time zone",
+        "nullable": false
+      }
+    ],
+    "ceremony_schedules": [
+      {
+        "column": "id",
+        "type": "uuid",
+        "nullable": false
+      },
+      {
+        "column": "workflow_id",
+        "type": "uuid",
+        "nullable": false
+      },
+      {
+        "column": "cron_expr",
+        "type": "text",
+        "nullable": false
+      },
+      {
+        "column": "timezone",
+        "type": "text",
+        "nullable": false
+      },
+      {
+        "column": "next_fire_at",
+        "type": "timestamp with time zone",
+        "nullable": false
+      },
+      {
+        "column": "last_fired_at",
+        "type": "timestamp with time zone",
+        "nullable": true
+      },
+      {
+        "column": "enabled",
+        "type": "boolean",
+        "nullable": false
+      },
+      {
+        "column": "created_at",
+        "type": "timestamp with time zone",
+        "nullable": false
+      },
+      {
+        "column": "updated_at",
+        "type": "timestamp with time zone",
+        "nullable": false
+      }
+    ],
+    "column_meta": [
+      {
+        "column": "id",
+        "type": "uuid",
+        "nullable": false
+      },
+      {
+        "column": "project_id",
+        "type": "uuid",
+        "nullable": false
+      },
+      {
+        "column": "column_id",
+        "type": "text",
+        "nullable": false
+      },
+      {
+        "column": "label",
+        "type": "text",
+        "nullable": false
+      },
+      {
+        "column": "description",
+        "type": "text",
+        "nullable": true
+      },
+      {
+        "column": "color",
+        "type": "text",
+        "nullable": false
+      },
+      {
+        "column": "position",
+        "type": "integer",
+        "nullable": false
+      },
+      {
+        "column": "semantic",
+        "type": "text",
+        "nullable": false
+      },
+      {
+        "column": "is_default",
+        "type": "boolean",
+        "nullable": false
+      },
+      {
+        "column": "created_at",
+        "type": "timestamp with time zone",
+        "nullable": false
+      },
+      {
+        "column": "updated_at",
+        "type": "timestamp with time zone",
+        "nullable": false
+      }
+    ],
+    "comments": [
+      {
+        "column": "id",
+        "type": "uuid",
+        "nullable": false
+      },
+      {
+        "column": "issue_id",
+        "type": "uuid",
+        "nullable": false
+      },
+      {
+        "column": "body",
+        "type": "text",
+        "nullable": false
+      },
+      {
+        "column": "author_id",
+        "type": "uuid",
+        "nullable": true
+      },
+      {
+        "column": "created_at",
+        "type": "timestamp with time zone",
+        "nullable": false
+      },
+      {
+        "column": "updated_at",
+        "type": "timestamp with time zone",
+        "nullable": false
+      },
+      {
+        "column": "github_comment_id",
+        "type": "text",
+        "nullable": true
+      },
+      {
+        "column": "author_kind",
+        "type": "text",
+        "nullable": false
+      },
+      {
+        "column": "author_ref",
+        "type": "text",
+        "nullable": true
+      },
+      {
+        "column": "mentions",
+        "type": "jsonb",
+        "nullable": false
+      },
+      {
+        "column": "event_kind",
+        "type": "text",
+        "nullable": true
+      },
+      {
+        "column": "event_payload",
+        "type": "jsonb",
+        "nullable": true
+      }
+    ],
+    "consult_messages": [
+      {
+        "column": "id",
+        "type": "uuid",
+        "nullable": false
+      },
+      {
+        "column": "session_id",
+        "type": "uuid",
+        "nullable": false
+      },
+      {
+        "column": "role",
+        "type": "USER-DEFINED",
+        "nullable": false
+      },
+      {
+        "column": "content",
+        "type": "text",
+        "nullable": false
+      },
+      {
+        "column": "reasoning_content",
+        "type": "text",
+        "nullable": true
+      },
+      {
+        "column": "tool_name",
+        "type": "text",
+        "nullable": true
+      },
+      {
+        "column": "tool_args",
+        "type": "jsonb",
+        "nullable": true
+      },
+      {
+        "column": "tool_result",
+        "type": "jsonb",
+        "nullable": true
+      },
+      {
+        "column": "input_tokens",
+        "type": "integer",
+        "nullable": true
+      },
+      {
+        "column": "output_tokens",
+        "type": "integer",
+        "nullable": true
+      },
+      {
+        "column": "cost_usd",
+        "type": "numeric",
+        "nullable": true
+      },
+      {
+        "column": "ts",
+        "type": "timestamp with time zone",
+        "nullable": false
+      }
+    ],
+    "consult_proposals": [
+      {
+        "column": "id",
+        "type": "uuid",
+        "nullable": false
+      },
+      {
+        "column": "session_id",
+        "type": "uuid",
+        "nullable": false
+      },
+      {
+        "column": "message_id",
+        "type": "uuid",
+        "nullable": true
+      },
+      {
+        "column": "kind",
+        "type": "USER-DEFINED",
+        "nullable": false
+      },
+      {
+        "column": "payload",
+        "type": "jsonb",
+        "nullable": false
+      },
+      {
+        "column": "edited_payload",
+        "type": "jsonb",
+        "nullable": true
+      },
+      {
+        "column": "status",
+        "type": "USER-DEFINED",
+        "nullable": false
+      },
+      {
+        "column": "result",
+        "type": "jsonb",
+        "nullable": true
+      },
+      {
+        "column": "error_message",
+        "type": "text",
+        "nullable": true
+      },
+      {
+        "column": "created_at",
+        "type": "timestamp with time zone",
+        "nullable": false
+      },
+      {
+        "column": "decided_at",
+        "type": "timestamp with time zone",
+        "nullable": true
+      }
+    ],
+    "consult_sessions": [
+      {
+        "column": "id",
+        "type": "uuid",
+        "nullable": false
+      },
+      {
+        "column": "project_id",
+        "type": "uuid",
+        "nullable": true
+      },
+      {
+        "column": "name",
+        "type": "text",
+        "nullable": true
+      },
+      {
+        "column": "mode",
+        "type": "USER-DEFINED",
+        "nullable": false
+      },
+      {
+        "column": "agent_id",
+        "type": "uuid",
+        "nullable": true
+      },
+      {
+        "column": "agent_name",
+        "type": "text",
+        "nullable": true
+      },
+      {
+        "column": "model",
+        "type": "text",
+        "nullable": true
+      },
+      {
+        "column": "status",
+        "type": "USER-DEFINED",
+        "nullable": false
+      },
+      {
+        "column": "sdk_session_id",
+        "type": "text",
+        "nullable": true
+      },
+      {
+        "column": "input_tokens",
+        "type": "integer",
+        "nullable": false
+      },
+      {
+        "column": "output_tokens",
+        "type": "integer",
+        "nullable": false
+      },
+      {
+        "column": "cost_usd",
+        "type": "numeric",
+        "nullable": false
+      },
+      {
+        "column": "message_count",
+        "type": "integer",
+        "nullable": false
+      },
+      {
+        "column": "forked_from_session_id",
+        "type": "uuid",
+        "nullable": true
+      },
+      {
+        "column": "error_message",
+        "type": "text",
+        "nullable": true
+      },
+      {
+        "column": "started_at",
+        "type": "timestamp with time zone",
+        "nullable": false
+      },
+      {
+        "column": "ended_at",
+        "type": "timestamp with time zone",
+        "nullable": true
+      },
+      {
+        "column": "created_at",
+        "type": "timestamp with time zone",
+        "nullable": false
+      },
+      {
+        "column": "updated_at",
+        "type": "timestamp with time zone",
+        "nullable": false
+      },
+      {
+        "column": "premium_requests",
+        "type": "numeric",
+        "nullable": false
+      },
+      {
+        "column": "cached_input_tokens",
+        "type": "integer",
+        "nullable": false
+      },
+      {
+        "column": "agent_origin",
+        "type": "text",
+        "nullable": false
+      }
+    ],
+    "copilot_auto_assign_dispatches": [
+      {
+        "column": "id",
+        "type": "uuid",
+        "nullable": false
+      },
+      {
+        "column": "rule_id",
+        "type": "uuid",
+        "nullable": false
+      },
+      {
+        "column": "issue_id",
+        "type": "uuid",
+        "nullable": false
+      },
+      {
+        "column": "created_at",
+        "type": "timestamp with time zone",
+        "nullable": false
+      }
+    ],
+    "copilot_auto_assign_rules": [
+      {
+        "column": "id",
+        "type": "uuid",
+        "nullable": false
+      },
+      {
+        "column": "project_id",
+        "type": "uuid",
+        "nullable": false
+      },
+      {
+        "column": "label",
+        "type": "text",
+        "nullable": false
+      },
+      {
+        "column": "enabled",
+        "type": "boolean",
+        "nullable": false
+      },
+      {
+        "column": "created_at",
+        "type": "timestamp with time zone",
+        "nullable": false
+      }
+    ],
+    "deliverables": [
+      {
+        "column": "id",
+        "type": "uuid",
+        "nullable": false
+      },
+      {
+        "column": "issue_id",
+        "type": "uuid",
+        "nullable": false
+      },
+      {
+        "column": "run_id",
+        "type": "uuid",
+        "nullable": true
+      },
+      {
+        "column": "step_run_id",
+        "type": "uuid",
+        "nullable": true
+      },
+      {
+        "column": "kind",
+        "type": "text",
+        "nullable": false
+      },
+      {
+        "column": "title",
+        "type": "text",
+        "nullable": false
+      },
+      {
+        "column": "summary",
+        "type": "text",
+        "nullable": true
+      },
+      {
+        "column": "payload",
+        "type": "jsonb",
+        "nullable": false
+      },
+      {
+        "column": "status",
+        "type": "text",
+        "nullable": false
+      },
+      {
+        "column": "produced_at",
+        "type": "timestamp with time zone",
+        "nullable": false
+      },
+      {
+        "column": "superseded_by_deliverable_id",
+        "type": "uuid",
+        "nullable": true
+      },
+      {
+        "column": "created_at",
+        "type": "timestamp with time zone",
+        "nullable": false
+      },
+      {
+        "column": "updated_at",
+        "type": "timestamp with time zone",
+        "nullable": false
+      }
+    ],
+    "gh_card_side_effects": [
+      {
+        "column": "id",
+        "type": "uuid",
+        "nullable": false
+      },
+      {
+        "column": "event_type",
+        "type": "text",
+        "nullable": false
+      },
+      {
+        "column": "action",
+        "type": "text",
+        "nullable": false
+      },
+      {
+        "column": "label_filter",
+        "type": "text",
+        "nullable": true
+      },
+      {
+        "column": "target_semantic",
+        "type": "text",
+        "nullable": true
+      },
+      {
+        "column": "target_deliverable_status",
+        "type": "text",
+        "nullable": true
+      },
+      {
+        "column": "description",
+        "type": "text",
+        "nullable": false
+      },
+      {
+        "column": "enabled",
+        "type": "boolean",
+        "nullable": false
+      },
+      {
+        "column": "created_at",
+        "type": "timestamp with time zone",
+        "nullable": false
+      }
+    ],
+    "github_events": [
+      {
+        "column": "id",
+        "type": "uuid",
+        "nullable": false
+      },
+      {
+        "column": "event_type",
+        "type": "text",
+        "nullable": false
+      },
+      {
+        "column": "action",
+        "type": "text",
+        "nullable": true
+      },
+      {
+        "column": "payload",
+        "type": "jsonb",
+        "nullable": false
+      },
+      {
+        "column": "delivery_id",
+        "type": "text",
+        "nullable": true
+      },
+      {
+        "column": "project_id_resolved",
+        "type": "uuid",
+        "nullable": true
+      },
+      {
+        "column": "received_at",
+        "type": "timestamp with time zone",
+        "nullable": false
+      },
+      {
+        "column": "processed_at",
+        "type": "timestamp with time zone",
+        "nullable": true
+      },
+      {
+        "column": "processed_outcome",
+        "type": "text",
+        "nullable": true
+      }
+    ],
+    "github_sync_log": [
+      {
+        "column": "id",
+        "type": "uuid",
+        "nullable": false
+      },
+      {
+        "column": "project_id",
+        "type": "uuid",
+        "nullable": false
+      },
+      {
+        "column": "direction",
+        "type": "text",
+        "nullable": false
+      },
+      {
+        "column": "entity_type",
+        "type": "text",
+        "nullable": false
+      },
+      {
+        "column": "entity_id",
+        "type": "text",
+        "nullable": false
+      },
+      {
+        "column": "github_number",
+        "type": "integer",
+        "nullable": true
+      },
+      {
+        "column": "status",
+        "type": "text",
+        "nullable": false
+      },
+      {
+        "column": "error_msg",
+        "type": "text",
+        "nullable": true
+      },
+      {
+        "column": "synced_at",
+        "type": "timestamp with time zone",
+        "nullable": false
+      }
+    ],
+    "handoff_context": [
+      {
+        "column": "id",
+        "type": "uuid",
+        "nullable": false
+      },
+      {
+        "column": "workflow_run_id",
+        "type": "uuid",
+        "nullable": false
+      },
+      {
+        "column": "step_run_id",
+        "type": "uuid",
+        "nullable": false
+      },
+      {
+        "column": "target_issue_id",
+        "type": "uuid",
+        "nullable": true
+      },
+      {
+        "column": "context_json",
+        "type": "jsonb",
+        "nullable": false
+      },
+      {
+        "column": "created_at",
+        "type": "timestamp with time zone",
+        "nullable": false
+      }
+    ],
+    "inbox_items": [
+      {
+        "column": "id",
+        "type": "uuid",
+        "nullable": false
+      },
+      {
+        "column": "user_id",
+        "type": "uuid",
+        "nullable": true
+      },
+      {
+        "column": "original_draft",
+        "type": "text",
+        "nullable": false
+      },
+      {
+        "column": "formulated_title",
+        "type": "text",
+        "nullable": true
+      },
+      {
+        "column": "formulated_body",
+        "type": "text",
+        "nullable": true
+      },
+      {
+        "column": "suggested_labels",
+        "type": "jsonb",
+        "nullable": false
+      },
+      {
+        "column": "suggested_project_id",
+        "type": "uuid",
+        "nullable": true
+      },
+      {
+        "column": "suggested_column",
+        "type": "text",
+        "nullable": true
+      },
+      {
+        "column": "confidence",
+        "type": "text",
+        "nullable": true
+      },
+      {
+        "column": "rationale",
+        "type": "text",
+        "nullable": true
+      },
+      {
+        "column": "status",
+        "type": "text",
+        "nullable": false
+      },
+      {
+        "column": "published_issue_id",
+        "type": "uuid",
+        "nullable": true
+      },
+      {
+        "column": "created_at",
+        "type": "timestamp with time zone",
+        "nullable": false
+      },
+      {
+        "column": "updated_at",
+        "type": "timestamp with time zone",
+        "nullable": false
+      },
+      {
+        "column": "idempotency_key",
+        "type": "text",
+        "nullable": true
+      },
+      {
+        "column": "created_by",
+        "type": "text",
+        "nullable": false
+      },
+      {
+        "column": "claimed_by",
+        "type": "text",
+        "nullable": true
+      },
+      {
+        "column": "claim_expires_at",
+        "type": "timestamp with time zone",
+        "nullable": true
+      }
+    ],
+    "issue_attachments": [
+      {
+        "column": "id",
+        "type": "uuid",
+        "nullable": false
+      },
+      {
+        "column": "issue_id",
+        "type": "uuid",
+        "nullable": false
+      },
+      {
+        "column": "filename",
+        "type": "text",
+        "nullable": false
+      },
+      {
+        "column": "mime_type",
+        "type": "text",
+        "nullable": false
+      },
+      {
+        "column": "size_bytes",
+        "type": "integer",
+        "nullable": false
+      },
+      {
+        "column": "content",
+        "type": "bytea",
+        "nullable": false
+      },
+      {
+        "column": "created_at",
+        "type": "timestamp with time zone",
+        "nullable": false
+      }
+    ],
+    "issue_labels": [
+      {
+        "column": "issue_id",
+        "type": "uuid",
+        "nullable": false
+      },
+      {
+        "column": "label_id",
+        "type": "uuid",
+        "nullable": false
+      }
+    ],
+    "issue_links": [
+      {
+        "column": "id",
+        "type": "uuid",
+        "nullable": false
+      },
+      {
+        "column": "parent_issue_id",
+        "type": "uuid",
+        "nullable": false
+      },
+      {
+        "column": "child_issue_id",
+        "type": "uuid",
+        "nullable": false
+      },
+      {
+        "column": "link_type",
+        "type": "text",
+        "nullable": false
+      },
+      {
+        "column": "created_at",
+        "type": "timestamp with time zone",
+        "nullable": false
+      }
+    ],
+    "issue_run_events": [
+      {
+        "column": "id",
+        "type": "bigint",
+        "nullable": false
+      },
+      {
+        "column": "run_id",
+        "type": "uuid",
+        "nullable": false
+      },
+      {
+        "column": "seq",
+        "type": "integer",
+        "nullable": false
+      },
+      {
+        "column": "event_type",
+        "type": "text",
+        "nullable": false
+      },
+      {
+        "column": "payload",
+        "type": "jsonb",
+        "nullable": false
+      },
+      {
+        "column": "created_at",
+        "type": "timestamp with time zone",
+        "nullable": false
+      }
+    ],
+    "issue_runs": [
+      {
+        "column": "id",
+        "type": "uuid",
+        "nullable": false
+      },
+      {
+        "column": "issue_id",
+        "type": "uuid",
+        "nullable": false
+      },
+      {
+        "column": "agent_id",
+        "type": "uuid",
+        "nullable": false
+      },
+      {
+        "column": "status",
+        "type": "USER-DEFINED",
+        "nullable": false
+      },
+      {
+        "column": "workspace_strategy",
+        "type": "USER-DEFINED",
+        "nullable": false
+      },
+      {
+        "column": "workspace_path",
+        "type": "text",
+        "nullable": true
+      },
+      {
+        "column": "lease_expires_at",
+        "type": "timestamp with time zone",
+        "nullable": true
+      },
+      {
+        "column": "heartbeat_at",
+        "type": "timestamp with time zone",
+        "nullable": true
+      },
+      {
+        "column": "started_at",
+        "type": "timestamp with time zone",
+        "nullable": true
+      },
+      {
+        "column": "completed_at",
+        "type": "timestamp with time zone",
+        "nullable": true
+      },
+      {
+        "column": "output",
+        "type": "text",
+        "nullable": true
+      },
+      {
+        "column": "error_message",
+        "type": "text",
+        "nullable": true
+      },
+      {
+        "column": "cost_tokens",
+        "type": "integer",
+        "nullable": true
+      },
+      {
+        "column": "cost_usd",
+        "type": "text",
+        "nullable": true
+      },
+      {
+        "column": "created_at",
+        "type": "timestamp with time zone",
+        "nullable": false
+      },
+      {
+        "column": "updated_at",
+        "type": "timestamp with time zone",
+        "nullable": false
+      },
+      {
+        "column": "kind",
+        "type": "USER-DEFINED",
+        "nullable": false
+      },
+      {
+        "column": "input_tokens",
+        "type": "integer",
+        "nullable": true
+      },
+      {
+        "column": "output_tokens",
+        "type": "integer",
+        "nullable": true
+      },
+      {
+        "column": "routing_tier",
+        "type": "integer",
+        "nullable": true
+      },
+      {
+        "column": "routing_score",
+        "type": "numeric",
+        "nullable": true
+      },
+      {
+        "column": "routing_reasoning",
+        "type": "text",
+        "nullable": true
+      },
+      {
+        "column": "step_run_id",
+        "type": "uuid",
+        "nullable": true
+      },
+      {
+        "column": "input_context",
+        "type": "text",
+        "nullable": true
+      },
+      {
+        "column": "premium_requests",
+        "type": "numeric",
+        "nullable": true
+      },
+      {
+        "column": "git_branch",
+        "type": "text",
+        "nullable": true
+      },
+      {
+        "column": "git_branch_url",
+        "type": "text",
+        "nullable": true
+      },
+      {
+        "column": "pr_number",
+        "type": "integer",
+        "nullable": true
+      },
+      {
+        "column": "pr_url",
+        "type": "text",
+        "nullable": true
+      },
+      {
+        "column": "pr_state",
+        "type": "text",
+        "nullable": true
+      },
+      {
+        "column": "ci_state",
+        "type": "text",
+        "nullable": true
+      },
+      {
+        "column": "ci_url",
+        "type": "text",
+        "nullable": true
+      },
+      {
+        "column": "git_cache_refreshed_at",
+        "type": "timestamp with time zone",
+        "nullable": true
+      },
+      {
+        "column": "external_ref",
+        "type": "jsonb",
+        "nullable": true
+      },
+      {
+        "column": "external_gh_context",
+        "type": "jsonb",
+        "nullable": true
+      },
+      {
+        "column": "stale_reason",
+        "type": "text",
+        "nullable": true
+      },
+      {
+        "column": "cached_input_tokens",
+        "type": "integer",
+        "nullable": false
+      },
+      {
+        "column": "coordinator_decision",
+        "type": "jsonb",
+        "nullable": true
+      }
+    ],
+    "issue_workflows": [
+      {
+        "column": "issue_id",
+        "type": "uuid",
+        "nullable": false
+      },
+      {
+        "column": "workflow_version_id",
+        "type": "uuid",
+        "nullable": false
+      },
+      {
+        "column": "attached_at",
+        "type": "timestamp with time zone",
+        "nullable": false
+      }
+    ],
+    "issues": [
+      {
+        "column": "id",
+        "type": "uuid",
+        "nullable": false
+      },
+      {
+        "column": "project_id",
+        "type": "uuid",
+        "nullable": false
+      },
+      {
+        "column": "title",
+        "type": "text",
+        "nullable": false
+      },
+      {
+        "column": "body",
+        "type": "text",
+        "nullable": false
+      },
+      {
+        "column": "status",
+        "type": "text",
+        "nullable": false
+      },
+      {
+        "column": "assignee_id",
+        "type": "uuid",
+        "nullable": true
+      },
+      {
+        "column": "position",
+        "type": "integer",
+        "nullable": false
+      },
+      {
+        "column": "archived",
+        "type": "integer",
+        "nullable": false
+      },
+      {
+        "column": "created_at",
+        "type": "timestamp with time zone",
+        "nullable": false
+      },
+      {
+        "column": "updated_at",
+        "type": "timestamp with time zone",
+        "nullable": false
+      },
+      {
+        "column": "version",
+        "type": "integer",
+        "nullable": false
+      },
+      {
+        "column": "github_issue_number",
+        "type": "integer",
+        "nullable": true
+      },
+      {
+        "column": "github_issue_url",
+        "type": "text",
+        "nullable": true
+      },
+      {
+        "column": "github_node_id",
+        "type": "text",
+        "nullable": true
+      },
+      {
+        "column": "completed_at",
+        "type": "timestamp with time zone",
+        "nullable": true
+      },
+      {
+        "column": "created_by",
+        "type": "text",
+        "nullable": false
+      },
+      {
+        "column": "deliverable_type",
+        "type": "text",
+        "nullable": false
+      },
+      {
+        "column": "deliverable_link",
+        "type": "text",
+        "nullable": true
+      },
+      {
+        "column": "deliverable_acceptance_criteria",
+        "type": "text",
+        "nullable": true
+      },
+      {
+        "column": "deliverable_status",
+        "type": "text",
+        "nullable": false
+      },
+      {
+        "column": "archived_at",
+        "type": "timestamp with time zone",
+        "nullable": true
+      },
+      {
+        "column": "archived_reason",
+        "type": "text",
+        "nullable": true
+      },
+      {
+        "column": "idempotency_key",
+        "type": "text",
+        "nullable": true
+      }
+    ],
+    "labels": [
+      {
+        "column": "id",
+        "type": "uuid",
+        "nullable": false
+      },
+      {
+        "column": "project_id",
+        "type": "uuid",
+        "nullable": false
+      },
+      {
+        "column": "name",
+        "type": "text",
+        "nullable": false
+      },
+      {
+        "column": "color",
+        "type": "text",
+        "nullable": false
+      },
+      {
+        "column": "created_at",
+        "type": "timestamp with time zone",
+        "nullable": false
+      }
+    ],
+    "live_session_events": [
+      {
+        "column": "id",
+        "type": "uuid",
+        "nullable": false
+      },
+      {
+        "column": "session_id",
+        "type": "uuid",
+        "nullable": false
+      },
+      {
+        "column": "type",
+        "type": "text",
+        "nullable": false
+      },
+      {
+        "column": "payload",
+        "type": "jsonb",
+        "nullable": false
+      },
+      {
+        "column": "created_at",
+        "type": "timestamp with time zone",
+        "nullable": false
+      }
+    ],
+    "live_sessions": [
+      {
+        "column": "id",
+        "type": "uuid",
+        "nullable": false
+      },
+      {
+        "column": "project_id",
+        "type": "uuid",
+        "nullable": false
+      },
+      {
+        "column": "agent_id",
+        "type": "uuid",
+        "nullable": true
+      },
+      {
+        "column": "agent_name",
+        "type": "text",
+        "nullable": true
+      },
+      {
+        "column": "title",
+        "type": "text",
+        "nullable": true
+      },
+      {
+        "column": "status",
+        "type": "USER-DEFINED",
+        "nullable": false
+      },
+      {
+        "column": "model",
+        "type": "text",
+        "nullable": true
+      },
+      {
+        "column": "sdk_session_id",
+        "type": "text",
+        "nullable": true
+      },
+      {
+        "column": "input_tokens",
+        "type": "integer",
+        "nullable": false
+      },
+      {
+        "column": "output_tokens",
+        "type": "integer",
+        "nullable": false
+      },
+      {
+        "column": "cost_usd",
+        "type": "numeric",
+        "nullable": false
+      },
+      {
+        "column": "turn_count",
+        "type": "integer",
+        "nullable": false
+      },
+      {
+        "column": "error_message",
+        "type": "text",
+        "nullable": true
+      },
+      {
+        "column": "created_at",
+        "type": "timestamp with time zone",
+        "nullable": false
+      },
+      {
+        "column": "updated_at",
+        "type": "timestamp with time zone",
+        "nullable": false
+      },
+      {
+        "column": "completed_at",
+        "type": "timestamp with time zone",
+        "nullable": true
+      },
+      {
+        "column": "cached_input_tokens",
+        "type": "integer",
+        "nullable": false
+      }
+    ],
+    "mcp_servers": [
+      {
+        "column": "id",
+        "type": "uuid",
+        "nullable": false
+      },
+      {
+        "column": "project_id",
+        "type": "uuid",
+        "nullable": false
+      },
+      {
+        "column": "name",
+        "type": "text",
+        "nullable": false
+      },
+      {
+        "column": "description",
+        "type": "text",
+        "nullable": true
+      },
+      {
+        "column": "transport",
+        "type": "text",
+        "nullable": false
+      },
+      {
+        "column": "url",
+        "type": "text",
+        "nullable": true
+      },
+      {
+        "column": "command",
+        "type": "text",
+        "nullable": true
+      },
+      {
+        "column": "args",
+        "type": "jsonb",
+        "nullable": false
+      },
+      {
+        "column": "headers",
+        "type": "jsonb",
+        "nullable": false
+      },
+      {
+        "column": "headers_iv",
+        "type": "text",
+        "nullable": true
+      },
+      {
+        "column": "headers_tag",
+        "type": "text",
+        "nullable": true
+      },
+      {
+        "column": "enabled",
+        "type": "boolean",
+        "nullable": false
+      },
+      {
+        "column": "created_at",
+        "type": "timestamp with time zone",
+        "nullable": false
+      },
+      {
+        "column": "updated_at",
+        "type": "timestamp with time zone",
+        "nullable": false
+      },
+      {
+        "column": "source",
+        "type": "text",
+        "nullable": false
+      },
+      {
+        "column": "source_uri",
+        "type": "text",
+        "nullable": true
+      }
+    ],
+    "projects": [
+      {
+        "column": "id",
+        "type": "uuid",
+        "nullable": false
+      },
+      {
+        "column": "name",
+        "type": "text",
+        "nullable": false
+      },
+      {
+        "column": "path",
+        "type": "text",
+        "nullable": false
+      },
+      {
+        "column": "created_at",
+        "type": "timestamp with time zone",
+        "nullable": false
+      },
+      {
+        "column": "updated_at",
+        "type": "timestamp with time zone",
+        "nullable": false
+      },
+      {
+        "column": "monthly_budget_usd",
+        "type": "numeric",
+        "nullable": true
+      },
+      {
+        "column": "github_sync_enabled",
+        "type": "boolean",
+        "nullable": false
+      },
+      {
+        "column": "github_token",
+        "type": "text",
+        "nullable": true
+      },
+      {
+        "column": "github_owner",
+        "type": "text",
+        "nullable": true
+      },
+      {
+        "column": "github_repo",
+        "type": "text",
+        "nullable": true
+      },
+      {
+        "column": "github_sync_last_at",
+        "type": "timestamp with time zone",
+        "nullable": true
+      },
+      {
+        "column": "github_auth_type",
+        "type": "text",
+        "nullable": true
+      },
+      {
+        "column": "github_app_id",
+        "type": "text",
+        "nullable": true
+      },
+      {
+        "column": "github_app_installation_id",
+        "type": "text",
+        "nullable": true
+      },
+      {
+        "column": "github_app_private_key",
+        "type": "text",
+        "nullable": true
+      },
+      {
+        "column": "default_model",
+        "type": "text",
+        "nullable": true
+      },
+      {
+        "column": "cost_model",
+        "type": "text",
+        "nullable": true
+      },
+      {
+        "column": "github_webhook_secret",
+        "type": "text",
+        "nullable": true
+      },
+      {
+        "column": "copilot_workflow_file",
+        "type": "text",
+        "nullable": true
+      },
+      {
+        "column": "description",
+        "type": "text",
+        "nullable": true
+      },
+      {
+        "column": "ralph_autonomy_enabled",
+        "type": "boolean",
+        "nullable": false
+      },
+      {
+        "column": "ralph_auto_merge_enabled",
+        "type": "boolean",
+        "nullable": false
+      },
+      {
+        "column": "ralph_monitor_state",
+        "type": "text",
+        "nullable": false
+      },
+      {
+        "column": "ralph_monitor_last_action",
+        "type": "jsonb",
+        "nullable": true
+      },
+      {
+        "column": "ralph_monitor_next_action",
+        "type": "jsonb",
+        "nullable": true
+      },
+      {
+        "column": "ralph_monitor_last_decision_at",
+        "type": "timestamp with time zone",
+        "nullable": true
+      }
+    ],
+    "ralph_monitor_events": [
+      {
+        "column": "id",
+        "type": "uuid",
+        "nullable": false
+      },
+      {
+        "column": "project_id",
+        "type": "uuid",
+        "nullable": false
+      },
+      {
+        "column": "state",
+        "type": "text",
+        "nullable": false
+      },
+      {
+        "column": "decision",
+        "type": "text",
+        "nullable": false
+      },
+      {
+        "column": "action",
+        "type": "text",
+        "nullable": false
+      },
+      {
+        "column": "reason",
+        "type": "text",
+        "nullable": false
+      },
+      {
+        "column": "selected_kind",
+        "type": "text",
+        "nullable": true
+      },
+      {
+        "column": "target_type",
+        "type": "text",
+        "nullable": true
+      },
+      {
+        "column": "target_id",
+        "type": "text",
+        "nullable": true
+      },
+      {
+        "column": "payload",
+        "type": "jsonb",
+        "nullable": false
+      },
+      {
+        "column": "created_at",
+        "type": "timestamp with time zone",
+        "nullable": false
+      }
+    ],
+    "review_events": [
+      {
+        "column": "id",
+        "type": "uuid",
+        "nullable": false
+      },
+      {
+        "column": "workflow_run_id",
+        "type": "uuid",
+        "nullable": true
+      },
+      {
+        "column": "step_run_id",
+        "type": "uuid",
+        "nullable": true
+      },
+      {
+        "column": "issue_run_id",
+        "type": "uuid",
+        "nullable": true
+      },
+      {
+        "column": "reviewer_agent_id",
+        "type": "uuid",
+        "nullable": true
+      },
+      {
+        "column": "reviewer_name",
+        "type": "text",
+        "nullable": true
+      },
+      {
+        "column": "verb",
+        "type": "text",
+        "nullable": false
+      },
+      {
+        "column": "body",
+        "type": "text",
+        "nullable": true
+      },
+      {
+        "column": "suggestions",
+        "type": "jsonb",
+        "nullable": true
+      },
+      {
+        "column": "created_at",
+        "type": "timestamp with time zone",
+        "nullable": false
+      },
+      {
+        "column": "deliverable_id",
+        "type": "uuid",
+        "nullable": true
+      }
+    ],
+    "review_policy_defaults": [
+      {
+        "column": "id",
+        "type": "uuid",
+        "nullable": false
+      },
+      {
+        "column": "scope",
+        "type": "text",
+        "nullable": false
+      },
+      {
+        "column": "scope_id",
+        "type": "uuid",
+        "nullable": false
+      },
+      {
+        "column": "payload",
+        "type": "jsonb",
+        "nullable": false
+      },
+      {
+        "column": "created_at",
+        "type": "timestamp with time zone",
+        "nullable": false
+      },
+      {
+        "column": "updated_at",
+        "type": "timestamp with time zone",
+        "nullable": false
+      }
+    ],
+    "review_policy_presets": [
+      {
+        "column": "id",
+        "type": "uuid",
+        "nullable": false
+      },
+      {
+        "column": "scope",
+        "type": "text",
+        "nullable": false
+      },
+      {
+        "column": "project_id",
+        "type": "uuid",
+        "nullable": true
+      },
+      {
+        "column": "slug",
+        "type": "text",
+        "nullable": false
+      },
+      {
+        "column": "name",
+        "type": "text",
+        "nullable": false
+      },
+      {
+        "column": "description",
+        "type": "text",
+        "nullable": true
+      },
+      {
+        "column": "payload",
+        "type": "jsonb",
+        "nullable": false
+      },
+      {
+        "column": "created_at",
+        "type": "timestamp with time zone",
+        "nullable": false
+      },
+      {
+        "column": "updated_at",
+        "type": "timestamp with time zone",
+        "nullable": false
+      }
+    ],
+    "routing_log": [
+      {
+        "column": "id",
+        "type": "uuid",
+        "nullable": false
+      },
+      {
+        "column": "project_id",
+        "type": "uuid",
+        "nullable": false
+      },
+      {
+        "column": "issue_id",
+        "type": "uuid",
+        "nullable": true
+      },
+      {
+        "column": "tier",
+        "type": "integer",
+        "nullable": true
+      },
+      {
+        "column": "resolved_agent",
+        "type": "text",
+        "nullable": true
+      },
+      {
+        "column": "matched_rule",
+        "type": "text",
+        "nullable": true
+      },
+      {
+        "column": "score",
+        "type": "numeric",
+        "nullable": true
+      },
+      {
+        "column": "reasoning",
+        "type": "text",
+        "nullable": true
+      },
+      {
+        "column": "specifier_run_id",
+        "type": "uuid",
+        "nullable": true
+      },
+      {
+        "column": "decided_at",
+        "type": "timestamp with time zone",
+        "nullable": false
+      }
+    ],
+    "routing_rules": [
+      {
+        "column": "id",
+        "type": "uuid",
+        "nullable": false
+      },
+      {
+        "column": "project_id",
+        "type": "uuid",
+        "nullable": false
+      },
+      {
+        "column": "priority",
+        "type": "integer",
+        "nullable": false
+      },
+      {
+        "column": "pattern",
+        "type": "text",
+        "nullable": false
+      },
+      {
+        "column": "match_type",
+        "type": "text",
+        "nullable": false
+      },
+      {
+        "column": "agent_name",
+        "type": "text",
+        "nullable": false
+      },
+      {
+        "column": "raw_rule",
+        "type": "text",
+        "nullable": false
+      },
+      {
+        "column": "loaded_at",
+        "type": "timestamp with time zone",
+        "nullable": false
+      }
+    ],
+    "settings": [
+      {
+        "column": "id",
+        "type": "uuid",
+        "nullable": false
+      },
+      {
+        "column": "key",
+        "type": "text",
+        "nullable": false
+      },
+      {
+        "column": "value",
+        "type": "text",
+        "nullable": true
+      },
+      {
+        "column": "project_id",
+        "type": "uuid",
+        "nullable": true
+      }
+    ],
+    "skills": [
+      {
+        "column": "id",
+        "type": "uuid",
+        "nullable": false
+      },
+      {
+        "column": "project_id",
+        "type": "uuid",
+        "nullable": false
+      },
+      {
+        "column": "key",
+        "type": "text",
+        "nullable": false
+      },
+      {
+        "column": "name",
+        "type": "text",
+        "nullable": false
+      },
+      {
+        "column": "description",
+        "type": "text",
+        "nullable": true
+      },
+      {
+        "column": "category",
+        "type": "text",
+        "nullable": true
+      },
+      {
+        "column": "prompt_addendum",
+        "type": "text",
+        "nullable": false
+      },
+      {
+        "column": "curated_key",
+        "type": "text",
+        "nullable": true
+      },
+      {
+        "column": "created_at",
+        "type": "timestamp with time zone",
+        "nullable": false
+      },
+      {
+        "column": "updated_at",
+        "type": "timestamp with time zone",
+        "nullable": false
+      },
+      {
+        "column": "source",
+        "type": "text",
+        "nullable": false
+      },
+      {
+        "column": "source_uri",
+        "type": "text",
+        "nullable": true
+      }
+    ],
+    "step_runs": [
+      {
+        "column": "id",
+        "type": "uuid",
+        "nullable": false
+      },
+      {
+        "column": "workflow_run_id",
+        "type": "uuid",
+        "nullable": false
+      },
+      {
+        "column": "issue_run_id",
+        "type": "uuid",
+        "nullable": true
+      },
+      {
+        "column": "step_index",
+        "type": "integer",
+        "nullable": false
+      },
+      {
+        "column": "step_type",
+        "type": "text",
+        "nullable": false
+      },
+      {
+        "column": "status",
+        "type": "USER-DEFINED",
+        "nullable": false
+      },
+      {
+        "column": "created_at",
+        "type": "timestamp with time zone",
+        "nullable": false
+      },
+      {
+        "column": "updated_at",
+        "type": "timestamp with time zone",
+        "nullable": false
+      },
+      {
+        "column": "pinned_agent_revisions",
+        "type": "text",
+        "nullable": true
+      },
+      {
+        "column": "retry_count",
+        "type": "integer",
+        "nullable": true
+      },
+      {
+        "column": "max_retries",
+        "type": "integer",
+        "nullable": true
+      },
+      {
+        "column": "retry_delay",
+        "type": "integer",
+        "nullable": true
+      },
+      {
+        "column": "lease_expires_at",
+        "type": "timestamp with time zone",
+        "nullable": true
+      },
+      {
+        "column": "heartbeat_at",
+        "type": "timestamp with time zone",
+        "nullable": true
+      },
+      {
+        "column": "review_decision",
+        "type": "text",
+        "nullable": true
+      },
+      {
+        "column": "review_comment",
+        "type": "text",
+        "nullable": true
+      },
+      {
+        "column": "review_suggestions",
+        "type": "jsonb",
+        "nullable": true
+      },
+      {
+        "column": "split_targets",
+        "type": "jsonb",
+        "nullable": true
+      },
+      {
+        "column": "output",
+        "type": "text",
+        "nullable": true
+      },
+      {
+        "column": "step_config",
+        "type": "jsonb",
+        "nullable": true
+      },
+      {
+        "column": "resolved_agent_id",
+        "type": "text",
+        "nullable": true
+      },
+      {
+        "column": "session_id",
+        "type": "text",
+        "nullable": true
+      },
+      {
+        "column": "started_at",
+        "type": "timestamp with time zone",
+        "nullable": true
+      }
+    ],
+    "templates": [
+      {
+        "column": "id",
+        "type": "uuid",
+        "nullable": false
+      },
+      {
+        "column": "kind",
+        "type": "text",
+        "nullable": false
+      },
+      {
+        "column": "name",
+        "type": "text",
+        "nullable": false
+      },
+      {
+        "column": "description",
+        "type": "text",
+        "nullable": true
+      },
+      {
+        "column": "payload",
+        "type": "jsonb",
+        "nullable": false
+      },
+      {
+        "column": "project_id",
+        "type": "uuid",
+        "nullable": true
+      },
+      {
+        "column": "created_at",
+        "type": "timestamp with time zone",
+        "nullable": false
+      },
+      {
+        "column": "updated_at",
+        "type": "timestamp with time zone",
+        "nullable": false
+      }
+    ],
+    "tools": [
+      {
+        "column": "id",
+        "type": "uuid",
+        "nullable": false
+      },
+      {
+        "column": "project_id",
+        "type": "uuid",
+        "nullable": false
+      },
+      {
+        "column": "key",
+        "type": "text",
+        "nullable": false
+      },
+      {
+        "column": "name",
+        "type": "text",
+        "nullable": false
+      },
+      {
+        "column": "description",
+        "type": "text",
+        "nullable": false
+      },
+      {
+        "column": "category",
+        "type": "text",
+        "nullable": true
+      },
+      {
+        "column": "mcp_server_id",
+        "type": "uuid",
+        "nullable": true
+      },
+      {
+        "column": "input_schema",
+        "type": "jsonb",
+        "nullable": true
+      },
+      {
+        "column": "output_schema",
+        "type": "jsonb",
+        "nullable": true
+      },
+      {
+        "column": "created_at",
+        "type": "timestamp with time zone",
+        "nullable": false
+      },
+      {
+        "column": "updated_at",
+        "type": "timestamp with time zone",
+        "nullable": false
+      },
+      {
+        "column": "source",
+        "type": "text",
+        "nullable": false
+      },
+      {
+        "column": "source_uri",
+        "type": "text",
+        "nullable": true
+      }
+    ],
+    "workflow_runs": [
+      {
+        "column": "id",
+        "type": "uuid",
+        "nullable": false
+      },
+      {
+        "column": "issue_id",
+        "type": "uuid",
+        "nullable": false
+      },
+      {
+        "column": "status",
+        "type": "USER-DEFINED",
+        "nullable": false
+      },
+      {
+        "column": "current_step_index",
+        "type": "integer",
+        "nullable": true
+      },
+      {
+        "column": "created_at",
+        "type": "timestamp with time zone",
+        "nullable": false
+      },
+      {
+        "column": "updated_at",
+        "type": "timestamp with time zone",
+        "nullable": false
+      },
+      {
+        "column": "workflow_version_id",
+        "type": "uuid",
+        "nullable": true
+      },
+      {
+        "column": "request_changes_policy",
+        "type": "text",
+        "nullable": true
+      },
+      {
+        "column": "parent_workflow_run_id",
+        "type": "text",
+        "nullable": true
+      },
+      {
+        "column": "child_workflow_run_ids",
+        "type": "jsonb",
+        "nullable": true
+      },
+      {
+        "column": "pinned_agent_revisions",
+        "type": "text",
+        "nullable": true
+      },
+      {
+        "column": "variables",
+        "type": "jsonb",
+        "nullable": true
+      },
+      {
+        "column": "inline_steps_json",
+        "type": "text",
+        "nullable": true
+      },
+      {
+        "column": "trigger_source",
+        "type": "jsonb",
+        "nullable": true
+      },
+      {
+        "column": "premium_requests",
+        "type": "numeric",
+        "nullable": true
+      }
+    ],
+    "workflow_versions": [
+      {
+        "column": "id",
+        "type": "uuid",
+        "nullable": false
+      },
+      {
+        "column": "workflow_id",
+        "type": "uuid",
+        "nullable": false
+      },
+      {
+        "column": "version",
+        "type": "integer",
+        "nullable": false
+      },
+      {
+        "column": "yaml_content",
+        "type": "text",
+        "nullable": false
+      },
+      {
+        "column": "json_schema",
+        "type": "text",
+        "nullable": true
+      },
+      {
+        "column": "pinned_agent_revisions",
+        "type": "text",
+        "nullable": true
+      },
+      {
+        "column": "is_active",
+        "type": "boolean",
+        "nullable": false
+      },
+      {
+        "column": "created_at",
+        "type": "timestamp with time zone",
+        "nullable": false
+      }
+    ],
+    "workflows": [
+      {
+        "column": "id",
+        "type": "uuid",
+        "nullable": false
+      },
+      {
+        "column": "project_id",
+        "type": "uuid",
+        "nullable": false
+      },
+      {
+        "column": "name",
+        "type": "text",
+        "nullable": false
+      },
+      {
+        "column": "slug",
+        "type": "text",
+        "nullable": false
+      },
+      {
+        "column": "description",
+        "type": "text",
+        "nullable": true
+      },
+      {
+        "column": "created_at",
+        "type": "timestamp with time zone",
+        "nullable": false
+      },
+      {
+        "column": "updated_at",
+        "type": "timestamp with time zone",
+        "nullable": false
+      },
+      {
+        "column": "trigger_kind",
+        "type": "text",
+        "nullable": false
+      },
+      {
+        "column": "trigger_config",
+        "type": "jsonb",
+        "nullable": false
+      },
+      {
+        "column": "kind",
+        "type": "text",
+        "nullable": false
+      },
+      {
+        "column": "status",
+        "type": "text",
+        "nullable": false
+      },
+      {
+        "column": "parent_narrative_id",
+        "type": "uuid",
+        "nullable": true
+      },
+      {
+        "column": "last_translation_error",
+        "type": "text",
+        "nullable": true
+      },
+      {
+        "column": "last_translation_attempt_at",
+        "type": "timestamp with time zone",
+        "nullable": true
+      }
+    ]
+  }
+}

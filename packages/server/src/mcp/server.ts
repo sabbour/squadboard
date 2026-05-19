@@ -63,7 +63,7 @@ export const TOOLS = [
         projectId: { type: 'string', description: 'UUID of the project (optional if x-project-id header set)' },
         status: {
           type: 'string',
-          enum: ['backlog', 'todo', 'in_progress', 'in_review', 'done'],
+          enum: ['backlog', 'ready', 'in_progress', 'in_review', 'done'],
           description: 'Filter by column status (optional)',
         },
       },
@@ -107,7 +107,7 @@ export const TOOLS = [
         body: { type: 'string', description: 'New body / description (optional)' },
         status: {
           type: 'string',
-          enum: ['backlog', 'todo', 'in_progress', 'in_review', 'done'],
+          enum: ['backlog', 'ready', 'in_progress', 'in_review', 'done'],
           description: 'New column status (optional)',
         },
         assigneeId: {
@@ -513,7 +513,7 @@ async function handleListIssues(args: ToolArgs, extra: Extra): Promise<unknown> 
 
   const conditions = [eq(issues.projectId, projectId), eq(issues.archived, 0)];
   if (status) {
-    conditions.push(eq(issues.status, status as 'backlog' | 'todo' | 'in_progress' | 'in_review' | 'done'));
+    conditions.push(eq(issues.status, status as 'backlog' | 'ready' | 'in_progress' | 'in_review' | 'done'));
   }
 
   const rows = await db
@@ -573,7 +573,7 @@ async function handleUpdateIssue(args: ToolArgs): Promise<unknown> {
     issueId: string;
     title?: string;
     body?: string;
-    status?: 'backlog' | 'todo' | 'in_progress' | 'in_review' | 'done';
+    status?: 'backlog' | 'ready' | 'in_progress' | 'in_review' | 'done';
     assigneeId?: string | null;
     labels?: string[];
   };
@@ -983,6 +983,10 @@ async function handleCapture(args: ToolArgs, extra: Extra): Promise<unknown> {
         : `Conjure routed this prompt to "${classification.intent}". Take the draft + routing hint into the matching create flow.`,
     classification,
   };
+}
+
+export async function capturePromptForTool(args: ToolArgs): Promise<unknown> {
+  return handleCapture(args, {} as Extra);
 }
 
 // ── N1: done: close-out helper ──────────────────────────────────────────────

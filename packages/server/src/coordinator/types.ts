@@ -16,8 +16,9 @@ export interface CoordinatorInput {
     title: string;
     body: string | null;
     labels: string[];
-    column: string;          // "Backlog" | "To Do" | "In Progress" | ...
+    column: string;          // "Backlog" | "Ready" | "In Progress" | ...
     parentId: string | null;
+    blockedParentIds?: string[];
     priority: number | null; // 0-5
     createdAt: string;       // ISO 8601
   };

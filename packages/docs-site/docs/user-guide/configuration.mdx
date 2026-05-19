@@ -1,0 +1,76 @@
+---
+title: Configuration
+description: Configure runtime, database, cost model, project defaults, and docs site commands.
+---
+
+import {SettingsRegular, MoneyRegular, ArrowSyncRegular} from '@fluentui/react-icons';
+import {IconCard, IconGrid, Screenshot, ScreenshotGrid} from '../../src/components/FluentDoc';
+
+# Configuration
+
+Use configuration to make runtime defaults, integrations, costs, and portability visible to the project owner.
+
+<IconGrid>
+  <IconCard icon={SettingsRegular} title="Runtime">Set server, database, model, and dispatch defaults.</IconCard>
+  <IconCard icon={ArrowSyncRegular} title="Integrations">Configure GitHub and MCP from explicit project surfaces.</IconCard>
+  <IconCard icon={MoneyRegular} title="Cost">Choose how model usage is accounted for and reviewed.</IconCard>
+</IconGrid>
+
+<ScreenshotGrid>
+  <Screenshot src="/img/scenarios/spark-15-settings-general.png" alt="Spark general settings." caption="Project settings capture runtime and repository-level defaults." />
+  <Screenshot src="/img/scenarios/spark-17-settings-github.png" alt="Spark GitHub settings." caption="GitHub configuration is project-level so automation can stay opt-in." />
+  <Screenshot src="/img/scenarios/spark-18-costs.png" alt="Spark costs page." caption="The cost view helps teams tune model usage as work runs." />
+</ScreenshotGrid>
+
+## Runtime
+
+The app runs as a local monorepo during development:
+
+```bash
+pnpm run dev
+```
+
+The backend defaults to `http://localhost:3000`; the frontend defaults to `http://localhost:5173`.
+
+## Database
+
+Squadboard uses embedded Postgres-compatible storage by default. For an external database, set `DATABASE_URL`:
+
+```bash
+export DATABASE_URL="postgresql://user:pass@host:5432/squadboard"
+```
+
+Squad state also defaults to the PostgreSQL-backed provider. Use `pnpm run dev:fs`, `squadboard init --squad-storage fs`, or `SQUADBOARD_SQUAD_STORAGE_PROVIDER=fs` only when you want repository `.squad/` files to stay as the live state store.
+
+## Project defaults
+
+Useful environment variables:
+
+| Variable | Purpose |
+| --- | --- |
+| `SQUADBOARD_DEFAULT_PROJECT_ID` | Default project for MCP tools and capture flows |
+| `SQUADBOARD_SQUAD_STORAGE_PROVIDER` | `postgresql` (default) or `fs` filesystem fallback for Squad state |
+| `SQUADBOARD_COST_MODEL` | Use `usd` or `gh_multipliers` cost accounting |
+| `COORDINATOR_DISPATCH_ENABLED` | Set `0` to disable coordinator dispatch |
+| `COORDINATOR_MODEL` | Primary model for bounded coordinator judgment |
+| `COORDINATOR_MODEL_FALLBACKS` | Comma-separated fallback model chain |
+
+## GitHub
+
+Projects can use a personal access token or GitHub App credentials. Configure GitHub from the UI or via `PUT /api/projects/:projectId/github`.
+
+## Ralph monitor
+
+Ralph autonomy is project-level opt-in. Disabled projects never run autonomous monitor actions.
+
+## Docs site
+
+The Docusaurus package lives in `packages/docs-site`.
+
+```bash
+pnpm docs:dev
+pnpm docs:build
+pnpm docs:serve
+```
+
+`prebuild` and `prestart` regenerate `llms.txt` and `llms-full.txt`.

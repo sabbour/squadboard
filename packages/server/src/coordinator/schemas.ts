@@ -24,6 +24,7 @@ const issueSchema = z.object({
   labels: z.array(z.string()),
   column: z.string(),
   parentId: z.string().nullable(),
+  blockedParentIds: z.array(z.string()).default([]),
   priority: z.number().int().min(0).max(5).nullable(),
   createdAt: z.string(),
 }).strict();

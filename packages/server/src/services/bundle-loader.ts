@@ -26,6 +26,7 @@ import { getDb, getPool, schema } from '../db/index.js';
 import { createSkill, listSkills } from './skills.js';
 import { createTool, listTools } from './tools.js';
 import { createMcpServer, listMcpServers } from './mcp.js';
+import { normalizeSquadPath } from './setup-lifecycle.js';
 import type {
   SquadboardBundle,
   ApplyResult,
@@ -97,6 +98,11 @@ async function applyProject(
   result: ExtendedApplyResult,
 ): Promise<string | undefined> {
   const db = getDb();
+  const projectPathSetting = bundle.project?.settings?.['squadPath'];
+  const rawProjectPath = typeof projectPathSetting === 'string' && projectPathSetting.trim()
+    ? projectPathSetting.trim()
+    : '.squad';
+  const projectPath = normalizeSquadPath(rawProjectPath);
 
   if (opts.projectId) {
     const [existing] = await db
@@ -127,6 +133,8 @@ async function applyProject(
           .update(schema.projects)
           .set({
             name: bundle.project.name,
+            path: projectPath,
+            description: bundle.project.description ?? null,
           })
           .where(eq(schema.projects.id, proj.id));
       }
@@ -144,7 +152,11 @@ async function applyProject(
 
   const [created] = await db
     .insert(schema.projects)
-    .values({ name: projectName, path: `.squad` })
+    .values({
+      name: projectName,
+      path: projectPath,
+      description: bundle.project?.description ?? null,
+    })
     .returning();
 
   result.applied.push(`project:${created.id} ("${projectName}" created)`);
@@ -217,6 +229,11 @@ async function applyTeam(
 ): Promise<void> {
   if (!bundle.team || bundle.team.length === 0) return;
   const db = getDb();
+  const [project] = await db
+    .select({ path: schema.projects.path })
+    .from(schema.projects)
+    .where(eq(schema.projects.id, projectId));
+  const squadPath = project?.path ?? '.squad';
 
   const existingAgents = await db
     .select({ name: schema.agents.name, id: schema.agents.id })
@@ -245,7 +262,8 @@ async function applyTeam(
       charterBody = `# ${member.name}\n\n## Role\n${member.role}\n`;
     }
 
-    const charterPath = `.squad/agents/${member.name.toLowerCase()}/charter.md`;
+    const agentSlug = member.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+    const charterPath = resolve(squadPath, 'agents', agentSlug || 'member', 'charter.md');
 
     if (opts.dryRun) {
       result.applied.push(`team: would create agent "${member.name}" (role=${member.role})`);
@@ -256,7 +274,7 @@ async function applyTeam(
       const agentId = existingByName.get(key)!;
       await db
         .update(schema.agents)
-        .set({ role: member.role, charterPath, updatedAt: new Date() })
+        .set({ role: member.role, charterPath, charterContent: charterBody, updatedAt: new Date() })
         .where(eq(schema.agents.id, agentId));
       result.applied.push(`team: agent "${member.name}" updated`);
     } else {
@@ -265,6 +283,7 @@ async function applyTeam(
         name: member.name,
         role: member.role,
         charterPath,
+        charterContent: charterBody,
         status: 'active',
       });
       result.applied.push(`team: agent "${member.name}" created (role=${member.role})`);

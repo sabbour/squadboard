@@ -8,13 +8,21 @@ import { BUILT_IN_CEREMONIES } from '../ceremonies/built-in/index.js';
 import { parseWorkflowYaml } from '../ceremonies/yaml-canonicalize.js';
 
 describe('BUILT_IN_CEREMONIES', () => {
-  it('has exactly 3 ceremonies', () => {
-    expect(BUILT_IN_CEREMONIES).toHaveLength(3);
+  it('has the expected built-in ceremonies', () => {
+    expect(BUILT_IN_CEREMONIES).toHaveLength(7);
   });
 
   it('has the expected names in order', () => {
     const names = BUILT_IN_CEREMONIES.map((c) => c.name);
-    expect(names).toEqual(['design-review', 'retrospective', 'retro-enforcement']);
+    expect(names).toEqual([
+      'scribe-close-out',
+      'work-pickup',
+      'sprint-planning',
+      'sprint-retro',
+      'design-review',
+      'retrospective',
+      'retro-enforcement',
+    ]);
   });
 
   it('each ceremony YAML passes the CER-3 parser without throwing', () => {
@@ -37,8 +45,8 @@ describe('BUILT_IN_CEREMONIES', () => {
     expect(parsed.spec.trigger.type).toBe('github-event');
   });
 
-  it('retrospective and retro-enforcement have trigger.type === manual', () => {
-    const manualNames = ['retrospective', 'retro-enforcement'];
+  it('planning, retro, retrospective, and retro-enforcement have trigger.type === manual', () => {
+    const manualNames = ['sprint-planning', 'sprint-retro', 'retrospective', 'retro-enforcement'];
     for (const name of manualNames) {
       const entry = BUILT_IN_CEREMONIES.find((c) => c.name === name)!;
       expect(entry).toBeDefined();

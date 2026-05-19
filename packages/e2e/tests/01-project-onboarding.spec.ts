@@ -73,7 +73,7 @@ test.describe('Demo 1 — Project onboarding', () => {
 
     // All five kanban columns must be visible
     await expect(page.getByText('Backlog')).toBeVisible()
-    await expect(page.getByText('Todo')).toBeVisible()
+    await expect(page.getByText('Ready')).toBeVisible()
     await expect(page.getByText('In Progress')).toBeVisible()
     await expect(page.getByText('Done')).toBeVisible()
 

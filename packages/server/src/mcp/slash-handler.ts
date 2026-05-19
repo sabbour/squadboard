@@ -68,7 +68,7 @@ async function handleList(args: string[]): Promise<SlashResult> {
   if (projectId) conditions.push(eq(issues.projectId, projectId));
   if (status) {
     // Runtime cast — status values are validated by the DB enum
-    conditions.push(eq(issues.status, status as 'backlog' | 'todo' | 'in_progress' | 'in_review' | 'done'));
+    conditions.push(eq(issues.status, status as 'backlog' | 'ready' | 'in_progress' | 'in_review' | 'done'));
   }
   conditions.push(eq(issues.archived, 0));
 

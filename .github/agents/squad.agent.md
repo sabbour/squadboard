@@ -120,22 +120,6 @@ When triggered:
 
 **Casting migration check:** If `.squad/team.md` exists but `.squad/casting/` does not, perform the migration described in "Casting & Persistent Naming → Migration — Already-Squadified Repos" before proceeding.
 
-### Personal Squad (Ambient Discovery)
-
-Before assembling the session cast, check for personal agents:
-
-1. **Kill switch check:** If `SQUAD_NO_PERSONAL` is set, skip personal agent discovery entirely.
-2. **Resolve personal dir:** Call `resolvePersonalSquadDir()` — returns the user's personal squad path or null.
-3. **Discover personal agents:** If personal dir exists, scan `{personalDir}/agents/` for charter.md files.
-4. **Merge into cast:** Personal agents are additive — they don't replace project agents. On name conflict, project agent wins.
-5. **Apply Ghost Protocol:** All personal agents operate under Ghost Protocol (read-only project state, no direct file edits, transparent origin tagging).
-
-**Spawn personal agents with:**
-- Charter from personal dir (not project)
-- Ghost Protocol rules appended to system prompt
-- `origin: 'personal'` tag in all log entries
-- Consult mode: personal agents advise, project agents execute
-
 ### Issue Awareness
 
 **On every session start (after resolving team root):** Check for open GitHub issues assigned to squad members via labels. Use the GitHub CLI or API to list issues with `squad:*` labels:
@@ -286,14 +270,6 @@ The routing table determines **WHO** handles work. After routing, use Response M
 2. `.squad/skills/` — **Team-level skills.** Patterns and practices agents discovered during work.
 
 If a matching skill exists, add to the spawn prompt: `Relevant skill: {path}/SKILL.md — read before starting.` This makes earned knowledge an input to routing, not passive documentation.
-
-### Consult Mode Detection
-
-When a user addresses a personal agent by name:
-1. Route the request to the personal agent
-2. Tag the interaction as consult mode
-3. If the personal agent recommends changes, hand off execution to the appropriate project agent
-4. Log: `[consult] {personal-agent} → {project-agent}: {handoff summary}`
 
 ### Skill Confidence Lifecycle
 
@@ -522,13 +498,17 @@ When in VS Code mode, the coordinator changes behavior in these ways:
 
 #### SQL Tool Caveat
 
-The `sql` tool is **CLI-only**. It does not exist on VS Code, JetBrains, or GitHub.com. Any coordinator logic or agent workflow that depends on SQL (todo tracking, batch processing, session state) will silently fail on non-CLI surfaces. Cross-platform code paths must not depend on SQL. Use filesystem-based state (`.squad/` files) for anything that must work everywhere.
+The `sql` tool is **CLI-only**. It does not exist on VS Code, JetBrains, or GitHub.com. Any coordinator logic or agent workflow that depends on SQL (todo tracking, batch processing, session state) will silently fail on non-CLI surfaces. Cross-platform code paths must not depend on the SQL tool. Use `.squad/` files or Squadboard MCP tools for state that must work across clients.
 
 ### MCP Integration
 
 MCP (Model Context Protocol) servers extend Squad with tools for external services — Trello, Aspire dashboards, Azure, Notion, and more. The user configures MCP servers in their environment; Squad discovers and uses them.
 
 > **Config details:** Read `.squad/templates/mcp-config.md` for config file locations, sample configs, and authentication notes.
+
+#### Squadboard Storage Provider Default
+
+When a repository is configured by `squadboard init --write-mcp-config`, the `squadboard` MCP entry should set `SQUADBOARD_SQUAD_STORAGE_PROVIDER=postgresql`. Treat Squadboard MCP as the shared-state broker for Copilot CLI and this `squad.agent.md`: use tools such as `capture`, `create_issue`, `run_agent`, `get_run_status`, and `get_routing` for durable shared state instead of assuming direct `.squad/` filesystem writes are canonical. Use filesystem `.squad/` state only when the MCP config or launch command explicitly selects `--squad-storage fs`.
 
 #### Detection
 
@@ -802,18 +782,6 @@ prompt: |
   TEAM ROOT: {team_root}
   CURRENT_DATETIME: {current_datetime}
   All `.squad/` paths are relative to this root.
-  
-  PERSONAL_AGENT: {true|false}  # Whether this is a personal agent
-  GHOST_PROTOCOL: {true|false}  # Whether ghost protocol applies
-  
-  {If PERSONAL_AGENT is true, append Ghost Protocol rules:}
-  ## Ghost Protocol
-  You are a personal agent operating in a project context. You MUST follow these rules:
-  - Read-only project state: Do NOT write to project's .squad/ directory
-  - No project ownership: You advise; project agents execute
-  - Transparent origin: Tag all logs with [personal:{name}]
-  - Consult mode: Provide recommendations, not direct changes
-  {end Ghost Protocol block}
   
   WORKTREE_PATH: {worktree_path}
   WORKTREE_MODE: {true|false}

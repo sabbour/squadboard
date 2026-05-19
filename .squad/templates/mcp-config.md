@@ -27,6 +27,32 @@ Users configure MCP servers at these locations (checked in priority order):
 }
 ```
 
+## Sample Config — Squadboard
+
+Generate this from the CLI when possible:
+
+```bash
+squadboard init --write-mcp-config
+```
+
+The resulting Copilot CLI config should include the PostgreSQL-backed Squad storage default:
+
+```json
+{
+  "mcpServers": {
+    "squadboard": {
+      "command": "squadboard",
+      "args": ["mcp"],
+      "env": {
+        "SQUADBOARD_SQUAD_STORAGE_PROVIDER": "postgresql"
+      }
+    }
+  }
+}
+```
+
+Use `squadboard init --squad-storage fs --write-mcp-config` only when repository `.squad/` files should remain the live state store.
+
 ## Sample Config — GitHub
 
 ```json

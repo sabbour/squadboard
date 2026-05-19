@@ -1,7 +1,7 @@
 /**
  * pglite.ts — PGlite in-process Postgres engine (replaces embedded-postgres).
  *
- * Decision recorded 2026-05-15 (Ahmed): no embedded PG. PGlite (~5 MB WASM)
+ * Decision recorded 2026-05-15: no embedded PG. PGlite (~5 MB WASM)
  * replaces embedded-postgres (~50 MB per-platform binary).
  *
  * Exports a pool-compatible adapter so all callers of getPool() in db/index.ts
@@ -29,6 +29,7 @@
  */
 
 import { PGlite } from '@electric-sql/pglite';
+import { mkdirSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 
@@ -135,6 +136,7 @@ export async function startPglite(): Promise<string> {
 
   console.log(`[pglite] booting WASM Postgres at ${PGLITE_DATA_DIR}`);
 
+  mkdirSync(PGLITE_DATA_DIR, { recursive: true });
   _pglite = new PGlite(PGLITE_DATA_DIR);
   await _pglite.waitReady;
 

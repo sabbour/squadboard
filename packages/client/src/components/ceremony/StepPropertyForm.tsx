@@ -10,12 +10,14 @@
  */
 
 import {
+  Button,
   Caption1,
   Dropdown,
   Input,
   Option,
   Textarea,
 } from '@fluentui/react-components'
+import { Add16Regular } from '@fluentui/react-icons'
 import type {
   AgentRunStepNode,
   ApproveStepNode,
@@ -23,6 +25,7 @@ import type {
   FanOutStepNode,
   HandoffStepNode,
   RouteStepNode,
+  StepKind,
 } from '../../services/ceremony-graph.ts'
 import type { Agent } from '../../api/agents.ts'
 
@@ -30,6 +33,7 @@ interface StepPropertyFormProps {
   step: CeremonyStep
   agents: Agent[] | undefined
   onChange: (next: CeremonyStep) => void
+  onAddFanOutChild?: (kind: StepKind) => void
   disabled?: boolean
 }
 
@@ -37,7 +41,7 @@ function patchExtras<T extends CeremonyStep>(s: T, patch: Partial<T>): T {
   return { ...s, ...patch }
 }
 
-export default function StepPropertyForm({ step, agents, onChange, disabled }: StepPropertyFormProps) {
+export default function StepPropertyForm({ step, agents, onChange, onAddFanOutChild, disabled }: StepPropertyFormProps) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
       <label style={{ fontSize: 12, display: 'flex', flexDirection: 'column', gap: 4 }}>
@@ -71,6 +75,7 @@ export default function StepPropertyForm({ step, agents, onChange, disabled }: S
         <FanOutFields
           step={step as FanOutStepNode}
           onChange={(next) => onChange(next)}
+          onAddChild={onAddFanOutChild}
           disabled={disabled}
         />
       )}
@@ -200,10 +205,12 @@ function ApproveFields({
 function FanOutFields({
   step,
   onChange,
+  onAddChild,
   disabled,
 }: {
   step: FanOutStepNode
   onChange: (next: FanOutStepNode) => void
+  onAddChild?: (kind: StepKind) => void
   disabled?: boolean
 }) {
   return (
@@ -280,10 +287,32 @@ function FanOutFields({
           <Option value="parallel">parallel — SDK spawns all children at once</Option>
         </Dropdown>
       </label>
-      <Caption1 style={{ color: 'var(--text-muted)' }}>
-        Child steps are authored in the YAML preview / Code tab. The visual
-        canvas shows each child as a derived node connected by a fan-out edge.
-      </Caption1>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+        <Caption1 style={{ color: 'var(--text-muted)' }}>
+          Child steps run inside this fan-out before the workflow continues. Add common
+          child steps here, then select the child node to edit its prompt or reviewer.
+        </Caption1>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+          <Button
+            size="small"
+            appearance="secondary"
+            icon={<Add16Regular />}
+            disabled={disabled || !onAddChild}
+            onClick={() => onAddChild?.('agent_run')}
+          >
+            Add agent run child
+          </Button>
+          <Button
+            size="small"
+            appearance="secondary"
+            icon={<Add16Regular />}
+            disabled={disabled || !onAddChild}
+            onClick={() => onAddChild?.('approve')}
+          >
+            Add approval child
+          </Button>
+        </div>
+      </div>
     </>
   )
 }

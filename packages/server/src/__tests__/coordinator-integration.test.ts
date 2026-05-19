@@ -52,7 +52,6 @@ const {
   mockFsAccess: vi.fn(),
   mockParseCharterContent: vi.fn(),
   mockComputeContentHash: vi.fn(),
-  mockUpdateFn: vi.fn(),
 }));
 
 // ---------------------------------------------------------------------------
@@ -82,6 +81,9 @@ vi.mock('../db/index.js', () => ({
     projects:  { id: 'projects.id', name: 'projects.name', description: 'projects.description' },
     issueLabels: { issueId: 'issue_labels.issue_id', labelId: 'issue_labels.label_id' },
     labels: { id: 'labels.id', name: 'labels.name' },
+    agentKeywords: { agentId: 'agent_keywords.agent_id', keywords: 'agent_keywords.keywords', focusAreas: 'agent_keywords.focus_areas' },
+    issueLinks: { childIssueId: 'issue_links.child_issue_id', parentIssueId: 'issue_links.parent_issue_id', linkType: 'issue_links.link_type' },
+    routingRules: { projectId: 'routing_rules.project_id', rawRule: 'routing_rules.raw_rule', priority: 'routing_rules.priority' },
   },
 }));
 
@@ -109,6 +111,10 @@ vi.mock('../services/coordinator-decision-log.js', async (importOriginal) => {
     persistCoordinatorDecision: (...args: unknown[]) => mockPersistCoordinatorDecision(...args),
   };
 });
+
+vi.mock('../services/coordinator-routing-log.js', () => ({
+  persistCoordinatorRoutingDecision: vi.fn().mockResolvedValue(undefined),
+}));
 
 vi.mock('../config/coordinator-env.js', async (importOriginal) => {
   const actual = await importOriginal() as typeof import('../config/coordinator-env.js');
@@ -164,7 +170,7 @@ import { dispatchBatchViaCoordinator, BatchDecisionCache, batchDecisionCache } f
 import { decisionCache, CoordinatorDecisionCache } from '../coordinator/cache.js';
 import { CoordinatorLlmParseError } from '../coordinator/llm-client.js';
 import { buildCoordinatorDecisionRecord } from '../services/coordinator-decision-log.js';
-import { pickupTodosSweep } from '../engine/sweeps/pickup-todos.js';
+import { pickupReadySweep } from '../engine/sweeps/pickup-ready.js';
 import { issueRunsRouter } from '../routes/runs.js';
 import { syncAgentsFromDisk } from '../services/agent-sync.js';
 import { resolveCoordinatorModelChain } from '../config/coordinator-env.js';
@@ -183,7 +189,7 @@ function makeInput(overrides: Partial<CoordinatorInput['issue']> = {}): Coordina
       title: 'Fix login bug',
       body: 'Users cannot log in with email',
       labels: ['bug'],
-      column: 'To Do',
+      column: 'Ready',
       parentId: null,
       priority: 1,
       createdAt: '2024-01-01T00:00:00.000Z',
@@ -243,7 +249,7 @@ function makeBaseMeta(overrides: Partial<CoordinatorCallMeta> = {}): Coordinator
 }
 
 // ---------------------------------------------------------------------------
-// Sweep mock helpers (mirroring sweep-pickup-todos-coordinator.test.ts pattern)
+// Sweep mock helpers (mirroring sweep-pickup-ready-coordinator.test.ts pattern)
 // ---------------------------------------------------------------------------
 
 const NOW = new Date('2025-01-15T12:00:00Z');
@@ -253,7 +259,7 @@ const ISSUE_1 = {
   projectId: 'proj-1111-0000-0000-0000-000000000001',
   title: 'Fix the login bug',
   body: 'Users cannot log in with email',
-  status: 'todo',
+  status: 'ready',
   createdAt: NOW,
 };
 
@@ -273,12 +279,13 @@ const AGENT_FENSTER = {
   charterHash: 'cafebabe',
 };
 
-const PROJECT_ROW = [{ id: ISSUE_1.projectId, name: 'Squadboard' }];
+const PROJECT_ROW = [{ id: ISSUE_1.projectId, name: 'Squadboard', description: 'Ship safely' }];
 
 function sel(rows: unknown[]) {
   const p = Promise.resolve(rows);
   const chain: Record<string, unknown> = {
     from:    vi.fn(() => chain),
+    innerJoin: vi.fn(() => chain),
     where:   vi.fn(() => chain),
     orderBy: vi.fn(() => chain),
     limit:   vi.fn().mockResolvedValue(rows),
@@ -290,22 +297,30 @@ function sel(rows: unknown[]) {
 }
 
 function setupSweepMocks(opts: {
-  todoIssues?: unknown[];
+  readyIssues?: unknown[];
   coveredRuns?: unknown[];
   activeAgents?: unknown[];
   projectRow?: unknown[];
   busyAgents?: unknown[];
+  agentKeywords?: unknown[];
+  labelRows?: unknown[];
+  parentRows?: unknown[];
+  routingRules?: unknown[];
   recentRuns?: unknown[];
   circuitBreakerFailures?: unknown[];
 } = {}) {
   mockSelectFn
-    .mockReturnValueOnce(sel(opts.todoIssues   ?? [ISSUE_1]))
+    .mockReturnValueOnce(sel(opts.readyIssues   ?? [ISSUE_1]))
     .mockReturnValueOnce(sel(opts.coveredRuns  ?? []))
     .mockReturnValueOnce(sel(opts.activeAgents ?? [AGENT_VERBAL]))
     .mockReturnValueOnce(sel(opts.projectRow   ?? PROJECT_ROW))
     .mockReturnValueOnce(sel(opts.busyAgents   ?? []))
-    .mockReturnValueOnce(sel(opts.recentRuns   ?? []))
-    .mockReturnValueOnce(sel(opts.circuitBreakerFailures ?? []));
+    .mockReturnValueOnce(sel(opts.agentKeywords ?? []))
+    .mockReturnValueOnce(sel(opts.labelRows ?? []))
+    .mockReturnValueOnce(sel(opts.parentRows ?? []))
+    .mockReturnValueOnce(sel(opts.routingRules ?? []))
+    .mockReturnValueOnce(sel(opts.circuitBreakerFailures ?? []))
+    .mockReturnValueOnce(sel(opts.recentRuns   ?? []));
 }
 
 function setupSweepInsert(runId = 'new-run-id') {
@@ -327,7 +342,7 @@ const AGENT_NAME = 'verbal';
 const ISSUE_ROW = {
   id: ISSUE_ID, projectId: PROJECT_ID,
   title: 'Implement feature X', body: 'Do the thing',
-  status: 'To Do', createdAt: new Date('2026-01-01T00:00:00Z'),
+  status: 'Ready', createdAt: new Date('2026-01-01T00:00:00Z'),
 };
 const PROJ_ROW  = { id: PROJECT_ID, name: 'Squadboard', description: 'Ship fast' };
 const AGENT_ROW = {
@@ -340,6 +355,7 @@ const RUN_ROW   = { id: 'run-001', issueId: ISSUE_ID, agentId: AGENT_ID, status:
 function makeChain(rows: unknown[]) {
   const chain = {
     from:    vi.fn().mockReturnThis(),
+    innerJoin: vi.fn().mockReturnThis(),
     where:   vi.fn().mockReturnThis(),
     limit:   vi.fn().mockReturnThis(),
     orderBy: vi.fn().mockReturnThis(),
@@ -358,7 +374,11 @@ function setupRouteSelectForCoordinator(overrides: {
   issueLabelRows?: object[];
   agentRows?: object[];
   busyRunRows?: object[];
+  agentKeywordRows?: object[];
   recentRunRows?: object[];
+  parentRows?: object[];
+  routingRuleRows?: object[];
+  failureRows?: object[];
 } = {}) {
   _routeSelectCallCount = 0;
   const {
@@ -367,7 +387,11 @@ function setupRouteSelectForCoordinator(overrides: {
     issueLabelRows = [],
     agentRows     = [AGENT_ROW],
     busyRunRows   = [],
+    agentKeywordRows = [],
     recentRunRows = [],
+    parentRows = [],
+    routingRuleRows = [],
+    failureRows = [],
   } = overrides;
 
   mockSelectFn.mockImplementation(() => {
@@ -377,7 +401,11 @@ function setupRouteSelectForCoordinator(overrides: {
     if (call === 3) return makeChain(issueLabelRows);
     if (call === 4) return makeChain(agentRows);
     if (call === 5) return makeChain(busyRunRows);
-    return makeChain(recentRunRows);
+    if (call === 6) return makeChain(agentKeywordRows);
+    if (call === 7) return makeChain(recentRunRows);
+    if (call === 8) return makeChain(parentRows);
+    if (call === 9) return makeChain(routingRuleRows);
+    return makeChain(failureRows);
   });
 }
 
@@ -432,6 +460,7 @@ beforeEach(() => {
   mockIsCoordinatorEnabled.mockReturnValue(true);
   mockResolveRouteTier2Fn.mockResolvedValue(null);
   mockPersistCoordinatorDecision.mockResolvedValue(undefined);
+  mockParseCharterContent.mockReturnValue({ role: 'implementer', model: null, expertise: [] });
 });
 
 afterEach(() => {
@@ -810,7 +839,7 @@ describe('GROUP C — Sweep integration (real coordinator, mocked DB + LLM)', ()
         model: 'claude-haiku-4.5',
       });
 
-      const result = await pickupTodosSweep.run();
+      const result = await pickupReadySweep.run();
 
       expect(result.acted).toBe(1);
       expect(result.errors).toBe(0);
@@ -839,12 +868,17 @@ describe('GROUP C — Sweep integration (real coordinator, mocked DB + LLM)', ()
   // -------------------------------------------------------------------------
   describe('Scenario 3 — skip path in sweep', () => {
     it('coordinator skip → no run inserted, acted=0, persistCoordinatorDecision NOT called', async () => {
-      // Skip doesn't reach circuit-breaker query — only 6 select calls
+      // Skip still logs deterministic context before the LLM skip decision.
       mockSelectFn
         .mockReturnValueOnce(sel([ISSUE_1]))
         .mockReturnValueOnce(sel([]))
         .mockReturnValueOnce(sel([AGENT_VERBAL]))
         .mockReturnValueOnce(sel(PROJECT_ROW))
+        .mockReturnValueOnce(sel([]))
+        .mockReturnValueOnce(sel([]))
+        .mockReturnValueOnce(sel([]))
+        .mockReturnValueOnce(sel([]))
+        .mockReturnValueOnce(sel([]))
         .mockReturnValueOnce(sel([]))
         .mockReturnValueOnce(sel([]));
 
@@ -855,7 +889,7 @@ describe('GROUP C — Sweep integration (real coordinator, mocked DB + LLM)', ()
         model: 'claude-haiku-4.5',
       });
 
-      const result = await pickupTodosSweep.run();
+      const result = await pickupReadySweep.run();
 
       expect(result.acted).toBe(0);
       expect(result.errors).toBe(0);
@@ -876,6 +910,10 @@ describe('GROUP C — Sweep integration (real coordinator, mocked DB + LLM)', ()
         .mockReturnValueOnce(sel(PROJECT_ROW))
         .mockReturnValueOnce(sel([]))
         .mockReturnValueOnce(sel([]))
+        .mockReturnValueOnce(sel([]))
+        .mockReturnValueOnce(sel([]))
+        .mockReturnValueOnce(sel([]))
+        .mockReturnValueOnce(sel([]))
         .mockReturnValueOnce(sel([])); // circuit breaker
 
       const { mockValues } = setupSweepInsert('run-ambig');
@@ -892,7 +930,7 @@ describe('GROUP C — Sweep integration (real coordinator, mocked DB + LLM)', ()
         reasoning: 'keyword match',
       });
 
-      const result = await pickupTodosSweep.run();
+      const result = await pickupReadySweep.run();
 
       expect(result.acted).toBe(1);
       expect(mockResolveRouteTier2Fn).toHaveBeenCalledOnce();
@@ -911,12 +949,16 @@ describe('GROUP C — Sweep integration (real coordinator, mocked DB + LLM)', ()
     it('COORDINATOR_DISPATCH_ENABLED=false → LLM never called, tier-2 runs directly', async () => {
       mockIsCoordinatorEnabled.mockReturnValue(false);
 
-      // With flag off: no recentRuns query, no coordinator call (6 selects, not 7)
+      // With flag off: no recentRuns query, no coordinator call.
       mockSelectFn
         .mockReturnValueOnce(sel([ISSUE_1]))
         .mockReturnValueOnce(sel([]))
         .mockReturnValueOnce(sel([AGENT_VERBAL]))
         .mockReturnValueOnce(sel(PROJECT_ROW))
+        .mockReturnValueOnce(sel([]))
+        .mockReturnValueOnce(sel([]))
+        .mockReturnValueOnce(sel([]))
+        .mockReturnValueOnce(sel([]))
         .mockReturnValueOnce(sel([]))
         .mockReturnValueOnce(sel([])); // circuit breaker
 
@@ -928,7 +970,7 @@ describe('GROUP C — Sweep integration (real coordinator, mocked DB + LLM)', ()
         reasoning: 'keyword match',
       });
 
-      const result = await pickupTodosSweep.run();
+      const result = await pickupReadySweep.run();
 
       expect(result.acted).toBe(1);
       expect(mockSweepLlmCallerCall).not.toHaveBeenCalled();
@@ -954,6 +996,10 @@ describe('GROUP C — Sweep integration (real coordinator, mocked DB + LLM)', ()
         .mockReturnValueOnce(sel(PROJECT_ROW))
         .mockReturnValueOnce(sel([]))
         .mockReturnValueOnce(sel([]))
+        .mockReturnValueOnce(sel([]))
+        .mockReturnValueOnce(sel([]))
+        .mockReturnValueOnce(sel([]))
+        .mockReturnValueOnce(sel([]))
         .mockReturnValueOnce(sel([]));
 
       setupSweepInsert();
@@ -973,7 +1019,7 @@ describe('GROUP C — Sweep integration (real coordinator, mocked DB + LLM)', ()
         };
       });
 
-      await pickupTodosSweep.run();
+      await pickupReadySweep.run();
 
       expect(capturedInput).not.toBeNull();
       const agents = capturedInput!.candidateAgents;
@@ -993,6 +1039,10 @@ describe('GROUP C — Sweep integration (real coordinator, mocked DB + LLM)', ()
         .mockReturnValueOnce(sel(PROJECT_ROW))
         .mockReturnValueOnce(sel([]))
         .mockReturnValueOnce(sel([]))
+        .mockReturnValueOnce(sel([]))
+        .mockReturnValueOnce(sel([]))
+        .mockReturnValueOnce(sel([]))
+        .mockReturnValueOnce(sel([]))
         .mockReturnValueOnce(sel([]));
 
       setupSweepInsert();
@@ -1009,7 +1059,7 @@ describe('GROUP C — Sweep integration (real coordinator, mocked DB + LLM)', ()
         };
       });
 
-      await pickupTodosSweep.run();
+      await pickupReadySweep.run();
 
       expect(capturedInput).not.toBeNull();
       expect(capturedInput!.candidateAgents[0].charterContent).toBe('');

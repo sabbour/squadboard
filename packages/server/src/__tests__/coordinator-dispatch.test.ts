@@ -24,7 +24,7 @@ function makeInput(overrides: Partial<CoordinatorInput["issue"]> = {}): Coordina
       title: "Test issue",
       body: "Do the thing",
       labels: ["bug"],
-      column: "To Do",
+      column: "Ready",
       parentId: null,
       priority: 1,
       createdAt: "2024-01-01T00:00:00.000Z",
@@ -190,6 +190,32 @@ describe("dispatchViaCoordinator — decision variants cached", () => {
 
     expect(hit.decision).toEqual(AMBIGUOUS_DECISION);
     expect(hit.cacheHit).toBe(true);
+  });
+});
+
+describe("dispatchViaCoordinator — deterministic post-processing", () => {
+  it("applies the low-confidence floor before returning and caching LLM decisions", async () => {
+    const lowConfidenceDecision: CoordinatorDecision = {
+      kind: "dispatch",
+      agent: "verbal",
+      rationale: "Weak fit",
+      confidence: 0.39,
+    };
+    const caller = makeFakeCaller(lowConfidenceDecision);
+    const cache = new CoordinatorDecisionCache();
+    const input = makeInput({ id: "i-low-confidence" });
+
+    const first = await dispatchViaCoordinator(input, { llmCaller: caller, cache });
+    const second = await dispatchViaCoordinator(input, { llmCaller: caller, cache });
+
+    expect(first.decision).toEqual({
+      kind: "ambiguous",
+      suggestedAgents: ["verbal"],
+      question: "Best fit verbal scored 0.39, below the 0.40 floor. Please clarify scope before dispatch.",
+    });
+    expect(second.decision).toEqual(first.decision);
+    expect(second.cacheHit).toBe(true);
+    expect((caller.call as ReturnType<typeof vi.fn>).mock.calls).toHaveLength(1);
   });
 });
 

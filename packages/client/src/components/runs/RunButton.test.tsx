@@ -1,7 +1,7 @@
 /**
  * RunButton regression test — W26
  *
- * Asserts that clicking "▶ Run" calls startRun.mutate with the correct
+ * Asserts that clicking "Run" calls startRun.mutate with the correct
  * agentId.  This test was introduced as part of the W26 regression fix to
  * prevent future footer-restructure changes from silently breaking the
  * Run action.
@@ -41,7 +41,7 @@ describe('RunButton', () => {
   it('renders the Run button with data-testid', () => {
     render(<RunButton projectId="proj-1" issueId="issue-1" />)
     expect(screen.getByTestId('task-run-button')).toBeInTheDocument()
-    expect(screen.getByTestId('task-run-button')).toHaveTextContent('▶ Run')
+    expect(screen.getByTestId('task-run-button')).toHaveTextContent('Run')
   })
 
   it('calls startRun.mutate with issueId and first agent id when clicked', async () => {
@@ -63,6 +63,6 @@ describe('RunButton', () => {
     render(<RunButton projectId="proj-1" issueId="issue-2" />)
     const btn = screen.getByTestId('task-run-button')
     expect(btn).not.toBeDisabled()
-    expect(btn).toHaveTextContent('▶ Run')
+    expect(btn).toHaveTextContent('Run')
   })
 })

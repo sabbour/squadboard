@@ -15,6 +15,8 @@ import { Router } from 'express';
 import type { Request, Response } from 'express';
 import * as inboxService from '../services/inbox.js';
 import type { InboxStatus } from '../services/inbox.js';
+import * as directiveCaptureService from '../services/directive-capture.js';
+import type { DirectiveCapturePhase } from '../services/directive-capture.js';
 import type { ColumnStatus } from '../services/issues.js';
 import { getDb } from '../db/index.js';
 import { inboxItems } from '../db/schema.js';
@@ -93,6 +95,52 @@ router.post('/', async (req: Request, res: Response) => {
       idempotencyKey: idempotencyKey ?? null,
     });
     res.status(created ? 201 : 200).json(item);
+  } catch (err) {
+    handleError(res, err);
+  }
+});
+
+// POST /api/inbox/directive-captures
+// Capture a Copilot directive to .squad/decisions/inbox, ensure a DB inbox row,
+// and best-effort call MCP capture (fail-open with audit in the response).
+router.post('/directive-captures', async (req: Request, res: Response) => {
+  try {
+    const body = (req.body ?? {}) as {
+      projectId?: string;
+      directive?: string;
+      sourceType?: string | null;
+      sourceId?: string | null;
+      phase?: DirectiveCapturePhase | null;
+      title?: string | null;
+      createdBy?: string | null;
+      userName?: string | null;
+      callMcp?: boolean;
+    };
+    if (!body.projectId || typeof body.projectId !== 'string') {
+      res.status(400).json({ error: '`projectId` is required' });
+      return;
+    }
+    if (!body.directive || typeof body.directive !== 'string') {
+      res.status(400).json({ error: '`directive` is required' });
+      return;
+    }
+    if (body.phase && body.phase !== 'intake' && body.phase !== 'closeout') {
+      res.status(400).json({ error: '`phase` must be intake or closeout' });
+      return;
+    }
+
+    const result = await directiveCaptureService.captureDirective({
+      projectId: body.projectId,
+      directive: body.directive,
+      sourceType: body.sourceType,
+      sourceId: body.sourceId,
+      phase: body.phase,
+      title: body.title,
+      createdBy: body.createdBy,
+      userName: body.userName,
+      callMcp: body.callMcp,
+    });
+    res.status(result.markdown.status === 'created' || result.inbox.created ? 201 : 200).json(result);
   } catch (err) {
     handleError(res, err);
   }

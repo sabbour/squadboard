@@ -16,6 +16,9 @@ const IDLE_AFTER_MS = 10 * 60_000; // 10 minutes
 
 export const idleLiveSessionsSweep: Sweep = {
   id: 'idle-live-sessions',
+  label: 'Live sessions',
+  description: 'Marks inactive live sessions idle so the UI stops showing them as actively streaming.',
+  scope: 'project',
   intervalMs: 60_000,
   enabled: true,
 

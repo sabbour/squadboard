@@ -23,7 +23,7 @@ import {
   makeStyles,
   tokens,
 } from '@fluentui/react-components'
-import { DataBarVertical20Regular } from '@fluentui/react-icons'
+import { DataBarVertical20Regular, Warning20Regular } from '@fluentui/react-icons'
 import { useConsultStream } from '../../api/consult.ts'
 import type { WsEventMap } from '../../realtime/ws-client.ts'
 
@@ -174,7 +174,7 @@ export function ContextPanel({ sessionId }: ContextPanelProps) {
                   className={`${styles.sectionRow}${sec.truncated ? ` ${styles.sectionTruncated}` : ''}`}
                 >
                   <Caption1 className={styles.sectionName}>
-                    {sec.truncated ? '⚠ ' : ''}{sec.name}
+                    {sec.truncated && <Warning20Regular aria-label="Truncated" />}{sec.name}
                   </Caption1>
                   <Caption1 className={styles.tokenBadge}>
                     {sec.tokens.toLocaleString()} tok

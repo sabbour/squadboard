@@ -6,7 +6,6 @@ import squadboardLogo from '../assets/squadboard-horizontal.png'
 import {
   NavDrawer,
   NavDrawerBody,
-  NavDrawerFooter,
   NavItem,
   NavSectionHeader,
   Button,
@@ -170,6 +169,7 @@ const PROJECT_NAV_GROUPS: Array<{ heading: string; items: Array<{ label: string;
       { label: 'Ceremonies', segment: 'ceremonies', icon: <ArrowSync24Regular /> },
       { label: 'Templates', segment: 'ceremonies/templates', icon: <DocumentBulletList24Regular /> },
       { label: 'Costs', segment: 'costs', icon: <Money24Regular /> },
+      { label: 'Settings', segment: 'settings', icon: <Settings24Regular /> },
     ],
   },
 ]
@@ -469,19 +469,6 @@ function LayoutInner() {
           )}
         </NavDrawerBody>
 
-        {id && (
-          <NavDrawerFooter>
-            {navCollapsed ? (
-              <Tooltip content="Settings" relationship="label" positioning="after" hideDelay={0}>
-                <NavItem icon={<Settings24Regular />} value="settings">
-                  <span className={styles.navLabelHidden}>Settings</span>
-                </NavItem>
-              </Tooltip>
-            ) : (
-              <NavItem icon={<Settings24Regular />} value="settings">Settings</NavItem>
-            )}
-          </NavDrawerFooter>
-        )}
       </NavDrawer>
 
       {/* Main content */}
@@ -544,6 +531,14 @@ function LayoutInner() {
             )}
           </div>
           <div className={styles.topBarRight}>
+            <Button
+              appearance="subtle"
+              icon={<DocumentBulletList24Regular />}
+              onClick={() => window.open('https://sabbour.me/squadboard/docs', '_blank', 'noopener,noreferrer')}
+              title="Open Squadboard docs"
+            >
+              Docs
+            </Button>
             <Button
               appearance="subtle"
               icon={<Mail20Regular />}

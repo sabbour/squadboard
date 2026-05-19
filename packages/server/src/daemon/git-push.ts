@@ -20,9 +20,13 @@ const execFileAsync = promisify(execFile);
 // Helpers
 // ---------------------------------------------------------------------------
 
-async function hasOriginRemote(): Promise<boolean> {
+function gitArgs(teamRoot: string | null | undefined, args: string[]): string[] {
+  return teamRoot ? ['-C', teamRoot, ...args] : args;
+}
+
+async function hasOriginRemote(teamRoot?: string): Promise<boolean> {
   try {
-    const { stdout } = await execFileAsync('git', ['remote', 'get-url', 'origin'], {
+    const { stdout } = await execFileAsync('git', gitArgs(teamRoot, ['remote', 'get-url', 'origin']), {
       timeout: 10_000,
     });
     return stdout.trim().length > 0;
@@ -48,9 +52,13 @@ export interface PushResult {
   error?: string;
 }
 
-export async function gitPush(): Promise<PushResult> {
+export interface GitPushOptions {
+  teamRoot?: string;
+}
+
+export async function gitPush(opts: GitPushOptions = {}): Promise<PushResult> {
   const [hasRemote, pushEnabled] = await Promise.all([
-    hasOriginRemote(),
+    hasOriginRemote(opts.teamRoot),
     isPushEnabled(),
   ]);
 
@@ -73,7 +81,7 @@ export async function gitPush(): Promise<PushResult> {
   try {
     const { stdout, stderr } = await execFileAsync(
       'git',
-      ['push', 'origin', 'HEAD'],
+      gitArgs(opts.teamRoot, ['push', 'origin', 'HEAD']),
       { timeout: 60_000 },
     );
     const output = [stdout, stderr].filter(Boolean).join('\n').trim();

@@ -9,7 +9,6 @@
 import { useRef, useState } from 'react'
 import { useParams } from 'react-router'
 import {
-  Body1,
   Body1Strong,
   Button,
   Caption1,
@@ -42,6 +41,7 @@ import {
 import FormulatePanel from '../components/formulate/FormulatePanel.tsx'
 import PageHeader from '../components/layout/PageHeader.tsx'
 import EmptyState from '../components/layout/EmptyState.tsx'
+import { PageLoading } from '../components/loading/index.tsx'
 
 const KEBAB_RE = /^[a-z_][a-z0-9_]*$/
 
@@ -92,6 +92,21 @@ export default function Tools() {
     acc.get(key)!.push(t)
     return acc
   }, new Map())
+
+  if (isLoading) {
+    return (
+      <PageLoading
+        header={
+          <PageHeader
+            eyebrow={project?.name}
+            title="Tools"
+            description="Catalogued external actions agents can be assigned. Typically backed by an MCP server."
+          />
+        }
+        label="Loading tools…"
+      />
+    )
+  }
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
@@ -146,7 +161,6 @@ export default function Tools() {
             <Button size="small" appearance="subtle" onClick={() => setImportMessage(null)}>Dismiss</Button>
           </div>
         )}
-        {isLoading && <Body1 style={{ color: tokens.colorNeutralForeground3 }}>Loading…</Body1>}
         {!isLoading && tools.length === 0 && (
           /* Wave 10 C5: Ceremonies-style empty state. Stream D's import-json
              flow remains the secondary action. */

@@ -7,8 +7,7 @@ import {
   getCoordinatorEnvSummary,
   DEFAULT_COORDINATOR_MODEL,
   DEFAULT_COORDINATOR_MODEL_FALLBACKS,
-  CoordinatorEnvSummary,
-} from "../config/coordinator-env";
+} from "../config/coordinator-env.js";
 
 /**
  * Helper: clear env vars after each test to avoid cross-test pollution.
@@ -193,7 +192,7 @@ describe("coordinator-env", () => {
       // Default: Haiku is both primary and first fallback
       const result = resolveCoordinatorModelChain(createEnv({}));
       const haiku = DEFAULT_COORDINATOR_MODEL;
-      const count = result.filter(m => m === haiku).length;
+      const count = result.filter((m: string) => m === haiku).length;
       expect(count).toBe(1);
     });
 

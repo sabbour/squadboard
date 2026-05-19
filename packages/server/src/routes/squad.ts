@@ -5,6 +5,7 @@ import path from 'node:path';
 import os from 'node:os';
 import { discoverSquadDirectories, validateSquadDir } from '../services/squad-discovery.js';
 import { linkProjectToSquad } from '../services/project-squad.js';
+import { scaffoldSquad } from '../services/setup-lifecycle.js';
 import { getDb, schema } from '../db/index.js';
 
 const router = Router();
@@ -114,25 +115,6 @@ router.post('/register', async (req: Request, res: Response) => {
   }
 });
 
-// ---------------------------------------------------------------------------
-// Scaffold helpers
-// ---------------------------------------------------------------------------
-
-async function scaffoldSquad(squadPath: string, projectName: string): Promise<void> {
-  await fs.mkdir(squadPath, { recursive: true });
-  await fs.writeFile(
-    path.join(squadPath, 'team.md'),
-    `# ${projectName}\n\n## Members\n\n| Name | Role | Status |\n|------|------|--------|\n`,
-    'utf-8',
-  );
-  await fs.writeFile(path.join(squadPath, 'decisions.md'), '# Decisions\n', 'utf-8');
-  for (const dir of ['decisions/inbox', 'agents', 'orchestration-log', 'log']) {
-    const dirPath = path.join(squadPath, dir);
-    await fs.mkdir(dirPath, { recursive: true });
-    await fs.writeFile(path.join(dirPath, '.gitkeep'), '', 'utf-8');
-  }
-}
-
 async function registerProject(
   squadPath: string,
   projectName: string,
@@ -196,7 +178,7 @@ router.post('/init', async (req: Request, res: Response) => {
     }
 
     const name = projectName ?? path.basename(dirPath);
-    await scaffoldSquad(squadPath, name);
+    await scaffoldSquad({ squadPath, projectName: name });
     const data = await registerProject(squadPath, name);
 
     res.status(201).json({ ok: true, data });
@@ -246,7 +228,7 @@ router.post('/create', async (req: Request, res: Response) => {
 
     await fs.mkdir(projectPath, { recursive: true });
     const squadPath = path.join(projectPath, '.squad');
-    await scaffoldSquad(squadPath, projectName);
+    await scaffoldSquad({ squadPath, projectName });
     const registration = await registerProject(squadPath, projectName);
 
     res.status(201).json({

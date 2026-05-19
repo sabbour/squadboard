@@ -4,7 +4,7 @@ Your plugin can extend Squad (the coordinator) without forking its upstream `squ
 
 ## What This Enables
 
-Squad is loaded into every Copilot CLI session with a fixed behavior preamble. That preamble lives upstream in the `bradygaster/squad-duck` repo — your users pull updates from there, and if you forked it, you'd lose those updates forever.
+Squad is loaded into every Copilot CLI session with a fixed behavior preamble. That preamble lives upstream in the [`bradygaster/squad`](https://github.com/bradygaster/squad) repo — your users pull updates from there, and if you forked it, you'd lose those updates forever.
 
 Instead, **write a Markdown fragment** that Squad loads at session start. Your fragment adds behavior (calls MCP tools, implements workflows) additively, on top of the upstream preamble. No fork. No merge pain. When Squad upgrades, your fragment keeps working.
 
@@ -170,7 +170,7 @@ Squad will load that instead of (and completely ignore) the user-global `~/.squa
 
 ## Upstream PR — Q3 Plan
 
-This generic extension mechanism is being submitted as a pull request against `bradygaster/squad-duck` under Q3 (timeline: May–July 2026). Until merged:
+This generic extension mechanism is being submitted as a pull request against [`bradygaster/squad`](https://github.com/bradygaster/squad) under Q3 (timeline: May–July 2026). Until merged:
 
 1. Individual plugins (Squadboard, Trello, Aspire, etc.) use this postinstall pattern to drop fragments into `~/.squad/extensions/`.
 2. Coordinate with the Squad maintainer (Brady) to enable the extension discovery in the upstream preamble.
@@ -200,7 +200,7 @@ Before shipping:
 
 - **Squadboard coordinator fragment** — `.../packages/squadboard/coordinator-fragment.md` — the canonical example of a full-featured fragment.
 - **Postinstall script** — `.../packages/squadboard/scripts/postinstall-coordinator-fragment.mjs` — reference implementation of idempotent install logic.
-- **Upstream Squad preamble** — `bradygaster/squad-duck/.github/agents/squad.agent.md` — the coordinator's core behavior that fragments extend.
+- **Upstream Squad preamble** — `bradygaster/squad/.github/agents/squad.agent.md` — the coordinator's core behavior that fragments extend.
 - **Squad routing** — `<repo>/.squad/routing.md` — how projects configure agent dispatch; fragments can hint at routing but don't override it.
 
 ## FAQ

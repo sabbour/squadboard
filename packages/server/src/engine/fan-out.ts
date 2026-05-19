@@ -202,7 +202,7 @@ export async function materializeFanOut(
       }
       const childIssueResult = await client.query<{ id: string }>(
         `INSERT INTO issues (project_id, title, body, status, assignee_id)
-         VALUES ($1, $2, $3, 'todo', $4)
+         VALUES ($1, $2, $3, 'ready', $4)
          RETURNING id`,
         [issue.projectId, childTitle, issue.body ?? '', target.agentId ?? null],
       );

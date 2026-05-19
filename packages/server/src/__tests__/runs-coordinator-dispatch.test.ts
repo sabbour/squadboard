@@ -24,6 +24,56 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 const mockDispatchViaCoordinator = vi.fn();
 vi.mock('../coordinator/index.js', () => ({
   dispatchViaCoordinator: (...args: unknown[]) => mockDispatchViaCoordinator(...args),
+  buildCoordinatorInput: (params: {
+    issue: { id: string; title: string; body?: string | null; status: string; createdAt: Date };
+    labels: string[];
+    project: { id: string; name: string; description?: string | null };
+    agents: Array<{ id: string; name: string; role: string; charterHash?: string | null; charterContent: string }>;
+    busyAgentIds?: Set<string>;
+    recentRuns?: unknown[];
+    parentIssueIds?: string[];
+    blockedParentIssueIds?: string[];
+    projectRules?: string;
+  }) => ({
+    issue: {
+      id: params.issue.id,
+      title: params.issue.title,
+      body: params.issue.body ?? null,
+      labels: params.labels,
+      column: params.issue.status,
+      parentId: params.parentIssueIds?.[0] ?? null,
+      blockedParentIds: params.blockedParentIssueIds ?? [],
+      priority: null,
+      createdAt: params.issue.createdAt.toISOString(),
+    },
+    candidateAgents: params.agents.map((agent) => ({
+      name: agent.name,
+      role: agent.role,
+      charterHash: agent.charterHash ?? '',
+      charterContent: agent.charterContent,
+      capabilities: [],
+      available: !params.busyAgentIds?.has(agent.id),
+    })),
+    project: { id: params.project.id, name: params.project.name, rules: params.projectRules ?? '' },
+    recentRuns: params.recentRuns ?? [],
+  }),
+  capabilityMapFromAgentKeywords: () => new Map(),
+  filterBlockedAgents: (input: { candidateAgents: Array<{ name: string }> }, blocked: Set<string>) => {
+    const candidateAgents = input.candidateAgents.filter((agent) => !blocked.has(agent.name));
+    if (candidateAgents.length === 0 && input.candidateAgents.length > 0) {
+      return { input, decision: { kind: 'skip', reason: 'blocked' } };
+    }
+    return { input: { ...input, candidateAgents }, decision: null };
+  },
+  applyDeterministicPrefilters: () => null,
+  buildDeterministicCoordinatorMeta: () => ({
+    model: 'deterministic-prefilter',
+    promptTokens: 0,
+    completionTokens: 0,
+    durationMs: 0,
+    cacheHit: false,
+    inputHash: 'a'.repeat(64),
+  }),
 }));
 
 let _coordinatorEnabled = true;
@@ -60,6 +110,7 @@ vi.mock('../db/index.js', () => ({
       body:      'issues.body',
       status:    'issues.status',
       createdAt: 'issues.created_at',
+      archived:  'issues.archived',
     },
     projects: {
       id:          'projects.id',
@@ -83,12 +134,28 @@ vi.mock('../db/index.js', () => ({
       id:   'labels.id',
       name: 'labels.name',
     },
+    agentKeywords: {
+      agentId:    'agent_keywords.agent_id',
+      keywords:   'agent_keywords.keywords',
+      focusAreas: 'agent_keywords.focus_areas',
+    },
+    issueLinks: {
+      childIssueId:  'issue_links.child_issue_id',
+      parentIssueId: 'issue_links.parent_issue_id',
+      linkType:      'issue_links.link_type',
+    },
+    routingRules: {
+      projectId: 'routing_rules.project_id',
+      rawRule:   'routing_rules.raw_rule',
+      priority:  'routing_rules.priority',
+    },
   },
 }));
 
 vi.mock('drizzle-orm', () => ({
   eq:  (a: unknown, b: unknown) => ({ __eq: [a, b] }),
   and: (...args: unknown[])     => ({ __and: args }),
+  inArray: (a: unknown, b: unknown[]) => ({ __inArray: [a, b] }),
   gte: (a: unknown, b: unknown) => ({ __gte: [a, b] }),
   asc: (a: unknown)             => ({ __asc: a }),
   max: (a: unknown)             => ({ __max: a }),
@@ -121,6 +188,9 @@ vi.mock('../services/github-git-ops.js', () => ({
 // MC-10: mock the decision-log service — the route calls it fire-and-forget.
 vi.mock('../services/coordinator-decision-log.js', () => ({
   persistCoordinatorDecision: vi.fn().mockResolvedValue(undefined),
+}));
+vi.mock('../services/coordinator-routing-log.js', () => ({
+  persistCoordinatorRoutingDecision: vi.fn().mockResolvedValue(undefined),
 }));
 
 // ---------------------------------------------------------------------------
@@ -182,7 +252,7 @@ const AGENT_NAME = 'verbal';
 const ISSUE_ROW = {
   id: ISSUE_ID, projectId: PROJECT_ID,
   title: 'Implement feature X', body: 'Do the thing',
-  status: 'To Do', createdAt: new Date('2026-01-01T00:00:00Z'),
+  status: 'Ready', createdAt: new Date('2026-01-01T00:00:00Z'),
 };
 const PROJECT_ROW = { id: PROJECT_ID, name: 'Squadboard', description: 'Ship fast' };
 const AGENT_ROW   = {
@@ -201,9 +271,10 @@ const RUN_ROW = {
 
 /** Chainable drizzle-like select chain that resolves with `rows` */
 function makeChain(rows: unknown[]) {
-  const chain = {
-    from:    vi.fn().mockReturnThis(),
-    where:   vi.fn().mockReturnThis(),
+    const chain = {
+      from:    vi.fn().mockReturnThis(),
+      innerJoin: vi.fn().mockReturnThis(),
+      where:   vi.fn().mockReturnThis(),
     limit:   vi.fn().mockReturnThis(),
     orderBy: vi.fn().mockReturnThis(),
     offset:  vi.fn().mockReturnThis(),
@@ -230,10 +301,14 @@ function setupSelectForPathA(agentRow: object | null, issueRow: object | null) {
  * select calls:
  *   1  = issue row
  *   2  = project row
- *   3  = issueLabels (labelId rows)
+ *   3  = issue labels
  *   4  = active agents
- *   5  = busy run rows (status='running')
- *   6  = recent run rows for this issue
+ *   5  = busy run rows
+ *   6  = cached agent keywords
+ *   7  = recent run rows for this issue
+ *   8  = issue parent links
+ *   9  = routing rules
+ *   10 = recent failure rows for circuit breaker
  */
 function setupSelectForPathB(overrides: {
   issueRow?: object | null;
@@ -241,7 +316,11 @@ function setupSelectForPathB(overrides: {
   issueLabelRows?: object[];
   agentRows?: object[];
   busyRunRows?: object[];
+  agentKeywordRows?: object[];
   recentRunRows?: object[];
+  parentRows?: object[];
+  routingRuleRows?: object[];
+  failureRows?: object[];
 } = {}) {
   _selectCallCount = 0;
   const {
@@ -250,7 +329,11 @@ function setupSelectForPathB(overrides: {
     issueLabelRows = [],
     agentRows    = [AGENT_ROW],
     busyRunRows  = [],
+    agentKeywordRows = [],
     recentRunRows = [],
+    parentRows = [],
+    routingRuleRows = [],
+    failureRows = [],
   } = overrides;
 
   mockSelect.mockImplementation(() => {
@@ -260,7 +343,11 @@ function setupSelectForPathB(overrides: {
     if (call === 3) return makeChain(issueLabelRows);     // issueLabels
     if (call === 4) return makeChain(agentRows);           // active agents
     if (call === 5) return makeChain(busyRunRows);         // busy agents
-    return makeChain(recentRunRows);                       // recent runs
+    if (call === 6) return makeChain(agentKeywordRows);     // agent keywords
+    if (call === 7) return makeChain(recentRunRows);        // recent runs
+    if (call === 8) return makeChain(parentRows);           // parent links
+    if (call === 9) return makeChain(routingRuleRows);      // routing rules
+    return makeChain(failureRows);                         // circuit breaker failures
   });
 }
 

@@ -13,6 +13,8 @@
  */
 
 import { BUILT_IN_CEREMONIES } from './built-in/index.js';
+import { builtInSourceMarker } from './built-in/protection.js';
+import { getDb, schema } from '../db/index.js';
 import { importCeremonyFromYaml } from '../services/ceremony-yaml-import.js';
 
 export interface SeedEntry {
@@ -43,7 +45,9 @@ export async function seedBuiltInCeremonies(projectId: string): Promise<SeedResu
 
   for (const ceremony of BUILT_IN_CEREMONIES) {
     try {
-      const result = await importCeremonyFromYaml(ceremony.yamlContent, projectId);
+      const result = await importCeremonyFromYaml(ceremony.yamlContent, projectId, {
+        sourceMarker: builtInSourceMarker(ceremony.slug),
+      });
       seeded.push({
         name: ceremony.name,
         ceremonyId: result.ceremonyId,
@@ -58,4 +62,14 @@ export async function seedBuiltInCeremonies(projectId: string): Promise<SeedResu
   }
 
   return { projectId, seeded, errors };
+}
+
+export async function seedBuiltInCeremoniesForAllProjects(): Promise<SeedResult[]> {
+  const db = getDb();
+  const projects = await db.select({ id: schema.projects.id }).from(schema.projects);
+  const results: SeedResult[] = [];
+  for (const project of projects) {
+    results.push(await seedBuiltInCeremonies(project.id));
+  }
+  return results;
 }

@@ -36,6 +36,7 @@ import { curatedSkillsRouter, projectSkillsRouter, agentSkillsRouter } from './r
 import { projectToolsRouter, agentToolsRouter } from './routes/tools.js';
 import { projectMcpRouter, agentMcpRouter } from './routes/mcp.js';
 import { diagnosticsRouter, projectDiagnosticsRouter } from './routes/diagnostics.js';
+import { projectRalphMonitorRouter } from './routes/ralph-monitor.js';
 import heartbeatRouter from './routes/heartbeat.js';
 import systemRouter from './routes/system.js';
 // Wave 10 B3: side-effect import — subscribes the in-memory ring buffer to
@@ -53,7 +54,9 @@ import { stalePresenceSweep } from './engine/sweeps/stale-presence.js';
 import { readyWorkflowStepsSweep } from './engine/sweeps/ready-workflow-steps.js';
 import { githubSyncOverdueSweep } from './engine/sweeps/github-sync-overdue.js';
 import { ceremoniesDueSweep } from './engine/sweeps/ceremonies-due.js';
-import { pickupTodosSweep } from './engine/sweeps/pickup-todos.js';
+import { pickupReadySweep } from './engine/sweeps/pickup-ready.js';
+import { ralphMonitorSweep } from './services/ralph-monitor.js';
+import { seedBuiltInCeremoniesForAllProjects } from './ceremonies/seed-built-in.js';
 // Phase 10: side-effect import — registers the on_event ceremony listener
 // against the in-process event bus.
 import './services/ceremony-dispatcher.js';
@@ -156,6 +159,19 @@ async function main(): Promise<void> {
   // cards. Gated and idempotent (see services/self-register.ts).
   await registerSelfAtBoot();
 
+  try {
+    const seedResults = await seedBuiltInCeremoniesForAllProjects();
+    const failures = seedResults.flatMap((result) => result.errors.map((error) => ({
+      projectId: result.projectId,
+      ...error,
+    })));
+    if (failures.length > 0) {
+      console.warn('[squadboard] built-in ceremony seeding completed with errors:', failures);
+    }
+  } catch (err) {
+    console.warn('[squadboard] built-in ceremony seeding failed (non-fatal):', err);
+  }
+
   // Wave 10 / A3: honour SQUADBOARD_DEFAULT_PROJECT_ID for the HTTP MCP
   // transport too. The stdio entry point does this independently for desktop
   // clients; doing it here covers HTTP clients (e.g. VS Code) that hit /mcp.
@@ -178,7 +194,8 @@ async function main(): Promise<void> {
     readyWorkflowStepsSweep,
     githubSyncOverdueSweep,
     ceremoniesDueSweep,
-    pickupTodosSweep,
+    pickupReadySweep,
+    ralphMonitorSweep,
   ]);
   heartbeat.register(stuckIssueRunsSweep);      // 30 s — reclaim expired/orphaned runs
   heartbeat.register(idleLiveSessionsSweep);    // 60 s — mark inactive sessions idle
@@ -186,7 +203,8 @@ async function main(): Promise<void> {
   heartbeat.register(readyWorkflowStepsSweep);  //  5 s — advance workflow steps + stepper
   heartbeat.register(githubSyncOverdueSweep);   // 60 s — catch-up GitHub pulls
   heartbeat.register(ceremoniesDueSweep);       //  5 s — fire due ceremony schedules
-  heartbeat.register(pickupTodosSweep);         // 10 s — dispatch unattended To Do items (W26)
+  heartbeat.register(pickupReadySweep);         // 10 s — dispatch unattended Ready items (W26)
+  heartbeat.register(ralphMonitorSweep);        // 30 s — opt-in Ralph autonomous monitor
   heartbeat.start();
 
   // Demo 15: register GitHub sync event-bus hooks
@@ -237,6 +255,7 @@ async function main(): Promise<void> {
   // Phase 13: MCP servers — encrypted-headers registry + per-agent assignment.
   app.use('/api/projects/:projectId/agents/:agentId/mcp-servers', agentMcpRouter);
   app.use('/api/projects/:projectId/mcp-servers', projectMcpRouter);
+  app.use('/api/projects/:projectId/ralph-monitor', projectRalphMonitorRouter);
   app.use('/api/projects/:projectId/routing', routingRouter);
   app.use('/api/models', modelsRouter);
   app.use('/api/roles', rolesRouter);
@@ -465,4 +484,3 @@ main().catch((err: unknown) => {
   console.error('[squadboard] fatal startup error:', msg);
   process.exit(1);
 });
-

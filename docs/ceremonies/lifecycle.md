@@ -60,20 +60,17 @@ The primary authoring surface. A drag-to-connect flow editor in the Squadboard U
 - Round-trip to YAML on export.
 - Step library with built-in step kinds.
 
-### 2. YAML Editor (Future)
-
-**Status: Coming in W29+**
+### 2. YAML Editor / API Import
 
 Users will be able to:
-- Export a ceremony as YAML (already shipped in CER-3).
+- Export a ceremony as YAML.
 - Edit the YAML file locally or in the code editor.
-- Re-import via `POST /ceremonies/import-yaml` (CER-3 endpoint, already shipped).
+- Re-import via `POST /ceremonies/import-yaml`.
 
-Today, YAML import/export are available only at the API level.
+Today, YAML import/export are available at the API level; richer in-browser YAML
+editing can build on the same canonical representation.
 
-### 3. Built-in Seeding (CER-2)
-
-**Status: In design (W29)**
+### 3. Built-in Seeding
 
 New projects are auto-seeded with three built-in ceremonies:
 - **design-review** — triggers on PRs touching `design.md`; agent review → peer approval
@@ -174,7 +171,11 @@ When a ceremony's trigger condition is met, the engine:
 4. **Emit outputs** — Depending on step configuration:
    - **PR comment** — post result as a GitHub comment
    - **Signal** — emit a signal that other agents can listen on
-   - **File** — write result to a file in the repo
+    - **File** — write result to a file in the repo
+
+5. **Close out** — Daemon and coordinator lifecycle signals call the shared
+   Scribe close-out service. Results include close-out report metadata,
+   health path when available, and lifecycle/worktree metadata for audit.
 
 ## Lifecycle States
 
@@ -190,6 +191,10 @@ Ceremonies transition through states:
 - **active** — trigger is live; runs when condition fires
 - **paused** — trigger disabled; no new runs start; existing runs continue
 - **archived** — retired; hidden from UI; no new runs possible
+
+Worktree-backed runs also carry lifecycle metadata when available: workspace
+path, branch name, started/ended timestamps, close-out report path, and cleanup
+status. Cleanup only removes safe worktrees/branches according to server policy.
 
 ## Retirement (Deletion and Archival)
 

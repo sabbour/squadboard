@@ -52,15 +52,21 @@ export async function initDb(connectionOrSentinel: string): Promise<void> {
   if (!_pool) throw new Error('Pool not initialised');
   await initMigrationLog(_pool);
 
-  // Apply migrations unless SKIP_BOOTSTRAP_DDL is set
+  // Ensure the current inline base schema exists before historical SQL migrations run.
+  // The migration files are additive snapshots from later waves and reference core
+  // tables such as issue_runs, so a clean PGlite database must be bootstrapped first.
+  await bootstrapSchema();
+
+  // Apply migrations unless SKIP_BOOTSTRAP_DDL is set.
   if (process.env.SKIP_BOOTSTRAP_DDL !== '1') {
     await applyMigrations(_pool, { dryRun: process.env.MIGRATIONS_DRY_RUN === '1' });
   } else {
-    console.log('[db] Skipping bootstrap DDL (SKIP_BOOTSTRAP_DDL=1)');
+    console.log('[db] Skipping SQL migrations (SKIP_BOOTSTRAP_DDL=1)');
   }
 
-  // Run remaining bootstrap (inline tables, seeds, etc.)
-  await bootstrapSchema();
+  if (connectionOrSentinel === PGLITE_SENTINEL) {
+    await repairPgliteIssueRunEventsFkCatalog(_pool);
+  }
 
   // W29 MC-5: Backfill charter_content column (runs once per process)
   if (process.env.SQUADBOARD_CHARTER_BACKFILL !== '0') {
@@ -91,6 +97,64 @@ function wrapPgPool(pool: Pool): PoolLike {
     },
     end: async () => pool.end(),
   };
+}
+
+/**
+ * Repairs a PGlite 0.4.5 catalog corruption seen in old local clusters where
+ * the RI triggers for issue_run_events(run_id) point at a stale constraint OID.
+ * When that happens, any issue_runs UPDATE can fail inside ri_LoadConstraintInfo.
+ */
+export async function repairPgliteIssueRunEventsFkCatalog(pool: PoolLike): Promise<number> {
+  const tables = await pool.query<{ issueRuns: string | null; issueRunEvents: string | null }>(`
+    SELECT
+      to_regclass('public.issue_runs')::text AS "issueRuns",
+      to_regclass('public.issue_run_events')::text AS "issueRunEvents"
+  `);
+  const tableRow = tables.rows[0];
+  if (!tableRow?.issueRuns || !tableRow.issueRunEvents) return 0;
+
+  const canonical = await pool.query<{ oid: number }>(`
+    SELECT oid::int AS oid
+    FROM pg_constraint
+    WHERE conname = 'issue_run_events_run_id_fkey'
+      AND contype = 'f'
+      AND conrelid = 'issue_run_events'::regclass
+      AND confrelid = 'issue_runs'::regclass
+    ORDER BY oid::int DESC
+    LIMIT 1
+  `);
+  const canonicalOid = Number(canonical.rows[0]?.oid);
+  if (!Number.isInteger(canonicalOid) || canonicalOid <= 0) return 0;
+
+  const staleTriggers = await pool.query<{ oid: number; tgconstraint: number }>(`
+    SELECT oid::int AS oid, tgconstraint::int AS tgconstraint
+    FROM pg_trigger
+    WHERE tgname LIKE 'RI_ConstraintTrigger_%'
+      AND (
+        (tgrelid = 'issue_runs'::regclass AND tgconstrrelid = 'issue_run_events'::regclass)
+        OR
+        (tgrelid = 'issue_run_events'::regclass AND tgconstrrelid = 'issue_runs'::regclass)
+      )
+      AND tgconstraint::int <> ${canonicalOid}
+    ORDER BY oid::int
+  `);
+
+  const triggerOids = staleTriggers.rows
+    .map((row) => Number(row.oid))
+    .filter((oid) => Number.isInteger(oid) && oid > 0);
+
+  if (triggerOids.length === 0) return 0;
+
+  await pool.query(`
+    UPDATE pg_trigger
+    SET tgconstraint = ${canonicalOid}::oid
+    WHERE oid::int IN (${triggerOids.join(', ')})
+  `);
+
+  console.warn(
+    `[db] repaired PGlite issue_run_events FK catalog (${triggerOids.length} trigger${triggerOids.length === 1 ? '' : 's'})`,
+  );
+  return triggerOids.length;
 }
 
 /**
@@ -203,7 +267,7 @@ async function bootstrapSchema(): Promise<void> {
     );
 
     DO $$ BEGIN
-      CREATE TYPE column_status AS ENUM ('backlog', 'todo', 'in_progress', 'in_review', 'done');
+      CREATE TYPE column_status AS ENUM ('backlog', 'ready', 'in_progress', 'in_review', 'done');
     EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
     CREATE TABLE IF NOT EXISTS issues (
@@ -257,10 +321,13 @@ async function bootstrapSchema(): Promise<void> {
       charter_path  TEXT          NOT NULL,
       history_path  TEXT,
       charter_hash  TEXT,
+      charter_content TEXT        NOT NULL DEFAULT '',
       created_at    TIMESTAMPTZ   NOT NULL DEFAULT NOW(),
       updated_at    TIMESTAMPTZ   NOT NULL DEFAULT NOW(),
       CONSTRAINT agents_project_name_unique UNIQUE (project_id, name)
     );
+
+    ALTER TABLE agents ADD COLUMN IF NOT EXISTS charter_content TEXT NOT NULL DEFAULT '';
 
     DO $$ BEGIN
       CREATE TYPE run_status AS ENUM ('pending', 'running', 'completed', 'failed', 'cancelled');
@@ -883,6 +950,7 @@ async function bootstrapSchema(): Promise<void> {
       mode                     consult_mode    NOT NULL DEFAULT 'agent',
       agent_id                 UUID            REFERENCES agents(id) ON DELETE SET NULL,
       agent_name               TEXT,
+      agent_origin             TEXT            NOT NULL DEFAULT 'project',
       model                    TEXT,
       status                   consult_status  NOT NULL DEFAULT 'active',
       sdk_session_id           TEXT,
@@ -1012,7 +1080,7 @@ async function bootstrapSchema(): Promise<void> {
 
     -- Step 3: Backfill semantic roll-up values for the 5 seed columns.
     UPDATE column_meta SET semantic = 'backlog'     WHERE column_id = 'backlog'     AND semantic = 'custom';
-    UPDATE column_meta SET semantic = 'ready'       WHERE column_id = 'todo'        AND semantic = 'custom';
+    UPDATE column_meta SET semantic = 'ready'       WHERE column_id = 'ready'       AND semantic = 'custom';
     UPDATE column_meta SET semantic = 'in_progress' WHERE column_id = 'in_progress' AND semantic = 'custom';
     UPDATE column_meta SET semantic = 'review'      WHERE column_id = 'in_review'   AND semantic = 'custom';
     UPDATE column_meta SET semantic = 'done'        WHERE column_id = 'done'        AND semantic = 'custom';
@@ -1298,6 +1366,35 @@ async function bootstrapSchema(): Promise<void> {
       ADD COLUMN IF NOT EXISTS description TEXT;
   `);
 
+  // Parity 6: Ralph-style autonomous monitor. Project-level opt-in is default
+  // off; state is persisted for UI controls and heartbeat polling.
+  await _pool.query(`
+    ALTER TABLE projects
+      ADD COLUMN IF NOT EXISTS ralph_autonomy_enabled BOOLEAN NOT NULL DEFAULT FALSE,
+      ADD COLUMN IF NOT EXISTS ralph_auto_merge_enabled BOOLEAN NOT NULL DEFAULT FALSE,
+      ADD COLUMN IF NOT EXISTS ralph_monitor_state TEXT NOT NULL DEFAULT 'stopped',
+      ADD COLUMN IF NOT EXISTS ralph_monitor_last_action JSONB,
+      ADD COLUMN IF NOT EXISTS ralph_monitor_next_action JSONB,
+      ADD COLUMN IF NOT EXISTS ralph_monitor_last_decision_at TIMESTAMPTZ;
+
+    CREATE TABLE IF NOT EXISTS ralph_monitor_events (
+      id            UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+      project_id    UUID        NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+      state         TEXT        NOT NULL,
+      decision      TEXT        NOT NULL,
+      action        TEXT        NOT NULL,
+      reason        TEXT        NOT NULL,
+      selected_kind TEXT,
+      target_type   TEXT,
+      target_id     TEXT,
+      payload       JSONB       NOT NULL DEFAULT '{}'::jsonb,
+      created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+
+    CREATE INDEX IF NOT EXISTS ralph_monitor_events_project_created_idx
+      ON ralph_monitor_events (project_id, created_at DESC);
+  `);
+
   // Wave 28 — JIS-T1: issue_run_events append-only event log.
   await _pool.query(`
     CREATE TABLE IF NOT EXISTS issue_run_events (
@@ -1324,6 +1421,13 @@ async function bootstrapSchema(): Promise<void> {
 
     ALTER TABLE consult_sessions
       ADD COLUMN IF NOT EXISTS cached_input_tokens INTEGER NOT NULL DEFAULT 0;
+
+    ALTER TABLE consult_sessions
+      ADD COLUMN IF NOT EXISTS agent_origin TEXT NOT NULL DEFAULT 'project';
+
+    UPDATE consult_sessions
+      SET agent_origin = 'model'
+      WHERE mode = 'model' AND agent_origin = 'project';
   `);
 
   console.log('[db] schema bootstrapped');

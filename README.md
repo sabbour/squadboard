@@ -9,7 +9,7 @@
     <img alt="License" src="https://img.shields.io/badge/license-MIT-blue.svg" />
   </a>
   <a href="#">
-    <img alt="Node.js Version" src="https://img.shields.io/badge/node-%3E%3D18-green.svg" />
+    <img alt="Node.js Version" src="https://img.shields.io/badge/node-%3E%3D20-green.svg" />
   </a>
   <a href="#">
     <img alt="Self-Hosted" src="https://img.shields.io/badge/deployment-self--hosted-orange.svg" />
@@ -20,13 +20,25 @@
 
 ## What It Is
 
-Squadboard is a workflow engine and kanban board for running multi-agent ceremonies on issues. It pairs with the upstream Squad agent for hands-off ops, providing durable orchestration, deterministic replay, and real-time visibility into parallel agent runs—all without leaving the browser.
+Squadboard is a workflow engine and kanban board for running multi-agent ceremonies on issues. It can act as the durable driver for Copilot CLI + Squad-style work: deterministic routing and lifecycle state stay in the server, while LLMs handle ambiguity inside bounded prompts.
 
-It runs locally by default, syncs to GitHub when you ship, and stores everything in an embedded Postgres database (no external setup).
+It runs locally by default, syncs to GitHub when you ship, and stores everything in an embedded Postgres-compatible database (no external setup).
+
+> **Alpha software warning:** Squadboard is pre-1.0, under active development, and not recommended for production or unattended operation. Expect breaking changes, incomplete flows, and sharp edges. Keep human review in the loop for code changes, GitHub writes, and any workflow that affects shared repositories.
 
 ## Who It's For
 
 Developers tired of pasting context between Copilot, GitHub Issues, and a kanban. Teams sharing a `.squad/` directory who need workflow gates (peer review, approvals) without inventing them in agent prompts. Agent builders shipping workflows as first-class versioned artifacts—auditable, demonstrable, composable. If you have one agent and one task at a time, `squad chat` is fine. The moment you have N agents, M tasks, K handoffs—use Squadboard.
+
+## Relationship to Squad
+
+Squadboard is designed to work with the upstream **[Squad agent](https://github.com/bradygaster/squad)**. Squad provides the Copilot CLI driver and agent conventions; Squadboard provides the durable board, deterministic orchestration, audit trail, templates, and UI around that workflow.
+
+The intended split is:
+
+- **Squad (`bradygaster/squad`)** remains the interactive agent/driver experience and source of the `.squad/` team conventions.
+- **Squadboard (`sabbour/squadboard`)** mirrors those outcomes in a local-first control plane: board cards, coordinator decisions, runs, ceremonies, Scribe close-out, GitHub sync, and MCP tools.
+- **MCP integration** lets Copilot CLI and compatible clients send directives into Squadboard so ambiguous instructions can become durable cards, decisions, and auditable runs.
 
 ## Getting Started
 
@@ -48,8 +60,8 @@ No external Postgres needed — Squadboard runs an embedded Postgres instance lo
 
 1. Clone the repository:
    ```bash
-   git clone https://github.com/you/foo
-   cd foo
+   git clone https://github.com/sabbour/squadboard
+   cd squadboard
    ```
 
 2. Install dependencies:
@@ -59,62 +71,99 @@ No external Postgres needed — Squadboard runs an embedded Postgres instance lo
 
 ### Initialize & Run
 
-**Option A: Start the full app (backend + frontend)**
+**Option A: Start all services (backend + frontend + docs)**
 
 ```bash
-pnpm run dev
+npm start
+# or: pnpm start
 ```
 
 This starts:
 - Backend (Express + WebSocket) on http://localhost:3000
 - Frontend (React + Vite) on http://localhost:5173
-- Embedded Postgres on localhost:54321 (auto-managed, no setup needed)
+- Docs (Docusaurus) on http://localhost:3002
+- Embedded PostgreSQL database (auto-managed, no setup needed)
+- PostgreSQL-backed Squad state by default; existing `.squad/` files are imported once into an empty DB-backed project
 
-Open http://localhost:5173 in your browser.
+Open http://localhost:5173 in your browser. Docs are available at http://localhost:3002.
+
+**Explicit PostgreSQL launch**
+
+The root startup scripts already use the PostgreSQL provider. Use the explicit script when you want launch intent to be obvious in docs, terminals, or automation:
+
+```bash
+pnpm run dev:postgresql
+```
+
+Squadboard will:
+- Use the embedded PostgreSQL database automatically (`@electric-sql/pglite`)
+- Import any existing `.squad/` files into the database on startup (one-time)
+- Store all future Squad state in PostgreSQL alongside Squadboard product state
+
+**Standalone server with PostgreSQL:**
+
+```bash
+pnpm --filter @sabbour/squadboard dev:postgresql
+```
+
+**Using CLI directly:**
+
+```bash
+squadboard start --squad-storage postgresql
+# or
+squadboard start --postgresql-storage  # alias
+```
+
+**Filesystem fallback:**
+
+```bash
+pnpm run dev:fs
+squadboard start --squad-storage fs
+```
+
+Use this when you intentionally want Squad state to stay in repository `.squad/` files.
+
+**Override with an external PostgreSQL instance:**
+
+If you need to share Squad state across machines (multi-process, multi-agent), point `DATABASE_URL` to your external instance:
+
+```bash
+DATABASE_URL=postgresql://user:password@host:port/squadboard pnpm run dev
+```
+
+See [Storage provider — Configuration recipes](packages/docs-site/docs/user-guide/storage-provider.mdx#configuration-recipes-for-shared-storage) for more scenarios and external agent compatibility guidance.
+
+**Configure Copilot CLI / `squad.agent.md` to use Squadboard as the broker:**
+
+```bash
+squadboard init --write-mcp-config
+# or inspect the config first
+squadboard init --print-mcp-config
+```
+
+This writes/prints a `.copilot/mcp-config.json` entry that starts `squadboard mcp` with `SQUADBOARD_SQUAD_STORAGE_PROVIDER=postgresql`. Stock Copilot CLI and `squad.agent.md` should use the Squadboard MCP tools for shared state; direct database access from upstream Squad CLI requires compatible upstream StorageProvider support.
 
 **Option B: Start components separately**
 
 Backend:
 ```bash
-pnpm --filter @squadboard/server dev
+pnpm --filter @sabbour/squadboard dev
 ```
 
 Frontend (in another terminal):
 ```bash
-pnpm --filter @squadboard/client dev
+pnpm --filter @sabbour/squadboard-client dev
 ```
 
-### Initialize & Run
-
-**Option A: Start the full app (backend + frontend)**
-
+Docs (in another terminal):
 ```bash
-pnpm run dev
-```
-
-This starts:
-- Backend (Express + WebSocket) on http://localhost:3000
-- Frontend (React + Vite) on http://localhost:5173
-- Embedded Postgres on localhost:54321 (auto-managed, no setup needed)
-
-Open http://localhost:5173 in your browser.
-
-**Option B: Start components separately**
-
-Backend:
-```bash
-pnpm --filter @squadboard/server dev
-```
-
-Frontend (in another terminal):
-```bash
-pnpm --filter @squadboard/client dev
+pnpm docs:dev
 ```
 
 ### First Run: 60-Second Click-Through
 
 1. **Create a project** — Click "New Project" on the dashboard. Squadboard scans `.squad/` for agents and ceremonies.
-2. **Throw a card on the board** — Type a title (e.g., "Fix login timeout") and drag it into the `todo` column.
+2. **Throw a card on the board** — Type a title (e.g., "Fix login timeout") and move it into the `ready` column when the team should pick it up.
 3. **Hit "Run Simple Review ceremony"** — Click the card, then "Run". The run drawer populates live with agent output. Watch the WS event feed.
 4. **See results** — Agent finishes, ceremony awaits approval. Click approve → card moves to done, run closes.
 
@@ -232,6 +281,18 @@ GitHub Apps are recommended for fine-grained permissions and higher rate limits.
 - PAT: `githubToken` (redacted — last 4 chars visible)
 - App: `appId`, `installationId` — **`privateKey` is never returned**
 
+### Copilot CLI + Squad Coexistence
+
+Squadboard now has the server-side pieces needed to mirror the current Copilot CLI + [Squad](https://github.com/bradygaster/squad) driver loop:
+
+- **Coordinator coexistence:** shared input builder, deterministic prefilters, visible circuit-breaker skips, and bounded LLM routing for semantic ambiguity.
+- **Spawn fidelity:** server-spawned agents receive charter, team root, requester, workspace mode/path, history/decision-reading instructions, assigned skills, MCP context, drop-box guidance, and validation expectations.
+- **Directive and Scribe loop:** directives can be captured into `.squad/decisions/inbox/`; daemon and coordinator close-out converge on the Scribe close-out service.
+- **Opt-in Ralph monitor:** autonomous work monitoring is disabled by default and can audit/prioritize untriaged work, member labels, assigned pickup, CI/review states, approved PRs, and drafts.
+- **Lifecycle coverage:** setup scaffolds `.squad/` state, ceremonies expose lifecycle/worktree metadata, and project, virtual Copilot, and human agent origins are visible.
+
+Current GitHub automation limit: Ralph can record and recommend next actions for GitHub work that was not started from Ready-column pickup, such as CI failures or review feedback. It does not merge PRs or apply fixes automatically without an explicit human approval policy.
+
 ### Build for Production
 
 ```bash
@@ -241,18 +302,33 @@ pnpm build
 This compiles TypeScript and builds the React frontend. Output:
 - Backend: `packages/server/dist/index.js`
 - Frontend: `packages/client/dist/`
+- Docs site: `packages/docs-site/build/`
 
-Start the production build:
+Run the built CLI entry point when you need the previous root `start` behavior:
 ```bash
-pnpm start
+pnpm run cli:start
 ```
 
-### Dogfood Mode — Auto-capture Directives (Wave 10)
+### Documentation Site
 
-When running Squadboard under GitHub Copilot CLI with Squad as the coordinator,
-every implementation directive is automatically captured into Squadboard's own
-project inbox. This closes the dogfood loop: directives → decisions → board
-cards → runs → completion tracking.
+The Docusaurus docs site lives in `packages/docs-site` and is mounted under
+`/docs/` to match the public docs URL shape.
+
+```bash
+pnpm docs:dev
+pnpm docs:build
+pnpm docs:serve
+```
+
+The docs build generates `llms.txt` and `llms-full.txt` for LLM/code-agent
+ingestion. The docs dev and serve commands bind to http://localhost:3002 so the backend keeps port 3000.
+
+### Dogfood Mode — Auto-capture Directives
+
+When running Squadboard under GitHub Copilot CLI with [Squad](https://github.com/bradygaster/squad) as the coordinator,
+implementation directives can be captured into Squadboard's project inbox and
+the `.squad/decisions/inbox/` memory drop box. This closes the dogfood loop:
+directives → decisions → board cards → runs → Scribe close-out.
 
 **Setup:**
 1. Ensure your `.copilot/mcp-config.json` points to this repo's MCP server
@@ -302,7 +378,7 @@ or the `/api/projects/{projectId}/import-template` endpoint.
 
 Inspect or edit the database schema:
 ```bash
-pnpm --filter @squadboard/server db:studio
+pnpm --filter @sabbour/squadboard db:studio
 ```
 
 Opens Drizzle Studio on http://localhost:3001.
@@ -312,7 +388,7 @@ Opens Drizzle Studio on http://localhost:3001.
 - **[Ceremonies](docs/concepts/ceremonies.md)** — Named triggered processes (e.g., "Review on demand", "Auto-fix on bug label"). You author them; the engine runs them.
 - **[Workflows](docs/concepts/ceremonies.md#workflow-step-catalogue)** — Ordered steps inside ceremonies (agent_run, peer_review, approve, fan_out, route, retry, branch, wait_event, wait_timer, github_pr, etc.).
 - **[Projects](docs/prd.md#projects)** — Isolated workspaces. Each project owns a kanban board, team of agents, ceremony templates, and GitHub sync settings.
-- **[Agents & Skills](docs/prd.md#agents)** — Defined in `.squad/agents/` (as agent.md charter files). Skills are reusable capabilities agents can run.
+- **[Agents & Skills](docs/prd.md#agents)** — Project agents in `.squad/agents/`, virtual Copilot/system members, human collaborators, and reusable skill addenda injected into runs.
 - **[Bundles](docs/features.md#project-bundles)** — Ship a complete project (board + ceremonies + team + tools + MCP) as a single artifact. 6 built-in templates.
 - **[MCP Integration](docs/setup/mcp-install.md)** — 10 tools (list_issues, create_issue, run_agent, capture, etc.) via stdio (Copilot CLI, VS Code) or HTTP.
 - **[Squad Integration](docs/prd.md#squad-integration)** — Pair with the upstream [Squad agent](https://github.com/bradygaster/squad) for hands-off multi-agent orchestration. Directives auto-capture to Squadboard inbox.
@@ -329,6 +405,7 @@ See **[Complete Feature List](docs/features.md)** for details on all subsystems.
 - Retry policy, fan-out, branch, wait primitives
 - Peer review & human approval gates (N-of-M quorum)
 - Five engine invariants ensure determinism and auditability
+- Copilot CLI + Squad coexistence prefilters and audited routing decisions
 
 ### Project Bundles
 - Universal YAML + JSON schema, versioned
@@ -343,12 +420,12 @@ See **[Complete Feature List](docs/features.md)** for details on all subsystems.
 
 ### GitHub Integration (W16+)
 - Branch convention, PR template, push branch, create PR, card badges
-- Phase 2 (W17): comment, merge, Settings panel (in progress)
+- GitHub App or PAT auth, activity sync, and Ralph monitor decision auditing
 
 ### Reliability
 - Periodic backup + restore CLI/UI
 - 6-invariant safety checks
-- PGlite (no native binaries)
+- Embedded PGlite storage for local use; external PostgreSQL when state must be shared across processes
 
 ### Real-time UI
 - Live run drawer (WebSocket push from engine)
@@ -359,11 +436,13 @@ See **[Complete Feature List](docs/features.md)** for details on all subsystems.
 - `@sabbour/squadboard-sdk` (SquadClient, CharterCompiler, CostTracker, EventBus)
 - 10 MCP tools (stdio for Copilot CLI / VS Code; HTTP for embedding)
 - Daemon mode for coordinator
+- Scribe close-out and directive capture primitives for the dogfood loop
 
 ### Conjure (Quick-Capture)
 - Freeform prompt router with intent classifier
 - Auto-capture from Copilot CLI directives
 - Done-prefix to close cards
+- Fail-open directive capture into durable decision inbox files
 
 ---
 
@@ -372,7 +451,7 @@ See **[Complete Feature List](docs/features.md)** for details on all subsystems.
 Squadboard integrates with the upstream **[Squad agent](https://github.com/bradygaster/squad)** for hands-off multi-agent orchestration.
 
 When running Squad under Copilot CLI with Squadboard's coordinator extension enabled:
-- Every implementation directive auto-captures to Squadboard's inbox
+- Implementation directives can capture to Squadboard's inbox and decision-memory drop box
 - Agent hand-offs resolve to board cards
 - Ceremony runs are visible in real-time
 - Close-out triggers automatic card completion
@@ -383,21 +462,35 @@ See [Coordinator Extension Guide](docs/plugins/squad-coordinator-extensions.md) 
 
 ---
 
+## Responsible AI Stance
+
+Squadboard is built around bounded AI assistance, not unchecked automation.
+
+- **Human accountability:** Agents can propose and execute work, but project-impacting changes should remain reviewable by people through board state, approvals, GitHub review, and audit logs.
+- **Deterministic guardrails:** The server owns dependency gates, circuit breakers, availability, schema validation, routing logs, and close-out state. LLMs are reserved for ambiguity, summarization, and semantic role fit.
+- **Least privilege:** GitHub tokens, MCP tools, worktree cleanup, and external integrations should be scoped narrowly. Prefer GitHub Apps over broad PATs when possible.
+- **Transparency:** Agent prompts, decisions, generated artifacts, and run events should be inspectable so teams can understand why work moved.
+- **Local-first privacy:** Squadboard stores project data locally by default. External model, GitHub, and MCP calls are opt-in integration boundaries that should be configured intentionally.
+- **Alpha caution:** Do not use Squadboard for regulated, safety-critical, confidential, or unattended production workflows without your own review, security assessment, and operational controls.
+
+---
+
 ## Links
 
 - **[Product Requirements Document](docs/prd.md)** — Full vision, roadmap, 15-demo plan, success criteria, engine invariants
 - **[Concepts: Ceremonies & Workflows](docs/concepts/ceremonies.md)** — Ceremony types, workflow steps, custom YAML, trigger configuration
 - **[Feature List](docs/features.md)** — Complete breakdown of workflow engine, bundles, ceremonies, GitHub integration, SDK+MCP, and roadmap
 - **[MCP Install & Configuration](docs/setup/mcp-install.md)** — Setup for Copilot CLI, VS Code, and embedded HTTP
+- **[Upstream Squad Agent](https://github.com/bradygaster/squad)** — Copilot CLI driver and `.squad/` team conventions Squadboard is designed to complement
 - **[Dogfood Playbook](.squad/dogfood.md)** — Using Squadboard to run Squadboard (auto-capture + close-out loop)
-- **[GitHub Repository](https://github.com/your/squadboard)** — Source code
+- **[GitHub Repository](https://github.com/sabbour/squadboard)** — Source code
 - **[MIT License](LICENSE)**
 
 ---
 
 ## Status
 
-**Hacking phase, pre-1.0.** We're building from the PRD down to 15 demoable vertical slices. Expect breaking changes. No cloud yet — self-hosted on your machine or your infrastructure.
+**Alpha / hacking phase, pre-1.0.** Squadboard is experimental software. Expect breaking changes, missing polish, and behavior that still needs validation. No cloud yet — self-hosted on your machine or your infrastructure.
 
 This is **local git only** during hacking phase. PR workflow resumes on launch.
 
@@ -410,4 +503,3 @@ MIT
 <img src="assets/squadboard.svg" alt="" width="56" align="left" hspace="12" />
 
 Built by McManus, Hockney, Kobayashi, Keyser, Verbal, Fenster, Kujan, and Redfoot.
-

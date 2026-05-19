@@ -98,7 +98,7 @@ describe("hashCoordinatorInput", () => {
 
   it("small CoordinatorInput-shaped object yields stable hash across calls", () => {
     const input = {
-      issue: { id: "i-1", title: "Fix bug", body: null, labels: ["bug"], column: "To Do", parentId: null, priority: 2, createdAt: "2024-01-01T00:00:00.000Z" },
+      issue: { id: "i-1", title: "Fix bug", body: null, labels: ["bug"], column: "Ready", parentId: null, priority: 2, createdAt: "2024-01-01T00:00:00.000Z" },
       candidateAgents: [{ name: "verbal", role: "implementer", charterHash: "abcd1234", charterContent: "# Verbal\n", capabilities: ["ts"], available: true }],
       project: { id: "p-1", name: "EMU", rules: "fast" },
       recentRuns: [],

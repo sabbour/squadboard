@@ -1,0 +1,66 @@
+---
+title: 2. Cast and review the team
+description: Give Spark a small launch team with real names, roles, and charters, and use Consult when the right answer is still ambiguous.
+---
+
+import {BotRegular, PeopleRegular, SparkleRegular} from '@fluentui/react-icons';
+import {IconCard, IconGrid, Screenshot, ScreenshotGrid} from '../../../src/components/FluentDoc';
+
+# 2. Cast and review the team
+
+Spark needs a small, project-specific team — not a generic pool of assistants. In this tutorial, you will review who is on the roster, fill any role gaps with **Cast Team**, and use **Consult** to think out loud before you commit anything to the board.
+
+This tutorial assumes you completed [Tutorial 1](./connect-spark.mdx) and have Spark open.
+
+## Why this matters
+
+When you move a card to Ready (next tutorial), Squadboard's coordinator decides who picks it up. That decision uses *agent role + charter + skills + labels on the card*, not the agent's name. A roster with thin or missing roles produces bad assignments — so give it five minutes here before queuing work.
+
+## 1. Open the roster
+
+Open **Agents**. Spark from Tutorial 1 should have at least a launch lead and an integration owner already present (either from the template or from your existing `.squad/`).
+
+<Screenshot src="/img/scenarios/spark-06-agents.png" alt="Spark Agents page listing the launch lead and integration engineer with roles and expertise." caption="Each agent needs a name, a role, and expertise. Names alone are not enough for assignment." />
+
+For each agent, confirm:
+
+1. **Name** is stable and easy to reference in cards and labels.
+2. **Role** describes an outcome (Launch lead, Integration engineer), not just a technology.
+3. **Expertise** covers the recurring decisions Spark will make.
+
+If any agent is missing a role or charter, fix it now. Charters live under `.squad/` and are shared with upstream Squad and Copilot CLI — edits here are durable.
+
+## 2. Fill role gaps with Cast Team
+
+If Spark is missing a role you know it needs — say a reviewer or a docs lead — click **Cast Team**. Cast Team turns "what team should Spark have?" into a reviewable proposal you can edit before accepting.
+
+<Screenshot src="/img/scenarios/spark-07-team-casting.png" alt="Cast Team dialog suggesting a proposed Spark roster." caption="Cast Team is a draft proposal. Accept the parts that fit, edit the charters, and discard the rest." />
+
+Accept only the roles you actually need. A small team with sharp charters routes better than a big team with vague ones.
+
+## 3. Use Consult when the work is still ambiguous
+
+Before queuing a card, you often want to think it through with an agent or with a raw model. That is what **Consult** is for. It is exploration; nothing it produces changes Spark until you create a card or accept a proposal.
+
+Open **Consult → New consult**, pick **Model** (or a specific Spark agent), and ask a narrow question. For example:
+
+```text
+Spark needs a launch note that explains Squadboard's relationship to upstream Squad.
+What are the three points the launch lead should cover, and what tone should it use?
+```
+
+<Screenshot src="/img/scenarios/spark-08-consult.png" alt="Spark Consult page in Model mode with a launch-note prompt drafted." caption="Consult is for brainstorming. The board is for durable execution. Decide which one you need before opening." />
+
+Rules of thumb:
+
+- Use **Consult** when the right answer depends on judgment, tone, or incomplete information.
+- Use a **board card** when the answer needs durable execution, audit trail, and a run history.
+- When Consult produces something good, promote it: copy the wording into a new board card so the work becomes trackable.
+
+## What you should have now
+
+- A Spark roster where every agent has a name, role, and charter.
+- A casting decision recorded (either "current roster is fine" or "added X via Cast Team").
+- A Consult conversation that helped you sharpen the next card — or a confirmed plan to skip Consult and go straight to the board.
+
+Continue with [3. Run the Spark launch wave →](./run-the-launch-wave.mdx) to capture work, move it into Ready, watch automatic pickup, and inspect what the agent produced.

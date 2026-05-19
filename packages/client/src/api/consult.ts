@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState, useRef } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { apiFetch } from './client.ts'
+import type { AgentOrigin } from './agents.ts'
 import { wsClient, type WsEventMap } from '../realtime/ws-client.ts'
 
 // ─── Wire types ────────────────────────────────────────────────────────────
@@ -23,6 +24,7 @@ export interface ConsultSession {
   mode: ConsultMode
   agentId: string | null
   agentName: string | null
+  agentOrigin?: AgentOrigin | 'model' | null
   model: string | null
   status: ConsultStatus
   sdkSessionId: string | null
@@ -77,6 +79,7 @@ export interface StartConsultInput {
   mode: ConsultMode
   agentId?: string | null
   agentName?: string | null
+  agentOrigin?: AgentOrigin | null
   model?: string | null
   name?: string | null
   forkedFromSessionId?: string | null

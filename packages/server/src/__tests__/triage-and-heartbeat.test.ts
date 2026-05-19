@@ -9,9 +9,9 @@
  *     A4. catchall rules still match everything.
  *     A5. Word-length boundary: 5-char words ("flows", "color") still match Fenster's rule.
  *
- *   Bug B — pickup-todos sweep (2+ cases):
- *     B1. Sweep creates a pending issue_run for an unattended To Do item (Tier-2 path).
- *     B2. Sweep skips To Do items that already have a pending run (idempotent).
+ *   Bug B — pickup-ready sweep (2+ cases):
+ *     B1. Sweep creates a pending issue_run for an unattended Ready item (Tier-2 path).
+ *     B2. Sweep skips Ready items that already have a pending run (idempotent).
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
@@ -101,13 +101,13 @@ describe('Bug A — matchRule keyword routing: word-length filter (> 4 chars)', 
   });
 });
 
-// ─── Bug B — pickupTodosSweep ────────────────────────────────────────────────
+// ─── Bug B — pickupReadySweep ────────────────────────────────────────────────
 // These tests use vi.mock() to stub the DB and router tiers.
 
 // DB mock state (shared, reset per test)
-let mockTodoIssues: Array<{ id: string; projectId: string; title: string; body: string }> = [];
+let mockReadyIssues: Array<{ id: string; projectId: string; title: string; body: string; status: string; createdAt: Date }> = [];
 let mockCoveredRunIds: string[] = [];
-let mockActiveAgents: Array<{ id: string; name: string }> = [];
+let mockActiveAgents: Array<{ id: string; name: string; role?: string; charterContent?: string; charterHash?: string | null }> = [];
 let mockLeastLoadedAgent: { id: string; name: string } | null = null;
 let mockTier2Result: { agentId: string; agentName: string; score: number; reasoning: string } | null = null;
 let mockInsertedRuns: Array<Record<string, unknown>> = [];
@@ -115,6 +115,56 @@ let mockInsertedRuns: Array<Record<string, unknown>> = [];
 // MC-7: disable coordinator dispatch so the counter-based DB mock is unaffected by new queries.
 vi.mock('../coordinator/index.js', () => ({
   dispatchViaCoordinator: vi.fn(),
+  buildCoordinatorInput: (params: {
+    issue: { id: string; title: string; body?: string | null; status: string; createdAt: Date };
+    labels: string[];
+    project: { id: string; name: string; description?: string | null };
+    agents: Array<{ id: string; name: string; role?: string; charterHash?: string | null; charterContent?: string }>;
+    busyAgentIds?: Set<string>;
+    recentRuns?: unknown[];
+    parentIssueIds?: string[];
+    blockedParentIssueIds?: string[];
+    projectRules?: string;
+  }) => ({
+    issue: {
+      id: params.issue.id,
+      title: params.issue.title,
+      body: params.issue.body ?? null,
+      labels: params.labels,
+      column: params.issue.status,
+      parentId: params.parentIssueIds?.[0] ?? null,
+      blockedParentIds: params.blockedParentIssueIds ?? [],
+      priority: null,
+      createdAt: params.issue.createdAt.toISOString(),
+    },
+    candidateAgents: params.agents.map((agent) => ({
+      name: agent.name,
+      role: agent.role ?? 'implementer',
+      charterHash: agent.charterHash ?? '',
+      charterContent: agent.charterContent ?? '',
+      capabilities: [],
+      available: !params.busyAgentIds?.has(agent.id),
+    })),
+    project: { id: params.project.id, name: params.project.name, rules: params.projectRules ?? '' },
+    recentRuns: params.recentRuns ?? [],
+  }),
+  capabilityMapFromAgentKeywords: () => new Map(),
+  filterBlockedAgents: (input: { candidateAgents: Array<{ name: string }> }, blocked: Set<string>) => {
+    const candidateAgents = input.candidateAgents.filter((agent) => !blocked.has(agent.name));
+    if (candidateAgents.length === 0 && input.candidateAgents.length > 0) {
+      return { input, decision: { kind: 'skip', reason: 'blocked' } };
+    }
+    return { input: { ...input, candidateAgents }, decision: null };
+  },
+  applyDeterministicPrefilters: () => null,
+  buildDeterministicCoordinatorMeta: () => ({
+    model: 'deterministic-prefilter',
+    promptTokens: 0,
+    completionTokens: 0,
+    durationMs: 0,
+    cacheHit: false,
+    inputHash: 'a'.repeat(64),
+  }),
 }));
 vi.mock('../config/coordinator-env.js', () => ({
   isCoordinatorDispatchEnabled: () => false,
@@ -122,6 +172,9 @@ vi.mock('../config/coordinator-env.js', () => ({
 // MC-10: mock decision-log so persistCoordinatorDecision is a no-op here.
 vi.mock('../services/coordinator-decision-log.js', () => ({
   persistCoordinatorDecision: vi.fn().mockResolvedValue(undefined),
+}));
+vi.mock('../services/coordinator-routing-log.js', () => ({
+  persistCoordinatorRoutingDecision: vi.fn().mockResolvedValue(undefined),
 }));
 
 vi.mock('../db/index.js', () => {
@@ -133,6 +186,7 @@ vi.mock('../db/index.js', () => {
       archived: 'archived',
       title: 'title',
       body: 'body',
+      createdAt: 'created_at',
     },
     issueRuns: {
       id: 'id',
@@ -149,14 +203,23 @@ vi.mock('../db/index.js', () => {
       projectId: 'project_id',
       status: 'status',
       name: 'name',
+      role: 'role',
+      charterContent: 'charter_content',
+      charterHash: 'charter_hash',
     },
-    projects: { id: 'id', name: 'name' },
+    projects: { id: 'id', name: 'name', description: 'description' },
+    issueLabels: { issueId: 'issue_id', labelId: 'label_id' },
+    labels: { id: 'id', name: 'name' },
+    agentKeywords: { agentId: 'agent_id', keywords: 'keywords', focusAreas: 'focus_areas' },
+    issueLinks: { childIssueId: 'child_issue_id', parentIssueId: 'parent_issue_id', linkType: 'link_type' },
+    routingRules: { projectId: 'project_id', rawRule: 'raw_rule', priority: 'priority' },
   };
 
   // Fluent DB mock: chain of .from().where().orderBy().limit() all return arrays.
   function makeChain(getter: () => unknown[]) {
     const chain = {
       from: () => chain,
+      innerJoin: () => chain,
       where: () => chain,
       orderBy: () => chain,
       limit: () => Promise.resolve(getter()),
@@ -166,15 +229,18 @@ vi.mock('../db/index.js', () => {
     return chain;
   }
 
-  let callCount = 0;
-
   const getDb = () => ({
     select: () => {
-      const idx = callCount++;
-      if (idx === 0) return makeChain(() => mockTodoIssues);          // todo issues
+      const key = '__triageHeartbeatSelectCallCount';
+      const state = globalThis as typeof globalThis & Record<string, number | undefined>;
+      const idx = state[key] ?? 0;
+      state[key] = idx + 1;
+      if (idx === 0) return makeChain(() => mockReadyIssues);          // ready issues
       if (idx === 1) return makeChain(() =>                            // covered run ids
         mockCoveredRunIds.map((id) => ({ issueId: id })));
       if (idx === 2) return makeChain(() => mockActiveAgents);         // active agents per project
+      if (idx === 3) return makeChain(() => [{ id: 'project-1', name: 'Project', description: '' }]);
+      if (idx >= 4 && idx <= 9) return makeChain(() => []);
       return makeChain(() => (mockLeastLoadedAgent ? [mockLeastLoadedAgent] : [])); // fallback
     },
     insert: (_table: unknown) => ({
@@ -210,54 +276,54 @@ vi.mock('drizzle-orm', () => {
   return { eq, and, asc, desc, inArray, notInArray, gte, sql, count, avg };
 });
 
-import { pickupTodosSweep } from '../engine/sweeps/pickup-todos.js';
+import { pickupReadySweep } from '../engine/sweeps/pickup-ready.js';
 
 beforeEach(() => {
-  mockTodoIssues = [];
+  mockReadyIssues = [];
   mockCoveredRunIds = [];
   mockActiveAgents = [];
   mockLeastLoadedAgent = null;
   mockTier2Result = null;
   mockInsertedRuns = [];
-  // Reset the call-count closure by reassigning; vitest re-executes module per test anyway.
+  (globalThis as typeof globalThis & Record<string, number | undefined>).__triageHeartbeatSelectCallCount = 0;
 });
 
-describe('Bug B — pickupTodosSweep dispatches unattended To Do items', () => {
-  it('B1: creates a pending issue_run for unattended todo (Tier-2 match)', async () => {
-    mockTodoIssues = [{ id: 'issue-todo-1', projectId: 'project-1', title: 'Fix engine dispatcher', body: '' }];
+describe('Bug B — pickupReadySweep dispatches unattended Ready items', () => {
+  it('B1: creates a pending issue_run for unattended Ready item (Tier-2 match)', async () => {
+    mockReadyIssues = [{ id: 'issue-ready-1', projectId: 'project-1', title: 'Fix engine dispatcher', body: 'Details', status: 'ready', createdAt: new Date('2026-01-01T00:00:00Z') }];
     mockCoveredRunIds = [];  // not covered
-    mockActiveAgents = [{ id: 'agent-hockney', name: 'Hockney' }];
+    mockActiveAgents = [{ id: 'agent-hockney', name: 'Hockney', role: 'implementer', charterContent: '', charterHash: null }];
     mockTier2Result = { agentId: 'agent-hockney', agentName: 'Hockney', score: 0.42, reasoning: 'tier2' };
 
-    const result = await pickupTodosSweep.run();
+    const result = await pickupReadySweep.run();
 
     expect(result.errors).toBe(0);
     expect(result.acted).toBe(1);
     expect(mockInsertedRuns).toHaveLength(1);
-    expect(mockInsertedRuns[0].issueId).toBe('issue-todo-1');
+    expect(mockInsertedRuns[0].issueId).toBe('issue-ready-1');
     expect(mockInsertedRuns[0].agentId).toBe('agent-hockney');
     expect(mockInsertedRuns[0].status).toBe('pending');
     expect(mockInsertedRuns[0].routingTier).toBe(2);
   });
 
-  it('B2: skips todo items that already have a pending run (idempotent)', async () => {
-    mockTodoIssues = [{ id: 'issue-covered', projectId: 'project-1', title: 'Already handled', body: '' }];
+  it('B2: skips Ready items that already have a pending run (idempotent)', async () => {
+    mockReadyIssues = [{ id: 'issue-covered', projectId: 'project-1', title: 'Already handled', body: 'Details', status: 'ready', createdAt: new Date('2026-01-01T00:00:00Z') }];
     mockCoveredRunIds = ['issue-covered'];  // already has a pending run
 
-    const result = await pickupTodosSweep.run();
+    const result = await pickupReadySweep.run();
 
     expect(result.acted).toBe(0);
     expect(mockInsertedRuns).toHaveLength(0);
   });
 
   it('B3: uses least-loaded fallback when Tier-2 returns null (no keyword match)', async () => {
-    mockTodoIssues = [{ id: 'issue-todo-2', projectId: 'project-2', title: 'Vague task', body: '' }];
+    mockReadyIssues = [{ id: 'issue-ready-2', projectId: 'project-2', title: 'Vague task', body: 'Details', status: 'ready', createdAt: new Date('2026-01-01T00:00:00Z') }];
     mockCoveredRunIds = [];
-    mockActiveAgents = [{ id: 'agent-kujan', name: 'Kujan' }];
+    mockActiveAgents = [{ id: 'agent-kujan', name: 'Kujan', role: 'implementer', charterContent: '', charterHash: null }];
     mockLeastLoadedAgent = { id: 'agent-kujan', name: 'Kujan' };
     mockTier2Result = null;
 
-    const result = await pickupTodosSweep.run();
+    const result = await pickupReadySweep.run();
 
     expect(result.errors).toBe(0);
     expect(result.acted).toBe(1);

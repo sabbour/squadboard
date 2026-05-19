@@ -1,0 +1,19 @@
+---
+id: index
+title: Reference
+description: Focused reference pages for operating and troubleshooting Squadboard.
+---
+
+import {DocumentCopyRegular, WrenchRegular} from '@fluentui/react-icons';
+import {IconGrid, IconCard} from '@site/src/components/FluentDoc';
+
+These pages are for quick lookup when you already know the workflow and need a specific answer.
+
+<IconGrid>
+  <IconCard icon={DocumentCopyRegular} title="FAQ" to="/reference/faq">
+    Short answers about local-first operation, upstream Squad, autonomy, and alpha expectations.
+  </IconCard>
+  <IconCard icon={WrenchRegular} title="Troubleshooting" to="/reference/troubleshooting">
+    Diagnose product runtime issues such as stuck runs, GitHub sync, and MCP connectivity.
+  </IconCard>
+</IconGrid>

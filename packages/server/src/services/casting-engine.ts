@@ -314,10 +314,7 @@ function enrich(
 }
 
 function kebabify(name: string): string {
-  // Take the first word (e.g. "Verbal Kint" → "verbal", "McManus" → "mcmanus")
-  // and strip non-alphanumeric. Fall back to a stable hash if empty.
-  const first = name.split(/\s+/)[0] ?? name;
-  const slug = first
+  const slug = name
     .toLowerCase()
     .normalize('NFKD')
     .replace(/[^a-z0-9]+/g, '-')

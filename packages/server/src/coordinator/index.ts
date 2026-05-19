@@ -62,3 +62,45 @@ export type { DispatchOptions, DispatchResult } from "./dispatch.js";
 // MC-11: batch dispatch
 export { dispatchBatchViaCoordinator, BatchDecisionCache, batchDecisionCache, CoordinatorTimeoutError } from "./batch.js";
 export type { BatchCacheOptions, BatchDispatchOptions, BatchDispatchResult } from "./batch.js";
+
+export {
+  PARITY_RULES,
+  summarizeParityRules,
+} from "./parity.js";
+export type {
+  DeterminismClass,
+  ParityDomain,
+  ParityRule,
+  ParitySummary,
+  ParityTargetHome,
+} from "./parity.js";
+
+export {
+  buildCandidateAgents,
+  buildCoordinatorInput,
+  capabilityMapFromAgentKeywords,
+  capabilitiesFromCharter,
+  mapCoordinatorRecentRuns,
+  priorityFromLabels,
+} from "./input-builder.js";
+export type {
+  BuildCoordinatorInputParams,
+  CoordinatorAgentKeywordRow,
+  CoordinatorAgentRow,
+  CoordinatorIssueRow,
+  CoordinatorProjectRow,
+  CoordinatorRunRow,
+} from "./input-builder.js";
+
+export {
+  CONFIDENCE_CONTENTION_DELTA,
+  LOW_CONFIDENCE_FLOOR,
+  applyDeterministicPrefilters,
+  applyDeterministicPostprocessing,
+  buildDeterministicCoordinatorMeta,
+  filterBlockedAgents,
+  isBacklogGated,
+  isHumanOnlyOperation,
+  isThinIssue,
+  resolveNamedAgent,
+} from "./prefilters.js";

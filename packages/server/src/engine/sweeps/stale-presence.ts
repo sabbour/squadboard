@@ -16,6 +16,9 @@ const MAX_PRESENCE_AGE_MS = 60_000; // 60 seconds
 
 export const stalePresenceSweep: Sweep = {
   id: 'stale-presence',
+  label: 'Presence',
+  description: 'Evicts stale browser presence records left behind by disconnected clients.',
+  scope: 'mixed',
   intervalMs: 30_000,
   enabled: true,
 

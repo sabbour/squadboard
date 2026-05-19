@@ -1,0 +1,226 @@
+---
+title: Storage provider alignment
+description: How Squadboard's PostgreSQL-backed Squad StorageProvider adapter enables shared state across processes.
+---
+
+# Storage provider alignment
+
+Upstream Squad has a `StorageProvider` interface for team state such as sessions, decisions, agent memories, and event logs. Squadboard now defaults to a **PostgreSQL-backed adapter** so Squad state flows through the same database that Squadboard uses for product state. Multiple compatible processes can share the same database when pointing to the same PostgreSQL instance.
+
+## Storage split: default provider vs filesystem fallback
+
+### Default behavior (PostgreSQLStorageProvider + PGlite)
+
+By default, Squadboard reads and writes Squad state through `PostgreSQLStorageProvider`, backed by **PGlite** (embedded PostgreSQL) for local development:
+
+| State | Owner |
+| --- | --- |
+| Product state | PGlite (embedded PostgreSQL) at `~/.squadboard/data/` |
+| Team conventions | PostgreSQL `squad_storage` table after one-time import from `.squad/` |
+| Agent runs and audit records | PGlite database plus `.squad/` close-out artifacts |
+| GitHub state | Optional sync layer, only when configured |
+
+PGlite is a pure-WASM implementation of PostgreSQL—it provides the same SQL features as standalone PostgreSQL (JSON columns, enums, UUIDs, etc.) and requires no external binaries or setup.
+
+This gives local development a real PostgreSQL-compatible provider without requiring a running database. Existing `.squad/` files are imported into an empty DB-backed project once on startup; after that, PostgreSQL is the active Squad state store until you explicitly choose filesystem fallback.
+
+### Filesystem fallback
+
+Use filesystem mode when you intentionally want repository `.squad/` files to stay as the live state store:
+
+```bash
+pnpm run dev:fs
+# or
+squadboard init --squad-storage fs
+# or
+squadboard start --squad-storage fs
+```
+
+This changes the split:
+
+| State | Owner (with filesystem fallback) |
+| --- | --- |
+| Squad state (agents, decisions, etc.) | Repository `.squad/` files via `FSStorageProvider` |
+| Squadboard product state | PostgreSQL database |
+| Repository `.squad/` files | Live state and portable Git artifact |
+| GitHub state | Optional sync layer, only when configured |
+
+Filesystem mode is the compatibility fallback. Non-canonical provider names such as `pglite` also fall back to filesystem; `pglite` is the database engine, not a StorageProvider selector.
+
+## Sync boundary: understanding what is NOT shared
+
+**PostgreSQL state is database-backed but requires compatible configuration.** It does NOT automatically establish sync in these scenarios:
+
+1. **External Squad CLI or Copilot CLI agents** cannot directly access Squadboard's database without being configured to use the same PostgreSQL instance. They default to `.squad/` files on disk.
+2. **Cross-machine sync** is not automatic unless external agents point to the same `DATABASE_URL` or use Squadboard's MCP bridge.
+3. **Other team members** see `.squad/` files in the repo unless they configure `DATABASE_URL` to the shared PostgreSQL instance, or unless Squadboard exports state back to `.squad/`.
+
+Sync must be established by explicit bridges:
+
+- **Filesystem bridge** – Squadboard → export state back to `.squad/` files (for repository portability and multi-machine access).
+- **PostgreSQL configuration** – external Squad CLI, Copilot, or other tools point `DATABASE_URL` to the same PostgreSQL instance as Squadboard. This requires a compatible PostgreSQL StorageProvider adapter in the external tool.
+- **MCP bridge** – external Squad CLI, Copilot CLI, or VS Code call Squadboard tools (which read/write the shared database through the Squadboard process).
+- **GitHub bridge** – opt in to issue, PR, and workflow sync.
+
+## When to use each
+
+### Use PostgreSQLStorageProvider (default)
+- Squadboard is the **primary source of truth** for squad orchestration.
+- You want one database-backed state store for cards, runs, agents, decisions, and ceremonies.
+- Multiple compatible processes (Squad CLI, Copilot, Squadboard) can share the same database by pointing to the same PostgreSQL instance.
+- You want local embedded PGlite for single-process workflows, or an external PostgreSQL instance that all agents can reach via `DATABASE_URL`.
+
+### Use FSStorageProvider (fallback)
+- Team shares a Git repository; `.squad/` is version-controlled and portable.
+- Squad CLI runs on different machines (CI, local dev, cloud agents) without database access.
+- You want state changes visible in `git diff` and reviewed in PRs.
+
+## Configuration recipes for shared storage
+
+### Recipe 1: Quick start — zero-config PostgreSQL launch
+
+**For an existing Squad repo (where `.squad/` exists):**
+
+```bash
+pnpm run dev
+```
+
+That's it. Squadboard will:
+1. Use the embedded PostgreSQL database automatically (`@electric-sql/pglite`)
+2. Detect your `.squad/` directory
+3. Import your existing agents, decisions, and ceremonies into the PostgreSQL database on startup (one-time)
+4. Store all future Squad state in the `squad_storage` table alongside Squadboard product state
+
+After the one-time import on startup, changes in Squadboard do not sync back to `.squad/` files. You can always export state back to `.squad/` later for portability.
+
+For explicit automation, `pnpm run dev:postgresql` is equivalent and makes the provider choice obvious.
+
+**For a fresh Squadboard (no existing `.squad/`):**
+
+```bash
+pnpm run dev
+```
+
+The embedded PostgreSQL database handles everything; no external database setup required. No state to import, so you start fresh in the database.
+
+**Using the CLI:**
+
+```bash
+squadboard init
+# explicit form:
+squadboard start --squad-storage postgresql
+# or use the alias:
+squadboard start --postgresql-storage
+```
+
+**Server only (no client):**
+
+```bash
+pnpm --filter @sabbour/squadboard dev:postgresql
+```
+
+### Recipe 1A: Configure Copilot CLI and `squad.agent.md` through MCP
+
+Stock Copilot CLI and the `squad.agent.md` coordinator prompt do not inject JavaScript `StorageProvider` instances directly. The portable default is to make Squadboard the state broker through MCP:
+
+```bash
+squadboard init --write-mcp-config
+# or inspect the config first:
+squadboard init --print-mcp-config
+```
+
+`--write-mcp-config` merges a `squadboard` entry into `.copilot/mcp-config.json` with:
+
+```json
+{
+  "mcpServers": {
+    "squadboard": {
+      "command": "squadboard",
+      "args": ["mcp"],
+      "env": {
+        "SQUADBOARD_SQUAD_STORAGE_PROVIDER": "postgresql"
+      }
+    }
+  }
+}
+```
+
+With that config, Copilot plus `squad.agent.md` should use Squadboard MCP tools (`capture`, `create_issue`, `run_agent`, `get_run_status`, `get_routing`) for shared state instead of editing `.squad/` files directly. Add `SQUADBOARD_DEFAULT_PROJECT_ID` to the same `env` block if you want project-scoped tools to run without passing a project ID.
+
+### Recipe 1B: Filesystem fallback
+
+```bash
+pnpm run dev:fs
+# or
+squadboard init --squad-storage fs
+```
+
+Use this for Git-first workflows where `.squad/` files should remain the live state store.
+
+### Recipe 1C: Override with an external (shared) PostgreSQL instance
+
+If you need to share Squad state across multiple machines or processes, point `DATABASE_URL` to your external PostgreSQL instance:
+
+```bash
+DATABASE_URL=postgresql://user:password@host:port/squadboard pnpm run dev
+```
+
+Squadboard will connect to the external database and use it for both product and Squad state.
+
+### Recipe 1D: Understanding the embedded database (PGlite)
+
+By default, Squadboard ships with **PGlite** (`@electric-sql/pglite`)—a pure-WASM implementation of PostgreSQL that runs in-process with no external binary dependencies. It stores data at `~/.squadboard/data/` and provides the exact same SQL features (JSON columns, enums, UUIDs, etc.) as standalone PostgreSQL.
+
+**When PGlite is used:**
+- You run `pnpm run dev`, `pnpm run dev:postgresql`, `squadboard init`, or `squadboard start --squad-storage postgresql`
+- Squad state and product state both live in the PGlite database
+- No external PostgreSQL installation or setup needed—download and run
+
+**When to use an external PostgreSQL instance instead:**
+- You need to share state across multiple machines or processes
+- You have a team database that all agents can reach via `DATABASE_URL`
+- You prefer to manage PostgreSQL separately from Squadboard
+
+PGlite handles single-user, local-first workflows perfectly; for multi-user or cloud deployments, override with `DATABASE_URL` pointing to an external PostgreSQL instance.
+
+### Recipe 2: External agents with shared PostgreSQL (advanced)
+
+If you're running external Squad CLI or Copilot CLI agents that need to see the same Squad state as Squadboard, they must be configured to use the same PostgreSQL instance **and have compatible StorageProvider implementations**.
+
+```bash
+# Squadboard side
+DATABASE_URL=postgresql://user:password@host:port/squadboard pnpm run dev
+
+# External Squad CLI or Copilot CLI side (requires compatible build)
+export DATABASE_URL=postgresql://user:password@host:port/squadboard
+export SQUAD_STORAGE_PROVIDER=postgresql  # only if your upstream build documents this
+squad chat
+```
+
+**Caveat:** This requires that your external CLI build has a compatible PostgreSQL StorageProvider implementation and a documented provider-selection config. The Squad SDK supports provider injection in code (`SquadState.create(provider, rootDir)` / `SquadState.fromStorage(provider, rootDir)`), but a separate CLI process must expose its own config surface before Squadboard can force it to use that provider. Stock Copilot CLI does not have direct DB provider injection—use **Recipe 3** (MCP bridge mode) instead for full portability.
+
+### Recipe 3: Copilot CLI via Squadboard MCP bridge (works with stock CLI)
+
+The most portable option—use stock Copilot CLI and let Squadboard be the database broker:
+
+```bash
+# Squadboard side: start with default PostgreSQL storage
+pnpm run dev
+# MCP server listens on stdio or HTTP (configure in Squadboard UI under "MCP Servers")
+
+# Copilot CLI side: no database configuration needed
+export COPILOT_MCP=http://localhost:3000/mcp  # or stdio command from Squadboard MCP page
+copilot
+# Use capture, create_issue, run_agent, get_run_status tools to interact with shared state
+```
+
+In this mode, Copilot CLI calls explicit Squadboard tools instead of reading/writing the database directly. Work stays visible in Squadboard's board and run history.
+
+## Portability and export/import
+
+Regardless of which StorageProvider is active, Squadboard always supports:
+
+- **Export Squad state to `.squad/` files** – write a snapshot for repository commits or cross-machine handoff.
+- **Import `.squad/` files from a Git repository** – restore a prior state or migrate from another Squadboard instance.
+
+This ensures your squad definition and decisions can always move between Squadboard instances and match the canonical `.squad/` format.

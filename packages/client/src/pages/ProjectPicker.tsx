@@ -289,19 +289,24 @@ function CreateFromTemplateModal({
                 </div>
                 <div>
                   <label style={{ fontSize: '12px', color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>
-                    Squad directory path <span style={{ color: 'var(--danger)' }}>*</span>
+                    Project folder or .squad path <span style={{ color: 'var(--danger)' }}>*</span>
                   </label>
                   <input
                     type="text"
-                    placeholder="/home/you/projects/my-new-project/.squad"
+                    placeholder="/home/you/projects/my-new-project"
                     value={squadPath}
                     onChange={(e) => setSquadPath(e.target.value)}
                     onKeyDown={(e) => { if (e.key === 'Enter') void handleCreate() }}
                     style={inputStyle}
                   />
                   <span style={{ fontSize: '11px', color: 'var(--text-muted)', display: 'block', marginTop: '4px' }}>
-                    Absolute path on disk where the new project's .squad/ folder will live.
+                    If you provide a project folder, Squadboard creates .squad/ inside it.
                   </span>
+                  {squadPath.trim() && (
+                    <span style={{ fontSize: '11px', color: 'var(--text-muted)', display: 'block', marginTop: '4px', fontFamily: 'monospace' }}>
+                      Will create: {normalizeProjectSquadPath(squadPath)}
+                    </span>
+                  )}
                 </div>
               </>
             )}
@@ -763,6 +768,26 @@ function CreateTab({
 // ---------------------------------------------------------------------------
 // SuggestTab — O1 Wave 20: "Suggest setup" third entry point
 // ---------------------------------------------------------------------------
+function setupProjectSlug(name: string): string {
+  return name
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '') || 'squad-project'
+}
+
+function setupSquadPath(parentOrSquadPath: string, projectName: string): string {
+  const trimmed = parentOrSquadPath.trim().replace(/\/+$/, '')
+  if (trimmed.endsWith('/.squad')) return trimmed
+  return `${trimmed}/${setupProjectSlug(projectName)}/.squad`
+}
+
+function normalizeProjectSquadPath(projectOrSquadPath: string): string {
+  const trimmed = projectOrSquadPath.trim().replace(/\/+$/, '')
+  if (!trimmed || trimmed.endsWith('/.squad')) return trimmed
+  return `${trimmed}/.squad`
+}
+
 function SuggestTab({
   onCustomize,
   onApplied,
@@ -794,7 +819,7 @@ function SuggestTab({
   function handleApply() {
     if (!suggestion || !applyName.trim() || !applyPath.trim()) return
     applyBuiltinTemplate.mutate(
-      { bundleId: suggestion.bundleId, name: applyName.trim(), squadPath: applyPath.trim() },
+      { bundleId: suggestion.bundleId, name: applyName.trim(), squadPath: setupSquadPath(applyPath, applyName) },
       { onSuccess: (res) => onApplied(res.id) },
     )
   }
@@ -863,17 +888,29 @@ function SuggestTab({
         >
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: tokens.spacingHorizontalS }}>
             <span style={{ fontWeight: Number(tokens.fontWeightSemibold), fontSize: '14px' }}>
-              {suggestion.bundleName}
+            {suggestion.bundleName}
             </span>
+            <div style={chipRowStyle}>
+              {suggestion.source && (
+                <Badge appearance="tint" color={suggestion.source === 'llm' ? 'brand' : 'subtle'} size="small">
+                  {suggestion.source === 'llm' ? 'AI suggested' : 'deterministic'}
+                </Badge>
+              )}
             {suggestion.matchedKeywords.length > 0 && (
-              <div style={chipRowStyle}>
+              <>
                 {suggestion.matchedKeywords.slice(0, 4).map((kw) => (
                   <Badge key={kw} appearance="tint" color="informative" size="small">{kw}</Badge>
                 ))}
-              </div>
+              </>
             )}
+            </div>
           </div>
           <Caption1 style={{ color: tokens.colorNeutralForeground3 }}>{suggestion.description}</Caption1>
+          {suggestion.rationale && (
+            <Caption1 style={{ color: tokens.colorNeutralForeground3 }}>
+              Why this setup: {suggestion.rationale}
+            </Caption1>
+          )}
 
           {/* Recommended team */}
           <div style={sectionStyle}>
@@ -979,6 +1016,12 @@ function SuggestTab({
               input={{ style: { fontFamily: tokens.fontFamilyMonospace } }}
             />
           </Field>
+
+          {applyPath.trim() && applyName.trim() && (
+            <Caption1 style={{ color: tokens.colorNeutralForeground3, fontFamily: tokens.fontFamilyMonospace }}>
+              Will create: {setupSquadPath(applyPath, applyName)}
+            </Caption1>
+          )}
 
           {applyBuiltinTemplate.error && (
             <Caption1 style={{ color: tokens.colorPaletteRedForeground1 }}>

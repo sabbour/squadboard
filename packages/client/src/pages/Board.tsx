@@ -43,7 +43,7 @@ export default function Board() {
 
   // Card detail slide-over
   const [activeCard, setActiveCard] = useState<Issue | null>(null)
-  const [initialTab, setInitialTab] = useState<'overview' | 'runs' | 'deliverables' | 'flow' | undefined>()
+  const [initialTab, setInitialTab] = useState<'overview' | 'runs' | 'outputs' | 'flow' | undefined>()
 
   // Phase 12: support deep-linking via ?openIssue=X&tab=flow|runs|...
   // Used by the project Flow board to jump straight into an issue's DAG.
@@ -55,9 +55,11 @@ export default function Board() {
     if (!target) return
     const tabParam = searchParams.get('tab')
     const tab =
-      tabParam === 'flow' || tabParam === 'runs' || tabParam === 'deliverables' || tabParam === 'overview'
-        ? tabParam
-        : undefined
+      tabParam === 'deliverables'
+        ? 'outputs'
+        : tabParam === 'flow' || tabParam === 'runs' || tabParam === 'outputs' || tabParam === 'overview'
+          ? tabParam
+          : undefined
     setActiveCard(target)
     setInitialTab(tab)
     // Strip the query so refreshes don't keep popping the panel open

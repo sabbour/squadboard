@@ -7,7 +7,7 @@
 import type { Page } from '@playwright/test'
 import { request } from '@playwright/test'
 
-const API_BASE = 'http://localhost:3000'
+export const API_BASE = process.env.SQUADBOARD_E2E_API_BASE ?? 'http://localhost:3000'
 
 /**
  * Create a new project directly via the REST API.
@@ -35,6 +35,59 @@ export async function createProjectViaApi(name: string): Promise<string> {
   }
   await ctx.dispose()
   return env.data.projectId
+}
+
+export async function createIssueViaApi(
+  projectId: string,
+  issue: {
+    title: string
+    body?: string
+    status?: 'backlog' | 'ready' | 'in_progress' | 'in_review' | 'done'
+    idempotencyKey?: string
+  },
+): Promise<string> {
+  const ctx = await request.newContext({ baseURL: API_BASE })
+  const columns = await ctx.get(`/api/projects/${projectId}/columns`)
+  if (!columns.ok()) {
+    throw new Error(`createIssueViaApi: GET /api/projects/${projectId}/columns returned ${columns.status()}`)
+  }
+  const res = await ctx.post(`/api/projects/${projectId}/issues`, {
+    data: {
+      title: issue.title,
+      body: issue.body,
+      status: issue.status ?? 'backlog',
+      idempotencyKey: issue.idempotencyKey,
+    },
+  })
+  if (!res.ok()) {
+    throw new Error(`createIssueViaApi: POST /api/projects/${projectId}/issues returned ${res.status()}: ${await res.text()}`)
+  }
+  const created = (await res.json()) as { id?: string }
+  await ctx.dispose()
+  if (!created.id) {
+    throw new Error(`createIssueViaApi: unexpected response: ${JSON.stringify(created)}`)
+  }
+  return created.id
+}
+
+export async function createInboxItemViaApi(input: {
+  originalDraft: string
+  suggestedProjectId?: string | null
+  idempotencyKey?: string
+}): Promise<string> {
+  const ctx = await request.newContext({ baseURL: API_BASE })
+  const res = await ctx.post('/api/inbox', {
+    data: input,
+  })
+  if (!res.ok()) {
+    throw new Error(`createInboxItemViaApi: POST /api/inbox returned ${res.status()}`)
+  }
+  const item = (await res.json()) as { id?: string }
+  await ctx.dispose()
+  if (!item.id) {
+    throw new Error(`createInboxItemViaApi: unexpected response: ${JSON.stringify(item)}`)
+  }
+  return item.id
 }
 
 /**
@@ -87,7 +140,7 @@ export async function createIssue(
   page: Page,
   projectId: string,
   title: string,
-  column: 'backlog' | 'todo' | 'in_progress' | 'in_review' | 'done' = 'backlog',
+  column: 'backlog' | 'ready' | 'in_progress' | 'in_review' | 'done' = 'backlog',
 ): Promise<string> {
   // Navigate to the board if we're not already there
   if (!page.url().includes(`/projects/${projectId}/board`)) {
@@ -98,22 +151,20 @@ export async function createIssue(
   // Click the one whose column label matches
   const columnLabels: Record<string, string> = {
     backlog: 'Backlog',
-    todo: 'Todo',
+    ready: 'Ready',
     in_progress: 'In Progress',
     in_review: 'In Review',
     done: 'Done',
   }
-  const label = columnLabels[column]
+  const columnOrder = Object.keys(columnLabels)
+  const columnIndex = columnOrder.indexOf(column)
 
-  // The column header contains the label text; the + button is a sibling
-  const columnHeader = page.locator('div').filter({ hasText: new RegExp(`^${label}`) }).first()
-  await columnHeader.getByTitle('Create issue').click()
+  await page.getByTitle('Create issue').nth(columnIndex).click()
 
   // Fill in the title in the modal — CreateIssueModal uses placeholder "Issue title"
   await page.getByPlaceholder('Issue title').fill(title)
 
-  // Submit (the modal has a submit button or pressing Enter works)
-  await page.getByRole('button', { name: /Create|Save|Add/i }).click()
+  await page.getByRole('button', { name: /^Create Issue$/i }).click()
 
   // Wait for the modal to close
   await page.waitForSelector('[placeholder*="title"]', { state: 'detached', timeout: 8_000 }).catch(() => {

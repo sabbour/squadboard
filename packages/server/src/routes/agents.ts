@@ -8,6 +8,7 @@ import { parseCharter, writeCharter, computeCharterHash } from '../services/char
 import { syncAgentsFromDisk } from '../services/agent-sync.js';
 import { formulateAgentDraft, formulateTeamDraft } from '../services/hire-formulator.js';
 import { castTeam, buildPersonaSection, type CastedMember } from '../services/casting-engine.js';
+import { generateCharter } from '../services/curated-roles.js';
 
 const router = Router({ mergeParams: true });
 
@@ -16,6 +17,19 @@ const router = Router({ mergeParams: true });
 // ---------------------------------------------------------------------------
 
 const KEBAB_RE = /^[a-z][a-z0-9-]*$/;
+
+function rowOrigin(agent: typeof schema.agents.$inferSelect): 'project' | 'virtual-copilot' {
+  return agent.agentKind === 'copilot' ? 'virtual-copilot' : 'project';
+}
+
+function withAgentOrigin(agent: typeof schema.agents.$inferSelect) {
+  const origin = rowOrigin(agent);
+  return {
+    ...agent,
+    origin,
+    readOnly: origin === 'virtual-copilot',
+  };
+}
 
 async function resolveSquadPath(projectId: string): Promise<string | null> {
   const db = getDb();
@@ -55,11 +69,14 @@ router.get('/', async (req: Request, res: Response) => {
     .from(schema.agents)
     .where(conditions.length === 1 ? conditions[0] : and(...conditions));
 
-  res.json({ ok: true, data: rows });
+  res.json({
+    ok: true,
+    data: rows.map(withAgentOrigin),
+  });
 });
 
 // ---------------------------------------------------------------------------
-// POST /api/projects/:projectId/agents  — hire a new agent
+// POST /api/projects/:projectId/agents  — cast a new agent
 // Body: { name, role, model?, expertise[] }
 // ---------------------------------------------------------------------------
 router.post('/', async (req: Request, res: Response) => {
@@ -131,6 +148,7 @@ router.post('/', async (req: Request, res: Response) => {
   await fs.writeFile(historyPath, historyContent, 'utf-8');
 
   const charterHash = await computeCharterHash(charterPath);
+  const charterContent = await fs.readFile(charterPath, 'utf-8');
 
   const [inserted] = await db
     .insert(schema.agents)
@@ -143,6 +161,7 @@ router.post('/', async (req: Request, res: Response) => {
       charterPath,
       historyPath,
       charterHash,
+      charterContent,
     })
     .returning();
 
@@ -184,7 +203,7 @@ router.post('/formulate', async (req: Request, res: Response) => {
 
 // ---------------------------------------------------------------------------
 // POST /api/projects/:projectId/agents/team/formulate
-// AI-formulate a team-hire configuration (universe, teamSize, requiredRoles)
+// AI-formulate a team-cast configuration (universe, teamSize, requiredRoles)
 // from a brief prose description. Does NOT cast — returns the form payload
 // for the user to review and submit through the existing propose flow.
 // ---------------------------------------------------------------------------
@@ -327,18 +346,15 @@ router.post('/hire-team/confirm', async (req: Request, res: Response) => {
           continue;
         }
 
-        await fs.mkdir(agentDir, { recursive: true });
-
-        await writeCharter(charterPath, {
-          name: agentName,
-          role,
-          model: undefined,
-          expertise: [],
-        });
-
-        // Append persona section from the cast member's personality / backstory
         const persona = buildPersonaSection(member);
-        await fs.appendFile(charterPath, '\n' + persona + '\n', 'utf-8');
+        const charterContent = generateCharter(role, agentName, persona);
+        if (!charterContent) {
+          errors.push({ agentName, error: `No charter template found for role "${role}"` });
+          continue;
+        }
+
+        await fs.mkdir(agentDir, { recursive: true });
+        await fs.writeFile(charterPath, charterContent, 'utf-8');
 
         const historyContent = `# ${agentName} — History\n\n## Core Context\n\n- **Role:** ${role}\n- **Joined:** ${new Date().toISOString()}\n\n## Learnings\n\n<!-- Append learnings below -->\n`;
         await fs.writeFile(historyPath, historyContent, 'utf-8');
@@ -356,6 +372,7 @@ router.post('/hire-team/confirm', async (req: Request, res: Response) => {
             charterPath,
             historyPath,
             charterHash,
+            charterContent,
           })
           .returning();
 
@@ -385,6 +402,7 @@ router.post('/hire-team/confirm', async (req: Request, res: Response) => {
 // ---------------------------------------------------------------------------
 router.get('/:id', async (req: Request, res: Response) => {
   const { projectId, id } = req.params as Record<string, string>;
+
   const db = getDb();
 
   const [agent] = await db
@@ -406,7 +424,7 @@ router.get('/:id', async (req: Request, res: Response) => {
       .catch(() => null);
   }
 
-  res.json({ ok: true, data: { ...agent, historyExcerpt } });
+  res.json({ ok: true, data: { ...withAgentOrigin(agent), historyExcerpt } });
 });
 
 // ---------------------------------------------------------------------------
@@ -445,7 +463,7 @@ router.patch('/:id', async (req: Request, res: Response) => {
     .where(eq(schema.agents.id, id))
     .returning();
 
-  res.json({ ok: true, data: updated });
+  res.json({ ok: true, data: withAgentOrigin(updated) });
 });
 
 // ---------------------------------------------------------------------------
@@ -454,6 +472,7 @@ router.patch('/:id', async (req: Request, res: Response) => {
 // ---------------------------------------------------------------------------
 router.delete('/:id', async (req: Request, res: Response) => {
   const { projectId, id } = req.params as Record<string, string>;
+
   const db = getDb();
 
   const [agent] = await db
@@ -473,7 +492,7 @@ router.delete('/:id', async (req: Request, res: Response) => {
     .where(eq(schema.agents.id, id))
     .returning();
 
-  res.json({ ok: true, data: updated });
+  res.json({ ok: true, data: withAgentOrigin(updated) });
 });
 
 // ---------------------------------------------------------------------------
@@ -482,6 +501,7 @@ router.delete('/:id', async (req: Request, res: Response) => {
 // ---------------------------------------------------------------------------
 router.get('/:id/charter', async (req: Request, res: Response) => {
   const { projectId, id } = req.params as Record<string, string>;
+
   const db = getDb();
 
   const [agent] = await db
@@ -548,7 +568,7 @@ router.patch('/:id/charter', async (req: Request, res: Response) => {
     .where(eq(schema.agents.id, id))
     .returning();
 
-  res.json({ ok: true, data: updated });
+  res.json({ ok: true, data: withAgentOrigin(updated) });
 });
 
 export default router;

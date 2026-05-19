@@ -1,5 +1,5 @@
 import { Draggable } from '@hello-pangea/dnd'
-import { useState, useRef, useEffect, type ReactNode } from 'react'
+import { useState, type ReactNode } from 'react'
 import { useNavigate } from 'react-router'
 import { Body1, Button, tokens } from '@fluentui/react-components'
 import {
@@ -10,14 +10,10 @@ import {
   Merge20Regular,
   Box20Regular,
   Comment20Regular,
-  PersonSwap20Regular,
 } from '@fluentui/react-icons'
-import { type Issue, useAssignIssue } from '../../api/issues.ts'
+import { type Issue } from '../../api/issues.ts'
 import { useIssueRuns } from '../../api/runs.ts'
-import { useActiveAgents } from '../../api/agents.ts'
 import LabelBadge from '../LabelBadge.tsx'
-import Avatar from '../Avatar.tsx'
-import RunButton from '../runs/RunButton.tsx'
 import RunStatusBadge from '../runs/RunStatusBadge.tsx'
 import CostDisplay from '../runs/CostDisplay.tsx'
 import { RoutingBadge } from './RoutingBadge.tsx'
@@ -28,6 +24,7 @@ interface IssueCardProps {
   issue: Issue
   index: number
   projectId: string
+  columnSemantic?: 'backlog' | 'ready' | 'in_progress' | 'review' | 'done' | 'custom'
   isSelected: boolean
   onSelect: (id: string, shiftKey: boolean) => void
   onOpen: (issue: Issue) => void
@@ -129,27 +126,19 @@ const badgeLinkStyle: React.CSSProperties = {
 
 // ────────────────────────────────────────────────────────────────────────────
 
-export default function IssueCard({ issue, index, projectId, isSelected, onSelect, onOpen }: IssueCardProps) {
+function automaticRunHint(columnSemantic?: IssueCardProps['columnSemantic']) {
+  if (columnSemantic === 'ready') return 'Starts automatically'
+  if (columnSemantic === 'in_progress') return 'Waiting for active run'
+  return null
+}
+
+export default function IssueCard({ issue, index, projectId, columnSemantic, isSelected, onSelect, onOpen }: IssueCardProps) {
   const [hovered, setHovered] = useState(false)
-  const [reassignOpen, setReassignOpen] = useState(false)
-  const reassignRef = useRef<HTMLDivElement>(null)
   const navigate = useNavigate()
   const { data: runs } = useIssueRuns(projectId, issue.id)
-  const { data: agents } = useActiveAgents(projectId)
-  const assignIssue = useAssignIssue(projectId)
   const activeRun = runs?.find((r) => r.status === 'running' || r.status === 'pending')
   const lastRun = runs?.[0]
-
-  // Close reassign dropdown on outside click
-  useEffect(() => {
-    function handleOutside(e: MouseEvent) {
-      if (reassignRef.current && !reassignRef.current.contains(e.target as Node)) {
-        setReassignOpen(false)
-      }
-    }
-    if (reassignOpen) document.addEventListener('mousedown', handleOutside)
-    return () => document.removeEventListener('mousedown', handleOutside)
-  }, [reassignOpen])
+  const runHint = !activeRun ? automaticRunHint(columnSemantic) : null
 
   return (
     <Draggable draggableId={issue.id} index={index}>
@@ -251,104 +240,21 @@ export default function IssueCard({ issue, index, projectId, isSelected, onSelec
             style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '6px' }}
           >
             <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-              {/* Reassign affordance: avatar (or placeholder) opens agent picker */}
-              <div ref={reassignRef} style={{ position: 'relative' }}>
-                <button
-                  title={issue.assignee ? `Reassign (currently ${issue.assignee.name})` : 'Assign agent'}
-                  onClick={(e) => { e.stopPropagation(); setReassignOpen((v) => !v) }}
+              {issue.assignee && (
+                <span
+                  title={`Assigned to ${issue.assignee.name}${issue.assignee.role ? ` — ${issue.assignee.role}` : ''}`}
                   style={{
-                    background: 'none',
-                    border: reassignOpen ? `1px solid ${tokens.colorBrandBackground}` : '1px solid transparent',
-                    borderRadius: '50%',
-                    padding: '0',
-                    cursor: 'pointer',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    width: '24px',
-                    height: '24px',
-                    position: 'relative',
+                    color: tokens.colorNeutralForeground2,
+                    fontSize: '11px',
+                    maxWidth: '150px',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    whiteSpace: 'nowrap',
                   }}
                 >
-                  {issue.assignee ? (
-                    <Avatar name={issue.assignee.name} avatarUrl={issue.assignee.avatarUrl} size={20} />
-                  ) : (
-                    <PersonSwap20Regular style={{ color: tokens.colorNeutralForeground3, width: '16px', height: '16px' }} />
-                  )}
-                </button>
-
-                {reassignOpen && (
-                  <div
-                    style={{
-                      position: 'absolute',
-                      bottom: '100%',
-                      left: 0,
-                      marginBottom: '4px',
-                      background: tokens.colorNeutralBackground1,
-                      border: `1px solid ${tokens.colorNeutralStroke1}`,
-                      borderRadius: '6px',
-                      minWidth: '160px',
-                      zIndex: 200,
-                      overflow: 'hidden',
-                      boxShadow: '0 4px 12px rgba(0,0,0,0.5)',
-                    }}
-                  >
-                    {(agents ?? []).length === 0 && (
-                      <div style={{ padding: '8px 12px', fontSize: '12px', color: tokens.colorNeutralForeground3 }}>No active agents</div>
-                    )}
-                    {(agents ?? []).map((agent) => (
-                      <button
-                        key={agent.id}
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          assignIssue.mutate({ issueId: issue.id, assigneeId: agent.id })
-                          setReassignOpen(false)
-                        }}
-                        style={{
-                          display: 'block',
-                          width: '100%',
-                          textAlign: 'left',
-                          background: issue.assignee?.id === agent.id ? 'rgba(56,139,253,0.13)' : 'none',
-                          border: 'none',
-                          color: tokens.colorNeutralForeground1,
-                          padding: '7px 12px',
-                          fontSize: '12px',
-                          cursor: 'pointer',
-                        }}
-                        onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.background = 'rgba(56,139,253,0.13)' }}
-                        onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.background = issue.assignee?.id === agent.id ? 'rgba(56,139,253,0.13)' : 'none' }}
-                      >
-                        {agent.name}
-                      </button>
-                    ))}
-                    {issue.assignee && (
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          assignIssue.mutate({ issueId: issue.id, assigneeId: null })
-                          setReassignOpen(false)
-                        }}
-                        style={{
-                          display: 'block',
-                          width: '100%',
-                          textAlign: 'left',
-                          background: 'none',
-                          border: 'none',
-                          borderTop: `1px solid ${tokens.colorNeutralStroke1}`,
-                          color: tokens.colorNeutralForeground3,
-                          padding: '7px 12px',
-                          fontSize: '12px',
-                          cursor: 'pointer',
-                        }}
-                        onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.color = tokens.colorNeutralForeground1 }}
-                        onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.color = tokens.colorNeutralForeground3 }}
-                      >
-                        Unassign
-                      </button>
-                    )}
-                  </div>
-                )}
-              </div>
+                  {issue.assignee.name}{issue.assignee.role ? ` — ${issue.assignee.role}` : ''}
+                </span>
+              )}
 
               {issue.routingRuleSummary && (
                 <RoutingBadge ruleSummary={issue.routingRuleSummary} />
@@ -395,10 +301,11 @@ export default function IssueCard({ issue, index, projectId, isSelected, onSelec
                   }}
                 />
               )}
-              <RunButton
-                projectId={projectId}
-                issueId={issue.id}
-              />
+              {runHint && (
+                <span style={{ color: tokens.colorNeutralForeground2, fontSize: '11px', whiteSpace: 'nowrap' }}>
+                  {runHint}
+                </span>
+              )}
             </div>
           </div>
         </div>

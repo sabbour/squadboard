@@ -6,10 +6,12 @@ import type { ColumnStatus } from '../services/issues.js';
 import * as attachmentsService from '../services/issue-attachments.js';
 import { AttachmentError } from '../services/issue-attachments.js';
 import { formulateIssueDraft } from '../services/issue-formulator.js';
-import { and, eq, sql } from 'drizzle-orm';
+import { and, eq, inArray, sql } from 'drizzle-orm';
 import { getDb, schema } from '../db/index.js';
 import { resolveRoute, createRoutedRun } from '../engine/router.js';
 import { eventBus } from '../realtime/event-bus.js';
+import { pickupReadySweep } from '../engine/sweeps/pickup-ready.js';
+import { readyWorkflowStepsSweep } from '../engine/sweeps/ready-workflow-steps.js';
 
 const router = Router({ mergeParams: true });
 
@@ -25,6 +27,90 @@ function handleError(res: Response, err: unknown) {
   }
   console.error('[issues] unhandled error:', err);
   res.status(500).json({ error: 'Internal server error' });
+}
+
+async function getColumnSemantic(projectId: string, columnId: string): Promise<string | null> {
+  const [column] = await getDb()
+    .select({ semantic: schema.columnMeta.semantic })
+    .from(schema.columnMeta)
+    .where(and(eq(schema.columnMeta.projectId, projectId), eq(schema.columnMeta.columnId, columnId)))
+    .limit(1);
+  return column?.semantic ?? null;
+}
+
+async function hasActiveIssueRun(issueId: string): Promise<boolean> {
+  const [run] = await getDb()
+    .select({ id: schema.issueRuns.id })
+    .from(schema.issueRuns)
+    .where(and(eq(schema.issueRuns.issueId, issueId), inArray(schema.issueRuns.status, ['pending', 'running'])))
+    .limit(1);
+  return Boolean(run);
+}
+
+function triggerReadyPickup(projectId: string, issueId: string): void {
+  void (async () => {
+    const pickup = await pickupReadySweep.run();
+    if (pickup.errors > 0) {
+      console.warn(`[issues] ready pickup completed with ${pickup.errors} error(s) after moving issue ${issueId}`);
+      return;
+    }
+    await readyWorkflowStepsSweep.run();
+  })().catch((err) => {
+    console.error(`[issues] ready pickup failed after moving issue ${issueId} in project ${projectId}:`, err);
+  });
+}
+
+function triggerLabelRunPlanAssignment(projectId: string, issueId: string, labelIds: string[]): void {
+  if (labelIds.length === 0) return;
+  void attachMatchingLabelRunPlan(projectId, issueId, labelIds).catch((err) => {
+    console.error(`[issues] label run-plan assignment failed for issue ${issueId}:`, err);
+  });
+}
+
+async function attachMatchingLabelRunPlan(projectId: string, issueId: string, labelIds: string[]): Promise<void> {
+  const db = getDb();
+
+  const [existingAttachment] = await db
+    .select({ issueId: schema.issueWorkflows.issueId })
+    .from(schema.issueWorkflows)
+    .where(eq(schema.issueWorkflows.issueId, issueId))
+    .limit(1);
+  if (existingAttachment) return;
+
+  const labelSet = new Set(labelIds);
+  const candidates = await db
+    .select({
+      ceremonyId: schema.workflows.id,
+      name: schema.workflows.name,
+      slug: schema.workflows.slug,
+      triggerConfig: schema.workflows.triggerConfig,
+      versionId: schema.workflowVersions.id,
+    })
+    .from(schema.workflows)
+    .innerJoin(schema.workflowVersions, eq(schema.workflowVersions.workflowId, schema.workflows.id))
+    .where(and(
+      eq(schema.workflows.projectId, projectId),
+      eq(schema.workflows.triggerKind, 'on_issue_entry'),
+      eq(schema.workflows.status, 'active'),
+      eq(schema.workflowVersions.isActive, true),
+    ));
+
+  const match = candidates
+    .filter((candidate) => {
+      const config = candidate.triggerConfig as Record<string, unknown>;
+      const configuredLabelIds = Array.isArray(config.labelIds)
+        ? config.labelIds.filter((id): id is string => typeof id === 'string')
+        : [];
+      return configuredLabelIds.some((labelId) => labelSet.has(labelId));
+    })
+    .sort((a, b) => a.slug.localeCompare(b.slug) || a.name.localeCompare(b.name))[0];
+
+  if (!match) return;
+
+  await db.insert(schema.issueWorkflows).values({
+    issueId,
+    workflowVersionId: match.versionId,
+  });
 }
 
 /** Adds `column` as an alias for `status` so the client can use `issue.column`. */
@@ -72,15 +158,26 @@ router.post('/', async (req: Request, res: Response) => {
     const effectiveStatus = status ?? column;
 
     // HTTP path validates column exists before delegating (MCP/CLI skip this).
+    let semantic: string | null = null;
     if (effectiveStatus) {
-      await issuesService.assertColumnExists(projectId, effectiveStatus);
+      semantic = await getColumnSemantic(projectId, effectiveStatus);
+      if (!semantic) {
+        res.status(400).json({ error: `Unknown column "${effectiveStatus}" for this project` });
+        return;
+      }
+      if (semantic === 'in_progress') {
+        res.status(409).json({
+          error: 'Cannot create a card directly in In Progress. Create it in Backlog or Ready; Squadboard moves it to In Progress when an active run starts.',
+        });
+        return;
+      }
     }
 
     const result = await issuesService.createIssue({
       projectId,
       title,
       body,
-      status: effectiveStatus as 'backlog' | 'todo' | 'in_progress' | 'in_review' | 'done' | undefined,
+      status: effectiveStatus as 'backlog' | 'ready' | 'in_progress' | 'in_review' | 'done' | undefined,
       assigneeId: assigneeId ?? null,
       labels: labels ?? [],
       createdBy: 'user',
@@ -137,6 +234,10 @@ router.post('/', async (req: Request, res: Response) => {
 
     res.status(201).json(serialize({ ...created, autoRoutedTo }));
     eventBus.emitIssueEvent('issue.created', projectId, { issue: serialize(created) });
+    triggerLabelRunPlanAssignment(projectId, created.id, labels ?? []);
+    if (semantic === 'ready') {
+      triggerReadyPickup(projectId, created.id);
+    }
   } catch (err) {
     handleError(res, err);
   }
@@ -158,8 +259,38 @@ router.post('/bulk', async (req: Request, res: Response) => {
       return;
     }
 
+    let semantic: string | null = null;
+    if (action === 'move' && status) {
+      semantic = await getColumnSemantic(projectId, status);
+      if (!semantic) {
+        res.status(400).json({ error: `Unknown column "${status}" for this project` });
+        return;
+      }
+      if (semantic === 'in_progress') {
+        const activeRuns = await getDb()
+          .select({ issueId: schema.issueRuns.issueId })
+          .from(schema.issueRuns)
+          .where(and(inArray(schema.issueRuns.issueId, issueIds), inArray(schema.issueRuns.status, ['pending', 'running'])));
+        const activeIssueIds = new Set(activeRuns.map((run) => run.issueId));
+        const inactiveIssueIds = issueIds.filter((issueId) => !activeIssueIds.has(issueId));
+        if (inactiveIssueIds.length > 0) {
+          res.status(409).json({
+            error: 'Cannot move cards to In Progress without active runs. Move them to Ready to let Squadboard assign and start work, or start runs first.',
+            issueIds: inactiveIssueIds,
+          });
+          return;
+        }
+      }
+    }
+
     const result = await issuesService.bulkAction(projectId, action, issueIds, { status, labelIds });
     res.json(result);
+    if (action === 'label' && labelIds && labelIds.length > 0) {
+      for (const issueId of issueIds) triggerLabelRunPlanAssignment(projectId, issueId, labelIds);
+    }
+    if (semantic === 'ready' && issueIds.length > 0) {
+      triggerReadyPickup(projectId, issueIds[0]);
+    }
   } catch (err) {
     handleError(res, err);
   }
@@ -223,6 +354,20 @@ router.patch('/:id', async (req: Request, res: Response) => {
       deliverableStatus?: string;
     };
     const resolvedStatus = status ?? column;
+    let resolvedSemantic: string | null = null;
+    if (resolvedStatus !== undefined) {
+      resolvedSemantic = await getColumnSemantic(projectId, resolvedStatus);
+      if (!resolvedSemantic) {
+        res.status(400).json({ error: `Unknown column "${resolvedStatus}" for this project` });
+        return;
+      }
+      if (resolvedSemantic === 'in_progress' && !(await hasActiveIssueRun(id))) {
+        res.status(409).json({
+          error: 'Cannot move a card to In Progress without an active run. Move it to Ready to let Squadboard assign and start work, or start a run first.',
+        });
+        return;
+      }
+    }
 
     // Optimistic concurrency check (OQ #6): if client sends `version`, enforce it.
     if (version !== undefined) {
@@ -279,6 +424,9 @@ router.patch('/:id', async (req: Request, res: Response) => {
 
       eventBus.emitIssueEvent('issue.updated', projectId, { issue: serialize(updated) });
       res.json(serialize(updated));
+      if (resolvedSemantic === 'ready') {
+        triggerReadyPickup(projectId, id);
+      }
       return;
     }
 
@@ -290,6 +438,9 @@ router.patch('/:id', async (req: Request, res: Response) => {
     }
     eventBus.emitIssueEvent('issue.updated', projectId, { issue: serialize(updated) });
     res.json(serialize(updated));
+    if (resolvedSemantic === 'ready') {
+      triggerReadyPickup(projectId, id);
+    }
   } catch (err) {
     handleError(res, err);
   }
@@ -321,6 +472,17 @@ router.patch('/:id/move', async (req: Request, res: Response) => {
       res.status(400).json({ error: '`status` is required' });
       return;
     }
+    const semantic = await getColumnSemantic(projectId, newStatus);
+    if (!semantic) {
+      res.status(400).json({ error: `Unknown column "${newStatus}" for this project` });
+      return;
+    }
+    if (semantic === 'in_progress' && !(await hasActiveIssueRun(id))) {
+      res.status(409).json({
+        error: 'Cannot move a card to In Progress without an active run. Move it to Ready to let Squadboard assign and start work, or start a run first.',
+      });
+      return;
+    }
     const moved = await issuesService.moveIssue(projectId, id, newStatus, position);
     if (!moved) {
       res.status(404).json({ error: 'Issue not found' });
@@ -332,6 +494,9 @@ router.patch('/:id/move', async (req: Request, res: Response) => {
       position: moved.position,
     });
     res.json(serialize(moved));
+    if (semantic === 'ready') {
+      triggerReadyPickup(projectId, id);
+    }
   } catch (err) {
     handleError(res, err);
   }
@@ -352,6 +517,7 @@ router.patch('/:id/labels', async (req: Request, res: Response) => {
       return;
     }
     res.json(result);
+    triggerLabelRunPlanAssignment(projectId, id, labelIds);
   } catch (err) {
     handleError(res, err);
   }

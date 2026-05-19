@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **PostgreSQL-backed Squad StorageProvider adapter (default):** Squadboard now stores Squad state (agents, decisions, skills, ceremonies) in the same PostgreSQL database as product state by default, using local PGlite unless `DATABASE_URL` points to standalone PostgreSQL. Existing `.squad/` files import once into an empty DB-backed project; use `pnpm run dev:fs`, `squadboard init --squad-storage fs`, or `SQUADBOARD_SQUAD_STORAGE_PROVIDER=fs` for filesystem fallback. `squadboard init --write-mcp-config` writes a Copilot CLI MCP config so Copilot plus `squad.agent.md` use Squadboard as the shared-state broker. External Squad CLI direct database access still requires compatible upstream StorageProvider configuration; otherwise use the MCP bridge.
+- **Coordinator parity foundation:** Coordinator input plumbing, deterministic routing prefilters, visible circuit-breaker decisions, spawn-prompt context, directive capture, automated Scribe close-out, Ralph monitor, and ceremony/worktree lifecycle metadata are now wired with focused coverage.
+- **Close-out automation:** Removed the manual close-out button/API path; Scribe close-out now runs through daemon/coordinator lifecycle automation instead of an explicit user action.
+- **Docs features IA:** Added a Docusaurus Features section with subsections for core orchestration, automation, integrations, operations, and current gaps.
+- **Scenario tutorials:** Added Getting Started scenario tutorials backed by a Playwright screenshot spec that captures project setup, board triage, team casting, Consult, and import/template screens.
+- **Squad Apps and imports docs:** Added user-guide pages explaining Squad Apps, template imports, built-in bundles, import safety, and the relationship to `bradygaster/squad`.
+- **Architecture diagrams:** Enabled Mermaid in the docs site and added user sequence/topology diagrams for coordinator and import flows.
+- **Docusaurus docs site:** Added a Hermes-style docs site package with getting-started, user guide, developer guide, reference, and LLM-readable entry points.
+- **Setup lifecycle foundation:** Suggest Setup now uses an LLM-backed built-in bundle selector with deterministic fallback, and built-in template apply creates a fuller `.squad/` scaffold with roster, routing, casting state, agent history, and lifecycle badges.
+
+### Changed
+
+- **Getting Started rewrite:** Collapsed the nine fragmented scenario tutorials into four sequential tutorials that share one continuous Spark project (Connect → Cast → Run the launch wave → Connect Copilot CLI/Squad/MCP). Quickstart is now a true 10-minute end-to-end (capture → Ready → automatic pickup → inspect run → ceremony). Screenshots are now anchored to the step they actually illustrate. Sidebar and tutorial index updated to match.
+- **Consult scope:** Consult is now documented and typed as project-agent/model brainstorming only; legacy user-local-agent policy surfaces were removed from runtime, UI, agent prompts, templates, and docs.
+
+### Fixed
+
+- Server TypeScript build now passes after bringing stale tests/services up to the current agent schema and DB accessor patterns.
+
 ## Wave 10 — 2026-05-15
 
 Dogfood loop, regression sweep, Fluent2 polish, feature gaps, and E1 gate verification.

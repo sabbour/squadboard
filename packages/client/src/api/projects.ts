@@ -81,6 +81,8 @@ export function useDeleteProject() {
 export interface ProjectSuggestionTeamMember {
   name: string
   role: string
+  kind?: 'project-agent' | 'human' | 'virtual-copilot'
+  badge?: string
 }
 
 export interface ProjectSuggestionCeremony {
@@ -102,6 +104,8 @@ export interface ProjectSuggestion {
   columns: ProjectSuggestionColumn[]
   skills: string[]
   matchedKeywords: string[]
+  source?: 'llm' | 'deterministic' | 'deterministic-fallback'
+  rationale?: string | null
 }
 
 export function useSuggestProjectSetup() {

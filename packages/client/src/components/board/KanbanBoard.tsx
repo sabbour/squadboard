@@ -55,9 +55,10 @@ export default function KanbanBoard({
           setOptimisticIssues(null)
           void queryClient.invalidateQueries({ queryKey: ['issues', projectId] })
         },
-        onError: () => {
+        onError: (error) => {
           // Revert optimistic update
           setOptimisticIssues(null)
+          window.alert(error instanceof Error ? error.message : 'Could not move card')
         },
       }
     )
@@ -112,6 +113,7 @@ export default function KanbanBoard({
             label={meta.label}
             description={meta.description}
             color={meta.color}
+            semantic={meta.semantic}
             issues={issuesByColumn(meta.columnId)}
             projectId={projectId}
             selectedIds={selectedIds}
@@ -124,4 +126,3 @@ export default function KanbanBoard({
     </DragDropContext>
   )
 }
-

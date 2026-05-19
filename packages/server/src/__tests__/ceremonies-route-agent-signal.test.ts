@@ -31,13 +31,13 @@ vi.mock('../db/index.js', () => {
     const insertChain = Object.assign(chain, {
       insert: vi.fn(() => insertChain),
       update: vi.fn(() => insertChain),
-      values: vi.fn(function (vals: unknown) {
-        this.vals = vals;
-        return this;
+      values: vi.fn((vals: unknown) => {
+        insertChain.vals = vals;
+        return insertChain;
       }),
-      set: vi.fn(function (data: unknown) {
-        this.data = data;
-        return this;
+      set: vi.fn((data: unknown) => {
+        insertChain.data = data;
+        return insertChain;
       }),
       returning: vi.fn(async () => [{
         id: 'cem-123',
@@ -95,8 +95,9 @@ vi.mock('drizzle-orm', () => ({
 
 vi.mock('../services/workflow-parser.js', () => ({
   parseWorkflowYaml: vi.fn(async () => ({
-    metadata: { name: 'test-ceremony', description: 'Test ceremony' },
-    spec: { trigger: { type: 'manual' } },
+    name: 'Test ceremony',
+    description: 'Test ceremony',
+    steps: [],
     outputSchema: null,
   })),
   validateWorkflowYaml: vi.fn(() => ({ valid: true, errors: [] })),
@@ -223,9 +224,7 @@ describe('triggerKind validation — agent-signal support', () => {
 
     await handler(req, res);
 
-    // Should NOT be 400 (validation error). May be 201 (success) or other error.
-    const status = res.getStatus();
-    expect(status).not.toBe(400);
+    expect(res.getStatus()).toBe(201);
   });
 
   it('POST / with triggerKind=invalid-unknown still rejected with 400', async () => {

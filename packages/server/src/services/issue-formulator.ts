@@ -23,7 +23,7 @@ import { getDb, schema } from '../db/index.js';
 // Types
 // ---------------------------------------------------------------------------
 
-const VALID_COLUMNS = ['backlog', 'todo', 'in_progress', 'in_review', 'done'] as const;
+const VALID_COLUMNS = ['backlog', 'ready', 'in_progress', 'in_review', 'done'] as const;
 type IssueColumn = (typeof VALID_COLUMNS)[number];
 
 export interface FormulatedIssueDraft {
@@ -66,7 +66,7 @@ function buildIssuePrompt(draft: string, existingLabels: string[]): string {
     '{',
     '  "title": string,             // ≤120 chars, imperative ("Add OAuth login")',
     '  "body": string,              // Markdown. Brief problem statement + acceptance criteria as bullets',
-    '  "suggestedColumn": string,   // one of the columns above (default "todo" if uncertain)',
+    '  "suggestedColumn": string,   // one of the column slugs above (default "ready" if uncertain)',
     '  "suggestedLabels": string[], // 0-4 label names from the existing vocabulary; reuse exact spelling',
     '  "rationale": string          // ≤1 sentence: why these choices',
     '}',
@@ -74,7 +74,7 @@ function buildIssuePrompt(draft: string, existingLabels: string[]): string {
     'Guidelines:',
     '- title: imperative voice, no trailing period. Strip filler ("we need to", "please").',
     '- body: 2-4 sentence problem statement, then a short ## Acceptance Criteria bullet list. Keep it tight.',
-    '- suggestedColumn: "backlog" if exploratory; "todo" if ready to work; "in_progress" only if the draft says it\'s already started.',
+    '- suggestedColumn: "backlog" if exploratory; "ready" if ready to work; "in_progress" only if the draft says it\'s already started.',
     '- suggestedLabels: prefer EXISTING labels by exact name. Examples that look like an existing label: bug, feature, docs, ui, backend.',
     '- Never include the user\'s raw draft verbatim in the body — restate cleanly.',
   ].join('\n');
@@ -97,8 +97,8 @@ function normalizeIssueDraft(parsed: unknown, existingLabelSet: Set<string>): Fo
 
   let suggestedColumn = typeof p.suggestedColumn === 'string'
     ? (p.suggestedColumn.trim() as IssueColumn)
-    : 'todo';
-  if (!VALID_COLUMNS.includes(suggestedColumn)) suggestedColumn = 'todo';
+    : 'ready';
+  if (!VALID_COLUMNS.includes(suggestedColumn)) suggestedColumn = 'ready';
 
   const labelsRaw = Array.isArray(p.suggestedLabels) ? p.suggestedLabels : [];
   const suggestedLabels = labelsRaw

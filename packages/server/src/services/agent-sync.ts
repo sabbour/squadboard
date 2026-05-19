@@ -3,7 +3,6 @@ import path from 'node:path';
 import { eq, and } from 'drizzle-orm';
 import { getDb, schema } from '../db/index.js';
 import { parseCharterContent, computeContentHash } from './charter-compiler.js';
-import { hashCharterContent } from './charter-identity.js';
 import { getAgents } from './sdk-state.js';
 
 export interface SyncResult {
@@ -20,7 +19,8 @@ export interface SyncResult {
  *   - Upsert agents row (matched on projectId + name)
  *   - Detect charter changes via md5 hash
  *
- * Agents in DB that no longer have a folder on disk are marked 'retired'.
+ * Agents in DB that are reliably absent from `.squad/agents/` are marked
+ * 'retired'. Charter read/parse failures are not absence signals.
  */
 export async function syncAgentsFromDisk(
   projectId: string,
@@ -28,62 +28,45 @@ export async function syncAgentsFromDisk(
 ): Promise<SyncResult> {
   const agentsDir = path.join(squadPath, 'agents');
 
-  // --- List agents: SDK first, raw fs fallback ---
-  let entries: string[] = [];
+  let sdkAgents: Awaited<ReturnType<typeof getAgents>> | null = null;
+  const sdkNames = new Set<string>();
   try {
-    entries = await (await getAgents(projectId)).list();
+    sdkAgents = await getAgents(projectId);
+    for (const name of await sdkAgents.list()) sdkNames.add(name);
   } catch (sdkErr) {
-    console.warn('[agent-sync] SDK agents.list() failed, falling back to fs.readdir:', sdkErr);
-    try {
-      const dirents = await fs.readdir(agentsDir, { withFileTypes: true });
-      entries = dirents.filter((d) => d.isDirectory()).map((d) => d.name);
-    } catch {
-      // No agents directory — nothing to sync
-      return { added: 0, updated: 0, removed: 0 };
-    }
+    console.warn('[agent-sync] SDK agents.list() failed; continuing with fs scan:', sdkErr);
   }
+
+  const diskListing = await listAgentDirs(agentsDir);
+  const presentNames = new Set<string>([...sdkNames, ...diskListing.names]);
+  const entries = [...presentNames].sort((a, b) => a.localeCompare(b));
 
   const db = getDb();
   let added = 0;
   let updated = 0;
-
-  const seenNames = new Set<string>();
 
   await Promise.all(
     entries.map(async (agentName) => {
       const charterPath = path.join(agentsDir, agentName, 'charter.md');
       const historyPath = path.join(agentsDir, agentName, 'history.md');
 
-      // --- Read charter: SDK first, raw fs fallback ---
-      let charterContent: string | null = null;
-      try {
-        charterContent = await (await getAgents(projectId)).get(agentName).charter();
-      } catch (sdkErr) {
-        console.warn(
-          `[agent-sync] SDK charter() failed for '${agentName}', falling back to fs:`,
-          sdkErr,
-        );
-        // Fallback: require charter.md on disk
-        try {
-          await fs.access(charterPath);
-        } catch {
-          return; // no charter — skip this agent
-        }
-        try {
-          charterContent = await fs.readFile(charterPath, 'utf-8');
-        } catch {
-          return;
-        }
-      }
+      const charterContent = await readAgentCharter({
+        agentName,
+        charterPath,
+        sdkAgents,
+        sdkHasAgent: sdkNames.has(agentName),
+      });
 
       if (charterContent === null) return;
-
-      seenNames.add(agentName);
 
       let meta;
       try {
         meta = parseCharterContent(charterContent);
-      } catch {
+      } catch (err) {
+        console.warn(
+          `[agent-sync] Could not parse charter for '${agentName}'; leaving DB status unchanged:`,
+          err instanceof Error ? err.message : String(err),
+        );
         return;
       }
 
@@ -132,8 +115,9 @@ export async function syncAgentsFromDisk(
         const roleChanged = row.role !== meta.role;
         const modelChanged = (row.model ?? undefined) !== (meta.model ?? undefined);
         const charterContentChanged = row.charterContent !== charterContent;
+        const shouldReactivate = row.status === 'retired';
 
-        if (hashChanged || roleChanged || modelChanged || charterContentChanged) {
+        if (hashChanged || roleChanged || modelChanged || charterContentChanged || shouldReactivate) {
           // UPDATE branch: scope `.set({...})` to MUTABLE fields ONLY.
           //
           // INVARIANT: `createdAt` (and `id`) MUST NEVER appear in this set
@@ -153,6 +137,7 @@ export async function syncAgentsFromDisk(
             historyPath: historyExists ? historyPath : row.historyPath,
             updatedAt: new Date(),
           };
+          if (shouldReactivate) mutableFields.status = 'active';
           try {
             await db
               .update(schema.agents)
@@ -170,27 +155,98 @@ export async function syncAgentsFromDisk(
     }),
   );
 
-  // Retire DB rows for agents whose folder no longer exists
+  // Retire DB rows only when the filesystem listing is reliable. A stale SDK
+  // cache, transient charter read failure, or parse problem is not proof of
+  // deletion and must not silently retire active hire-team agents.
   const allRows = await db
     .select()
     .from(schema.agents)
     .where(eq(schema.agents.projectId, projectId));
 
   let removed = 0;
-  await Promise.all(
-    allRows
-      .filter((r) => !seenNames.has(r.name) && r.status === 'active')
-      .map(async (r) => {
-        // Whitelist set fields — never re-stamp `createdAt` on retire.
-        await db
-          .update(schema.agents)
-          .set({ status: 'retired', updatedAt: new Date() })
-          .where(eq(schema.agents.id, r.id));
-        removed++;
-      }),
-  );
+  if (diskListing.reliableForRetirement) {
+    await Promise.all(
+      allRows
+        .filter((r) => !presentNames.has(r.name) && r.status === 'active')
+        .map(async (r) => {
+          // Whitelist set fields — never re-stamp `createdAt` on retire.
+          await db
+            .update(schema.agents)
+            .set({ status: 'retired', updatedAt: new Date() })
+            .where(eq(schema.agents.id, r.id));
+          removed++;
+        }),
+    );
+  } else if (allRows.some((r) => !presentNames.has(r.name) && r.status === 'active')) {
+    console.warn(
+      '[agent-sync] Skipped retiring agents because .squad/agents could not be listed reliably',
+    );
+  }
 
   return { added, updated, removed };
+}
+
+interface AgentDirListing {
+  names: Set<string>;
+  reliableForRetirement: boolean;
+}
+
+async function listAgentDirs(agentsDir: string): Promise<AgentDirListing> {
+  try {
+    const dirents = await fs.readdir(agentsDir, { withFileTypes: true });
+    return {
+      names: new Set(dirents.filter((d) => d.isDirectory()).map((d) => d.name)),
+      reliableForRetirement: true,
+    };
+  } catch (err) {
+    if (isNotFoundError(err)) {
+      return { names: new Set(), reliableForRetirement: true };
+    }
+    console.warn(
+      '[agent-sync] fs.readdir(.squad/agents) failed; retirement disabled for this sync:',
+      err instanceof Error ? err.message : String(err),
+    );
+    return { names: new Set(), reliableForRetirement: false };
+  }
+}
+
+async function readAgentCharter(opts: {
+  agentName: string;
+  charterPath: string;
+  sdkAgents: Awaited<ReturnType<typeof getAgents>> | null;
+  sdkHasAgent: boolean;
+}): Promise<string | null> {
+  const { agentName, charterPath, sdkAgents, sdkHasAgent } = opts;
+
+  if (sdkAgents && sdkHasAgent) {
+    try {
+      return await sdkAgents.get(agentName).charter();
+    } catch (sdkErr) {
+      console.warn(
+        `[agent-sync] SDK charter() failed for '${agentName}', falling back to fs:`,
+        sdkErr,
+      );
+    }
+  }
+
+  try {
+    return await fs.readFile(charterPath, 'utf-8');
+  } catch (fsErr) {
+    console.warn(
+      `[agent-sync] Could not read charter.md for '${agentName}'; leaving DB status unchanged:`,
+      fsErr instanceof Error ? fsErr.message : String(fsErr),
+    );
+    return null;
+  }
+}
+
+function isNotFoundError(err: unknown): boolean {
+  return (
+    typeof err === 'object' &&
+    err !== null &&
+    'code' in err &&
+    (err as { code?: unknown }).code === 'ENOENT'
+  );
 }
 
 /**

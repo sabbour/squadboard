@@ -21,12 +21,18 @@
  * Wave 14 (q8) — Built-in ceremony registry:
  *   BUILT_IN_CEREMONIES defines first-class ceremonies that are always
  *   available regardless of project YAML. The 'scribe-close-out' ceremony is
- *   the convergence point for the CLI coordinator, the autonomous daemon (q7),
- *   and the manual End Wave button (q9). All three paths call the same SDK
- *   function: squadboard.scribe.closeOut() from @sabbour/squadboard-sdk.
+ *   the convergence point for the CLI coordinator and the autonomous daemon.
+ *   Both paths call the same SDK function: squadboard.scribe.closeOut() from
+ *   @sabbour/squadboard-sdk.
  */
 
 import { validateWorkflowYaml } from './workflow-parser.js';
+import * as yaml from 'js-yaml';
+import {
+  invokeScribeCloseOut,
+  type ScribeCloseOutSource,
+} from './scribe-closeout.js';
+import { LIFECYCLE_MODEL_VERSION } from './worktree-lifecycle.js';
 
 // ---------------------------------------------------------------------------
 // Public types
@@ -136,8 +142,8 @@ export interface CeremonySpawnManifest {
 
 /**
  * Invocation context passed to a built-in ceremony's `invoke` handler.
- * The daemon, the CLI coordinator, and the manual button all populate this
- * from their own routing layer before calling `invokeBuiltInCeremony()`.
+ * The daemon and the CLI coordinator populate this from their own routing
+ * layer before calling `invokeBuiltInCeremony()`.
  */
 export interface CeremonyInvokeContext {
   projectId?: string;
@@ -149,7 +155,7 @@ export interface CeremonyInvokeContext {
 
 /** Trigger surface: which caller paths are authorised to fire this ceremony. */
 export interface CeremonyTriggers {
-  /** Fired by the manual "End Wave" button (q9, Wave 15). */
+  /** Allows direct user/API invocation; disabled for close-out ceremonies. */
   manual: boolean;
   /** Fired by the autonomous daemon on a cron/event cadence (q7). */
   scheduled: boolean;
@@ -175,6 +181,8 @@ export interface BuiltInCeremony {
   participants: string[];
   /** Which caller paths can trigger this ceremony. */
   triggers: CeremonyTriggers;
+  /** Shared lifecycle envelope used by daemon and coordinator callers. */
+  lifecycleModel?: typeof LIFECYCLE_MODEL_VERSION;
   /** Execute the ceremony and return a result. */
   invoke: (ctx: CeremonyInvokeContext) => Promise<Record<string, unknown>>;
 }
@@ -183,8 +191,8 @@ export interface BuiltInCeremony {
  * Registry of first-class ceremonies. Consumers call `getBuiltInCeremony(id)`
  * to look up a ceremony and `invokeBuiltInCeremony(id, ctx)` to run it.
  *
- * To add a new ceremony: push an entry to this array. The daemon, the button,
- * and the coordinator all discover ceremonies through this registry.
+ * To add a new ceremony: push an entry to this array. The daemon and the
+ * coordinator discover ceremonies through this registry.
  */
 const BUILT_IN_CEREMONIES: BuiltInCeremony[] = [
   {
@@ -194,22 +202,24 @@ const BUILT_IN_CEREMONIES: BuiltInCeremony[] = [
       'Scribe merges inbox decisions, writes orchestration logs, archives decisions.md if oversized, commits .squad/ changes.',
     facilitator: 'scribe',
     participants: ['scribe'],
+    lifecycleModel: LIFECYCLE_MODEL_VERSION,
     triggers: {
-      manual: true,      // "End Wave" button (q9)
+      manual: false,
       scheduled: true,   // daemon (q7) fires on cron cadence
       coordinator: true, // CLI coordinator post-work spawn (existing behaviour)
     },
     invoke: async (ctx: CeremonyInvokeContext): Promise<Record<string, unknown>> => {
-      // Lazy-import so the SDK is only loaded when the ceremony runs,
-      // keeping server startup cost zero when Scribe isn't needed.
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const sdk = await import('@sabbour/squadboard-sdk') as any;
-      return sdk.squadboard.scribe.closeOut({
+      const requestedSource = (ctx.extra?.source ?? ctx.extra?.caller) as ScribeCloseOutSource | undefined;
+      const source = requestedSource === 'daemon' || requestedSource === 'coordinator' || requestedSource === 'server'
+        ? requestedSource
+        : 'server';
+      return invokeScribeCloseOut({
         projectId: ctx.projectId,
         spawnManifest: ctx.spawnManifest,
         teamRoot: ctx.teamRoot,
-        ...(ctx.extra ?? {}),
-      }) as Promise<Record<string, unknown>>;
+        source,
+        extra: ctx.extra,
+      }) as unknown as Record<string, unknown>;
     },
   },
 ];
@@ -292,6 +302,57 @@ const VALID_TRIGGER_KINDS: ReadonlySet<TranslatorTriggerKind> = new Set([
   'on_event',
   'manual',
 ]);
+
+function humanizeStepType(type: string): string {
+  return type
+    .split('_')
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(' ');
+}
+
+function inferStepLabel(step: Record<string, unknown>, index: number): string {
+  const type = typeof step.type === 'string' ? step.type : 'step';
+  if (type === 'agent_run') {
+    const agent = typeof step.agent === 'string' ? step.agent : 'assigned agent';
+    return `Run ${agent}`;
+  }
+  if (type === 'approve') return 'Review and approve';
+  if (type === 'route') return 'Route work';
+  if (type === 'fan_out') return 'Fan out work';
+  if (type === 'handoff') {
+    const to = typeof step.to === 'string' ? step.to : 'next owner';
+    return `Handoff to ${to}`;
+  }
+  return `${humanizeStepType(type)} ${index + 1}`;
+}
+
+function addMissingStepLabels(steps: unknown[]): void {
+  steps.forEach((raw, index) => {
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return;
+    const step = raw as Record<string, unknown>;
+    if (typeof step.label !== 'string' || !step.label.trim()) {
+      step.label = inferStepLabel(step, index);
+    }
+    if (Array.isArray(step.steps)) {
+      addMissingStepLabels(step.steps);
+    }
+  });
+}
+
+function withStepLabels(yamlContent: string): string {
+  const parsed = yaml.load(yamlContent);
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    return yamlContent;
+  }
+  const doc = parsed as Record<string, unknown>;
+  if (!Array.isArray(doc.steps)) return yamlContent;
+  addMissingStepLabels(doc.steps);
+  return yaml.dump(doc, {
+    lineWidth: -1,
+    noRefs: true,
+    sortKeys: false,
+  });
+}
 
 function renderAvailableAgents(agents: TranslatorAvailableAgent[] | undefined): string {
   if (!agents || agents.length === 0) {
@@ -433,7 +494,7 @@ function normalisePayload(parsed: unknown): TranslatorResult {
   }
   const p = parsed as Record<string, unknown>;
 
-  const yamlContent = typeof p.yamlContent === 'string' ? p.yamlContent : '';
+  const yamlContent = typeof p.yamlContent === 'string' ? withStepLabels(p.yamlContent) : '';
   if (!yamlContent.trim()) {
     throw new TranslatorError('LLM payload missing `yamlContent`', true);
   }
@@ -529,29 +590,34 @@ function buildProseAuthorPrompt(input: ProseAuthorInput): string {
     'Available agents on this project (use only these names; do not invent):',
     availableAgents,
     '',
-    'CRITICAL: each step object MUST have a `type:` field. The valid values for `type` are: agent_run, approve, fan_out, handoff, route.',
+    'CRITICAL: each step object MUST have a `type:` field and a short action-oriented `label:` field. The valid values for `type` are: agent_run, approve, fan_out, handoff, route.',
     '',
     'Step schema (use the `type:` key exactly as shown):',
     '  - type: agent_run',
+    '    label: <short action label>',
     '    agent: <agentName|@role>   # optional; omit to let routing decide',
     '    prompt: <string>',
     '    timeout: <duration>        # optional, e.g. "30m"',
     '  - type: approve',
+    '    label: <short action label>',
     "    approvers: [<agentName|@role>]",
     "    request_changes_policy: first|majority|all",
     '    quorum: {n: <int>, of: <int>}   # optional',
     '    timeout: <duration>             # optional',
     "    timeoutAction: auto_approve|auto_reject|escalate|notify  # optional",
     '  - type: fan_out',
+    '    label: <short action label>',
     "    split_by: agents|labels|count",
     '    agents: [<agentName>]   # when split_by=agents',
     '    count: <int>            # when split_by=count',
     "    merge_strategy: all|any|first",
     '    steps: [<step>, ...]',
     '  - type: handoff',
+    '    label: <short action label>',
     '    to: <agentName>',
     '    message: <string>   # optional',
     '  - type: route',
+    '    label: <short action label>',
     '    agent: <agentName|@role>   # optional',
     '    prompt: <string>           # optional',
     '',
@@ -559,6 +625,7 @@ function buildProseAuthorPrompt(input: ProseAuthorInput): string {
     'name: Daily Standup',
     'steps:',
     '  - type: agent_run',
+    '    label: Draft standup',
     '    agent: scribe',
     '    prompt: Post a standup thread to #standups.',
     '  - type: approve',

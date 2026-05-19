@@ -1,0 +1,50 @@
+---
+title: Built-in templates and defaults
+description: Built-in ceremonies, team templates, project templates, and how to review them before use.
+---
+
+import {ClipboardTaskListLtrRegular, PeopleRegular, SettingsRegular} from '@fluentui/react-icons';
+import {IconCard, IconGrid, Screenshot, ScreenshotGrid} from '@site/src/components/FluentDoc';
+
+# Built-in templates and defaults
+
+Squadboard includes built-in starting points so a new project can become useful before you author every ceremony or team pattern by hand.
+
+<IconGrid>
+  <IconCard icon={ClipboardTaskListLtrRegular} title="Ceremony templates">Repeatable launch, review, close-out, and planning loops that can be reviewed before deployment.</IconCard>
+  <IconCard icon={PeopleRegular} title="Team templates">Reusable role sets for common project shapes, including coordinator, implementer, reviewer, and documentation roles.</IconCard>
+  <IconCard icon={SettingsRegular} title="Project templates">Portable project defaults for board columns, routing assumptions, ceremonies, skills, and integration setup.</IconCard>
+</IconGrid>
+
+## Review before deploying
+
+Open **Templates** from the project navigation. Use **Review** to inspect a ceremony, team, or project template before you apply it to Spark. Applying a template should be an explicit deployment decision, not a blind import.
+
+<ScreenshotGrid>
+  <Screenshot src="/img/scenarios/spark-09-templates-ceremonies.png" alt="Spark ceremony templates with review and use actions" caption="Ceremony templates can be reviewed before opening the new ceremony flow." />
+  <Screenshot src="/img/scenarios/spark-10-templates-projects.png" alt="Spark project templates" caption="Project templates package setup defaults for reuse." />
+</ScreenshotGrid>
+
+## Built-in ceremonies
+
+Built-in ceremonies are normal Squadboard ceremonies once deployed. They can run on issue entry, schedules, manual triggers, or project lifecycle events depending on their template configuration.
+
+The built-in ceremony catalog is intentionally small in the alpha. Use **Review** before applying one so you can see the exact YAML, prompts, approvers, and timeouts.
+
+| Ceremony | Use it when | What it does |
+| --- | --- | --- |
+| **Simple Review** | You want the smallest useful loop for normal work. | Routes the card, runs the assigned agent, then asks a lead to approve the result. |
+| **Bug Fix** | A card is a defect or regression. | Reproduces the bug, implements the fix, verifies the fix, then sends the result through lead approval. |
+| **RFC / Proposal** | The next step is a decision, not code. | Drafts an RFC, gathers concerns, then requires each listed reviewer to approve. |
+| **Spike** | The team needs research before implementation. | Routes the work, investigates within a time box, writes findings, then asks a lead to review those findings. |
+| **Pair-Programming Session** | Two agents should build on the same context. | Routes the work, runs a first pass, runs a second pass that improves it, then asks for final review. |
+| **Sprint Planning** | You are about to choose the next sprint objective and Ready backlog. | Collects candidate work, drafts a sprint plan, and asks the lead to commit the plan. |
+| **Sprint Retro** | A sprint or focused work cycle has just ended. | Gathers evidence, identifies process themes, and accepts follow-up improvements. |
+
+Squadboard also has an SDK-backed **Scribe close-out** path. It is not a YAML template in the ceremony catalog because it is wired to daemon and coordinator lifecycle events. Use it to summarize completed work, record health/report paths, capture follow-up directives, and clean up run metadata.
+
+## Built-in teams and projects
+
+Team templates give you a consistent roster shape without hiding the details. After applying one, review agent names, roles, charters, skills, and tool access before moving cards into Ready.
+
+Project templates are broader. They can bring in board structure, ceremonies, and integration defaults. The default software project includes Simple Review, Bug Fix, RFC, Sprint Planning, and Sprint Retro so a team can plan, execute, review, and improve without authoring ceremonies first. Review the payload first, apply it to the target `.squad/` workspace, then adjust anything that is specific to your project.

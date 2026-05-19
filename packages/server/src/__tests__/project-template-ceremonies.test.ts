@@ -10,13 +10,14 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import path from 'node:path';
 import type { CeremonyBundle, ProjectPayload } from '../services/templates/project-template.js';
 
 // ---------------------------------------------------------------------------
 // Hoist shared constants and mutable state before vi.mock factories
 // ---------------------------------------------------------------------------
 
-const { CANONICAL_YAML, importCalls, insertedWorkflows, insertedVersions } = vi.hoisted(() => {
+const { CANONICAL_YAML, importCalls, insertedWorkflows, insertedVersions, mkdirCalls, projectInsertParams } = vi.hoisted(() => {
   const CANONICAL_YAML = `apiVersion: squad.io/v1
 kind: Ceremony
 metadata:
@@ -32,7 +33,9 @@ spec:
   const importCalls: { yamlText: string; projectId: string }[] = [];
   const insertedWorkflows: Record<string, unknown>[] = [];
   const insertedVersions: Record<string, unknown>[] = [];
-  return { CANONICAL_YAML, importCalls, insertedWorkflows, insertedVersions };
+  const mkdirCalls: string[] = [];
+  const projectInsertParams: unknown[][] = [];
+  return { CANONICAL_YAML, importCalls, insertedWorkflows, insertedVersions, mkdirCalls, projectInsertParams };
 });
 
 // ---------------------------------------------------------------------------
@@ -71,6 +74,7 @@ vi.mock('../db/index.js', () => {
             return { rows: [] };
           }
           if (sql.trim().startsWith('INSERT INTO projects')) {
+            projectInsertParams.push(params ?? []);
             return { rows: [{ id: 'project-001' }] };
           }
           return { rows: [] };
@@ -123,7 +127,10 @@ vi.mock('./template-storage.js', () => ({
 
 vi.mock('node:fs/promises', () => ({
   default: {
-    mkdir: vi.fn().mockResolvedValue(undefined),
+    mkdir: vi.fn((dirPath: string) => {
+      mkdirCalls.push(dirPath);
+      return Promise.resolve(undefined);
+    }),
     readFile: vi.fn().mockResolvedValue('# Charter content'),
     writeFile: vi.fn().mockResolvedValue(undefined),
   },
@@ -182,6 +189,18 @@ describe('project-template import — canonical CER-3 yamlContent', () => {
     importCalls.length = 0;
     insertedWorkflows.length = 0;
     insertedVersions.length = 0;
+    mkdirCalls.length = 0;
+    projectInsertParams.length = 0;
+  });
+
+  it('normalizes project-root import paths to the .squad directory', async () => {
+    const payload = makeMinimalPayload([]);
+    const projectRoot = '/squads/root-project';
+
+    await importProject(payload, 'New Project', projectRoot);
+
+    expect(mkdirCalls[0]).toBe(path.join(projectRoot, '.squad', 'agents'));
+    expect(projectInsertParams[0]?.[1]).toBe(path.join(projectRoot, '.squad'));
   });
 
   it('calls importCeremonyFromYaml for canonical YAML bundles', async () => {
@@ -276,4 +295,3 @@ describe('project-template import — canonical CER-3 yamlContent', () => {
     expect(insertedWorkflows).toHaveLength(1);
   });
 });
-

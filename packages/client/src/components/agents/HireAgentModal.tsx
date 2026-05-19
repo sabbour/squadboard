@@ -62,7 +62,7 @@ export default function HireAgentModal({ projectId, onClose }: HireAgentModalPro
   const [pickedSkills, setPickedSkills] = useState<Set<string>>(new Set())
   const [pickedTools, setPickedTools] = useState<Set<string>>(new Set())
   const [pickedMcp, setPickedMcp] = useState<Set<string>>(new Set())
-  const [postHireAgentId, setPostHireAgentId] = useState<string | null>(null)
+  const [postCastAgentId, setPostCastAgentId] = useState<string | null>(null)
   const [formulateModel, setFormulateModel] = useState<FormulateModelInfo | null>(null)
   const styles = useStyles()
 
@@ -71,9 +71,9 @@ export default function HireAgentModal({ projectId, onClose }: HireAgentModalPro
   const { data: skills = [] } = useSkills(projectId)
   const { data: tools = [] } = useTools(projectId)
   const { data: mcpServers = [] } = useMcpServers(projectId)
-  const assignSkills = useAssignSkillsToAgent(projectId, postHireAgentId ?? '')
-  const assignTools = useAssignToolsToAgent(projectId, postHireAgentId ?? '')
-  const assignMcp = useAssignMcpServersToAgent(projectId, postHireAgentId ?? '')
+  const assignSkills = useAssignSkillsToAgent(projectId, postCastAgentId ?? '')
+  const assignTools = useAssignToolsToAgent(projectId, postCastAgentId ?? '')
+  const assignMcp = useAssignMcpServersToAgent(projectId, postCastAgentId ?? '')
 
   function validateName(val: string): boolean {
     if (!val) {
@@ -130,9 +130,9 @@ export default function HireAgentModal({ projectId, onClose }: HireAgentModalPro
       },
       {
         onSuccess: async (created) => {
-          setPostHireAgentId(created.id)
+          setPostCastAgentId(created.id)
           // Fan out the three bulk-assigns in parallel; ignore individual failures
-          // so the modal still closes and the agent still gets hired.
+          // so the modal still closes and the agent still gets cast.
           const tasks: Promise<unknown>[] = []
           if (pickedSkills.size > 0) tasks.push(assignSkills.mutateAsync(Array.from(pickedSkills)).catch(() => null))
           if (pickedTools.size > 0) tasks.push(assignTools.mutateAsync(Array.from(pickedTools)).catch(() => null))
@@ -158,7 +158,7 @@ export default function HireAgentModal({ projectId, onClose }: HireAgentModalPro
     <Dialog open onOpenChange={(_, data) => { if (!data.open) onClose() }}>
       <DialogSurface style={{ maxWidth: '560px', width: '100%' }}>
         <DialogBody>
-          <DialogTitle>Hire Agent — {step === 'role' ? 'Step 1 of 2: Role' : 'Step 2 of 2: Capabilities'}</DialogTitle>
+          <DialogTitle>Cast Agent — {step === 'role' ? 'Step 1 of 2: Role' : 'Step 2 of 2: Capabilities'}</DialogTitle>
           <DialogContent>
             {step === 'role' ? (
               <form
@@ -238,7 +238,7 @@ export default function HireAgentModal({ projectId, onClose }: HireAgentModalPro
 
             {createAgent.isError && (
               <p style={{ fontSize: '12px', color: tokens.colorPaletteRedForeground1, margin: 0 }}>
-                Failed to hire agent. Please try again.
+                Failed to cast agent. Please try again.
               </p>
             )}
           </DialogContent>
@@ -263,7 +263,7 @@ export default function HireAgentModal({ projectId, onClose }: HireAgentModalPro
                   onClick={handleSubmit}
                   disabled={createAgent.isPending}
                 >
-                  {createAgent.isPending ? 'Hiring…' : 'Hire Agent'}
+                  {createAgent.isPending ? 'Casting…' : 'Cast Agent'}
                 </Button>
               </>
             )}

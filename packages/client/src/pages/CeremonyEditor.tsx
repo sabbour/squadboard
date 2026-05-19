@@ -102,6 +102,7 @@ import PageHeader from '../components/layout/PageHeader.tsx'
 import FormulatePanel from '../components/formulate/FormulatePanel.tsx'
 import { safeAbsoluteTime } from '../utils/dates.ts'
 import { SectionLoading } from '../components/loading/index.tsx'
+import { useUnsavedChangesWarning } from '../hooks/useUnsavedChangesWarning.ts'
 
 // ---------------------------------------------------------------------------
 // Phase 16: the single source of truth for editor state is now the
@@ -123,7 +124,7 @@ const ADVANCED_STEP_OPTIONS = STEP_TYPE_OPTIONS.filter((o) => o.advanced)
 const TRIGGER_KIND_OPTIONS: { value: TriggerKind; label: string; description: string }[] = [
   { value: 'manual', label: 'Manual', description: 'Run on demand. You click a button to start it.' },
   { value: 'on_schedule', label: 'Schedule', description: 'Run on a recurring schedule (cron expression).' },
-  { value: 'on_event', label: 'Event', description: 'Run when a specific event happens (e.g., issue created, deliverable submitted).' },
+  { value: 'on_event', label: 'Event', description: 'Run when a specific event happens (e.g., issue created, output submitted).' },
   { value: 'on_issue_entry', label: 'Issue entry', description: 'Run when an issue enters a board column.' },
 ]
 
@@ -153,18 +154,23 @@ const CEREMONY_KIND_OPTIONS: { value: CeremonyKind; label: string; description: 
 ]
 
 const EVENT_TYPE_OPTIONS = [
-  'issue.created',
-  'issue.updated',
-  'issue.moved',
-  'run.started',
-  'run.completed',
-  'workflow.advanced',
-  'comment.created',
-  'deliverable.created',
-  'deliverable.updated',
-  'deliverable.reviewed',
-  'session.completed',
+  { value: 'issue.created', label: 'Issue created' },
+  { value: 'issue.updated', label: 'Issue updated' },
+  { value: 'issue.moved', label: 'Issue moved' },
+  { value: 'run.started', label: 'Run started' },
+  { value: 'run.completed', label: 'Run completed' },
+  { value: 'workflow.advanced', label: 'Workflow advanced' },
+  { value: 'comment.created', label: 'Comment created' },
+  { value: 'deliverable.created', label: 'Output created' },
+  { value: 'deliverable.updated', label: 'Output updated' },
+  { value: 'deliverable.reviewed', label: 'Output reviewed' },
+  { value: 'session.completed', label: 'Session completed' },
 ]
+
+function eventTypeLabel(value: unknown): string {
+  const eventValue = typeof value === 'string' ? value : 'deliverable.created'
+  return EVENT_TYPE_OPTIONS.find((option) => option.value === eventValue)?.label ?? eventValue
+}
 
 const TIMEZONE_OPTIONS = ['UTC', 'America/Los_Angeles', 'America/New_York', 'Europe/London', 'Europe/Berlin', 'Asia/Tokyo']
 
@@ -179,6 +185,17 @@ function emitYaml(header: CeremonyHeader, steps: CeremonyStep[]): string {
 function parseSteps(yaml: string): { header: CeremonyHeader; steps: CeremonyStep[] } {
   const graph = ceremonyYamlToGraph(yaml)
   return { header: graph.header, steps: topLevelSteps(graph) }
+}
+
+function editorSnapshot(input: {
+  name: string
+  description: string
+  kind: CeremonyKind
+  triggerKind: TriggerKind
+  triggerConfig: Record<string, unknown>
+  yaml: string
+}): string {
+  return JSON.stringify(input)
 }
 
 const DEFAULT_STEPS: CeremonyStep[] = [
@@ -219,6 +236,8 @@ export default function CeremonyEditor() {
   const [steps, setSteps] = useState<CeremonyStep[]>(DEFAULT_STEPS)
   const [showAdvancedFor, setShowAdvancedFor] = useState<Set<number>>(new Set())
   const [activeTab, setActiveTab] = useState<'code' | 'visual'>('code')
+  const [baselineSnapshot, setBaselineSnapshot] = useState<string | null>(null)
+  const [suppressUnsavedWarning, setSuppressUnsavedWarning] = useState(false)
 
   // Conjure/Formulate model badge.
   const [formulateModelUsed, setFormulateModelUsed] = useState<{ model: string; via: string } | null>(null)
@@ -283,6 +302,18 @@ export default function CeremonyEditor() {
         const parsed = parseSteps(tpl.yamlContent)
         setSteps(parsed.steps)
         setHeaderExtras(parsed.header.extras)
+        setBaselineSnapshot(editorSnapshot({
+          name: tpl.name,
+          description: tpl.description ?? '',
+          kind: 'workflow',
+          triggerKind,
+          triggerConfig,
+          yaml: emitYaml({
+            name: tpl.name,
+            description: tpl.description?.trim() ? tpl.description : undefined,
+            extras: parsed.header.extras,
+          }, parsed.steps),
+        }))
       } catch {
         // Bad YAML in template — skip steps pre-fill, form remains partially filled.
       }
@@ -294,24 +325,42 @@ export default function CeremonyEditor() {
   // Hydrate from server.
   useEffect(() => {
     if (isNew || !detail) return
+    let nextDescription = detail.ceremony.description ?? ''
+    let nextHeaderExtras: Record<string, unknown> = {}
+    let nextSteps = steps
     setName(detail.ceremony.name)
-    setDescription(detail.ceremony.description ?? '')
+    setDescription(nextDescription)
     setKind(detail.ceremony.kind)
     setTriggerKind(detail.ceremony.triggerKind)
     setTriggerConfig(detail.ceremony.triggerConfig ?? {})
     if (detail.activeVersion?.yamlContent) {
       try {
         const parsed = parseSteps(detail.activeVersion.yamlContent)
+        nextSteps = parsed.steps
+        nextHeaderExtras = parsed.header.extras
         setSteps(parsed.steps)
         setHeaderExtras(parsed.header.extras)
         // Prefer the YAML's name/description if the metadata is missing them.
         if (!detail.ceremony.description && parsed.header.description) {
-          setDescription(parsed.header.description)
+          nextDescription = parsed.header.description
+          setDescription(nextDescription)
         }
       } catch {
         // If YAML is malformed, leave the defaults so the user can still edit.
       }
     }
+    setBaselineSnapshot(editorSnapshot({
+      name: detail.ceremony.name,
+      description: nextDescription,
+      kind: detail.ceremony.kind,
+      triggerKind: detail.ceremony.triggerKind,
+      triggerConfig: detail.ceremony.triggerConfig ?? {},
+      yaml: emitYaml({
+        name: detail.ceremony.name,
+        description: nextDescription.trim() ? nextDescription : undefined,
+        extras: nextHeaderExtras,
+      }, nextSteps),
+    }))
   }, [isNew, detail])
 
   const header = useMemo<CeremonyHeader>(
@@ -324,6 +373,16 @@ export default function CeremonyEditor() {
   )
   const yaml = useMemo(() => emitYaml(header, steps), [header, steps])
   const readOnly = kind === 'narrative'
+  const currentSnapshot = useMemo(
+    () => editorSnapshot({ name, description, kind, triggerKind, triggerConfig, yaml }),
+    [description, kind, name, triggerConfig, triggerKind, yaml],
+  )
+  useEffect(() => {
+    if (baselineSnapshot === null && isNew && !templateSlug) {
+      setBaselineSnapshot(currentSnapshot)
+    }
+  }, [baselineSnapshot, currentSnapshot, isNew, templateSlug])
+  useUnsavedChangesWarning(Boolean(baselineSnapshot && currentSnapshot !== baselineSnapshot && !suppressUnsavedWarning))
 
   // ---------- Step manipulation ----------
   function moveStep(i: number, dir: -1 | 1) {
@@ -375,6 +434,8 @@ export default function CeremonyEditor() {
           triggerConfig,
           kind,
         })
+        setBaselineSnapshot(currentSnapshot)
+        setSuppressUnsavedWarning(true)
         setSaveOk(true)
         navigate(`/projects/${projectId}/ceremonies/${created.ceremony.id}`, { replace: true })
       } else {
@@ -387,6 +448,7 @@ export default function CeremonyEditor() {
           kind,
           yamlContent: yaml,
         })
+        setBaselineSnapshot(currentSnapshot)
         setSaveOk(true)
         setTimeout(() => setSaveOk(false), 2500)
       }
@@ -1566,13 +1628,13 @@ function TriggerConfigForm({
       <label style={{ fontSize: 12 }}>
         event type
         <Dropdown
-          value={(triggerConfig.eventType as string) ?? 'deliverable.created'}
+          value={eventTypeLabel(triggerConfig.eventType)}
           selectedOptions={[(triggerConfig.eventType as string) ?? 'deliverable.created']}
           onOptionSelect={(_, d) => set('eventType', d.optionValue)}
           disabled={disabled}
         >
-          {EVENT_TYPE_OPTIONS.map((t) => (
-            <Option key={t} value={t}>{t}</Option>
+          {EVENT_TYPE_OPTIONS.map((option) => (
+            <Option key={option.value} value={option.value}>{option.label}</Option>
           ))}
         </Dropdown>
       </label>

@@ -1,4 +1,5 @@
 import { readFile } from 'node:fs/promises';
+import path from 'node:path';
 import type { Agent } from '../db/schema.js';
 import { getDb } from '../db/index.js';
 import { issueRuns, projects as projectsTable } from '../db/schema.js';
@@ -9,6 +10,11 @@ import { CostTracker } from './cost-tracker.js';
 import { BudgetGuard, BudgetExceededError } from './budget-guard.js';
 import { BUILTIN_FALLBACK } from './model-defaults.js';
 import { RunningIssueSessionImpl } from './issue-stream.js';
+import {
+  buildAgentSpawnPrompt,
+  type SpawnMcpServerContext,
+  type SpawnSkillContext,
+} from './spawn-prompt.js';
 
 export type { IssueRun } from '../db/schema.js';
 
@@ -40,6 +46,41 @@ function validateModel(model: string | null | undefined, agentName: string): str
   return model;
 }
 
+function trimTrailingSeparators(value: string): string {
+  return value.replace(/[\\/]+$/, '');
+}
+
+function teamRootFromSquadPath(projectSquadPath: string, workspacePath: string): string {
+  const candidate = trimTrailingSeparators(projectSquadPath || workspacePath);
+  if (!candidate) return workspacePath;
+  return path.basename(candidate) === '.squad' ? path.dirname(candidate) : candidate;
+}
+
+function requesterName(): string {
+  return (
+    process.env.SQUADBOARD_REQUESTER_NAME ||
+    process.env.GIT_AUTHOR_NAME ||
+    process.env.USER ||
+    process.env.USERNAME ||
+    'Unknown requester'
+  );
+}
+
+async function loadAssignedSpawnContext(
+  projectId: string,
+  agentId: string,
+): Promise<{ assignedSkills: SpawnSkillContext[]; assignedMcpServers: SpawnMcpServerContext[] }> {
+  const [skillsResult, mcpResult] = await Promise.allSettled([
+    import('../services/skills.js').then((mod) => mod.listAgentSkills(projectId, agentId)),
+    import('../services/mcp.js').then((mod) => mod.listAgentMcpServers(projectId, agentId)),
+  ]);
+
+  return {
+    assignedSkills: skillsResult.status === 'fulfilled' ? skillsResult.value : [],
+    assignedMcpServers: mcpResult.status === 'fulfilled' ? mcpResult.value : [],
+  };
+}
+
 export interface AgentRunInput {
   issueRunId: string;
   projectId: string; // needed for budget guard
@@ -48,6 +89,7 @@ export interface AgentRunInput {
   issueBody: string;
   workspacePath: string;
   projectSquadPath: string; // path to .squad/ directory
+  workspaceStrategy?: string | null;
 }
 
 export interface AgentRunOutput {
@@ -104,7 +146,21 @@ export async function executeAgentRun(input: AgentRunInput): Promise<AgentRunOut
     const charter = await readFile(input.agent.charterPath, 'utf8').catch(() => '');
 
     // 2. Build session context.
-    const task = `# ${input.issueTitle}\n\n${input.issueBody}`;
+    const assignedContext = await loadAssignedSpawnContext(input.projectId, input.agent.id);
+    const spawnPrompt = buildAgentSpawnPrompt({
+      agentName: input.agent.name,
+      agentRole: input.agent.role,
+      charter,
+      teamRoot: teamRootFromSquadPath(input.projectSquadPath, input.workspacePath),
+      currentDateTime: new Date().toISOString(),
+      requesterName: requesterName(),
+      workspacePath: input.workspacePath,
+      workspaceMode: input.workspaceStrategy ?? 'dir',
+      taskTitle: input.issueTitle,
+      taskBody: input.issueBody,
+      assignedSkills: assignedContext.assignedSkills,
+      assignedMcpServers: assignedContext.assignedMcpServers,
+    });
 
     // 3. Look up project default model (auto-resolution chain).
     const [projectRow] = await db
@@ -118,7 +174,8 @@ export async function executeAgentRun(input: AgentRunInput): Promise<AgentRunOut
       charterPath: input.agent.charterPath,
       workspacePath: input.workspacePath,
       squadPath: input.projectSquadPath,
-      task,
+      task: `Begin the assigned issue run now: ${input.issueTitle}`,
+      systemPrompt: spawnPrompt,
       agentModel: validateModel(input.agent.model ?? null, input.agent.name),
       projectDefaultModel: projectRow?.defaultModel ?? null,
     });

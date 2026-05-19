@@ -1,5 +1,7 @@
 #!/usr/bin/env node
 import { spawn } from 'node:child_process';
+import { existsSync } from 'node:fs';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { createConnection } from 'node:net';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
@@ -7,29 +9,51 @@ import { dirname, join } from 'node:path';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
-const MCP_CONFIG = JSON.stringify(
-  {
-    mcpServers: {
-      squadboard: {
-        command: 'squadboard',
-        args: ['mcp'],
-      },
+interface CliOptions {
+  printMcpConfig: boolean;
+  writeMcpConfig: boolean;
+  squadStorageProvider?: string;
+}
+
+function buildMcpServerConfig(squadStorageProvider = 'postgresql'): Record<string, unknown> {
+  return {
+    command: 'squadboard',
+    args: ['mcp'],
+    env: {
+      SQUADBOARD_SQUAD_STORAGE_PROVIDER: squadStorageProvider,
     },
-  },
-  null,
-  2,
-);
+  };
+}
+
+function buildMcpConfig(squadStorageProvider = 'postgresql'): string {
+  return JSON.stringify({
+    mcpServers: {
+      squadboard: buildMcpServerConfig(squadStorageProvider),
+    },
+  }, null, 2);
+}
 
 const USAGE = `
 Squadboard CLI v0.1.0
 
 Usage:
-  squadboard init   Start the Squadboard server and open the UI
-  squadboard mcp    Start the MCP server (stdio) for Claude Desktop / Cursor
+  squadboard init [--squad-storage postgresql|fs] [--print-mcp-config] [--write-mcp-config]
+                    Start the Squadboard server and open the UI
+  squadboard mcp  [--squad-storage postgresql|fs] [--print-mcp-config] [--write-mcp-config]
+                    Start the MCP server (stdio) for Copilot CLI / VS Code
+
+Storage:
+  postgresql        Default. Store Squad state in Squadboard's PostgreSQL DB
+                    (local PGlite unless DATABASE_URL points to PostgreSQL).
+  fs                Fallback. Store Squad state in repository .squad/ files.
+
+Config:
+  --print-mcp-config  Print a Copilot CLI MCP config block and exit.
+  --write-mcp-config  Merge a squadboard entry into .copilot/mcp-config.json.
 
 `.trim();
 
-const [, , command] = process.argv;
+const [, , command, ...args] = process.argv;
 
 if (!command || command === '--help' || command === '-h') {
   console.log(USAGE);
@@ -40,6 +64,79 @@ if (command !== 'init' && command !== 'mcp') {
   console.error(`Unknown command: ${command}`);
   console.error('Run `squadboard --help` for usage.');
   process.exit(1);
+}
+
+function parseOptions(rawArgs: string[]): CliOptions {
+  const options: CliOptions = { printMcpConfig: false, writeMcpConfig: false };
+
+  for (let i = 0; i < rawArgs.length; i++) {
+    const arg = rawArgs[i];
+
+    if (arg === '--print-mcp-config') {
+      options.printMcpConfig = true;
+      continue;
+    }
+
+    if (arg === '--write-mcp-config') {
+      options.writeMcpConfig = true;
+      continue;
+    }
+
+    if (arg.startsWith('--squad-storage=')) {
+      options.squadStorageProvider = arg.slice('--squad-storage='.length);
+      continue;
+    }
+
+    if (arg === '--squad-storage') {
+      const value = rawArgs[i + 1];
+      if (!value || value.startsWith('-')) {
+        throw new Error('Missing value for --squad-storage. Use "postgresql" or "fs".');
+      }
+      options.squadStorageProvider = value;
+      i++;
+      continue;
+    }
+
+    throw new Error(`Unknown option: ${arg}`);
+  }
+
+  return options;
+}
+
+function normalizeSquadStorageProvider(value: string | undefined): string {
+  const provider = value?.trim().toLowerCase();
+  if (!provider) return 'postgresql';
+  if (provider === 'postgresql' || provider === 'fs') return provider;
+  throw new Error(`Unsupported Squad storage provider "${provider}". Use "postgresql" or "fs".`);
+}
+
+function isJsonObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+async function writeMcpConfigFile(squadStorageProvider: string): Promise<void> {
+  const configDir = join(process.cwd(), '.copilot');
+  const configPath = join(configDir, 'mcp-config.json');
+  let config: Record<string, unknown> = {};
+
+  if (existsSync(configPath)) {
+    const parsed = JSON.parse(await readFile(configPath, 'utf8')) as unknown;
+    if (!isJsonObject(parsed)) {
+      throw new Error(`${configPath} must contain a JSON object.`);
+    }
+    config = parsed;
+  }
+
+  const existingServers = config.mcpServers;
+  const mcpServers = isJsonObject(existingServers) ? existingServers : {};
+  config.mcpServers = {
+    ...mcpServers,
+    squadboard: buildMcpServerConfig(squadStorageProvider),
+  };
+
+  await mkdir(configDir, { recursive: true });
+  await writeFile(configPath, `${JSON.stringify(config, null, 2)}\n`, 'utf8');
+  console.log(`[cli] wrote ${configPath}`);
 }
 
 // packages/cli/dist/index.js → up 2 → packages/ → server/dist/index.js
@@ -84,15 +181,18 @@ async function openBrowser(url: string): Promise<void> {
  * `squadboard mcp` — print the MCP server config JSON then spawn the server.
  * The MCP server (stdio) is consumed by Claude Desktop, Cursor, etc.
  */
-async function runMcp(): Promise<void> {
+async function runMcp(squadStorageProvider: string): Promise<void> {
   console.error('[squadboard] MCP server config (paste into your MCP host):');
-  console.error(MCP_CONFIG);
+  console.error(buildMcpConfig(squadStorageProvider));
   console.error('');
   console.error('[squadboard] Starting MCP server on stdio…');
 
   const mcpProcess = spawn('node', [MCP_ENTRY], {
     stdio: 'inherit',
-    env: process.env,
+    env: {
+      ...process.env,
+      SQUADBOARD_SQUAD_STORAGE_PROVIDER: squadStorageProvider,
+    },
   });
 
   mcpProcess.on('error', (err: Error) => {
@@ -120,16 +220,32 @@ async function runMcp(): Promise<void> {
 }
 
 async function main(): Promise<void> {
+  const options = parseOptions(args);
+  const squadStorageProvider = normalizeSquadStorageProvider(options.squadStorageProvider);
+
+  if (options.writeMcpConfig) {
+    await writeMcpConfigFile(squadStorageProvider);
+  }
+
+  if (options.printMcpConfig) {
+    console.log(buildMcpConfig(squadStorageProvider));
+    return;
+  }
+
   if (command === 'mcp') {
-    await runMcp();
+    await runMcp(squadStorageProvider);
     return;
   }
 
   console.log('🎯 Starting Squadboard…');
+  console.log(`[cli] Squad storage provider: ${squadStorageProvider}`);
 
   const server = spawn('node', [SERVER_ENTRY], {
     stdio: 'inherit',
-    env: process.env,
+    env: {
+      ...process.env,
+      SQUADBOARD_SQUAD_STORAGE_PROVIDER: squadStorageProvider,
+    },
   });
 
   server.on('error', (err: Error) => {

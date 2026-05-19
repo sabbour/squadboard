@@ -1,0 +1,23 @@
+name: Sprint Retro
+description: Summarize the sprint, surface patterns, and capture improvements.
+steps:
+  - type: agent_run
+    label: Gather evidence
+    agent: Lead
+    prompt: |
+      Review completed cards, run history, review notes, incidents, and unresolved
+      follow-ups from the sprint. Highlight what actually happened.
+    timeout: 45m
+  - type: agent_run
+    label: Identify themes
+    agent: Lead
+    prompt: |
+      Group the evidence into what went well, what slowed the team down, and
+      concrete experiments or process improvements for the next sprint.
+    timeout: 45m
+  - type: approve
+    label: Accept follow-ups
+    approvers: [Lead]
+    request_changes_policy: first
+    timeout: 24h
+    timeoutAction: notify

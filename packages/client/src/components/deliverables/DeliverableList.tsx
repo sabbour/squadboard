@@ -20,7 +20,7 @@ export default function DeliverableList({ projectId, issueId }: DeliverableListP
           padding: '20px 0',
         }}
       >
-        Loading deliverables…
+        Loading outputs…
       </p>
     )
   }
@@ -37,7 +37,7 @@ export default function DeliverableList({ projectId, issueId }: DeliverableListP
           borderRadius: '6px',
         }}
       >
-        Failed to load deliverables: {(error as Error)?.message ?? 'Unknown error'}
+        Failed to load outputs: {(error as Error)?.message ?? 'Unknown error'}
       </p>
     )
   }
@@ -64,10 +64,10 @@ export default function DeliverableList({ projectId, issueId }: DeliverableListP
             marginBottom: '4px',
           }}
         >
-          No deliverables yet
+          No outputs yet
         </p>
         <p style={{ margin: 0, fontSize: '12px', color: tokens.colorNeutralForeground3 }}>
-          Run the workflow or attach an agent — completed steps surface here.
+          Outputs are the files, links, notes, or structured results agents produce while working this card.
         </p>
       </div>
     )

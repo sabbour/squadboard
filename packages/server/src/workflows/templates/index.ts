@@ -285,6 +285,55 @@ steps:
     timeout_action: notify
 `;
 
+const SPRINT_PLANNING_YAML = `# Sprint Planning Workflow
+# Turn a project goal into a ready sprint backlog and owner assignments.
+name: "Sprint Planning"
+description: "Review goals, select Ready work, identify risks, and publish a sprint plan."
+steps:
+  - type: agent_run
+    label: "Collect candidate work"
+    prompt: |
+      Review the project goal, current backlog, recent decisions, and open
+      risks. Summarize the candidate work that should be considered for the
+      next sprint.
+  - type: agent_run
+    label: "Draft sprint plan"
+    prompt: |
+      Propose a sprint plan: objective, selected cards, likely owners, risks,
+      dependencies, and what should stay out of scope.
+  - type: approve
+    label: "Commit the plan"
+    description: "Lead confirms the sprint objective and Ready backlog."
+    approvers: [lead]
+    request_changes_policy: first
+    timeout: 24h
+    timeout_action: notify
+`;
+
+const SPRINT_RETRO_YAML = `# Sprint Retro Workflow
+# Review completed work and convert lessons into follow-up cards.
+name: "Sprint Retro"
+description: "Summarize the sprint, surface patterns, and capture improvements."
+steps:
+  - type: agent_run
+    label: "Gather evidence"
+    prompt: |
+      Review completed cards, run history, review notes, incidents, and
+      unresolved follow-ups from the sprint. Highlight what actually happened.
+  - type: agent_run
+    label: "Identify themes"
+    prompt: |
+      Group the evidence into what went well, what slowed the team down, and
+      concrete experiments or process improvements for the next sprint.
+  - type: approve
+    label: "Accept follow-ups"
+    description: "Lead accepts which retro actions should become backlog cards."
+    approvers: [lead]
+    request_changes_policy: first
+    timeout: 24h
+    timeout_action: notify
+`;
+
 export function getBuiltinTemplates(): WorkflowTemplate[] {
   return [
     {
@@ -321,6 +370,20 @@ export function getBuiltinTemplates(): WorkflowTemplate[] {
       description: 'Two agents alternate work passes on shared context.',
       tags: ['pair', 'collaborative'],
       yamlContent: PAIR_PROGRAMMING_YAML,
+    },
+    {
+      slug: 'sprint_planning',
+      name: 'Sprint Planning',
+      description: 'Review goals, select Ready work, identify risks, and publish a sprint plan.',
+      tags: ['planning', 'sprint'],
+      yamlContent: SPRINT_PLANNING_YAML,
+    },
+    {
+      slug: 'sprint_retro',
+      name: 'Sprint Retro',
+      description: 'Review completed work, surface lessons, and capture follow-up improvements.',
+      tags: ['retro', 'sprint'],
+      yamlContent: SPRINT_RETRO_YAML,
     },
   ];
 }

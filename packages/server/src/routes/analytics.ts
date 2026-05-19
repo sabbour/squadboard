@@ -28,7 +28,7 @@ router.get('/overview', async (req, res) => {
     `);
 
     const issuesByStatus: Record<string, number> = {
-      backlog: 0, todo: 0, in_progress: 0, in_review: 0, done: 0,
+      backlog: 0, ready: 0, in_progress: 0, in_review: 0, done: 0,
     };
     for (const row of byStatusRows.rows as { status: string; count: number }[]) {
       issuesByStatus[row.status] = row.count;

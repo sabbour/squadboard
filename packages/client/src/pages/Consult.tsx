@@ -62,6 +62,7 @@ import PageHeader from '../components/layout/PageHeader.tsx'
 import { ChatBubble } from '../components/ChatBubble.tsx'
 import { ContextPanel } from '../components/consult/ContextPanel.tsx'
 import { ConsultDisconnectBar } from '../components/consult/ConsultDisconnectBar.tsx'
+import { getAgentOriginBadge, normalizeAgentOrigin } from '../components/agents/agent-origin.ts'
 
 const useStyles = makeStyles({
   root: {
@@ -475,6 +476,7 @@ function NewSessionView({
   // disabled / retired agents never reach the picker dropdown.
   const agents = agentsQuery.data ?? []
   const models = modelsQuery.data ?? []
+  const selectedAgent = agents.find((a) => a.id === agentId)
 
   // Wave 10 B8: surface failures in-place instead of letting them bubble to
   // the React error boundary. Both the create-session POST and the seed
@@ -501,6 +503,7 @@ function NewSessionView({
         projectId,
         mode,
         agentId: mode === 'agent' ? (agentId || null) : null,
+        agentOrigin: mode === 'agent' && selectedAgent ? normalizeAgentOrigin(selectedAgent) : null,
         model: model || null,
         name: name || null,
       })
@@ -547,7 +550,7 @@ function NewSessionView({
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
       <PageHeader
         title="New consult"
-        description="Brainstorm with an agent (charter-bound, propose-only) or a raw model. Nothing you say here side-effects your project until you accept a proposal."
+        description="Brainstorm with a project agent or a raw model. Nothing side-effects your project until you explicitly accept it."
       />
       {/* Wave 10 C1: form card uses up to 1280px so it breathes on wider viewports
           and matches the Inbox/Board content rhythm, while still capping for
@@ -597,7 +600,7 @@ function NewSessionView({
                   >
                     {agents.map((a) => (
                       <Option key={a.id} value={a.id} text={a.name}>
-                        {a.name} ({a.role})
+                        {a.name} ({a.role}) · {getAgentOriginBadge(a).label}{a.readOnly ? ' · read-only' : ''}
                       </Option>
                     ))}
                   </Dropdown>
@@ -1269,7 +1272,7 @@ function PromoteDialog({
               selectedOptions={[columnSlug]}
               onOptionSelect={(_, d) => setColumnSlug(d.optionValue ?? 'backlog')}
             >
-              {['backlog', 'todo', 'in_progress', 'in_review', 'done'].map((c) => (
+              {['backlog', 'ready', 'in_progress', 'in_review', 'done'].map((c) => (
                 <Option key={c} value={c} text={c}>{c}</Option>
               ))}
             </Dropdown>

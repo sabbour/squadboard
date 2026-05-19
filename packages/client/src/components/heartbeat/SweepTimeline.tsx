@@ -33,16 +33,37 @@ import { wsClient } from '../../realtime/ws-client.ts'
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 interface SweepTick {
-  sweepName:       string
-  timestamp:       string
-  agentsActivated: string[]
-  durationMs:      number
-  status:          'success' | 'error' | 'skip'
+  sweepName:        string
+  sweepLabel?:      string
+  sweepDescription?: string
+  sweepScope?:      'system' | 'project' | 'mixed'
+  timestamp:        string
+  agentsActivated:  string[]
+  durationMs:       number
+  status:           'success' | 'error' | 'skip'
+  projectIds?:       string[]
 }
 
 interface SweepPulse extends SweepTick {
   id:         string
   receivedAt: number
+}
+
+export interface SweepDefinition {
+  id: string
+  label: string
+  description?: string
+  scope?: 'system' | 'project' | 'mixed'
+}
+
+export interface SweepTimelineEvent {
+  seq?: number
+  ts: string
+  sweepId: string
+  outcome: 'completed' | 'error'
+  durationMs: number
+  result?: { acted: number; errors: number; details?: string; projectIds?: string[] }
+  error?: string
 }
 
 // ─── Sweep lane registry ──────────────────────────────────────────────────────
@@ -55,8 +76,9 @@ const ALL_SWEEPS = [
   { id: 'stale-presence',       label: 'Presence'        },
   { id: 'idle-live-sessions',   label: 'Live Sessions'   },
   { id: 'github-sync-overdue',  label: 'GitHub Sync'     },
-  { id: 'pickup-todos',         label: 'Todo Dispatch'   },
-] as const
+  { id: 'pickup-ready',         label: 'Ready Pickup'    },
+  { id: 'ralph-monitor',        label: 'Ralph Monitor'   },
+] satisfies SweepDefinition[]
 
 const COMPACT_SWEEPS: ReadonlySet<string> = new Set([
   'ceremonies-due',
@@ -182,20 +204,25 @@ function PulseDot({
 interface SweepTimelineProps {
   windowSizeMs?: number
   compact?:      boolean
+  sweeps?:       SweepDefinition[]
+  initialEvents?: SweepTimelineEvent[]
 }
 
 export function SweepTimeline({
   windowSizeMs = 60_000,
   compact      = false,
+  sweeps       = ALL_SWEEPS,
+  initialEvents = [],
 }: SweepTimelineProps) {
   const styles = useStyles()
   const [, forceTick] = useState(0)
   const pulsesRef  = useRef<SweepPulse[]>([])
   const counterRef = useRef(0)
+  const seededEventsRef = useRef(new Set<string>())
 
   const visibleSweeps = compact
-    ? ALL_SWEEPS.filter((s) => COMPACT_SWEEPS.has(s.id))
-    : ALL_SWEEPS
+    ? sweeps.filter((s) => COMPACT_SWEEPS.has(s.id))
+    : sweeps
 
   // Prune old pulses + slide the window every 2 s.
   useEffect(() => {
@@ -208,6 +235,32 @@ export function SweepTimeline({
     }, 2_000)
     return () => clearInterval(timer)
   }, [windowSizeMs])
+
+  useEffect(() => {
+    let changed = false
+    const seeded: SweepPulse[] = []
+    for (const event of initialEvents) {
+      const key = event.seq !== undefined ? String(event.seq) : `${event.sweepId}:${event.ts}`
+      if (seededEventsRef.current.has(key)) continue
+      seededEventsRef.current.add(key)
+      const receivedAt = Date.parse(event.ts)
+      if (!Number.isFinite(receivedAt)) continue
+      seeded.push({
+        id: `history-${key}`,
+        sweepName: event.sweepId,
+        timestamp: event.ts,
+        agentsActivated: [],
+        durationMs: event.durationMs,
+        status: event.outcome === 'completed' ? 'success' : 'error',
+        receivedAt,
+      })
+      changed = true
+    }
+    if (changed) {
+      pulsesRef.current = [...pulsesRef.current, ...seeded].slice(-200)
+      forceTick((n) => n + 1)
+    }
+  }, [initialEvents])
 
   // WS subscription — append new pulses on every sweep.tick.
   useEffect(() => {
@@ -296,8 +349,8 @@ export function SweepTimeline({
 
       {pulsesRef.current.length === 0 && (
         <Caption1 className={styles.emptyHint}>
-          Waiting for sweep activity… pulses appear here in real time as the
-          heartbeat fires.
+          No sweep activity in this window. Recent sweep runs still appear in
+          the activity list above.
         </Caption1>
       )}
     </div>

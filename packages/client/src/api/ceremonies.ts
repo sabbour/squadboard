@@ -21,6 +21,33 @@ export type CeremonyStatus = 'active' | 'draft' | 'paused' | 'archived'
 // CER-1: origin/provenance of a ceremony (computed server-side from existing columns)
 export type CeremonyOrigin = 'built-in' | 'yaml-import' | 'conjure-llm' | 'user-created'
 
+export type LifecycleRunState = 'idle' | 'pending' | 'running' | 'completed' | 'failed' | 'cancelled' | 'unknown'
+export type LifecycleCleanupStatus = 'not_applicable' | 'not_ready' | 'pending' | 'cleaned' | 'unknown'
+
+export interface LifecycleCleanupMetadata {
+  expected: boolean
+  status: LifecycleCleanupStatus
+  reason: string
+}
+
+export interface CeremonyLifecycleMetadata {
+  model: 'squadboard.lifecycle.v1'
+  currentWaveId: string | null
+  currentRunId: string | null
+  currentIssueRunId: string | null
+  runState: LifecycleRunState
+  status: string | null
+  workspaceStrategy: string | null
+  workspacePath: string | null
+  worktreePath: string | null
+  branch: string | null
+  startedAt: string | null
+  endedAt: string | null
+  closeoutReportPath: string | null
+  healthReportPath: string | null
+  cleanup: LifecycleCleanupMetadata
+}
+
 export interface Ceremony {
   id: string
   projectId: string
@@ -37,6 +64,9 @@ export interface Ceremony {
   lastTranslationAttemptAt?: string | null
   // CER-1: computed provenance field (derived server-side, no schema change)
   origin?: CeremonyOrigin
+  activeVersionId?: string | null
+  protected?: boolean
+  lifecycle?: CeremonyLifecycleMetadata
   createdAt: string
   updatedAt: string
 }
@@ -88,6 +118,7 @@ export interface WorkflowRun {
   workflowVersionId: string | null
   status: 'pending' | 'running' | 'completed' | 'failed' | 'cancelled' | 'splitting' | 'waiting_children'
   currentStepIndex: number | null
+  lifecycle?: CeremonyLifecycleMetadata
   createdAt: string
   updatedAt: string
 }
@@ -181,9 +212,13 @@ export function useDeleteCeremony(projectId: string) {
 
 export function useRunCeremony(projectId: string) {
   const queryClient = useQueryClient()
-  return useMutation<{ workflowRunId: string }, Error, { ceremonyId: string; anchorIssueId?: string }>({
+  return useMutation<
+    { workflowRunId: string; message?: string; lifecycle?: CeremonyLifecycleMetadata },
+    Error,
+    { ceremonyId: string; anchorIssueId?: string }
+  >({
     mutationFn: ({ ceremonyId, anchorIssueId }) =>
-      apiFetch<{ workflowRunId: string }>(
+      apiFetch<{ workflowRunId: string; message?: string; lifecycle?: CeremonyLifecycleMetadata }>(
         `/api/projects/${projectId}/ceremonies/${ceremonyId}/run`,
         { method: 'POST', body: JSON.stringify(anchorIssueId ? { anchorIssueId } : {}) },
       ),
@@ -484,9 +519,7 @@ export function useCeremonyTemplates() {
 }
 
 // ---------------------------------------------------------------------------
-// Per-issue attachment + run (kept on the legacy issueWorkflow surface for now;
-// not renamed in Phase 10 since the issue ↔ workflow attachment is its own
-// concept that the spec leaves alone).
+// Per-issue run plan attachment + run.
 // ---------------------------------------------------------------------------
 
 export function useAttachCeremony(projectId: string, issueId: string) {

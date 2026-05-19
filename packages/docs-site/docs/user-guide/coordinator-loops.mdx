@@ -1,0 +1,40 @@
+---
+title: Coordinator loops
+description: How Squadboard deterministically picks up Ready work, starts runs, advances ceremonies, and keeps ambiguity bounded.
+---
+
+import {ArrowSyncRegular, ClipboardTaskListLtrRegular, SparkleRegular} from '@fluentui/react-icons';
+import {IconCard, IconGrid, Screenshot} from '@site/src/components/FluentDoc';
+
+# Coordinator loops
+
+Squadboard uses deterministic server loops for repeatable control flow and reserves LLM calls for ambiguity.
+
+<IconGrid>
+  <IconCard icon={ClipboardTaskListLtrRegular} title="Ready pickup">Cards in columns marked with the Ready semantic are picked up automatically.</IconCard>
+  <IconCard icon={SparkleRegular} title="Bounded judgment">The coordinator asks an LLM only when role fit or summarization requires interpretation.</IconCard>
+  <IconCard icon={ArrowSyncRegular} title="Lifecycle loops">Run advancement, ceremonies, close-out, GitHub sync, and Ralph decisions are audited loops.</IconCard>
+</IconGrid>
+
+<Screenshot src="/img/scenarios/spark-19-ready-pickup.png" alt="Spark board with Ready work assigned by automatic pickup" caption="Ready is the automatic pickup column. Moving work there starts the coordinator path." />
+
+## Ready pickup loop
+
+1. A card enters a column whose semantic type is **ready**.
+2. The pickup sweep loads the card, labels, parent links, project rules, agent roles, skills, and recent run state.
+3. Deterministic gates run first: blocked parents, unavailable agents, backlog constraints, thin issue checks, and circuit-breaker lockouts.
+4. If one agent is clearly eligible, Squadboard creates the issue run without a semantic LLM decision.
+5. If role fit is ambiguous, the coordinator uses a schema-bound LLM decision and writes the result to the routing log.
+6. The workflow-step sweep claims the pending run and starts execution.
+
+## Board state rules
+
+Ready means ready to run. In Progress means an active run exists. Squadboard should not require a play button for ordinary Ready pickup, and it should not allow a manual move into In Progress when no run is active.
+
+## Close-out and continuation
+
+When work reaches review or delivery, lifecycle loops can trigger Scribe-style close-out and ceremony work. Ralph-style monitoring is opt-in alpha automation that can choose the next eligible work item, but every decision should remain visible through audit records rather than hidden background action.
+
+## Where upstream Squad fits
+
+The coordinator reads the same project/team concepts that upstream [Squad](https://github.com/bradygaster/squad) uses: `.squad/` conventions, agent charters, decisions, skills, and MCP recipes. Squadboard adds durable database state and deterministic loops around those conventions.

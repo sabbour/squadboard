@@ -11,7 +11,85 @@ Shipped full Squadboard coordinator extension framework: fragment (~200 lines), 
 
 ---
 
-## Wave 17 — Docs Catch-Up (2026-05-15T22:42:29-07:00)
+## Wave 18 — Squad Apps & Templates Documentation (2026-05-19T15:30:00-07:00)
+
+**Scope:** Pending documentation work on Squad Apps, bundles, and template system.
+
+### Deliverables Shipped
+
+1. **`docs/concepts/squad-apps-and-templates.md`** — 340 lines
+   - Quick-reference table: Squad App vs Template vs Plugin vs Starter
+   - Implementation map: canonical files, modules, discovery flow
+   - When-to-use guide with concrete examples
+   - Common Q&A section
+   - Links to authoritative specs (`squadapp-spec.md`, ceremonies docs, MCP setup)
+
+2. **Feature spec updates** — Two features marked complete:
+   - `feat-2026-05-19-document-squad-apps-implementation-map` → Status: Done
+   - `feat-2026-05-19-explain-squad-app-vs-project-template` → Status: Done
+
+3. **Terminology decision captured** → `.squad/decisions/inbox/redfoot-squad-apps-terminology.md`
+   - Canonical definitions: Squad App, Bundle, Project/Team/Workflow Templates, Starter Projects
+   - Locked team notation for consistent vocabulary
+   - Evidence trail linking to implementation files
+
+4. **Docs IA updated** → `docs/README.md`
+   - Added link to new Squad Apps & Templates concept page
+
+### Key Insights Locked
+
+**Distinction:** Squad Apps (portable bundles with versioning) vs Templates (DB-backed snapshots without versioning).
+
+| Artifact | Scope | Authored | Versioned | Marketplace |
+|----------|-------|----------|-----------|------------|
+| Squad App | Full project | Devs shipping configs | ✅ SemVer | ✅ (F6+) |
+| Project/Team/Workflow Template | Granular slices | End users ("Save" button) | ❌ | ❌ |
+| Bundle | Runtime structure | Computed on apply | ✅ (tied to app) | — |
+| Starter Project | Full project | Build-time generation | ❌ | — (legacy) |
+
+**Discovery implementation:**
+- **Bundles:** `packages/server/src/services/builtin-bundles.ts` lazy-scans `bundles/` on first API call
+- **API:** `packages/server/src/routes/templates.ts` serves all template endpoints
+- **Frontend:** `packages/client/src/pages/Templates.tsx` + `packages/client/src/api/templates.ts` (hooks)
+
+**Pre-alpha labeling:** README.md already flags "Alpha software warning" with clear expectations. No additional labeling needed beyond what Hockney/Verbal manage in release copy.
+
+### Design Principles Established
+
+- **Terminology is precise:** Squad Apps ≠ Bundles ≠ Templates. Each has a specific meaning.
+- **Implementation is discoverable:** Canonical files and modules are listed in implementation map for builders extending the system.
+- **User guidance is concrete:** "When to use each" section includes real-world examples (legal doc review, Q3 sprint clone, standard agent roster, RFC ceremony).
+
+### Doc Debt Resolved
+
+- ✅ "Where are Squad Apps implemented?" → `packages/server/src/services/builtin-bundles.ts`
+- ✅ "How does Squadboard discover them?" → Lazy scan + in-memory cache on `GET /api/templates/builtin-projects`
+- ✅ "What's the difference between a Squad App and a project template?" → Published in new concept page
+- ✅ "When should users choose each?" → When-to-use section with 4 concrete examples
+
+### Success Criteria Met
+
+- ✅ Clear implementation map (canonical files, modules, discovery flow)
+- ✅ Conceptual distinction (Squad App vs Template vs Plugin) explained with tables
+- ✅ When-to-use guidance tied to real examples
+- ✅ Terminology locked for team (decision captured in inbox)
+- ✅ Pre-alpha status already present in README
+- ✅ Links to authoritative specs (squadapp-spec.md, ceremonies.md, MCP setup)
+- ✅ Feature specs marked Done
+
+### Next Steps (Flagged)
+
+- **F4 (Wave 24+):** Curate built-in Squad Apps for `bundles/` directory
+- **F5 (Wave 25+):** Automated export → Squad App workflow; git URL installer
+- **F6 (Wave 26+):** Squad App marketplace + upgrade path
+- **Starters migration:** Migrate legacy starters to Squad App format per W25 roadmap
+
+## Team Update — undefined
+
+Run: w18
+
+- **verbal**: Stream G phase 2A (G2.3 comment + G2.5 merge PR with CI gate + G2.6 card badges)
+- **keyser**: Settings batch (Backup/Restore UI + GitHub Integration Settings)
 
 **Scope:** Four related deliverables to close docs gap after 16 waves of heavy build.
 

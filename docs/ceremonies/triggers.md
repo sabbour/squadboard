@@ -27,7 +27,7 @@ Fires when a GitHub webhook event matches the configured event type and filters.
 - **labels** — list of label name patterns (glob or substring); PR/issue must have at least one matching label
 - **paths** — list of file path patterns (glob); PR changes must touch at least one matching path
 
-**Coming in W29+:** CER-5 will expand filters to include:
+Additional planned filters:
 - `review_state` — wait for PR review status (changes requested, approved, dismissed)
 - `branch` — branch name patterns
 - `author` — author username patterns
@@ -222,15 +222,16 @@ spec:
 
 ## agent-signal
 
-Fires when another agent emits a signal on a lifecycle event. Support is currently limited; CER-6 expands this in W29.
+Fires when another agent or lifecycle service emits a signal event.
 
 ### Event Types
 
-**Today:**
 - `workflow_run_completed` — fires when another ceremony's run finishes
+- `before-batch` — fires before a batch of issue runs is spawned
+- `after-batch` — fires after a batch of issue runs has started
 - (Other event types reserved for future expansion)
 
-**Coming in W29+ (CER-6):**
+Additional planned event types:
 - `agent_available` — when an agent becomes available (e.g., after being busy)
 - `agent_error` — when an agent fails (configurable retry/escalation)
 - `threshold_crossed` — custom metrics exceed a threshold

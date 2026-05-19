@@ -1,0 +1,35 @@
+---
+title: Integrations
+description: GitHub, MCP, SDK, CLI, and bundle integration surfaces.
+---
+
+import {PlugConnectedRegular, ArrowUploadRegular, ArrowSyncRegular} from '@fluentui/react-icons';
+import {IconCard, IconGrid, Screenshot, ScreenshotGrid} from '../../src/components/FluentDoc';
+
+# Integrations
+
+Squadboard exposes product state and orchestration through integration surfaces instead of requiring direct database access.
+
+<IconGrid>
+  <IconCard icon={ArrowSyncRegular} title="GitHub">Issue, PR, check, review, and activity signals can update project state.</IconCard>
+  <IconCard icon={PlugConnectedRegular} title="MCP">Copilot CLI, VS Code, and services call explicit board and run tools.</IconCard>
+  <IconCard icon={ArrowUploadRegular} title="Imports">Templates, bundles, and Squad Apps package reusable operating models.</IconCard>
+</IconGrid>
+
+<ScreenshotGrid>
+  <Screenshot src="/img/scenarios/spark-13-mcp-list.png" alt="Spark MCP servers page." caption="MCP servers are project-visible tool bridges." />
+  <Screenshot src="/img/scenarios/spark-17-settings-github.png" alt="Spark GitHub integration settings." caption="GitHub integration is configured from project settings." />
+  <Screenshot src="/img/scenarios/spark-10-templates-projects.png" alt="Spark project template import page." caption="Project imports can seed a full operating model." />
+</ScreenshotGrid>
+
+## Capability summary
+
+| Surface | What it is for |
+| --- | --- |
+| GitHub | Mirror issue/PR signals, checks, review state, and merge outcomes into project state. |
+| MCP | Let Copilot CLI, VS Code, and services call explicit board, run, capture, and status tools. |
+| SDK and CLI | Script project operations, Scribe primitives, bundle import/export, and local development tasks. |
+| Squad Apps | Package a board, team, ceremonies, skills, tools, routing rules, and docs as an installable project model. |
+| PostgreSQL | Store Squadboard product state and optionally Squad state in a shared database. Multiple compatible processes can share the same database when pointing to the same PostgreSQL instance via `DATABASE_URL`. |
+
+For operating details, use [Squad integration](../user-guide/squad-integration.mdx), [MCP integration](../user-guide/mcp.mdx), [Squad Apps](../user-guide/squad-apps.mdx), [Importing](../user-guide/importing.mdx), and [Storage provider alignment](../user-guide/storage-provider.mdx).

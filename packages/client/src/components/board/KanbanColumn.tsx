@@ -8,6 +8,7 @@ interface KanbanColumnProps {
   label: string
   description?: string | null
   color?: string
+  semantic?: 'backlog' | 'ready' | 'in_progress' | 'review' | 'done' | 'custom'
   issues: Issue[]
   projectId: string
   selectedIds: Set<string>
@@ -21,6 +22,7 @@ export default function KanbanColumn({
   label,
   description,
   color,
+  semantic,
   issues,
   projectId,
   selectedIds,
@@ -29,6 +31,7 @@ export default function KanbanColumn({
   onCreateIssue,
 }: KanbanColumnProps) {
   const accentColor = color ?? tokens.colorNeutralStroke1
+  const canCreateIssue = semantic !== 'in_progress'
 
   return (
     <div
@@ -91,28 +94,29 @@ export default function KanbanColumn({
               {issues.length}
             </span>
           </div>
-          {/* FAB: create issue in this column */}
-          <button
-            onClick={() => onCreateIssue(columnId)}
-            title="Create issue"
-            style={{
-              background: 'none',
-              border: 'none',
-              color: tokens.colorNeutralForeground2,
-              fontSize: '18px',
-              lineHeight: 1,
-              padding: '0 2px',
-              borderRadius: '4px',
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              flexShrink: 0,
-            }}
-            onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.color = tokens.colorBrandBackground }}
-            onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.color = tokens.colorNeutralForeground2 }}
-          >
-            +
-          </button>
+          {canCreateIssue && (
+            <button
+              onClick={() => onCreateIssue(columnId)}
+              title="Create issue"
+              style={{
+                background: 'none',
+                border: 'none',
+                color: tokens.colorNeutralForeground2,
+                fontSize: '18px',
+                lineHeight: 1,
+                padding: '0 2px',
+                borderRadius: '4px',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                flexShrink: 0,
+              }}
+              onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.color = tokens.colorBrandBackground }}
+              onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.color = tokens.colorNeutralForeground2 }}
+            >
+              +
+            </button>
+          )}
         </div>
 
         {description && (
@@ -174,6 +178,7 @@ export default function KanbanColumn({
                 issue={issue}
                 index={index}
                 projectId={projectId}
+                columnSemantic={semantic}
                 isSelected={selectedIds.has(issue.id)}
                 onSelect={onSelect}
                 onOpen={onOpenCard}

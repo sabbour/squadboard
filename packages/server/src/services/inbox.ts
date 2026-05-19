@@ -213,7 +213,7 @@ export async function publishInboxItem(
     throw Object.assign(new Error('`projectId` is required'), { status: 400 });
   }
   const column: ColumnStatus = input.columnSlug ?? 'backlog';
-  const validCols: ColumnStatus[] = ['backlog', 'todo', 'in_progress', 'in_review', 'done'];
+  const validCols: ColumnStatus[] = ['backlog', 'ready', 'in_progress', 'in_review', 'done'];
   if (!validCols.includes(column)) {
     throw Object.assign(new Error(`invalid columnSlug: ${input.columnSlug}`), { status: 400 });
   }
@@ -225,7 +225,7 @@ export async function publishInboxItem(
     projectId: input.projectId,
     title,
     body,
-    status: column as 'backlog' | 'todo' | 'in_progress' | 'in_review' | 'done',
+    status: column as 'backlog' | 'ready' | 'in_progress' | 'in_review' | 'done',
     createdBy: 'user',
   });
   const issue = issueResult.issue!;
@@ -283,7 +283,7 @@ export interface FormulatorPayload {
   rationale: string;
 }
 
-const VALID_COLUMNS: ColumnStatus[] = ['backlog', 'todo', 'in_progress', 'in_review', 'done'];
+const VALID_COLUMNS: ColumnStatus[] = ['backlog', 'ready', 'in_progress', 'in_review', 'done'];
 const VALID_CONFIDENCE = new Set(['high', 'medium', 'low']);
 
 /**
@@ -336,7 +336,7 @@ async function buildPrompt(item: InboxItem): Promise<{ prompt: string; projectId
     '  "body": string,                             // markdown, 1-4 short paragraphs',
     '  "suggestedLabels": string[],                // label names (not IDs)',
     '  "suggestedProjectId": string | null,        // UUID from the projects list, or null',
-    '  "suggestedColumn": "backlog"|"todo"|"in_progress"|"in_review"|"done",',
+    '  "suggestedColumn": "backlog"|"ready"|"in_progress"|"in_review"|"done",',
     '  "confidence": "high"|"medium"|"low",',
     '  "rationale": string                         // ≤2 sentences explaining your choices',
     '}',

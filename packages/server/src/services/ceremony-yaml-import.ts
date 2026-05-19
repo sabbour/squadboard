@@ -25,10 +25,15 @@ import { eq, and } from 'drizzle-orm';
 import { getDb, schema } from '../db/index.js';
 import { parseWorkflowYaml, stringifyWorkflowYaml } from '../ceremonies/yaml-canonicalize.js';
 import type { WorkflowTrigger } from '../ceremonies/types.js';
+import { builtInSourceMarker, isProtectedBuiltInCeremony } from '../ceremonies/built-in/protection.js';
 
 export interface ImportResult {
   ceremonyId: string;
   created: boolean;
+}
+
+export interface ImportCeremonyOptions {
+  sourceMarker?: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -95,6 +100,7 @@ function mapYamlTriggerToDb(
 export async function importCeremonyFromYaml(
   yamlText: string,
   projectId: string,
+  options: ImportCeremonyOptions = {},
 ): Promise<ImportResult> {
   // 1. Parse + validate (throws on invalid)
   const workflow = parseWorkflowYaml(yamlText);
@@ -104,7 +110,7 @@ export async function importCeremonyFromYaml(
   const description = workflow.metadata.description ?? null;
 
   // Source marker stored in triggerConfig so origin derivation sees 'yaml-import'
-  const sourceMarker = `import:${slug}`;
+  const sourceMarker = options.sourceMarker ?? `import:${slug}`;
   const { triggerKind, triggerConfig } = mapYamlTriggerToDb(workflow.spec.trigger, sourceMarker);
 
   // Canonical YAML string for storage (normalised round-trip)
@@ -120,6 +126,11 @@ export async function importCeremonyFromYaml(
     .limit(1);
 
   if (existing) {
+    if (isProtectedBuiltInCeremony(existing) && sourceMarker !== builtInSourceMarker(slug)) {
+      const err = new Error(`"${slug}" is a required built-in ceremony and cannot be replaced by an import`);
+      (err as Error & { status?: number }).status = 409;
+      throw err;
+    }
     // UPDATE existing ceremony
     await db
       .update(schema.workflows)

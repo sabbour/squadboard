@@ -110,6 +110,14 @@ to capture an action item — proposals render as inline cards that the \
 user can Accept, Edit, or Discard. Never call these tools in the middle \
 of a thought; finish your reasoning first.`;
 
+type AgentOrigin = 'project' | 'virtual-copilot' | 'human' | 'model';
+
+function normalizeAgentOrigin(origin: string | null | undefined): AgentOrigin {
+  return origin === 'virtual-copilot' || origin === 'human' || origin === 'model'
+    ? origin
+    : 'project';
+}
+
 // ---------------------------------------------------------------------------
 // Session registry (for streaming runs in todo 2)
 // ---------------------------------------------------------------------------
@@ -137,6 +145,7 @@ export interface StartConsultInput {
   mode: ConsultMode;
   agentId?: string | null;
   agentName?: string | null;
+  agentOrigin?: AgentOrigin | string | null;
   model?: string | null;
   name?: string | null;
   forkedFromSessionId?: string | null;
@@ -153,6 +162,16 @@ export async function startConsultSession(input: StartConsultInput): Promise<Con
   let agentName = input.agentName ?? null;
   let model = input.model ?? null;
   let resolvedAgentId = input.agentId ?? null;
+  let agentOrigin: AgentOrigin = input.mode === 'agent'
+    ? normalizeAgentOrigin(input.agentOrigin)
+    : 'model';
+
+  if (input.mode === 'agent' && input.agentOrigin === 'personal') {
+    throw Object.assign(new Error('Consult supports only project agents and models.'), { status: 400 });
+  }
+  if (input.mode === 'agent' && resolvedAgentId?.startsWith('personal:')) {
+    throw Object.assign(new Error('Consult supports only project agents and models.'), { status: 400 });
+  }
 
   if (input.mode === 'agent' && resolvedAgentId) {
     const db = getDb();
@@ -162,6 +181,7 @@ export async function startConsultSession(input: StartConsultInput): Promise<Con
         name: schema.agents.name,
         model: schema.agents.model,
         status: schema.agents.status,
+        agentKind: schema.agents.agentKind,
       })
       .from(schema.agents)
       .where(eq(schema.agents.id, resolvedAgentId))
@@ -178,6 +198,7 @@ export async function startConsultSession(input: StartConsultInput): Promise<Con
       }
       agentName = agentName ?? row.name;
       model = model ?? row.model;
+      agentOrigin = row.agentKind === 'copilot' ? 'virtual-copilot' : 'project';
     } else {
       throw Object.assign(new Error('Agent not found'), { status: 404 });
     }
@@ -188,6 +209,7 @@ export async function startConsultSession(input: StartConsultInput): Promise<Con
     mode: input.mode,
     agentId: resolvedAgentId,
     agentName,
+    agentOrigin,
     model,
     name: input.name ?? null,
     forkedFromSessionId: input.forkedFromSessionId ?? null,
@@ -200,6 +222,7 @@ export async function startConsultSession(input: StartConsultInput): Promise<Con
     projectId: session.projectId,
     mode: session.mode,
     agentName: session.agentName,
+    agentOrigin: session.agentOrigin,
     model: session.model,
   });
 
@@ -648,7 +671,7 @@ function buildProposeTools(consultId: string): ConsultTool[] {
           },
           columnSlug: {
             type: 'string',
-            enum: ['backlog', 'todo', 'in_progress', 'in_review', 'done'],
+            enum: ['backlog', 'ready', 'in_progress', 'in_review', 'done'],
             description: 'Target board column. Defaults to backlog.',
           },
         },
@@ -871,7 +894,7 @@ async function acceptProposeIssue(
     projectId,
     title,
     body,
-    status: columnSlug as 'backlog' | 'todo' | 'in_progress' | 'in_review' | 'done',
+    status: columnSlug as 'backlog' | 'ready' | 'in_progress' | 'in_review' | 'done',
     createdBy: 'user',
   });
   const created = createdResult.issue!;
@@ -1120,7 +1143,7 @@ export async function promoteConsult(input: PromoteConsultInput): Promise<Promot
       projectId,
       title: finalTitle,
       body,
-      status: (input.columnSlug as 'backlog' | 'todo' | 'in_progress' | 'in_review' | 'done') ?? 'backlog',
+      status: (input.columnSlug as 'backlog' | 'ready' | 'in_progress' | 'in_review' | 'done') ?? 'backlog',
       createdBy: 'user',
     });
     const created = createdResult.issue!;

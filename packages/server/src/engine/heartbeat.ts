@@ -19,11 +19,21 @@ export interface SweepResult {
   errors: number;
   /** Optional human-readable detail string for logs / status UI. */
   details?: string;
+  /** Project ids touched or checked by this sweep when the sweep can report them. */
+  projectIds?: string[];
 }
+
+export type SweepScope = 'system' | 'project' | 'mixed';
 
 export interface Sweep {
   /** Unique identifier used in routes, logs, and event payloads. */
   id: string;
+  /** Human-readable lane label used in operational UI. */
+  label: string;
+  /** Plain-language description of the work this sweep performs. */
+  description: string;
+  /** Whether the sweep is purely system-wide, project-facing, or both. */
+  scope: SweepScope;
   /** Milliseconds between successive automatic runs. */
   intervalMs: number;
   /** When false the sweep is registered but not scheduled. */
@@ -103,6 +113,10 @@ export class Heartbeat {
     lastError?: string;
     sweeps: Array<{
       id: string;
+      label: string;
+      description: string;
+      scope: SweepScope;
+      intervalMs: number;
       enabled: boolean;
       lastResult?: SweepResult;
       lastRunAt?: string;
@@ -115,6 +129,10 @@ export class Heartbeat {
       lastError: this.lastError,
       sweeps: Array.from(this.registry.values()).map((state) => ({
         id: state.sweep.id,
+        label: state.sweep.label,
+        description: state.sweep.description,
+        scope: state.sweep.scope,
+        intervalMs: state.sweep.intervalMs,
         enabled: state.sweep.enabled,
         lastResult: state.lastResult,
         lastRunAt: state.lastRunAt?.toISOString(),
@@ -129,11 +147,21 @@ export class Heartbeat {
    * Used by GET /api/heartbeat/config so Brady can verify which overrides
    * from heartbeat.config.json actually took effect at boot.
    */
-  getEffectiveIntervals(): Array<{ id: string; intervalMs: number; enabled: boolean }> {
+  getEffectiveIntervals(): Array<{
+    id: string;
+    label: string;
+    description: string;
+    scope: SweepScope;
+    intervalMs: number;
+    enabled: boolean;
+  }> {
     return Array.from(this.registry.values()).map((state) => ({
-      id:         state.sweep.id,
-      intervalMs: state.sweep.intervalMs,
-      enabled:    state.sweep.enabled,
+      id:          state.sweep.id,
+      label:       state.sweep.label,
+      description: state.sweep.description,
+      scope:       state.sweep.scope,
+      intervalMs:  state.sweep.intervalMs,
+      enabled:     state.sweep.enabled,
     }));
   }
 
@@ -190,10 +218,14 @@ export class Heartbeat {
       // Heartbeat + Now pages can animate a pulse on the sweep's lane.
       eventBus.emitHeartbeatEvent('sweep.tick', {
         sweepName:       state.sweep.id,
+        sweepLabel:      state.sweep.label,
+        sweepDescription: state.sweep.description,
+        sweepScope:      state.sweep.scope,
         timestamp:       new Date().toISOString(),
         agentsActivated: [],
         durationMs,
         status:          'success' as const,
+        projectIds:       result.projectIds ?? [],
       });
 
       if (result.acted > 0 || process.env.LOG_LEVEL === 'debug') {
@@ -220,6 +252,9 @@ export class Heartbeat {
       // a red pulse on the relevant lane.
       eventBus.emitHeartbeatEvent('sweep.tick', {
         sweepName:       state.sweep.id,
+        sweepLabel:      state.sweep.label,
+        sweepDescription: state.sweep.description,
+        sweepScope:      state.sweep.scope,
         timestamp:       new Date().toISOString(),
         agentsActivated: [],
         durationMs,

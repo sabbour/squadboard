@@ -9,6 +9,8 @@ out/
 **/out/
 .vite/
 **/.vite/
+.docusaurus/
+**/.docusaurus/
 *.tsbuildinfo
 
 # Squad: ignore runtime state (logs, inbox, sessions)

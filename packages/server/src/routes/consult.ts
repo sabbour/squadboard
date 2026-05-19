@@ -100,6 +100,7 @@ consultRouter.post('/', async (req: Request, res: Response) => {
       mode?: string;
       agentId?: string | null;
       agentName?: string | null;
+      agentOrigin?: string | null;
       model?: string | null;
       name?: string | null;
       forkedFromSessionId?: string | null;
@@ -118,6 +119,7 @@ consultRouter.post('/', async (req: Request, res: Response) => {
       mode,
       agentId: body.agentId ?? null,
       agentName: body.agentName ?? null,
+      agentOrigin: body.agentOrigin ?? null,
       model: body.model ?? null,
       name: body.name ?? null,
       forkedFromSessionId: body.forkedFromSessionId ?? null,
@@ -156,6 +158,7 @@ projectConsultRouter.post('/', async (req: Request, res: Response) => {
       mode?: string;
       agentId?: string | null;
       agentName?: string | null;
+      agentOrigin?: string | null;
       model?: string | null;
       name?: string | null;
       forkedFromSessionId?: string | null;
@@ -174,6 +177,7 @@ projectConsultRouter.post('/', async (req: Request, res: Response) => {
       mode,
       agentId: body.agentId ?? null,
       agentName: body.agentName ?? null,
+      agentOrigin: body.agentOrigin ?? null,
       model: body.model ?? null,
       name: body.name ?? null,
       forkedFromSessionId: body.forkedFromSessionId ?? null,
@@ -297,7 +301,9 @@ consultRouter.get('/:sessionId/proposals', async (req: Request, res: Response) =
 consultRouter.post('/:sessionId/proposals/:proposalId/accept', async (req: Request, res: Response) => {
   try {
     const { sessionId, proposalId } = req.params as Record<string, string>;
-    const body = (req.body ?? {}) as { editedPayload?: Record<string, unknown> };
+    const body = (req.body ?? {}) as {
+      editedPayload?: Record<string, unknown>;
+    };
     const result = await acceptProposal({
       sessionId,
       proposalId,

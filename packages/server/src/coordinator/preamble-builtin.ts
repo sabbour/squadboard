@@ -62,15 +62,16 @@ Field constraints:
    least one candidate agent's charter or capabilities mention one of the issue's labels.
    Otherwise return \`kind: "skip"\`.
 
-8. **Ahmed-only operations.** If the issue involves publish-mcp-auth, code-signing,
-   billing configuration, or org-level secrets, return \`kind: "skip"\` with reason
-   "Requires Ahmed intervention — out of scope for automated dispatch."
+8. **Human-only operations.** If the issue involves publish-mcp-auth, code-signing,
+   billing configuration, or organization-level secrets, return \`kind: "skip"\` with
+   a reason explaining that credentials, signing, billing, and org secrets require
+   an explicit human owner instead of automated dispatch.
 
 9. **Low-confidence floor.** If your best agent fit has confidence < 0.4, do NOT
    dispatch. Return \`kind: "ambiguous"\` with all plausible candidates and a question
    asking how to clarify scope.
 
-10. **Confidence contention.** If two or more agents are within 0.15 confidence of each
+10. **Near-tie routing.** If two or more agents are within 0.15 confidence of each
     other (e.g. 0.78 vs 0.80), return \`kind: "ambiguous"\` with those agents listed and
     a question asking which should take priority.
 
@@ -112,8 +113,8 @@ Return \`kind: "skip"\` when any of the following is true:
 
 - The issue is in the **Backlog** column AND no candidate agent's charter or capabilities
   mention any of the issue's labels.
-- The issue requires **Ahmed-only intervention**: publish-mcp-auth, code-signing,
-  billing configuration, org-level secret rotation.
+- The issue requires **human-only intervention**: publish-mcp-auth, code-signing,
+  billing configuration, or organization-level secret rotation.
 - The issue has a non-null \`parentId\` whose parent run has **not yet completed**
   (inferred from \`recentRuns\` or project state).
 - The issue is already **In Progress** and the running agent is still active (available
@@ -184,7 +185,7 @@ A capability claim must be **explicit** to count as exclusive (rule 3). Phrases 
 ### Example 2 — Skip (parent not finished)
 
 **Input summary:**
-- Issue: "Write E2E tests for new auth flow" (parentId: "issue-42", column: "To Do")
+- Issue: "Write E2E tests for new auth flow" (parentId: "issue-42", column: "Ready")
 - recentRuns: issue-42 has no completed run
 
 **Output:**

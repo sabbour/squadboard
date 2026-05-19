@@ -9,7 +9,7 @@
  * - Bootstrap DDL skip flag for production environments
  */
 
-import { promises as fs } from 'fs';
+import { existsSync, promises as fs, statSync } from 'fs';
 import * as path from 'path';
 import { fileURLToPath } from 'url';
 import type { PoolLike } from './pglite.js';
@@ -45,6 +45,24 @@ function computeChecksum(content: string): string {
   return Math.abs(hash).toString(16);
 }
 
+function findSquadDirUpward(start: string): string | null {
+  let dir = path.resolve(start);
+  for (let depth = 0; depth < 12; depth++) {
+    const candidate = path.join(dir, '.squad');
+    if (existsSync(candidate)) {
+      try {
+        if (statSync(candidate).isDirectory()) return candidate;
+      } catch {
+        // Unreadable candidate; continue upward.
+      }
+    }
+    const parent = path.dirname(dir);
+    if (parent === dir) break;
+    dir = parent;
+  }
+  return null;
+}
+
 /**
  * Load all migration files from the migrations directory.
  * Returns list sorted by version (ascending).
@@ -56,6 +74,8 @@ async function loadMigrationFiles(): Promise<MigrationFile[]> {
   const migrations: MigrationFile[] = [];
 
   for (const filename of files) {
+    if (filename.endsWith('.rollback.sql')) continue;
+
     const match = filename.match(/^(\d+)_.*\.sql$/);
     if (!match) continue;
 
@@ -120,7 +140,8 @@ async function recordMigrationApplied(
  * Capture schema snapshot (all tables + columns) and write to .squad/db-snapshots/.
  */
 async function captureSchemaSnapshot(pool: PoolLike, timestamp: string): Promise<void> {
-  const snapshotDir = path.join(process.cwd(), '.squad', 'db-snapshots');
+  const squadDir = findSquadDirUpward(process.cwd()) ?? path.join(process.cwd(), '.squad');
+  const snapshotDir = path.join(squadDir, 'db-snapshots');
 
   // Ensure directory exists
   await fs.mkdir(snapshotDir, { recursive: true });

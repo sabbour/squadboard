@@ -1,0 +1,31 @@
+---
+id: index
+title: Tutorials
+description: Four sequential tutorials that take Spark from "nothing" to "running, observed, and connected to your other tools".
+---
+
+import {PlugConnectedRegular, PeopleRegular, ArrowSyncRegular, FolderAddRegular} from '@fluentui/react-icons';
+import {IconGrid, IconCard} from '@site/src/components/FluentDoc';
+
+# Tutorials
+
+These tutorials form **one continuous Spark project**. Do them in order. Each builds on the state created by the one before it — agents from Tutorial 2 do the work in Tutorial 3, MCP in Tutorial 4 connects back to the runs you watched in Tutorial 3.
+
+If you only have 10 minutes, do the [Quickstart](../quickstart.mdx) instead. It is the same loop in compressed form.
+
+<IconGrid>
+  <IconCard icon={FolderAddRegular} title="1. Connect Spark" to="/getting-started/tutorials/connect-spark">
+    Create the project and point it at a repository — new repo with Squad, project template, or existing Squad repo.
+  </IconCard>
+  <IconCard icon={PeopleRegular} title="2. Cast and review the team" to="/getting-started/tutorials/cast-the-team">
+    Give Spark a small roster with real charters, and use Consult to think before you commit.
+  </IconCard>
+  <IconCard icon={ArrowSyncRegular} title="3. Run the Spark launch wave" to="/getting-started/tutorials/run-the-launch-wave">
+    Capture work → Backlog → Ready → automatic pickup → inspect the run → ceremony close-out.
+  </IconCard>
+  <IconCard icon={PlugConnectedRegular} title="4. Connect Copilot CLI, Squad, and MCP" to="/getting-started/tutorials/connect-tools">
+    Wire MCP for Copilot CLI, connect GitHub for the outer loop, and save Spark as a reusable template.
+  </IconCard>
+</IconGrid>
+
+When a tutorial references a concept you want to understand more deeply (the coordinator's pickup gates, the workflow engine, the storage layout), jump to the matching [Product Guide](../../features/overview.mdx) page and then come back to the next step.

@@ -3,202 +3,7 @@ import type { Request, Response } from 'express';
 import { eq } from 'drizzle-orm';
 import { getDb, schema } from '../db/index.js';
 import { createProject } from '../services/project-init.js';
-
-// ---------------------------------------------------------------------------
-// Types for the /suggest endpoint (O1 — Wave 20)
-// ---------------------------------------------------------------------------
-
-export interface ProjectSuggestionTeamMember {
-  name: string;
-  role: string;
-}
-
-export interface ProjectSuggestionCeremony {
-  name: string;
-  cadence: string;
-}
-
-export interface ProjectSuggestionColumn {
-  slug: string;
-  label: string;
-}
-
-export interface ProjectSuggestion {
-  bundleId: string;
-  bundleName: string;
-  description: string;
-  team: ProjectSuggestionTeamMember[];
-  ceremonies: ProjectSuggestionCeremony[];
-  columns: ProjectSuggestionColumn[];
-  skills: string[];
-  matchedKeywords: string[];
-}
-
-// ---------------------------------------------------------------------------
-// Keyword → bundle mapping (static deterministic stub; LLM call TBD by Verbal)
-// ---------------------------------------------------------------------------
-
-interface BundleTemplate {
-  bundleId: string;
-  bundleName: string;
-  description: string;
-  team: ProjectSuggestionTeamMember[];
-  ceremonies: ProjectSuggestionCeremony[];
-  columns: ProjectSuggestionColumn[];
-  skills: string[];
-}
-
-const BUNDLE_TEMPLATES: Record<string, BundleTemplate> = {
-  'library-or-sdk-project': {
-    bundleId: 'library-or-sdk-project',
-    bundleName: 'Library / SDK Project',
-    description: 'Kanban for library/SDK development: triage through release.',
-    team: [
-      { name: 'Lead', role: 'Library Lead' },
-      { name: 'Implementer', role: 'Core Implementer' },
-      { name: 'Docs', role: 'Documentation Writer' },
-      { name: 'Tester', role: 'QA / Test Engineer' },
-    ],
-    ceremonies: [
-      { name: 'API RFC', cadence: 'on-demand' },
-      { name: 'Version Bump', cadence: 'on-demand' },
-      { name: 'Release Notes', cadence: 'on-release' },
-    ],
-    columns: [
-      { slug: 'triage', label: 'Triage' },
-      { slug: 'api-design', label: 'API Design' },
-      { slug: 'impl', label: 'Impl' },
-      { slug: 'docs', label: 'Docs' },
-      { slug: 'release', label: 'Release' },
-    ],
-    skills: ['code-review', 'changelog-writer', 'semver-advisor'],
-  },
-  'default-software-project': {
-    bundleId: 'default-software-project',
-    bundleName: 'Default Software Project',
-    description: 'General-purpose software project with standard Kanban flow.',
-    team: [
-      { name: 'Lead', role: 'Tech Lead' },
-      { name: 'Dev', role: 'Developer' },
-      { name: 'Reviewer', role: 'Code Reviewer' },
-    ],
-    ceremonies: [
-      { name: 'Sprint Planning', cadence: 'weekly' },
-      { name: 'Retro', cadence: 'biweekly' },
-    ],
-    columns: [
-      { slug: 'backlog', label: 'Backlog' },
-      { slug: 'in-progress', label: 'In Progress' },
-      { slug: 'review', label: 'Review' },
-      { slug: 'done', label: 'Done' },
-    ],
-    skills: ['code-review', 'pr-summarizer', 'issue-formulator'],
-  },
-  'research-spike': {
-    bundleId: 'research-spike',
-    bundleName: 'Research Spike',
-    description: 'Time-boxed research or exploration project.',
-    team: [
-      { name: 'Researcher', role: 'Lead Researcher' },
-      { name: 'Analyst', role: 'Data Analyst' },
-    ],
-    ceremonies: [
-      { name: 'Findings Review', cadence: 'on-demand' },
-      { name: 'Spike Debrief', cadence: 'on-completion' },
-    ],
-    columns: [
-      { slug: 'questions', label: 'Questions' },
-      { slug: 'investigating', label: 'Investigating' },
-      { slug: 'findings', label: 'Findings' },
-      { slug: 'done', label: 'Done' },
-    ],
-    skills: ['web-search', 'summarizer', 'report-writer'],
-  },
-  'content-writing-project': {
-    bundleId: 'content-writing-project',
-    bundleName: 'Content Writing Project',
-    description: 'Content creation pipeline: ideation through publication.',
-    team: [
-      { name: 'Writer', role: 'Lead Writer' },
-      { name: 'Editor', role: 'Editor' },
-      { name: 'Publisher', role: 'Content Publisher' },
-    ],
-    ceremonies: [
-      { name: 'Editorial Standup', cadence: 'weekly' },
-      { name: 'Content Calendar Review', cadence: 'monthly' },
-    ],
-    columns: [
-      { slug: 'ideas', label: 'Ideas' },
-      { slug: 'drafting', label: 'Drafting' },
-      { slug: 'editing', label: 'Editing' },
-      { slug: 'published', label: 'Published' },
-    ],
-    skills: ['blog-writer', 'seo-advisor', 'proofreader'],
-  },
-  'ops-runbook-project': {
-    bundleId: 'ops-runbook-project',
-    bundleName: 'Ops / Incident Runbook',
-    description: 'Incident response and operational runbook management.',
-    team: [
-      { name: 'On-Call', role: 'On-Call Engineer' },
-      { name: 'SRE', role: 'Site Reliability Engineer' },
-      { name: 'Incident Commander', role: 'Incident Commander' },
-    ],
-    ceremonies: [
-      { name: 'Incident Postmortem', cadence: 'on-incident' },
-      { name: 'Runbook Review', cadence: 'monthly' },
-    ],
-    columns: [
-      { slug: 'alert', label: 'Alert' },
-      { slug: 'triaging', label: 'Triaging' },
-      { slug: 'mitigating', label: 'Mitigating' },
-      { slug: 'resolved', label: 'Resolved' },
-    ],
-    skills: ['incident-responder', 'postmortem-writer', 'alert-analyzer'],
-  },
-  'bug-bash-project': {
-    bundleId: 'bug-bash-project',
-    bundleName: 'Bug Bash Project',
-    description: 'Structured bug-bash and QA validation campaign.',
-    team: [
-      { name: 'QA Lead', role: 'QA Lead' },
-      { name: 'Tester', role: 'Tester' },
-      { name: 'Dev', role: 'Developer' },
-    ],
-    ceremonies: [
-      { name: 'Bug Triage', cadence: 'daily' },
-      { name: 'Bash Summary', cadence: 'on-completion' },
-    ],
-    columns: [
-      { slug: 'found', label: 'Found' },
-      { slug: 'reproducing', label: 'Reproducing' },
-      { slug: 'fixing', label: 'Fixing' },
-      { slug: 'verified', label: 'Verified' },
-    ],
-    skills: ['bug-reporter', 'repro-writer', 'severity-classifier'],
-  },
-};
-
-/** Keyword sets that map to a bundleId, in priority order. */
-const KEYWORD_MAP: Array<{ keywords: string[]; bundleId: string }> = [
-  { keywords: ['rust', 'cargo', 'crate', 'npm', 'pypi', 'pip', 'gem', 'nuget', 'library', 'sdk', 'package', 'cli', 'command-line', 'module'], bundleId: 'library-or-sdk-project' },
-  { keywords: ['writing', 'blog', 'content', 'article', 'newsletter', 'editorial', 'copywriting', 'post', 'publication'], bundleId: 'content-writing-project' },
-  { keywords: ['research', 'spike', 'analysis', 'explore', 'investigation', 'data', 'ml', 'machine learning', 'ai', 'experiment', 'python', 'jupyter', 'notebook'], bundleId: 'research-spike' },
-  { keywords: ['ops', 'devops', 'infra', 'infrastructure', 'incident', 'runbook', 'sre', 'monitoring', 'cloud', 'kubernetes', 'k8s', 'docker', 'ci/cd', 'deployment'], bundleId: 'ops-runbook-project' },
-  { keywords: ['bug', 'test', 'qa', 'quality', 'bash', 'regression', 'testing', 'validation'], bundleId: 'bug-bash-project' },
-  { keywords: ['node', 'express', 'react', 'next', 'typescript', 'javascript', 'web', 'api', 'http', 'rest', 'graphql', 'app', 'application', 'backend', 'frontend', 'go', 'golang', 'java', 'kotlin', 'swift', 'c#', 'dotnet', 'php', 'ruby', 'rails'], bundleId: 'default-software-project' },
-];
-
-function detectBundle(description: string): { bundleId: string; matchedKeywords: string[] } {
-  const lower = description.toLowerCase();
-  for (const { keywords, bundleId } of KEYWORD_MAP) {
-    const matched = keywords.filter((kw) => lower.includes(kw));
-    if (matched.length > 0) {
-      return { bundleId, matchedKeywords: matched };
-    }
-  }
-  return { bundleId: 'default-software-project', matchedKeywords: [] };
-}
+import { suggestProjectSetup } from '../services/setup-lifecycle.js';
 
 const router = Router();
 
@@ -329,10 +134,10 @@ router.delete('/:id', async (req: Request, res: Response) => {
 });
 
 // ---------------------------------------------------------------------------
-// POST /suggest  — O1 Wave 20
-// Static keyword-keyed stub. Verbal can wire in an LLM call later.
+// POST /suggest
+// LLM-backed setup proposal with deterministic built-in bundle fallback.
 // ---------------------------------------------------------------------------
-router.post('/suggest', (req: Request, res: Response) => {
+router.post('/suggest', async (req: Request, res: Response) => {
   const { description = '' } = (req.body ?? {}) as { description?: string };
 
   if (typeof description !== 'string') {
@@ -340,15 +145,13 @@ router.post('/suggest', (req: Request, res: Response) => {
     return;
   }
 
-  const { bundleId, matchedKeywords } = detectBundle(description);
-  const template = BUNDLE_TEMPLATES[bundleId] ?? BUNDLE_TEMPLATES['default-software-project']!;
-
-  const suggestion: ProjectSuggestion = {
-    ...template,
-    matchedKeywords,
-  };
-
-  res.json(suggestion);
+  try {
+    const suggestion = await suggestProjectSetup(description);
+    res.json(suggestion);
+  } catch (err) {
+    const status = (err as Error & { status?: number }).status ?? 500;
+    res.status(status).json({ error: err instanceof Error ? err.message : 'Internal server error' });
+  }
 });
 
 export default router;

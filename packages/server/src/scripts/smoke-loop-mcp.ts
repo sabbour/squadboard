@@ -6,7 +6,7 @@
  *
  *   1. capture(prompt) → MCP tool creates a card on the board
  *   2. list_issues({status: 'backlog'}) → confirm the card is there
- *   3. update_issue({status: 'todo'}) → move to-do
+ *   3. update_issue({status: 'ready'}) → move to Ready
  *   4. update_issue({status: 'in_progress'}) → start work
  *   5. update_issue({status: 'done'}) → close the loop
  *   6. list_issues({status: 'done'}) → confirm closure
@@ -74,7 +74,7 @@ async function main(): Promise<void> {
   const promptText =
     `[DOGFOOD A6 SMOKE ${new Date().toISOString()}] ` +
     'Fix bug: capture-from-CLI smoke test card. Will be moved through ' +
-    'todo → in_progress → done by the smoke script and closed.';
+    'ready → in_progress → done by the smoke script and closed.';
 
   console.log('\n[smoke] (1) calling capture …');
   const captureRes = (await client.callTool({
@@ -111,12 +111,12 @@ async function main(): Promise<void> {
     process.exit(1);
   }
 
-  // ── 3. → todo ───────────────────────────────────────────────────────────
-  console.log('\n[smoke] (3) update_issue → status=todo …');
+  // ── 3. → ready ──────────────────────────────────────────────────────────
+  console.log('\n[smoke] (3) update_issue → status=ready …');
   const upd1 = parseToolJson(
     (await client.callTool({
       name: 'update_issue',
-      arguments: { issueId, status: 'todo' },
+      arguments: { issueId, status: 'ready' },
     })) as CallToolResult,
   );
   console.log('[smoke]    →', JSON.stringify(upd1));
@@ -154,7 +154,7 @@ async function main(): Promise<void> {
   await client.close();
 
   if (closed) {
-    console.log('\n[smoke] PASS — full loop completed: capture → backlog → todo → in_progress → done.');
+    console.log('\n[smoke] PASS — full loop completed: capture → backlog → ready → in_progress → done.');
     process.exit(0);
   }
   console.error('\n[smoke] FAIL: card did not land in done after final update');

@@ -182,7 +182,7 @@ export async function dispatchBatchViaCoordinator(
   } catch (err) {
     const elapsedMs = Date.now() - startMs;
     if (err instanceof Error && err.name === "AbortError") {
-      throw new CoordinatorTimeoutError(model, timeoutMs, elapsedMs);
+      throw new CoordinatorTimeoutError(model, timeoutMs, Math.max(elapsedMs, timeoutMs));
     }
     throw err;
   } finally {

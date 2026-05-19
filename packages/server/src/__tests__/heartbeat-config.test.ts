@@ -26,6 +26,9 @@ const mockedReadFileSync = vi.mocked(readFileSync);
 function makeSweep(id: string, intervalMs: number, enabled = true): Sweep {
   return {
     id,
+    label: id,
+    description: `Test sweep ${id}`,
+    scope: 'system',
     intervalMs,
     enabled,
     async run(): Promise<SweepResult> { return { acted: 0, errors: 0 }; },

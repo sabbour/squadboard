@@ -70,7 +70,7 @@ if (import.meta.env.DEV) {
   const ids = ROLE_OPTIONS.map((r) => r.id)
   const dupes = ids.filter((id, i) => ids.indexOf(id) !== i)
   if (dupes.length > 0) {
-    throw new Error(`HireTeamModal: ROLE_OPTIONS has duplicate ids: ${dupes.join(', ')}`)
+    throw new Error(`CastTeamModal: ROLE_OPTIONS has duplicate ids: ${dupes.join(', ')}`)
   }
 }
 
@@ -156,8 +156,8 @@ export default function HireTeamModal({ projectId, onClose }: HireTeamModalProps
   }
 
   async function handleConfirm() {
-    const toHire = proposed.filter((m) => selected.has(m.agentName))
-    const result = await confirm.mutateAsync({ members: toHire })
+    const toCast = proposed.filter((m) => selected.has(m.agentName))
+    const result = await confirm.mutateAsync({ members: toCast })
     setResults({
       created: result.created.length,
       errors: result.errors.map((e) => `${e.agentName}: ${e.error}`),
@@ -311,7 +311,7 @@ export default function HireTeamModal({ projectId, onClose }: HireTeamModalProps
             {step === 'review' && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', paddingTop: '8px' }}>
                 <p style={{ margin: 0, fontSize: '13px', color: tokens.colorNeutralForeground2 }}>
-                  Cast complete. Deselect anyone you don't want to hire.
+                  Cast complete. Deselect anyone you don't want to add to the roster.
                 </p>
                 {proposed.map((member) => {
                   const isSelected = selected.has(member.agentName)
@@ -374,7 +374,7 @@ export default function HireTeamModal({ projectId, onClose }: HireTeamModalProps
                 })}
                 {confirm.isError && (
                   <p style={{ fontSize: '12px', color: tokens.colorPaletteRedForeground1, margin: 0 }}>
-                    {confirm.error?.message ?? 'Failed to hire team. Please try again.'}
+                    {confirm.error?.message ?? 'Failed to cast team. Please try again.'}
                   </p>
                 )}
               </div>
@@ -389,7 +389,7 @@ export default function HireTeamModal({ projectId, onClose }: HireTeamModalProps
                 }}>
                   <Checkmark20Regular style={{ color: tokens.colorStatusSuccessForeground1, flexShrink: 0 }} />
                   <span style={{ fontSize: '14px', color: tokens.colorStatusSuccessForeground1 }}>
-                    {results.created} agent{results.created !== 1 ? 's' : ''} hired successfully!
+                    {results.created} agent{results.created !== 1 ? 's' : ''} cast successfully!
                   </span>
                 </div>
                 {results.errors.length > 0 && (
@@ -434,9 +434,9 @@ export default function HireTeamModal({ projectId, onClose }: HireTeamModalProps
                   appearance="primary"
                   onClick={handleConfirm}
                   disabled={selected.size === 0 || confirm.isPending}
-                  icon={confirm.isPending ? <ActionLoading label="Hiring…" /> : undefined}
+                  icon={confirm.isPending ? <ActionLoading label="Casting…" /> : undefined}
                 >
-                  {confirm.isPending ? 'Hiring…' : `Hire ${selected.size} Agent${selected.size !== 1 ? 's' : ''}`}
+                  {confirm.isPending ? 'Casting…' : `Cast ${selected.size} Agent${selected.size !== 1 ? 's' : ''}`}
                 </Button>
               </>
             )}

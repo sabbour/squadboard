@@ -1,0 +1,76 @@
+---
+title: 1. Connect Spark
+description: Create the Spark project and connect it to a repository — whether the repo is new, came from a template, or already has Squad initialized.
+---
+
+import {FolderAddRegular, DocumentCopyRegular, BranchRegular, ArrowUploadRegular} from '@fluentui/react-icons';
+import {IconCard, IconGrid, Screenshot, ScreenshotGrid} from '../../../src/components/FluentDoc';
+
+# 1. Connect Spark
+
+Spark is the project you will use for every tutorial that follows. This page gets Spark created and pointed at a repository, no matter which starting point you have. By the end, you should be looking at the Spark dashboard with a healthy board ready for the next tutorial.
+
+If you have not installed Squadboard yet, follow [Installation](../installation.md) first, then come back here.
+
+## Pick your starting point
+
+Choose the path that matches what you already have. All three converge on the same Spark project.
+
+<IconGrid>
+  <IconCard icon={FolderAddRegular} title="A. New repo with Squad initialized">Best when you already ran <code>squad init</code> in a fresh repo and want Squadboard to give that team a board.</IconCard>
+  <IconCard icon={DocumentCopyRegular} title="B. Empty workspace + project template">Best when you have nothing yet and want sensible defaults: backlog → ready → in progress → in review → done, plus example ceremonies.</IconCard>
+  <IconCard icon={BranchRegular} title="C. Existing repo already running Squad">Best when the repo has a populated <code>.squad/</code>, agents, and history you do not want Squadboard to overwrite.</IconCard>
+</IconGrid>
+
+## 1. Create the project
+
+Open Squadboard. The first screen is **Projects** — the boundary for every board card, agent, ceremony, run, MCP server, and integration you create.
+
+<Screenshot src="/img/scenarios/spark-01-projects.png" alt="Squadboard Projects page with the Spark project listed." caption="Every tutorial uses one project named Spark. Reuse it; do not create a second project per tutorial." />
+
+Click **New project**, name it `Spark`, and pick the repository folder:
+
+- **Path A or C** — choose the existing repository that already owns `.squad/`. Squadboard reads that folder as the operating model; it will not overwrite the agents, decisions, or history that are already there.
+- **Path B** — pick an empty folder, then choose the **Default Software Project** template. Squadboard scaffolds `.squad/` with a roster, routing rules, casting state, and example ceremonies.
+
+Either way, Spark now exists.
+
+## 2. Read the dashboard before touching anything
+
+Open Spark from the project list. The dashboard is the cockpit: project identity, board state, recent runs, and automation status all in one place. Confirm the project name and repository path match what you intended before you move work around.
+
+<Screenshot src="/img/scenarios/spark-02-dashboard.png" alt="The Spark dashboard showing project identity and board health." caption="The dashboard is the first sanity check. If the repository path is wrong here, fix it before adding cards." />
+
+## 3. Confirm the board exists with the expected columns
+
+Open **Board**. You should see five columns — **Backlog → Ready → In Progress → In Review → Done**. Template- and existing-repo paths may already have cards; the new-repo path will be empty except for any seeded launch work.
+
+<Screenshot src="/img/scenarios/spark-03-board-plan.png" alt="Spark board with backlog and ready columns visible." caption="Ready is intentionally a separate column. It is the pickup boundary — moving a card there starts work automatically (Tutorial 3)." />
+
+You do not need to add a card yet. The board is just here so you know where work will live.
+
+## 4. (Optional) Import a Squad App for more than defaults
+
+Squad Apps package reusable team + ceremonies + skills + tool recipes + seed work as one unit. Use them when the default template is too thin for the project you are running.
+
+Open **Templates** and switch to the **Projects** tab to see what is available.
+
+<Screenshot src="/img/scenarios/spark-10-templates-projects.png" alt="Project templates available for Spark, including the default software project and additional Squad Apps." caption="Project-level imports can carry team, board layout, ceremonies, skills, tools, MCP recipes, and seed backlog. Read the manifest before applying." />
+
+Before applying any import, check:
+
+1. Which agents and charters will be added.
+2. Which skills or tool instructions will be injected into agent prompts.
+3. Whether MCP servers or GitHub settings need secrets you have not configured yet.
+4. What seed work will appear on the Spark board.
+
+For the rest of these tutorials, the default software template is enough. Heavier imports (launch-readiness, integration-validation) are reviewed in [Tutorial 4](./connect-tools.mdx).
+
+## What you should have now
+
+- A Spark project visible on the Projects page.
+- A dashboard pointed at the repository you intended.
+- A board with the standard five columns.
+- (Optional) An imported Squad App you reviewed before applying.
+
+Continue with [2. Cast and review the team →](./cast-the-team.mdx) to give Spark a roster the coordinator can actually route work to.

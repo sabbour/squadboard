@@ -2,12 +2,22 @@
  * sdk-state.ts — Phase 5 SquadState wrapper
  *
  * Provides a lazily-cached SquadState (and typed collection accessors)
- * per project, backed by the SDK's FSStorageProvider over the project's
- * `.squad/` directory.
+ * per project, backed by PostgreSQL by default with an explicit filesystem
+ * fallback for `.squad/` portability.
+ *
+ * Storage back-end selection
+ * --------------------------
+ * Unset config routes SquadState I/O through the PostgreSQL-backed adapter.
+ * The adapter stores `.squad/` content in the `squad_storage` table via the
+ * existing DB pool, so it works with either in-process PGlite or standalone
+ * PostgreSQL selected by DATABASE_URL. Set `--squad-storage fs` or
+ * SQUADBOARD_SQUAD_STORAGE_PROVIDER=fs to fall back to `.squad/` files.
  *
  * @module services/sdk-state
  */
 
+import { existsSync } from 'node:fs';
+import { readdir, readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { eq } from 'drizzle-orm';
 import {
@@ -21,8 +31,11 @@ import {
   ConfigCollection,
 } from '@bradygaster/squad-sdk';
 import { FSStorageProvider } from '@bradygaster/squad-sdk/storage';
+import type { StorageProvider } from '@bradygaster/squad-sdk/storage';
 import { getDb } from '../db/index.js';
+import { getPool } from '../db/index.js';
 import { projects } from '../db/schema.js';
+import { PostgreSQLStorageProvider } from '../sdk/postgresql-storage-provider.js';
 
 // ---------------------------------------------------------------------------
 // Typed errors
@@ -44,6 +57,101 @@ export class ProjectNotFoundError extends Error {
 
 /** Per-process cache: projectId → SquadState */
 const stateCache = new Map<string, SquadState>();
+
+// ---------------------------------------------------------------------------
+// Storage provider selection
+// ---------------------------------------------------------------------------
+
+/**
+ * Which StorageProvider back-end is active.
+ *
+ *   'fs'         — explicit fallback; reads/writes the real `.squad/` directory on disk.
+ *   'postgresql' — stores all Squad state in the `squad_storage` DB table.
+ *                  Default when no provider is configured.
+ *
+ * Only the canonical value 'postgresql' or an unset/blank value selects the DB
+ * provider. Other values, including the legacy 'pglite' spelling, use the
+ * filesystem fallback.
+ */
+export type StorageBackend = 'fs' | 'postgresql';
+
+export interface StorageBackendConfig {
+  /**
+   * Canonical provider selector. Unset/blank and "postgresql" select the
+   * DB-backed provider; "fs", "pglite", and unknown values use filesystem.
+   */
+  squadStorageProvider?: string | null;
+}
+
+export type StorageBackendConfigSource = StorageBackendConfig | string | null | undefined;
+
+export function resolveStorageBackend(source?: StorageBackendConfigSource): StorageBackend {
+  const raw =
+    typeof source === 'string'
+      ? source
+      : source === undefined
+        ? process.env['SQUADBOARD_SQUAD_STORAGE_PROVIDER']
+        : source?.squadStorageProvider;
+  const provider = raw?.trim().toLowerCase();
+  if (!provider) return 'postgresql';
+  if (provider === 'postgresql') return 'postgresql';
+  return 'fs';
+}
+
+async function listFilesystemSquadFiles(
+  squadDir: string,
+  relativeDir = '',
+): Promise<string[]> {
+  const absoluteDir = relativeDir ? path.join(squadDir, relativeDir) : squadDir;
+  const entries = await readdir(absoluteDir, { withFileTypes: true });
+  const files: string[] = [];
+
+  for (const entry of entries.sort((a, b) => a.name.localeCompare(b.name))) {
+    if (entry.isSymbolicLink()) continue;
+
+    const relativePath = relativeDir
+      ? path.posix.join(relativeDir, entry.name)
+      : entry.name;
+
+    if (entry.isDirectory()) {
+      files.push(...await listFilesystemSquadFiles(squadDir, relativePath));
+    } else if (entry.isFile()) {
+      files.push(relativePath);
+    }
+  }
+
+  return files;
+}
+
+export async function seedPostgreSQLProviderFromFilesystemIfEmpty(
+  provider: PostgreSQLStorageProvider,
+  projectId: string,
+  rootDir: string,
+): Promise<void> {
+  const existing = await provider.list('');
+  if (existing.length > 0) return;
+
+  const squadDir = path.join(rootDir, '.squad');
+  if (!existsSync(squadDir)) return;
+
+  const files = await listFilesystemSquadFiles(squadDir);
+  if (files.length === 0) return;
+
+  const contents = await Promise.all(
+    files.map(async (relativePath) => ({
+      relativePath,
+      content: await readFile(path.join(squadDir, relativePath), 'utf8'),
+    })),
+  );
+
+  for (const { relativePath, content } of contents) {
+    await provider.write(relativePath, content);
+  }
+
+  console.log(
+    `[sdk-state] imported ${contents.length} .squad file(s) into PostgreSQL storage for project ${projectId}`,
+  );
+}
 
 // ---------------------------------------------------------------------------
 // Core helpers
@@ -69,12 +177,38 @@ async function resolveSquadPath(projectId: string): Promise<string> {
   return squadPath;
 }
 
+/**
+ * Build a StorageProvider for the requested back-end.
+ * For 'postgresql', the provider is pre-initialized before being returned.
+ */
+async function buildStorageProvider(
+  projectId: string,
+  rootDir: string,
+  backend: StorageBackend,
+): Promise<StorageProvider> {
+  if (backend === 'postgresql') {
+    const pool = getPool();
+    const provider = new PostgreSQLStorageProvider(pool, projectId, { rootDir });
+    await provider.init();
+    await seedPostgreSQLProviderFromFilesystemIfEmpty(provider, projectId, rootDir);
+    return provider;
+  }
+  // 'fs' — explicit fallback, no async init needed
+  return new FSStorageProvider(rootDir);
+}
+
 // ---------------------------------------------------------------------------
 // Primary export
 // ---------------------------------------------------------------------------
 
 /**
  * Return a SquadState bound to the given project's `.squad/` directory.
+ *
+ * The storage back-end is selected by CLI/config/env:
+ *   - unset/blank       → PostgreSQLStorageProvider (default)
+ *   - 'postgresql'      → PostgreSQLStorageProvider (all I/O via squad_storage table)
+ *   - 'fs'              → FSStorageProvider (explicit filesystem fallback)
+ *   - all other values  → FSStorageProvider (fallback, including 'pglite')
  *
  * Results are cached per projectId in-process.  Call `invalidateState()`
  * to drop the cached instance (e.g. after the user changes the linked path).
@@ -88,7 +222,8 @@ export async function getState(projectId: string): Promise<SquadState> {
   const squadPath = await resolveSquadPath(projectId);
   const rootDir = path.dirname(squadPath);
 
-  const storage = new FSStorageProvider(rootDir);
+  const backend = resolveStorageBackend();
+  const storage = await buildStorageProvider(projectId, rootDir, backend);
   const state = SquadState.fromStorage(storage, rootDir);
 
   stateCache.set(projectId, state);
@@ -101,6 +236,26 @@ export async function getState(projectId: string): Promise<SquadState> {
  */
 export function invalidateState(projectId: string): void {
   stateCache.delete(projectId);
+}
+
+// ---------------------------------------------------------------------------
+// PostgreSQL provider factory (for callers that need the raw provider)
+// ---------------------------------------------------------------------------
+
+/**
+ * Create and initialize a PostgreSQLStorageProvider for the given scope string.
+ * Useful for testing or for callers that want direct provider access without
+ * going through SquadState.
+ *
+ * The scope is typically a project UUID but can be any opaque string.
+ */
+export async function createPostgreSQLStorageProvider(
+  scope: string,
+): Promise<PostgreSQLStorageProvider> {
+  const pool = getPool();
+  const provider = new PostgreSQLStorageProvider(pool, scope);
+  await provider.init();
+  return provider;
 }
 
 // ---------------------------------------------------------------------------

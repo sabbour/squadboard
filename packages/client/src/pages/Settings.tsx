@@ -17,6 +17,7 @@ import { SystemGitHubSection } from '../components/settings/SystemGitHubSection.
 import { GitHubActivityFeed } from '../components/GitHubActivityFeed.tsx'
 import PageHeader from '../components/layout/PageHeader.tsx'
 import { useUserPrefs } from '../utils/userPrefs.ts'
+import { useUnsavedChangesWarning } from '../hooks/useUnsavedChangesWarning.ts'
 import {
   Dropdown,
   Option,
@@ -117,6 +118,7 @@ function BudgetSection({ projectId }: { projectId: string }) {
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  useUnsavedChangesWarning(Boolean(value.trim()))
 
   async function handleSave() {
     const usd = parseFloat(value)
@@ -131,6 +133,7 @@ function BudgetSection({ projectId }: { projectId: string }) {
         method: 'PUT',
         body: JSON.stringify({ monthlyBudgetUsd: usd }),
       })
+      setValue('')
       setSaved(true)
       void refetch()
       setTimeout(() => setSaved(false), 2500)

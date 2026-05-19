@@ -23,6 +23,9 @@ const OVERDUE_AFTER_MS = 5 * 60_000; // 5 minutes
 
 export const githubSyncOverdueSweep: Sweep = {
   id: 'github-sync-overdue',
+  label: 'GitHub sync',
+  description: 'Runs catch-up pulls for GitHub-connected projects whose sync loop is overdue.',
+  scope: 'project',
   intervalMs: 60_000,
   enabled: true,
 
@@ -45,9 +48,11 @@ export const githubSyncOverdueSweep: Sweep = {
 
     let acted = 0;
     let errors = 0;
+    const projectIds: string[] = [];
 
     for (const project of projects) {
       if (!project.githubOwner || !project.githubRepo) continue;
+      projectIds.push(project.id);
       try {
         const sync = await GitHubSync.fromProject(project.id, project);
         const since = project.githubSyncLastAt?.toISOString();
@@ -59,6 +64,6 @@ export const githubSyncOverdueSweep: Sweep = {
       }
     }
 
-    return { acted, errors };
+    return { acted, errors, projectIds };
   },
 };

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { DragDropContext, Droppable, Draggable, type DropResult } from '@hello-pangea/dnd'
 import {
   Button,
@@ -29,6 +29,7 @@ import {
   type ColumnMeta,
 } from '../../api/columns.ts'
 import { useIssues } from '../../api/issues.ts'
+import { useUnsavedChangesWarning } from '../../hooks/useUnsavedChangesWarning.ts'
 
 // 8-swatch palette: 5 defaults + yellow, red, teal
 const PALETTE = [
@@ -43,7 +44,7 @@ const PALETTE = [
 ]
 
 // Slugs of the 5 seed columns — used to count "custom" columns for reset confirm
-const SEED_SLUGS = new Set(['backlog', 'todo', 'in_progress', 'in_review', 'done'])
+const SEED_SLUGS = new Set(['backlog', 'ready', 'in_progress', 'in_review', 'done'])
 
 const SEMANTIC_OPTIONS: { value: ColumnMeta['semantic']; label: string }[] = [
   { value: 'backlog', label: 'Backlog' },
@@ -133,6 +134,33 @@ export default function ColumnSettingsPanel({ projectId, onClose }: ColumnSettin
     slugError: null,
   })
   const [deleteConfirm, setDeleteConfirm] = useState<DeleteConfirmState | null>(null)
+
+  const hasUnsavedChanges = useMemo(() => {
+    const hasEditedColumns = columns.some((col) => {
+      const local = localState[col.columnId]
+      return Boolean(local) && (
+        local.label !== col.label ||
+        local.description !== (col.description ?? '') ||
+        local.color !== col.color ||
+        local.semantic !== col.semantic
+      )
+    })
+    const hasAddDraft = addFormOpen && Boolean(
+      addForm.label.trim() ||
+      addForm.columnId.trim() ||
+      addForm.description.trim() ||
+      addForm.semantic !== 'custom',
+    )
+    return hasEditedColumns || hasAddDraft
+  }, [addForm, addFormOpen, columns, localState])
+  useUnsavedChangesWarning(hasUnsavedChanges)
+
+  function requestClose() {
+    if (hasUnsavedChanges && !window.confirm('You have unsaved column changes. Close and discard them?')) {
+      return
+    }
+    onClose()
+  }
 
   // Initialise localState and orderedIds once columns load / change
   useEffect(() => {
@@ -347,7 +375,7 @@ export default function ColumnSettingsPanel({ projectId, onClose }: ColumnSettin
         display: 'flex',
         justifyContent: 'flex-end',
       }}
-      onClick={(e) => { if (e.target === e.currentTarget) onClose() }}
+      onClick={(e) => { if (e.target === e.currentTarget) requestClose() }}
     >
       {/* Drawer panel — widened to 480px */}
       <div
@@ -374,7 +402,7 @@ export default function ColumnSettingsPanel({ projectId, onClose }: ColumnSettin
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
             <Subtitle1 as="h2">Columns</Subtitle1>
             <button
-              onClick={onClose}
+              onClick={requestClose}
               aria-label="Close"
               style={{
                 background: 'none',

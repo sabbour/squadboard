@@ -1,0 +1,30 @@
+apiVersion: squad.io/v1
+kind: Ceremony
+metadata:
+  name: sprint-planning
+  displayName: Sprint Planning
+  description: Pick the next sprint objective, candidate work, owners, risks, and explicit non-goals.
+spec:
+  trigger:
+    type: manual
+  steps:
+    - id: collect-candidate-work
+      kind: agent-task
+      label: Collect candidate work
+      agent: "@lead"
+      prompt: "Review the project goal, backlog, recent decisions, open risks, and current Ready column. Summarize the candidate work that should be considered for the next sprint."
+      timeout: 45m
+    - id: draft-sprint-plan
+      kind: agent-task
+      label: Draft sprint plan
+      agent: "@lead"
+      prompt: "Propose a sprint plan with an objective, selected cards, likely owners, risks, dependencies, and what should stay out of scope."
+      timeout: 45m
+    - id: commit-plan
+      kind: approve
+      label: Commit the plan
+      approvers:
+        - "@lead"
+      request_changes_policy: first
+      timeout: 24h
+      timeoutAction: notify

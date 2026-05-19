@@ -57,11 +57,11 @@ export const useWorkflowRun = useCeremonyRun
  */
 export function useAttachWorkflow(projectId: string, issueId: string) {
   const queryClient = useQueryClient()
-  return useMutation<void, Error, { workflowId: string }>({
-    mutationFn: ({ workflowId }) =>
+  return useMutation<void, Error, { workflowVersionId?: string; workflowId?: string }>({
+    mutationFn: ({ workflowVersionId, workflowId }) =>
       apiFetch<void>(`/api/projects/${projectId}/issues/${issueId}/workflow`, {
-        method: 'PUT',
-        body: JSON.stringify({ workflowId }),
+        method: 'POST',
+        body: JSON.stringify({ workflowVersionId: workflowVersionId ?? workflowId }),
       }),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['issues', projectId] })

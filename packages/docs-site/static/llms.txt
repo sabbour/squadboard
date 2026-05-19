@@ -1,0 +1,45 @@
+# Squadboard documentation index
+
+Machine-readable entry point for the Squadboard documentation site.
+
+- [Architecture](/squadboard/docs/developer-guide/architecture) - The main services, data flow, user sequences, and invariants behind Squadboard.
+- [Contributing docs](/squadboard/docs/developer-guide/contributing-docs) - How to edit and validate the Docusaurus docs site.
+- [Developer Guide](/squadboard/docs/developer-guide/index) - Architecture, contribution, and local development notes for Squadboard.
+- [Agents and workspaces](/squadboard/docs/features/agents-and-workspaces) - Agent origins, skill addenda, Consult behavior, and workspace isolation.
+- [Board and runs](/squadboard/docs/features/board-and-runs) - Project board, cards, run history, live output, and audit state.
+- [Ceremonies and automation](/squadboard/docs/features/ceremonies-and-automation) - Triggered workflows, schedules, lifecycle close-out, and Ralph monitor automation.
+- [Copilot CLI + Squad coexistence](/squadboard/docs/features/copilot-squad-coexistence) - Server-owned equivalents that let Squadboard coexist with the Copilot CLI + Squad driver workflow.
+- [Integrations](/squadboard/docs/features/integrations) - GitHub, MCP, SDK, CLI, and bundle integration surfaces.
+- [Feature overview](/squadboard/docs/features/overview) - Map of Squadboard's product capabilities and feature areas.
+- [Reliability and real-time UI](/squadboard/docs/features/reliability-and-ui) - Persistence, backup/restore, migration safety, live updates, and operational visibility.
+- [Current alpha limits](/squadboard/docs/features/roadmap-gaps) - Current alpha constraints and feature areas that remain intentionally future work.
+- [Workflow engine](/squadboard/docs/features/workflow-engine) - Durable workflow execution, recovery, retries, and step orchestration.
+- [Getting Started](/squadboard/docs/getting-started/index) - Install Squadboard, create your first project, and follow the Spark tutorials.
+- [Installation](/squadboard/docs/getting-started/installation) - Install dependencies, start the local app, and build the docs site.
+- [Learning path](/squadboard/docs/getting-started/learning-path) - Choose the docs path that matches your role and goal.
+- [Quickstart](/squadboard/docs/getting-started/quickstart) - Ten minutes from install to a Spark card that an agent picked up automatically — the same loop the tutorials expand on.
+- [2. Cast and review the team](/squadboard/docs/getting-started/tutorials/cast-the-team) - Give Spark a small launch team with real names, roles, and charters, and use Consult when the right answer is still ambiguous.
+- [1. Connect Spark](/squadboard/docs/getting-started/tutorials/connect-spark) - Create the Spark project and connect it to a repository — whether the repo is new, came from a template, or already has Squad initialized.
+- [4. Connect Copilot CLI, Squad, and MCP](/squadboard/docs/getting-started/tutorials/connect-tools) - Wire Spark to Copilot CLI and upstream Squad via MCP, connect GitHub for the outer loop, and save Spark as a reusable template.
+- [Tutorials](/squadboard/docs/getting-started/tutorials/index) - Four sequential tutorials that take Spark from "nothing" to "running, observed, and connected to your other tools".
+- [3. Run the Spark launch wave](/squadboard/docs/getting-started/tutorials/run-the-launch-wave) - Capture work in the inbox, shape it into a card, move it to Ready, watch automatic pickup, inspect the run, and close the loop with a ceremony.
+- [Squadboard documentation](/squadboard/docs/) - Start here for installation, quick links, and a map of the Squadboard docs.
+- [FAQ](/squadboard/docs/reference/faq) - Frequently asked questions about Squadboard.
+- [Reference](/squadboard/docs/reference/index) - Focused reference pages for operating and troubleshooting Squadboard.
+- [Troubleshooting](/squadboard/docs/reference/troubleshooting) - Common runtime, coordinator, MCP, and automation issues.
+- [Agents and skills](/squadboard/docs/user-guide/agents-skills) - Manage project agents, virtual Copilot members, human collaborators, and reusable skills.
+- [Board and runs](/squadboard/docs/user-guide/board-and-runs) - Work with cards, run agents, monitor live output, and understand run state.
+- [Built-in templates and defaults](/squadboard/docs/user-guide/built-ins) - Built-in ceremonies, team templates, project templates, and how to review them before use.
+- [Ceremonies and workflows](/squadboard/docs/user-guide/ceremonies-workflows) - Author, trigger, run, automate close-out, and audit ceremonies.
+- [Configuration](/squadboard/docs/user-guide/configuration) - Configure runtime, database, cost model, project defaults, and docs site commands.
+- [Coordinator loops](/squadboard/docs/user-guide/coordinator-loops) - How Squadboard deterministically picks up Ready work, starts runs, advances ceremonies, and keeps ambiguity bounded.
+- [Copilot CLI + Squad coexistence](/squadboard/docs/user-guide/copilot-squad-coexistence) - How Squadboard coexists with Copilot CLI and upstream Squad through deterministic orchestration.
+- [GitHub integration](/squadboard/docs/user-guide/github) - Configure GitHub sync, PR workflows, activity feed, and Ralph monitor signals.
+- [Importing](/squadboard/docs/user-guide/importing) - Import templates, bundles, and Squad Apps into Squadboard projects.
+- [MCP integration](/squadboard/docs/user-guide/mcp) - Connect Squadboard to Copilot CLI, VS Code, or HTTP clients through MCP.
+- [Scribe and Ralph](/squadboard/docs/user-guide/scribe-ralph) - Automate Scribe close-out and keep opted-in projects moving with Ralph.
+- [Security](/squadboard/docs/user-guide/security) - Security defaults for local-first operation, GitHub credentials, MCP, worktrees, and LLM boundaries.
+- [Squad Apps](/squadboard/docs/user-guide/squad-apps) - Package complete Squadboard projects as installable apps.
+- [Squad integration](/squadboard/docs/user-guide/squad-integration) - How Squadboard works with upstream Squad and Copilot CLI.
+- [Squad tools and hooks](/squadboard/docs/user-guide/squad-tools-hooks) - How Squadboard MCP tools map to upstream Squad ToolRegistry and hook concepts.
+- [Storage provider alignment](/squadboard/docs/user-guide/storage-provider) - How Squadboard's PostgreSQL-backed Squad StorageProvider adapter enables shared state across processes.

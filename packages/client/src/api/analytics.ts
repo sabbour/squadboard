@@ -8,7 +8,7 @@ import { apiFetch } from './client.ts'
 export interface ProjectOverview {
   issuesByStatus: {
     backlog: number
-    todo: number
+    ready: number
     in_progress: number
     in_review: number
     done: number

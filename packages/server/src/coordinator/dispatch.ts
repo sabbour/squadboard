@@ -32,6 +32,7 @@ import {
 } from "./llm-client.js";
 import { resolveCoordinatorModelChain } from "../config/coordinator-env.js";
 import { sanitizeUntrustedText } from "./sanitize.js";
+import { applyDeterministicPostprocessing } from "./prefilters.js";
 
 // ---------------------------------------------------------------------------
 // Public types
@@ -227,8 +228,10 @@ export async function dispatchViaCoordinator(
         llmCaller: opts?.llmCaller,
       });
 
-      // 8. Cache the result keyed by input (not by model)
-      cache.set(input, llmResult.decision);
+      const decision = applyDeterministicPostprocessing(input, llmResult.decision);
+
+      // 8. Cache the post-processed result keyed by input (not by model)
+      cache.set(input, decision);
 
       // 9. meta.model reflects the model that actually succeeded
       const meta: CoordinatorCallMeta = {
@@ -237,7 +240,7 @@ export async function dispatchViaCoordinator(
         inputHash,
       };
 
-      return { decision: llmResult.decision, meta, cacheHit: false };
+      return { decision, meta, cacheHit: false };
     } catch (err) {
       if (!isRetriableError(err)) throw err;
       failures.push({

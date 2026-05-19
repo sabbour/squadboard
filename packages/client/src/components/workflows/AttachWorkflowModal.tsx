@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useWorkflows, useWorkflowTemplates, useAttachWorkflow, useCreateWorkflow } from '../../api/workflows.ts'
+import { useCeremonies, useCeremonyTemplates, useAttachCeremony, useCreateCeremony } from '../../api/ceremonies.ts'
 import {
   Dialog,
   DialogSurface,
@@ -51,28 +51,28 @@ const useStyles = makeStyles({
 })
 
 /**
- * Modal that lets the user attach a workflow to an issue.
+ * Modal that lets the user choose a run plan for an issue.
  */
 export function AttachWorkflowModal({ projectId, issueId, onClose }: AttachWorkflowModalProps) {
-  const { data: workflows } = useWorkflows(projectId)
-  const { data: templates } = useWorkflowTemplates()
-  const attachWorkflow = useAttachWorkflow(projectId, issueId)
-  const createWorkflow = useCreateWorkflow(projectId)
+  const { data: ceremonies } = useCeremonies(projectId)
+  const { data: templates } = useCeremonyTemplates()
+  const attachCeremony = useAttachCeremony(projectId, issueId)
+  const createCeremony = useCreateCeremony(projectId)
   const styles = useStyles()
 
-  const [selectedWorkflowId, setSelectedWorkflowId] = useState('')
+  const [selectedVersionId, setSelectedVersionId] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
 
   async function handleAttach() {
-    if (!selectedWorkflowId) return
+    if (!selectedVersionId) return
     setBusy(true)
     setError(null)
     try {
-      await attachWorkflow.mutateAsync({ workflowId: selectedWorkflowId })
+      await attachCeremony.mutateAsync({ workflowVersionId: selectedVersionId })
       onClose()
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to attach workflow')
+      setError(e instanceof Error ? e.message : 'Failed to choose run plan')
     } finally {
       setBusy(false)
     }
@@ -81,16 +81,23 @@ export function AttachWorkflowModal({ projectId, issueId, onClose }: AttachWorkf
   async function handleUseTemplate(slug: string) {
     const tpl = templates?.find((t) => t.slug === slug)
     if (!tpl) return
+    if (!tpl.yamlContent) {
+      setError('This template does not include a run-plan definition yet.')
+      return
+    }
     setBusy(true)
     setError(null)
     try {
-      const created = await createWorkflow.mutateAsync({
-        yamlContent: `template:${tpl.slug}`,
+      const created = await createCeremony.mutateAsync({
+        yamlContent: tpl.yamlContent,
+        triggerKind: 'manual',
+        triggerConfig: {},
+        kind: 'workflow',
       })
-      await attachWorkflow.mutateAsync({ workflowId: created.ceremony.id })
+      await attachCeremony.mutateAsync({ workflowVersionId: created.version.id })
       onClose()
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to create workflow from template')
+      setError(e instanceof Error ? e.message : 'Failed to create run plan from template')
     } finally {
       setBusy(false)
     }
@@ -100,17 +107,17 @@ export function AttachWorkflowModal({ projectId, issueId, onClose }: AttachWorkf
     <Dialog open onOpenChange={(_, data) => { if (!data.open) onClose() }}>
       <DialogSurface style={{ maxWidth: '440px', width: '100%' }}>
         <DialogBody>
-          <DialogTitle>Attach Workflow</DialogTitle>
+          <DialogTitle>Choose run plan</DialogTitle>
           <DialogContent>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', paddingTop: '8px' }}>
-              {/* Existing project workflows */}
-              {workflows && workflows.length > 0 && (
+              {/* Existing project ceremonies/run plans */}
+              {ceremonies && ceremonies.length > 0 && (
                 <div>
-                  <span className={styles.sectionLabel}>Project Workflows</span>
+                  <span className={styles.sectionLabel}>Project run plans</span>
                   <div className={styles.attachRow}>
                     <select
-                      value={selectedWorkflowId}
-                      onChange={(e) => setSelectedWorkflowId(e.target.value)}
+                      value={selectedVersionId}
+                      onChange={(e) => setSelectedVersionId(e.target.value)}
                       style={{
                         flex: 1,
                         background: tokens.colorNeutralBackground1,
@@ -121,17 +128,21 @@ export function AttachWorkflowModal({ projectId, issueId, onClose }: AttachWorkf
                         padding: '6px 10px',
                       }}
                     >
-                      <option value="">— select a workflow —</option>
-                      {workflows.map((w) => (
-                        <option key={w.id} value={w.id}>{w.name}</option>
-                      ))}
+                      <option value="">— select a run plan —</option>
+                      {ceremonies
+                        .filter((ceremony) => Boolean(ceremony.activeVersionId))
+                        .map((ceremony) => (
+                          <option key={ceremony.id} value={ceremony.activeVersionId ?? ''}>
+                            {ceremony.name}
+                          </option>
+                        ))}
                     </select>
                     <Button
                       appearance="primary"
                       onClick={() => { void handleAttach() }}
-                      disabled={!selectedWorkflowId || busy}
+                      disabled={!selectedVersionId || busy}
                     >
-                      Attach
+                      Use plan
                     </Button>
                   </div>
                 </div>
@@ -140,7 +151,7 @@ export function AttachWorkflowModal({ projectId, issueId, onClose }: AttachWorkf
               {/* Bundled templates */}
               {templates && templates.length > 0 && (
                 <div>
-                  <span className={styles.sectionLabel}>Use a Template</span>
+                  <span className={styles.sectionLabel}>Start from a template</span>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                     {templates.map((tpl) => (
                       <div key={tpl.slug} className={styles.templateCard}>
@@ -156,7 +167,7 @@ export function AttachWorkflowModal({ projectId, issueId, onClose }: AttachWorkf
                           onClick={() => { void handleUseTemplate(tpl.slug) }}
                           disabled={busy}
                         >
-                          Use
+                          Create and use
                         </Button>
                       </div>
                     ))}

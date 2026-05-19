@@ -1,0 +1,185 @@
+:root {
+  --ifm-color-primary: #111827;
+  --ifm-color-primary-dark: #0f172a;
+  --ifm-color-primary-darker: #0b1120;
+  --ifm-color-primary-darkest: #030712;
+  --ifm-color-primary-light: #374151;
+  --ifm-color-primary-lighter: #4b5563;
+  --ifm-color-primary-lightest: #6b7280;
+  --ifm-code-font-size: 95%;
+  --ifm-heading-font-weight: 750;
+  --ifm-link-color: #0f5bd7;
+  --ifm-link-hover-color: #0847aa;
+}
+
+.markdown a:not(.button):not(.fluent-icon-card),
+.theme-doc-markdown a:not(.button):not(.fluent-icon-card) {
+  color: var(--ifm-link-color);
+  text-decoration: underline;
+  text-underline-offset: 0.16em;
+}
+
+.markdown a:not(.button):not(.fluent-icon-card):hover,
+.theme-doc-markdown a:not(.button):not(.fluent-icon-card):hover {
+  color: var(--ifm-link-hover-color);
+}
+
+.hero {
+  background:
+    radial-gradient(circle at top left, rgba(17, 24, 39, 0.10), transparent 35%),
+    linear-gradient(135deg, #ffffff 0%, #f8fafc 55%, #eef2ff 100%);
+  color: #111827;
+}
+
+.markdown h2 {
+  border-top: 1px solid var(--ifm-color-emphasis-200);
+  padding-top: 1.5rem;
+}
+
+.quick-links {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+}
+
+.quick-link-card {
+  border: 1px solid var(--ifm-color-emphasis-200);
+  border-radius: 12px;
+  padding: 1rem;
+  background: var(--ifm-background-surface-color);
+}
+
+.quick-link-card strong {
+  display: block;
+  margin-bottom: 0.35rem;
+}
+
+.fluent-icon-grid {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  margin: 1.25rem 0;
+}
+
+.fluent-icon-card {
+  display: flex;
+  gap: 0.8rem;
+  align-items: flex-start;
+  border: 1px solid var(--ifm-color-emphasis-200);
+  border-radius: 14px;
+  padding: 1rem;
+  background: var(--ifm-background-surface-color);
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+}
+
+.fluent-icon-card__icon {
+  color: #2563eb;
+  flex: 0 0 auto;
+  height: 1.45rem;
+  width: 1.45rem;
+}
+
+.fluent-icon-card strong {
+  display: block;
+  margin-bottom: 0.25rem;
+}
+
+.scenario-flow {
+  border-left: 3px solid #2563eb;
+  padding-left: 1rem;
+  margin: 1.25rem 0;
+}
+
+.screenshot-grid {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  margin: 1.25rem 0;
+}
+
+.doc-screenshot {
+  margin: 1rem 0;
+  border: 1px solid var(--ifm-color-emphasis-200);
+  border-radius: 14px;
+  overflow: hidden;
+  background: var(--ifm-background-surface-color);
+  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.08);
+}
+
+.doc-screenshot__trigger {
+  background: transparent;
+  border: 0;
+  cursor: zoom-in;
+  display: block;
+  padding: 0;
+  position: relative;
+  width: 100%;
+}
+
+.doc-screenshot__trigger img {
+  display: block;
+  width: 100%;
+}
+
+.doc-screenshot__hint {
+  background: rgba(15, 23, 42, 0.78);
+  border-radius: 999px;
+  bottom: 0.75rem;
+  color: #ffffff;
+  font-size: 0.75rem;
+  font-weight: 650;
+  opacity: 0;
+  padding: 0.3rem 0.65rem;
+  pointer-events: none;
+  position: absolute;
+  right: 0.75rem;
+  transition: opacity 0.15s ease;
+}
+
+.doc-screenshot__trigger:hover .doc-screenshot__hint,
+.doc-screenshot__trigger:focus-visible .doc-screenshot__hint {
+  opacity: 1;
+}
+
+.doc-screenshot figcaption {
+  border-top: 1px solid var(--ifm-color-emphasis-200);
+  color: var(--ifm-color-emphasis-700);
+  font-size: 0.85rem;
+  line-height: 1.45;
+  margin: 0;
+  padding: 0.7rem 0.9rem;
+}
+
+.doc-screenshot-lightbox {
+  align-items: center;
+  background: rgba(3, 7, 18, 0.86);
+  cursor: zoom-out;
+  display: flex;
+  inset: 0;
+  justify-content: center;
+  padding: 3rem;
+  position: fixed;
+  z-index: 1000;
+}
+
+.doc-screenshot-lightbox__image {
+  border-radius: 14px;
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.45);
+  cursor: default;
+  max-height: 90vh;
+  max-width: min(96vw, 1600px);
+}
+
+.doc-screenshot-lightbox__close {
+  background: #ffffff;
+  border: 1px solid rgba(15, 23, 42, 0.16);
+  border-radius: 999px;
+  color: #111827;
+  cursor: pointer;
+  font-weight: 700;
+  padding: 0.45rem 0.85rem;
+  position: fixed;
+  right: 1.25rem;
+  top: 1.25rem;
+  z-index: 1001;
+}

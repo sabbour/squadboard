@@ -119,7 +119,7 @@ export interface ProjectFlow {
 
 const COLUMN_CATALOG: Array<{ slug: string; name: string; color: string }> = [
   { slug: 'backlog',     name: 'Backlog',     color: '#7d8590' },
-  { slug: 'todo',        name: 'Todo',        color: '#388bfd' },
+  { slug: 'ready',       name: 'Ready',       color: '#388bfd' },
   { slug: 'in_progress', name: 'In Progress', color: '#d29922' },
   { slug: 'in_review',   name: 'In Review',   color: '#a371f7' },
   { slug: 'done',        name: 'Done',        color: '#3fb950' },

@@ -1,0 +1,94 @@
+---
+title: MCP integration
+description: Connect Squadboard to Copilot CLI, VS Code, or HTTP clients through MCP.
+---
+
+import {PlugConnectedRegular, WrenchRegular, ClipboardTaskListLtrRegular} from '@fluentui/react-icons';
+import {IconCard, IconGrid, Screenshot, ScreenshotGrid} from '../../src/components/FluentDoc';
+
+# MCP integration
+
+Squadboard exposes board, project, run, capture, and routing tools through Model Context Protocol.
+
+<IconGrid>
+  <IconCard icon={PlugConnectedRegular} title="Connect clients">Use MCP from Copilot CLI, VS Code, or service clients.</IconCard>
+  <IconCard icon={WrenchRegular} title="Expose tools">Make board and run operations available without direct database access.</IconCard>
+  <IconCard icon={ClipboardTaskListLtrRegular} title="Capture work">Turn driver directives into inbox items, cards, or decision files.</IconCard>
+</IconGrid>
+
+<ScreenshotGrid>
+  <Screenshot src="/img/scenarios/spark-13-mcp-list.png" alt="Spark MCP servers page." caption="Project MCP servers are visible and configurable." />
+  <Screenshot src="/img/scenarios/spark-14-mcp-dialog.png" alt="New MCP server dialog." caption="Server recipes describe the specific bridge a client should use." />
+</ScreenshotGrid>
+
+## Copilot CLI
+
+Add Squadboard to `~/.copilot/mcp-config.json`:
+
+```json
+{
+  "mcpServers": {
+    "squadboard": {
+      "command": "node",
+      "args": ["/absolute/path/to/squadboard/packages/cli/dist/index.js", "mcp"],
+      "env": {
+        "SQUADBOARD_SQUAD_STORAGE_PROVIDER": "postgresql",
+        "SQUADBOARD_DEFAULT_PROJECT_ID": "project-uuid"
+      }
+    }
+  }
+}
+```
+
+Or let the CLI create a repo-local config:
+
+```bash
+squadboard init --write-mcp-config
+```
+
+This config makes Copilot CLI and `squad.agent.md` use Squadboard as the broker for PostgreSQL-backed Squad state. Use `squadboard init --squad-storage fs --write-mcp-config` only when you want filesystem `.squad/` fallback.
+
+## VS Code
+
+Add a project-level `.vscode/mcp.json`:
+
+```json
+{
+  "servers": {
+    "squadboard": {
+      "type": "stdio",
+      "command": "node",
+      "args": ["packages/cli/dist/index.js", "mcp"]
+    }
+  }
+}
+```
+
+## Core tools
+
+| Tool | Purpose |
+| --- | --- |
+| `list_projects` | List Squadboard projects |
+| `list_issues` | List board cards |
+| `create_issue` | Create a card |
+| `update_issue` | Update a card |
+| `run_agent` | Trigger an agent run |
+| `get_run_status` | Read run status and output |
+| `list_agents` | List active, disabled, retired, or all agents |
+| `list_inbox` | List capture inbox items |
+| `capture` | Capture freeform work or done messages |
+| `slash_command` | Execute a `/squadboard` command |
+| `get_routing` | Read project routing metadata |
+
+GitHub run tools are also available for worktree-backed runs: branch push, PR open/comment/merge, workflow dispatch, workflow polling, workflow listing, default-branch lookup, branch listing, and authenticated-user lookup.
+
+When using upstream Squad, register these as a `squadboard` tool bundle or MCP server recipe so Squad hooks can enforce policy before write tools run. See [Squad tools and hooks](./squad-tools-hooks.mdx).
+
+## Capture loop
+
+Use `capture` for both issue-like work and done messages:
+
+```bash
+capture --prompt "Add a Docusaurus docs site" --hint issue
+capture --prompt "done: Docusaurus docs site builds cleanly"
+```

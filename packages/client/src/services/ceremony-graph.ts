@@ -128,7 +128,23 @@ export interface CeremonyGraph {
 // YAML emitter (no runtime YAML lib on the client)
 // ---------------------------------------------------------------------------
 
-const RESERVED_FIELDS_BASE = new Set(['type', 'label'])
+// `type` is the legacy step discriminator; `kind` is the canonical one
+// (apiVersion: squad.io/v1). Both are consumed by the parser and must NEVER
+// leak into a step's `extras` map (would otherwise be re-emitted as a
+// duplicate field on save and confuse the YAML reader).
+const RESERVED_FIELDS_BASE = new Set(['type', 'kind', 'label'])
+
+// Marker keys stored on header.extras / step.extras to remember that a
+// canonical (apiVersion: squad.io/v1) document was loaded, so we can emit
+// it back in the same shape. Stripped on emit.
+const CANONICAL_HEADER_MARKERS = new Set([
+  '_canonical',
+  '_metadataName',
+  '_apiVersion',
+  '_kind',
+  '_trigger',
+])
+const CANONICAL_STEP_MARKER = '_yamlKind'
 const RESERVED_FIELDS_ROUTE = new Set([...RESERVED_FIELDS_BASE, 'agent', 'prompt', 'timeout'])
 const RESERVED_FIELDS_AGENT_RUN = new Set([...RESERVED_FIELDS_BASE, 'agent', 'prompt', 'timeout'])
 const RESERVED_FIELDS_APPROVE = new Set([
@@ -275,8 +291,109 @@ function emitStep(step: CeremonyStep, depth: number, lines: string[]): void {
     }
   }
 
-  // Trailing extras — preserved verbatim from the input YAML.
+  // Trailing extras — preserved verbatim from the input YAML. Strip private
+  // markers (e.g. _yamlKind) that only exist to support canonical round-trip.
   for (const [k, v] of Object.entries(step.extras ?? {})) {
+    if (k === CANONICAL_STEP_MARKER) continue
+    emitField(k, v, depth + 1, lines)
+  }
+}
+
+/**
+ * Canonical (apiVersion: squad.io/v1) step emitter — mirrors the structure
+ * the server's yaml-canonicalize.ts produces:
+ *
+ *   - id: <slug>
+ *     kind: <kind>
+ *     <other fields>
+ *
+ * The step's `_yamlKind` extras marker (set by the parser) is used to map
+ * back to the canonical kind vocabulary (e.g. agent_run -> agent-task).
+ */
+function legacyKindToCanonical(kind: StepKind): string {
+  switch (kind) {
+    case 'agent_run':
+      return 'agent-task'
+    case 'fan_out':
+      return 'fan-out'
+    default:
+      return kind
+  }
+}
+
+function deriveStepId(step: CeremonyStep, index: number): string {
+  if (step.label) {
+    const slug = step.label
+      .toLowerCase()
+      .trim()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '')
+      .slice(0, 60)
+    if (slug) return slug
+  }
+  return `step-${index + 1}`
+}
+
+function emitCanonicalStep(step: CeremonyStep, index: number, depth: number, lines: string[]): void {
+  const extras = (step.extras ?? {}) as Record<string, unknown>
+  const rawKind = typeof extras[CANONICAL_STEP_MARKER] === 'string'
+    ? (extras[CANONICAL_STEP_MARKER] as string)
+    : legacyKindToCanonical(step.kind)
+  // id comes from extras if it was preserved on the original YAML, otherwise
+  // derive a stable one from the label / position.
+  const id = typeof extras.id === 'string' && extras.id.trim() !== ''
+    ? extras.id
+    : deriveStepId(step, index)
+  lines.push(`${indent(depth)}- id: ${quoteIfNeeded(id)}`)
+  lines.push(`${indent(depth + 1)}kind: ${quoteIfNeeded(rawKind)}`)
+  if (step.label !== undefined) emitField('label', step.label, depth + 1, lines)
+
+  switch (step.kind) {
+    case 'route':
+    case 'agent_run': {
+      const s = step as RouteStepNode | AgentRunStepNode
+      if (s.agent !== undefined) emitField('agent', s.agent, depth + 1, lines)
+      if (s.prompt !== undefined) emitField('prompt', s.prompt, depth + 1, lines)
+      if (s.timeout !== undefined) emitField('timeout', s.timeout, depth + 1, lines)
+      break
+    }
+    case 'approve': {
+      const s = step as ApproveStepNode
+      if (s.approvers !== undefined) emitField('approvers', s.approvers, depth + 1, lines)
+      if (s.request_changes_policy !== undefined) {
+        emitField('request_changes_policy', s.request_changes_policy, depth + 1, lines)
+      }
+      if (s.timeout !== undefined) emitField('timeout', s.timeout, depth + 1, lines)
+      break
+    }
+    case 'fan_out': {
+      const s = step as FanOutStepNode
+      if (s.split_by !== undefined) emitField('split_by', s.split_by, depth + 1, lines)
+      if (s.count !== undefined) emitField('count', s.count, depth + 1, lines)
+      if (s.agents !== undefined) emitField('agents', s.agents, depth + 1, lines)
+      if (s.merge_strategy !== undefined) {
+        emitField('merge_strategy', s.merge_strategy, depth + 1, lines)
+      }
+      if (s.mode !== undefined && s.mode !== 'serial') emitField('mode', s.mode, depth + 1, lines)
+      if (s.steps && s.steps.length > 0) {
+        lines.push(`${indent(depth + 1)}steps:`)
+        s.steps.forEach((child, ci) => emitCanonicalStep(child, ci, depth + 2, lines))
+      } else {
+        lines.push(`${indent(depth + 1)}steps: []`)
+      }
+      break
+    }
+    case 'handoff': {
+      const s = step as HandoffStepNode
+      if (s.to !== undefined) emitField('to', s.to, depth + 1, lines)
+      if (s.message !== undefined) emitField('message', s.message, depth + 1, lines)
+      break
+    }
+  }
+
+  for (const [k, v] of Object.entries(extras)) {
+    if (k === CANONICAL_STEP_MARKER) continue
+    if (k === 'id') continue
     emitField(k, v, depth + 1, lines)
   }
 }
@@ -286,14 +403,23 @@ function emitStep(step: CeremonyStep, depth: number, lines: string[]): void {
 // ---------------------------------------------------------------------------
 
 export function graphToCeremonyYaml(graph: CeremonyGraph): string {
-  const lines: string[] = []
   const { header } = graph
+  const headerExtras = (header.extras ?? {}) as Record<string, unknown>
+  const isCanonical = headerExtras._canonical === true
+
+  if (isCanonical) {
+    return graphToCanonicalYaml(graph)
+  }
+
+  const lines: string[] = []
   lines.push(`name: ${quoteIfNeeded(header.name ?? 'Untitled ceremony')}`)
   if (header.description !== undefined && header.description !== '') {
     emitField('description', header.description, 0, lines)
   }
-  for (const [k, v] of Object.entries(header.extras ?? {})) {
+  for (const [k, v] of Object.entries(headerExtras)) {
     if (RESERVED_HEADER_FIELDS.has(k)) continue
+    if (CANONICAL_HEADER_MARKERS.has(k)) continue
+    if (k.startsWith('_meta_') || k.startsWith('_spec_')) continue
     emitField(k, v, 0, lines)
   }
   // Top-level steps come from the nodes that have no parent.
@@ -305,6 +431,72 @@ export function graphToCeremonyYaml(graph: CeremonyGraph): string {
     for (const n of topNodes) emitStep(n.step, 1, lines)
   }
   return lines.join('\n') + '\n'
+}
+
+/**
+ * Emit a CeremonyGraph as canonical (apiVersion: squad.io/v1, kind: Ceremony)
+ * YAML. Used when `header.extras._canonical === true`, i.e. the document was
+ * originally loaded as canonical YAML. Mirrors the field ordering produced
+ * by the server's yaml-canonicalize.ts stringifier.
+ */
+function graphToCanonicalYaml(graph: CeremonyGraph): string {
+  const { header } = graph
+  const headerExtras = (header.extras ?? {}) as Record<string, unknown>
+  const lines: string[] = []
+
+  const apiVersion = typeof headerExtras._apiVersion === 'string'
+    ? (headerExtras._apiVersion as string)
+    : 'squad.io/v1'
+  const docKind = typeof headerExtras._kind === 'string'
+    ? (headerExtras._kind as string)
+    : 'Ceremony'
+
+  lines.push(`apiVersion: ${quoteIfNeeded(apiVersion)}`)
+  lines.push(`kind: ${quoteIfNeeded(docKind)}`)
+  lines.push('metadata:')
+
+  const metaName = typeof headerExtras._metadataName === 'string' && headerExtras._metadataName.trim() !== ''
+    ? (headerExtras._metadataName as string)
+    : slugify(header.name)
+  emitField('name', metaName, 1, lines)
+  if (header.name && header.name !== metaName) {
+    emitField('displayName', header.name, 1, lines)
+  }
+  if (header.description !== undefined && header.description !== '') {
+    emitField('description', header.description, 1, lines)
+  }
+  for (const [k, v] of Object.entries(headerExtras)) {
+    if (!k.startsWith('_meta_')) continue
+    emitField(k.slice('_meta_'.length), v, 1, lines)
+  }
+
+  lines.push('spec:')
+  const trigger = headerExtras._trigger
+  if (trigger && typeof trigger === 'object') {
+    emitField('trigger', trigger, 1, lines)
+  }
+  for (const [k, v] of Object.entries(headerExtras)) {
+    if (!k.startsWith('_spec_')) continue
+    emitField(k.slice('_spec_'.length), v, 1, lines)
+  }
+
+  const topNodes = graph.nodes.filter((n) => !n.parentId).sort((a, b) => a.index - b.index)
+  if (topNodes.length === 0) {
+    lines.push(`${indent(1)}steps: []`)
+  } else {
+    lines.push(`${indent(1)}steps:`)
+    topNodes.forEach((n, i) => emitCanonicalStep(n.step, i, 2, lines))
+  }
+  return lines.join('\n') + '\n'
+}
+
+function slugify(name: string): string {
+  const s = (name ?? '')
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+  return s || 'untitled'
 }
 
 // ---------------------------------------------------------------------------
@@ -544,16 +736,53 @@ function pickReservedFields(raw: Record<string, unknown>, reserved: Set<string>)
   return { picked, extras }
 }
 
+/**
+ * Normalise the discriminator field of a step. Accepts both the legacy
+ * `type:` (Phase 16 flat YAML) and the canonical `kind:` (apiVersion:
+ * squad.io/v1) values, and maps newer canonical aliases onto the editor's
+ * legacy StepKind vocabulary. The original raw kind is returned so callers
+ * can preserve it via the `_yamlKind` marker for round-trip fidelity.
+ */
+function normaliseStepKind(raw: unknown): { kind: StepKind; rawKind: string } {
+  const rawKind = typeof raw === 'string' && raw.trim() !== '' ? raw : 'agent_run'
+  switch (rawKind) {
+    case 'agent_run':
+    case 'agent-run':
+    case 'agent-task':
+    case 'agent_task':
+      return { kind: 'agent_run', rawKind }
+    case 'route':
+      return { kind: 'route', rawKind }
+    case 'approve':
+    case 'peer_review':
+    case 'peer-review':
+      return { kind: 'approve', rawKind }
+    case 'fan_out':
+    case 'fan-out':
+      return { kind: 'fan_out', rawKind }
+    case 'handoff':
+    case 'notify':
+      return { kind: 'handoff', rawKind }
+    default:
+      return { kind: 'agent_run', rawKind }
+  }
+}
+
 function rawStepToCeremonyStep(raw: unknown): CeremonyStep {
   if (!raw || typeof raw !== 'object') {
     return { kind: 'agent_run', extras: {} } satisfies AgentRunStepNode
   }
   const obj = raw as Record<string, unknown>
-  const type = String(obj.type ?? 'agent_run') as StepKind
+  // Accept either the legacy `type` or the canonical `kind` discriminator.
+  const { kind: type, rawKind } = normaliseStepKind(obj.type ?? obj.kind)
+  const attachRawKindMarker = (extras: Record<string, unknown>) => {
+    if (rawKind !== type) extras[CANONICAL_STEP_MARKER] = rawKind
+    return extras
+  }
   switch (type) {
     case 'route': {
       const { picked, extras } = pickReservedFields(obj, RESERVED_FIELDS_ROUTE)
-      const node: RouteStepNode = { kind: 'route', extras }
+      const node: RouteStepNode = { kind: 'route', extras: attachRawKindMarker(extras) }
       if (typeof picked.label === 'string') node.label = picked.label
       if (typeof picked.agent === 'string') node.agent = picked.agent
       if (typeof picked.prompt === 'string') node.prompt = picked.prompt
@@ -562,7 +791,7 @@ function rawStepToCeremonyStep(raw: unknown): CeremonyStep {
     }
     case 'approve': {
       const { picked, extras } = pickReservedFields(obj, RESERVED_FIELDS_APPROVE)
-      const node: ApproveStepNode = { kind: 'approve', extras }
+      const node: ApproveStepNode = { kind: 'approve', extras: attachRawKindMarker(extras) }
       if (typeof picked.label === 'string') node.label = picked.label
       if (Array.isArray(picked.approvers)) {
         node.approvers = (picked.approvers as unknown[]).map((a) =>
@@ -582,7 +811,11 @@ function rawStepToCeremonyStep(raw: unknown): CeremonyStep {
     }
     case 'fan_out': {
       const { picked, extras } = pickReservedFields(obj, RESERVED_FIELDS_FAN_OUT)
-      const node: FanOutStepNode = { kind: 'fan_out', extras, steps: [] }
+      const node: FanOutStepNode = {
+        kind: 'fan_out',
+        extras: attachRawKindMarker(extras),
+        steps: [],
+      }
       if (typeof picked.label === 'string') node.label = picked.label
       const sb = picked.split_by
       if (sb === 'labels' || sb === 'agents' || sb === 'count') node.split_by = sb
@@ -599,7 +832,7 @@ function rawStepToCeremonyStep(raw: unknown): CeremonyStep {
     }
     case 'handoff': {
       const { picked, extras } = pickReservedFields(obj, RESERVED_FIELDS_HANDOFF)
-      const node: HandoffStepNode = { kind: 'handoff', extras }
+      const node: HandoffStepNode = { kind: 'handoff', extras: attachRawKindMarker(extras) }
       if (typeof picked.label === 'string') node.label = picked.label
       if (typeof picked.to === 'string') node.to = picked.to
       if (typeof picked.message === 'string') node.message = picked.message
@@ -608,7 +841,10 @@ function rawStepToCeremonyStep(raw: unknown): CeremonyStep {
     case 'agent_run':
     default: {
       const { picked, extras } = pickReservedFields(obj, RESERVED_FIELDS_AGENT_RUN)
-      const node: AgentRunStepNode = { kind: 'agent_run', extras }
+      const node: AgentRunStepNode = {
+        kind: 'agent_run',
+        extras: attachRawKindMarker(extras),
+      }
       if (typeof picked.label === 'string') node.label = picked.label
       if (typeof picked.agent === 'string') node.agent = picked.agent
       if (typeof picked.prompt === 'string') node.prompt = picked.prompt
@@ -657,6 +893,19 @@ function buildGraphFromHeaderAndSteps(
 
 /**
  * Parse a ceremony YAML document into a CeremonyGraph projection.
+ *
+ * Accepts two shapes:
+ *   1. Legacy flat YAML — top-level `name`, `description`, `steps:` with
+ *      per-step `type:` discriminator (Phase 16).
+ *   2. Canonical YAML — `apiVersion: squad.io/v1`, `kind: Ceremony`,
+ *      `metadata: {name, displayName, description}`, `spec: {trigger, steps}`
+ *      with per-step `kind:` discriminator (CER-3, used by all built-in
+ *      ceremonies including Work Pickup).
+ *
+ * For canonical YAML, header.name comes from metadata.displayName (or
+ * metadata.name), and the apiVersion / kind / metadata.name / spec.trigger
+ * fields are preserved on header.extras via underscore-prefixed markers so
+ * graphToCeremonyYaml can emit the document back in the canonical shape.
  */
 export function ceremonyYamlToGraph(yaml: string): CeremonyGraph {
   if (!yaml || !yaml.trim()) {
@@ -676,6 +925,60 @@ export function ceremonyYamlToGraph(yaml: string): CeremonyGraph {
       edges: [],
     }
   }
+
+  // ---- Canonical detection (apiVersion: squad.io/v1, kind: Ceremony) ----
+  const apiVersion = doc.apiVersion
+  const docKind = doc.kind
+  const spec = doc.spec
+  const metadata = doc.metadata
+  const isCanonical =
+    typeof apiVersion === 'string' &&
+    apiVersion.startsWith('squad.io/') &&
+    docKind === 'Ceremony' &&
+    typeof spec === 'object' &&
+    spec !== null
+  if (isCanonical) {
+    const meta = (metadata && typeof metadata === 'object'
+      ? (metadata as Record<string, unknown>)
+      : {}) as Record<string, unknown>
+    const specObj = spec as Record<string, unknown>
+    const displayName =
+      typeof meta.displayName === 'string' && meta.displayName.trim() !== ''
+        ? meta.displayName
+        : typeof meta.name === 'string' && meta.name.trim() !== ''
+          ? meta.name
+          : 'Untitled ceremony'
+
+    const headerExtras: Record<string, unknown> = {
+      _canonical: true,
+      _apiVersion: apiVersion,
+      _kind: docKind,
+    }
+    if (typeof meta.name === 'string') headerExtras._metadataName = meta.name
+    if (specObj.trigger !== undefined) headerExtras._trigger = specObj.trigger
+    // Preserve any other top-level metadata fields the editor doesn't model.
+    for (const [k, v] of Object.entries(meta)) {
+      if (k === 'name' || k === 'displayName' || k === 'description') continue
+      headerExtras[`_meta_${k}`] = v
+    }
+    // Preserve any other top-level spec fields (e.g. permissions) similarly.
+    for (const [k, v] of Object.entries(specObj)) {
+      if (k === 'trigger' || k === 'steps') continue
+      headerExtras[`_spec_${k}`] = v
+    }
+
+    const header: CeremonyHeader = {
+      name: displayName,
+      extras: headerExtras,
+    }
+    if (typeof meta.description === 'string') header.description = meta.description
+
+    const rawSteps = Array.isArray(specObj.steps) ? (specObj.steps as unknown[]) : []
+    const steps = rawSteps.map((s) => rawStepToCeremonyStep(s))
+    return buildGraphFromHeaderAndSteps(header, steps)
+  }
+
+  // ---- Legacy flat YAML path ----
   const headerExtras: Record<string, unknown> = {}
   for (const [k, v] of Object.entries(doc)) {
     if (!RESERVED_HEADER_FIELDS.has(k)) headerExtras[k] = v

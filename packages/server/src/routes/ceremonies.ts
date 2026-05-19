@@ -31,7 +31,7 @@
 
 import { Router } from 'express';
 import type { Request, Response } from 'express';
-import { eq, and, sql, gte, count, isNotNull, inArray } from 'drizzle-orm';
+import { eq, and, sql, gte, count, isNotNull, inArray, desc } from 'drizzle-orm';
 import { getDb, schema } from '../db/index.js';
 import { parseWorkflowYaml, validateWorkflowYaml } from '../services/workflow-parser.js';
 import { deriveOrigin, type CeremonyOrigin } from '../services/ceremony-origin.js';
@@ -52,6 +52,13 @@ import {
 import { getBuiltinTemplates } from '../workflows/templates/index.js';
 import { exportCeremonyAsYaml } from '../services/ceremony-yaml-export.js';
 import { importCeremonyFromYaml, type ImportResult } from '../services/ceremony-yaml-import.js';
+import { isProtectedBuiltInCeremony } from '../ceremonies/built-in/protection.js';
+import {
+  buildRunLifecycleMetadata,
+  resolveWorktreeExists,
+  type CeremonyLifecycleMetadata,
+  type LifecycleRunLike,
+} from '../services/worktree-lifecycle.js';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -90,6 +97,128 @@ function slugify(name: string): string {
     .replace(/^-|-$/g, '');
 }
 
+type WorkflowRunLifecycleRow = Omit<LifecycleRunLike, 'id'> & {
+  id: string;
+  workflowId: string;
+};
+
+type IssueRunLifecycleRow = Omit<LifecycleRunLike, 'id'> & {
+  id: string;
+  workflowRunId: string;
+};
+
+function chooseIssueRunForLifecycle(rows: IssueRunLifecycleRow[]): IssueRunLifecycleRow | null {
+  return rows.find((row) => row.status === 'running' || row.status === 'pending')
+    ?? rows[0]
+    ?? null;
+}
+
+async function loadCeremonyLifecycleMap(workflowIds: string[]): Promise<Map<string, CeremonyLifecycleMetadata>> {
+  const lifecycleByWorkflow = new Map<string, CeremonyLifecycleMetadata>();
+  if (workflowIds.length === 0) return lifecycleByWorkflow;
+
+  const db = getDb();
+  const runRows = await db
+    .select({
+      workflowId: schema.workflowVersions.workflowId,
+      id: schema.workflowRuns.id,
+      status: schema.workflowRuns.status,
+      createdAt: schema.workflowRuns.createdAt,
+      updatedAt: schema.workflowRuns.updatedAt,
+    })
+    .from(schema.workflowRuns)
+    .innerJoin(
+      schema.workflowVersions,
+      eq(schema.workflowRuns.workflowVersionId, schema.workflowVersions.id),
+    )
+    .where(inArray(schema.workflowVersions.workflowId, workflowIds))
+    .orderBy(desc(schema.workflowRuns.createdAt));
+
+  const latestRunByWorkflow = new Map<string, WorkflowRunLifecycleRow>();
+  for (const row of runRows) {
+    if (row.id && !latestRunByWorkflow.has(row.workflowId)) {
+      latestRunByWorkflow.set(row.workflowId, row);
+    }
+  }
+
+  const runIds = [...latestRunByWorkflow.values()].map((row) => row.id).filter(Boolean) as string[];
+  const issueRunRows = runIds.length > 0
+    ? await db
+      .select({
+        workflowRunId: schema.stepRuns.workflowRunId,
+        id: schema.issueRuns.id,
+        status: schema.issueRuns.status,
+        workspaceStrategy: schema.issueRuns.workspaceStrategy,
+        workspacePath: schema.issueRuns.workspacePath,
+        gitBranch: schema.issueRuns.gitBranch,
+        startedAt: schema.issueRuns.startedAt,
+        completedAt: schema.issueRuns.completedAt,
+        createdAt: schema.issueRuns.createdAt,
+        updatedAt: schema.issueRuns.updatedAt,
+      })
+      .from(schema.stepRuns)
+      .leftJoin(schema.issueRuns, eq(schema.stepRuns.issueRunId, schema.issueRuns.id))
+      .where(inArray(schema.stepRuns.workflowRunId, runIds))
+      .orderBy(desc(schema.stepRuns.updatedAt))
+    : [];
+
+  const issueRunsByWorkflowRun = new Map<string, IssueRunLifecycleRow[]>();
+  for (const row of issueRunRows) {
+    if (!row.id) continue;
+    const rows = issueRunsByWorkflowRun.get(row.workflowRunId) ?? [];
+    rows.push({ ...row, id: row.id });
+    issueRunsByWorkflowRun.set(row.workflowRunId, rows);
+  }
+
+  await Promise.all([...latestRunByWorkflow].map(async ([workflowId, workflowRun]) => {
+    const issueRun = chooseIssueRunForLifecycle(issueRunsByWorkflowRun.get(workflowRun.id) ?? []);
+    const worktreePath = issueRun?.workspaceStrategy === 'worktree' ? issueRun.workspacePath : null;
+    lifecycleByWorkflow.set(workflowId, buildRunLifecycleMetadata({
+      workflowRun,
+      issueRun,
+      worktreeExists: await resolveWorktreeExists(worktreePath),
+    }));
+  }));
+
+  return lifecycleByWorkflow;
+}
+
+async function loadActiveVersionIdMap(workflowIds: string[]): Promise<Map<string, string>> {
+  const versionByWorkflow = new Map<string, string>();
+  if (workflowIds.length === 0) return versionByWorkflow;
+  const db = getDb();
+  const rows = await db
+    .select({
+      workflowId: schema.workflowVersions.workflowId,
+      id: schema.workflowVersions.id,
+    })
+    .from(schema.workflowVersions)
+    .where(and(
+      inArray(schema.workflowVersions.workflowId, workflowIds),
+      eq(schema.workflowVersions.isActive, true),
+    ));
+  for (const row of rows) {
+    if (!versionByWorkflow.has(row.workflowId)) {
+      versionByWorkflow.set(row.workflowId, row.id);
+    }
+  }
+  return versionByWorkflow;
+}
+
+function sourceYamlPath(row: { triggerConfig: unknown }): string | null {
+  if (!row.triggerConfig || typeof row.triggerConfig !== 'object') return null;
+  const value = (row.triggerConfig as { sourceYamlPath?: unknown }).sourceYamlPath;
+  return typeof value === 'string' ? value : null;
+}
+
+function ceremonyOrigin(row: { parentNarrativeId?: string | null; triggerConfig: unknown }): CeremonyOrigin {
+  return deriveOrigin({
+    parentNarrativeId: row.parentNarrativeId,
+    sourceYamlPath: sourceYamlPath(row),
+    templateId: sourceYamlPath(row)?.startsWith('import:built-in/') ? 'built-in' : null,
+  });
+}
+
 /** Extract `# Heading` (or `## Heading`) from the first non-blank markdown line. */
 function extractFirstMarkdownHeading(markdown: string): string | null {
   for (const line of markdown.split('\n')) {
@@ -124,10 +253,17 @@ ceremoniesRouter.get('/', async (req: Request, res: Response) => {
       .from(schema.workflows)
       .where(and(...conditions));
 
+    const workflowIds = rows.map((row) => row.id);
+    const lifecycleByWorkflow = await loadCeremonyLifecycleMap(workflowIds);
+    const activeVersionIds = await loadActiveVersionIdMap(workflowIds);
+
     // CER-1: attach computed origin field (no schema change; derived from existing columns)
     const result = rows.map((row) => ({
       ...row,
-      origin: deriveOrigin({ parentNarrativeId: row.parentNarrativeId }) satisfies CeremonyOrigin,
+      origin: ceremonyOrigin(row) satisfies CeremonyOrigin,
+      activeVersionId: activeVersionIds.get(row.id) ?? null,
+      protected: isProtectedBuiltInCeremony(row),
+      lifecycle: lifecycleByWorkflow.get(row.id) ?? buildRunLifecycleMetadata({}),
     }));
 
     res.json(result);
@@ -266,10 +402,15 @@ ceremoniesRouter.get('/:id', async (req: Request, res: Response) => {
 
     const activeVersion = versions.find((v) => v.isActive) ?? versions[versions.length - 1] ?? null;
 
+    const lifecycleByWorkflow = await loadCeremonyLifecycleMap([workflow.id]);
+
     // CER-1: attach computed origin field
     const ceremonyWithOrigin = {
       ...workflow,
-      origin: deriveOrigin({ parentNarrativeId: workflow.parentNarrativeId }) satisfies CeremonyOrigin,
+      origin: ceremonyOrigin(workflow) satisfies CeremonyOrigin,
+      activeVersionId: activeVersion?.id ?? null,
+      protected: isProtectedBuiltInCeremony(workflow),
+      lifecycle: lifecycleByWorkflow.get(workflow.id) ?? buildRunLifecycleMetadata({}),
     };
 
     res.json({ ceremony: ceremonyWithOrigin, activeVersion, versions });
@@ -501,6 +642,12 @@ ceremoniesRouter.delete('/:id', async (req: Request, res: Response) => {
       res.status(404).json({ error: 'Ceremony not found' });
       return;
     }
+    if (isProtectedBuiltInCeremony(workflow)) {
+      res.status(409).json({
+        error: `${workflow.name} is a required built-in ceremony and cannot be deleted or archived.`,
+      });
+      return;
+    }
 
     // For draft ceremonies (typically auto-translated rows on the review page)
     // we hard-delete the row + its versions. For active rows we soft-archive
@@ -563,7 +710,24 @@ ceremoniesRouter.post('/:id/run', async (req: Request, res: Response) => {
       return;
     }
 
-    res.status(201).json({ workflowRunId: runId, message: 'Ceremony run started' });
+    const [workflowRun] = await db
+      .select({
+        id: schema.workflowRuns.id,
+        status: schema.workflowRuns.status,
+        createdAt: schema.workflowRuns.createdAt,
+        updatedAt: schema.workflowRuns.updatedAt,
+      })
+      .from(schema.workflowRuns)
+      .where(eq(schema.workflowRuns.id, runId))
+      .limit(1);
+
+    res.status(201).json({
+      workflowRunId: runId,
+      message: 'Ceremony run started',
+      lifecycle: buildRunLifecycleMetadata({
+        workflowRun: workflowRun ?? { id: runId, status: 'pending', createdAt: new Date(), updatedAt: new Date() },
+      }),
+    });
   } catch (err) {
     handleError(res, err);
   }
@@ -861,8 +1025,9 @@ ceremoniesRouter.get('/audit', async (req: Request, res: Response) => {
  *
  * Body: { ceremonySlug: string, context?: object }
  *
- * Invokes a built-in ceremony (e.g. 'scribe-close-out') for the given project.
- * Used by the manual "End wave" button (q9) when the daemon is not running.
+ * Invokes a built-in ceremony for the given project.
+ * Close-out ceremonies are intentionally excluded from this ad-hoc surface:
+ * they run from daemon/coordinator lifecycle paths.
  *
  * Returns: { ok: true, result: <ceremony result object> }
  */
@@ -879,12 +1044,20 @@ ceremoniesRouter.post('/invoke', async (req: Request, res: Response) => {
       return;
     }
 
+    const slug = ceremonySlug.trim();
+    if (slug === 'scribe-close-out') {
+      res.status(403).json({
+        error: 'Scribe close-out is automatic; use daemon or coordinator lifecycle triggers.',
+      });
+      return;
+    }
+
     let result: Record<string, unknown>;
     try {
-      result = await invokeBuiltInCeremony(ceremonySlug.trim(), {
+      result = await invokeBuiltInCeremony(slug, {
         projectId,
         ...(context ?? {}),
-        extra: context,
+        extra: { ...(context ?? {}), caller: 'api-invoke' },
       });
     } catch (err) {
       if (err instanceof TranslatorError) {

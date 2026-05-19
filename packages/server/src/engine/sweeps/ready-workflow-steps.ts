@@ -18,6 +18,9 @@ import { claimAndRun } from '../stepper.js';
 
 export const readyWorkflowStepsSweep: Sweep = {
   id: 'ready-workflow-steps',
+  label: 'Workflow steps',
+  description: 'Advances unblocked workflow steps and lets the stepper claim one pending agent run.',
+  scope: 'project',
   intervalMs: 5_000,
   enabled: true,
 

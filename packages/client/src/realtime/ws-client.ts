@@ -47,7 +47,7 @@ export interface WsEventMap {
   'deliverable.reviewed':   { deliverableId: string; verb: string; newStatus: string; reviewerName?: string; revisionRunId?: string | null }
   'deliverable.superseded': { deliverableId: string; supersededBy: string }
   // Phase 17: Ask / Consult mode events (per-consult room: subscribeRoom('consult:<sessionId>'))
-  'consult.started':           { sessionId: string; projectId: string | null; mode: 'agent' | 'model'; agentName?: string | null; model?: string | null }
+  'consult.started':           { sessionId: string; projectId: string | null; mode: 'agent' | 'model'; agentName?: string | null; agentOrigin?: string | null; model?: string | null }
   'consult.user_message':      { sessionId: string; messageId: string; content: string }
   'consult.message_delta':     { sessionId: string; delta: string }
   'consult.reasoning_delta':   { sessionId: string; delta: string }
@@ -82,7 +82,17 @@ export interface WsEventMap {
   // W25 — Sweep timeline animation. Fired server-side on every heartbeat
   // sweep completion (success + error) and fanned out to '__global__'
   // subscribers (Heartbeat + Now pages).
-  'sweep.tick': { sweepName: string; timestamp: string; agentsActivated: string[]; durationMs: number; status: 'success' | 'error' | 'skip' }
+  'sweep.tick': {
+    sweepName: string
+    sweepLabel?: string
+    sweepDescription?: string
+    sweepScope?: 'system' | 'project' | 'mixed'
+    timestamp: string
+    agentsActivated: string[]
+    durationMs: number
+    status: 'success' | 'error' | 'skip'
+    projectIds?: string[]
+  }
   // Connection control (sent by server)
   connected: { serverId: string }
   error: { message: string }

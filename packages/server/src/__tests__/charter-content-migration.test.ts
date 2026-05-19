@@ -49,8 +49,11 @@ describe('Charter Content Migration (W29 MC-5)', () => {
         projectId: 'test',
         name: 'test',
         role: 'test',
+        model: null,
         charterPath: '/test/charter.md',
         charterContent: '# Test Charter',
+        historyPath: null,
+        charterHash: null,
         status: 'active',
         agentKind: 'squad',
         createdAt: new Date(),
@@ -153,4 +156,3 @@ describe('Charter Content Migration (W29 MC-5)', () => {
     });
   });
 });
-

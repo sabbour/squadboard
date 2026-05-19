@@ -14,7 +14,7 @@
  *
  *   GET  /                          { ok: true, data: { templates: TemplateSummary[] } }
  *   GET  /builtin-projects          { ok: true, data: { templates: BuiltinBundleSummary[] } }
- *   POST /builtin-projects/:id/apply { ok: true, data: { project: { id, name }, result: ApplyResult } }
+ *   POST /builtin-projects/:id/apply { ok: true, data: { project: { id, name }, result: ApplyResult, scaffold } }
  *   GET  /:id                       { ok: true, data: { template: TemplateDetail } }
  *   DELETE /:id                     { ok: true, data: { template: TemplateSummary } }
  *
@@ -37,6 +37,7 @@ import {
   getBuiltinBundleDir,
 } from '../services/builtin-bundles.js';
 import { applyBundle } from '../services/bundle-loader.js';
+import { normalizeSquadPath, scaffoldSquadFromBundle } from '../services/setup-lifecycle.js';
 
 const router = Router();
 
@@ -116,6 +117,8 @@ router.post('/builtin-projects/:bundleId/apply', async (req: Request, res: Respo
     // Derive the final project name: caller-supplied > bundle.project.name > bundle.manifest.name
     const projectName = name?.trim() || bundle.project?.name || bundle.manifest.name;
 
+    const targetSquadPath = normalizeSquadPath(squadPath);
+
     const bundleToApply: typeof bundle = {
       ...bundle,
       project: {
@@ -123,7 +126,7 @@ router.post('/builtin-projects/:bundleId/apply', async (req: Request, res: Respo
         name: projectName,
         settings: {
           ...(bundle.project?.settings ?? {}),
-          squadPath: squadPath.trim(),
+          squadPath: targetSquadPath,
         },
       },
     };
@@ -137,11 +140,17 @@ router.post('/builtin-projects/:bundleId/apply', async (req: Request, res: Respo
       return;
     }
 
+    const scaffold = await scaffoldSquadFromBundle(bundleToApply, {
+      squadPath: targetSquadPath,
+      projectName,
+    });
+
     res.json({
       ok: true,
       data: {
         project: { id: result.meta.projectId, name: projectName },
         result,
+        scaffold,
       },
     });
   } catch (err) {

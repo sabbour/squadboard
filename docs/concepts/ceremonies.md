@@ -2,7 +2,7 @@
 
 ## TL;DR
 
-**Ceremony** = trigger + workflow. A named process your team runs, activated by a schedule, GitHub event, or manual button.
+**Ceremony** = trigger + workflow. A named process your team runs, activated by a schedule, GitHub event, agent signal, or explicit run action.
 
 **Workflow** = execution graph. The ordered steps that run *inside* the ceremony — agent runs, approvals, fan-outs, retries, all orchestrated deterministically.
 

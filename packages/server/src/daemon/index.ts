@@ -226,10 +226,13 @@ async function executeTick(): Promise<void> {
   try {
     console.log(`[daemon] tick at ${tickAt.toISOString()} — running ceremony scribe-close-out`);
 
-    ceremonyResult = await invokeCeremony();
+    ceremonyResult = await invokeCeremony({
+      projectId: process.env.SQUADBOARD_DEFAULT_PROJECT_ID,
+      source: 'daemon',
+    });
     lastCeremonyResult = ceremonyResult;
 
-    pushResult = await gitPush();
+    pushResult = await gitPush({ teamRoot: ceremonyResult.teamRoot });
   } finally {
     isCeremonyRunning = false;
   }

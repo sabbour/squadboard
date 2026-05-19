@@ -9,6 +9,7 @@ export interface SessionOptions {
   workspacePath: string;
   squadPath: string;
   task: string; // issue title + body
+  systemPrompt?: string; // optional prebuilt spawn/system prompt
   model?: string; // optional — passed through from session/run
   agentModel?: string | null; // optional — agent's configured model
   projectDefaultModel?: string | null; // optional — project-level default
@@ -50,8 +51,9 @@ function extractOutput(result: unknown): string {
 }
 
 export async function createAgentSession(options: SessionOptions): Promise<SessionResult> {
-  const charter = await readFile(options.charterPath, 'utf8')
-    .catch(() => `(charter not found at: ${options.charterPath})`);
+  const systemPrompt = options.systemPrompt
+    ?? (await readFile(options.charterPath, 'utf8')
+      .catch(() => `(charter not found at: ${options.charterPath})`));
 
   const resolved = resolveModel({
     sessionModel: options.model,
@@ -71,7 +73,7 @@ export async function createAgentSession(options: SessionOptions): Promise<Sessi
   try {
     const session = await client.createSession({
       model: resolved.model,
-      systemMessage: { mode: 'replace', content: charter },
+      systemMessage: { mode: 'replace', content: systemPrompt },
       workingDirectory: options.workspacePath,
       onPermissionRequest: () => ({ kind: 'approved' }),
     });
@@ -79,7 +81,7 @@ export async function createAgentSession(options: SessionOptions): Promise<Sessi
     const result = await client.sendAndWait(session, { prompt: options.task });
 
     const output = extractOutput(result);
-    const inputTokens = Math.ceil((charter.length + options.task.length) / 4);
+    const inputTokens = Math.ceil((systemPrompt.length + options.task.length) / 4);
     const outputTokens = Math.ceil(output.length / 4);
 
     return {

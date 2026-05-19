@@ -11,6 +11,8 @@ import { describe, it, expect, beforeAll, vi } from 'vitest';
 import { promises as fs } from 'fs';
 import * as path from 'path';
 import * as schema from '../db/schema.js';
+import { applyMigrations } from '../db/migrations.js';
+import type { PoolLike } from '../db/pglite.js';
 
 // Mock the DB connection before importing db modules
 const mockQuery = vi.fn();
@@ -216,6 +218,26 @@ describe('Migration Safety (I9)', () => {
         console.warn('Migration file not found at expected path', filePath);
       }
     });
+
+    it('does not treat rollback files as forward migrations', async () => {
+      const dryRunPool: PoolLike = {
+        query: vi.fn().mockResolvedValue({ rows: [], rowCount: 0 }),
+        connect: vi.fn(),
+        end: vi.fn(),
+      };
+      const logs: string[] = [];
+      const logSpy = vi.spyOn(console, 'log').mockImplementation((...args: unknown[]) => {
+        logs.push(args.map(String).join(' '));
+      });
+
+      try {
+        await applyMigrations(dryRunPool, { dryRun: true });
+      } finally {
+        logSpy.mockRestore();
+      }
+
+      expect(logs.some((line) => line.includes('.rollback.sql'))).toBe(false);
+      expect(logs.some((line) => line.includes('0005_ralph_monitor.sql'))).toBe(true);
+    });
   });
 });
-

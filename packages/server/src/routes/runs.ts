@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import type { Request, Response } from 'express';
-import { eq, and, gte, asc, sql, max } from 'drizzle-orm';
+import { eq, and, gte, asc, sql, max, inArray } from 'drizzle-orm';
 import { getDb, schema } from '../db/index.js';
 import { eventBus } from '../realtime/event-bus.js';
 import * as activeIssueSessions from '../engine/active-issue-sessions.js';
@@ -16,9 +16,24 @@ import {
   GitOpsError,
 } from '../services/github-git-ops.js';
 import { isCoordinatorDispatchEnabled } from '../config/coordinator-env.js';
-import { dispatchViaCoordinator } from '../coordinator/index.js';
-import type { CoordinatorInput } from '../coordinator/index.js';
+import {
+  applyDeterministicPrefilters,
+  buildCoordinatorInput,
+  buildDeterministicCoordinatorMeta,
+  capabilityMapFromAgentKeywords,
+  dispatchViaCoordinator,
+  filterBlockedAgents,
+} from '../coordinator/index.js';
+import type { CoordinatorCallMeta, CoordinatorDecision, CoordinatorInput } from '../coordinator/index.js';
 import { persistCoordinatorDecision } from '../services/coordinator-decision-log.js';
+import { persistCoordinatorRoutingDecision } from '../services/coordinator-routing-log.js';
+import {
+  buildRunLifecycleMetadata,
+  resolveWorktreeExists,
+} from '../services/worktree-lifecycle.js';
+
+const CIRCUIT_BREAKER_MIN_FAILURES = 3;
+const CIRCUIT_BREAKER_WINDOW_MS = 30 * 60 * 1000;
 
 /** Sanitize a branch name — reject any shell-unsafe characters */
 function sanitizeBranchName(name: string): string {
@@ -50,6 +65,24 @@ function handleError(res: Response, err: unknown) {
   }
   console.error('[runs] error:', err);
   res.status(500).json({ error: 'Internal server error' });
+}
+
+function isParentComplete(row: { parentStatus: string; parentArchived?: number | null }): boolean {
+  if (row.parentArchived === 1) return true;
+  return ['done', 'completed', 'cancelled'].includes(row.parentStatus.toLowerCase());
+}
+
+function handleCoordinatorNonDispatch(res: Response, decision: Exclude<CoordinatorDecision, { kind: 'dispatch' }>) {
+  if (decision.kind === 'skip') {
+    res.status(422).json({ error: 'Coordinator skipped this issue', reason: decision.reason });
+    return;
+  }
+
+  res.status(409).json({
+    error: 'Coordinator could not determine a single agent — please pick one',
+    candidates: decision.suggestedAgents,
+    question: decision.question,
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -172,18 +205,11 @@ issueRunsRouter.post('/', async (req: Request, res: Response) => {
 
     // Fetch labels for the issue: issueLabels has (issueId, labelId); labels has (id, name)
     const issueLabelRows = await db
-      .select({ labelId: schema.issueLabels.labelId })
+      .select({ name: schema.labels.name })
       .from(schema.issueLabels)
+      .innerJoin(schema.labels, eq(schema.issueLabels.labelId, schema.labels.id))
       .where(eq(schema.issueLabels.issueId, issueId));
-    const resolvedLabels: string[] = [];
-    for (const { labelId } of issueLabelRows) {
-      const [lRow] = await db
-        .select({ name: schema.labels.name })
-        .from(schema.labels)
-        .where(eq(schema.labels.id, labelId))
-        .limit(1);
-      if (lRow) resolvedLabels.push(lRow.name);
-    }
+    const resolvedLabels = issueLabelRows.map((row: { name: string }) => row.name);
 
     // Fetch active agents for this project
     const agentRows = await db
@@ -198,23 +224,30 @@ issueRunsRouter.post('/', async (req: Request, res: Response) => {
       .from(schema.agents)
       .where(and(eq(schema.agents.projectId, projectId), eq(schema.agents.status, 'active')));
 
-    // Determine which agents are currently busy (running a run)
-    const busyRunRows = await db
-      .select({ agentId: schema.issueRuns.agentId })
-      .from(schema.issueRuns)
-      .where(eq(schema.issueRuns.status, 'running'));
+    // Determine which agents are currently busy (pending/running a run)
+    const busyRunRows = agentRows.length > 0
+      ? await db
+        .select({ agentId: schema.issueRuns.agentId })
+        .from(schema.issueRuns)
+        .where(
+          and(
+            inArray(schema.issueRuns.agentId, agentRows.map((agent: { id: string }) => agent.id)),
+            inArray(schema.issueRuns.status, ['pending', 'running']),
+          ),
+        )
+      : [];
     const busyAgentIds = new Set(busyRunRows.map((r: { agentId: string }) => r.agentId));
 
-    const candidateAgents: CoordinatorInput['candidateAgents'] = agentRows.map((a: {
-      id: string; name: string; role: string; charterHash: string | null; charterContent: string; status: string;
-    }) => ({
-      name: a.name,
-      role: a.role,
-      charterHash: a.charterHash ?? '',
-      charterContent: a.charterContent,
-      capabilities: [],  // capabilities derived from charter at dispatch time by coordinator LLM
-      available: !busyAgentIds.has(a.id),
-    }));
+    const agentKeywordRows = agentRows.length > 0
+      ? await db
+        .select({
+          agentId: schema.agentKeywords.agentId,
+          keywords: schema.agentKeywords.keywords,
+          focusAreas: schema.agentKeywords.focusAreas,
+        })
+        .from(schema.agentKeywords)
+        .where(inArray(schema.agentKeywords.agentId, agentRows.map((agent: { id: string }) => agent.id)))
+      : [];
 
     // Fetch recent completed runs for context (last 5 terminal runs for this issue)
     const recentRunRows = await db
@@ -230,79 +263,115 @@ issueRunsRouter.post('/', async (req: Request, res: Response) => {
       .orderBy(asc(schema.issueRuns.createdAt))
       .limit(5);
 
-    // Resolve agent names for recent runs
-    const recentAgentIds = [...new Set(recentRunRows.map((r: { agentId: string }) => r.agentId))];
-    const agentNameMap = new Map<string, string>();
-    for (const id of recentAgentIds) {
-      const a = agentRows.find((ar: { id: string; name: string }) => ar.id === id);
-      if (a) agentNameMap.set(id, a.name);
+    const parentRows = await db
+      .select({
+        parentIssueId: schema.issueLinks.parentIssueId,
+        linkType: schema.issueLinks.linkType,
+        parentStatus: schema.issues.status,
+        parentArchived: schema.issues.archived,
+      })
+      .from(schema.issueLinks)
+      .innerJoin(schema.issues, eq(schema.issueLinks.parentIssueId, schema.issues.id))
+      .where(eq(schema.issueLinks.childIssueId, issueId));
+
+    const parentIssueIds = parentRows.map((row: { parentIssueId: string }) => row.parentIssueId);
+    const blockedParentIssueIds = parentRows
+      .filter((row: { parentIssueId: string; linkType: string; parentStatus: string; parentArchived?: number | null }) =>
+        row.linkType === 'fan_out' && !isParentComplete(row),
+      )
+      .map((row: { parentIssueId: string }) => row.parentIssueId);
+
+    const routingRuleRows = await db
+      .select({ rawRule: schema.routingRules.rawRule, priority: schema.routingRules.priority })
+      .from(schema.routingRules)
+      .where(eq(schema.routingRules.projectId, projectId))
+      .orderBy(asc(schema.routingRules.priority));
+
+    const windowStart = new Date(Date.now() - CIRCUIT_BREAKER_WINDOW_MS);
+    const failureRows = agentRows.length > 0
+      ? await db
+        .select({ agentId: schema.issueRuns.agentId })
+        .from(schema.issueRuns)
+        .where(
+          and(
+            eq(schema.issueRuns.issueId, issueId),
+            inArray(schema.issueRuns.agentId, agentRows.map((agent: { id: string }) => agent.id)),
+            eq(schema.issueRuns.status, 'failed'),
+            gte(schema.issueRuns.createdAt, windowStart),
+          ),
+        )
+      : [];
+
+    const failureCounts = new Map<string, number>();
+    for (const row of failureRows as Array<{ agentId: string }>) {
+      failureCounts.set(row.agentId, (failureCounts.get(row.agentId) ?? 0) + 1);
+    }
+    const blockedAgentNames = new Set(
+      agentRows
+        .filter((agent: { id: string }) => (failureCounts.get(agent.id) ?? 0) >= CIRCUIT_BREAKER_MIN_FAILURES)
+        .map((agent: { name: string }) => agent.name),
+    );
+
+    const baseCoordinatorInput: CoordinatorInput = buildCoordinatorInput({
+      issue: issueRow,
+      labels: resolvedLabels,
+      project: projectRow,
+      agents: agentRows,
+      busyAgentIds,
+      recentRuns: recentRunRows,
+      parentIssueIds,
+      blockedParentIssueIds,
+      agentCapabilities: capabilityMapFromAgentKeywords(agentKeywordRows),
+      projectRules: routingRuleRows.map((row: { rawRule: string }) => row.rawRule).join('\n'),
+    });
+
+    const filtered = filterBlockedAgents(baseCoordinatorInput, blockedAgentNames);
+    const coordinatorInput = filtered.input;
+    const deterministicDecision = filtered.decision ?? applyDeterministicPrefilters(coordinatorInput);
+    let dispatchResult: { decision: CoordinatorDecision; meta: CoordinatorCallMeta } | null = null;
+
+    if (deterministicDecision) {
+      dispatchResult = {
+        decision: deterministicDecision,
+        meta: buildDeterministicCoordinatorMeta(coordinatorInput),
+      };
+      await persistCoordinatorRoutingDecision({
+        projectId,
+        issueId,
+        decision: deterministicDecision,
+        matchedRule: 'coordinator:deterministic-prefilter',
+        db,
+      });
     }
 
-    function mapRunOutcome(status: string): 'success' | 'failed' | 'abandoned' {
-      if (status === 'completed') return 'success';
-      if (status === 'failed') return 'failed';
-      return 'abandoned';
-    }
-
-    const recentRuns: CoordinatorInput['recentRuns'] = recentRunRows
-      .filter((r: { status: string }) => ['completed', 'failed', 'cancelled'].includes(r.status))
-      .map((r: { issueId: string; agentId: string; status: string; startedAt: Date | null; completedAt: Date | null }) => ({
-        issueId: r.issueId,
-        agentName: agentNameMap.get(r.agentId) ?? r.agentId,
-        outcome: mapRunOutcome(r.status),
-        durationMs:
-          r.startedAt && r.completedAt
-            ? new Date(r.completedAt).getTime() - new Date(r.startedAt).getTime()
-            : 0,
-      }));
-
-    const coordinatorInput: CoordinatorInput = {
-      issue: {
-        id: issueRow.id,
-        title: issueRow.title,
-        body: issueRow.body ?? null,
-        labels: resolvedLabels,
-        column: issueRow.status,
-        parentId: null,
-        priority: null,
-        createdAt: issueRow.createdAt.toISOString(),
-      },
-      candidateAgents,
-      project: {
-        id: projectRow.id,
-        name: projectRow.name,
-        rules: projectRow.description ?? '',
-      },
-      recentRuns,
-    };
-
-    let dispatchResult;
-    try {
-      dispatchResult = await dispatchViaCoordinator(coordinatorInput, {
-        ...(model ? { model } : {}),
-      });
-    } catch (coordinatorErr) {
-      console.error('[runs] coordinator dispatch error:', coordinatorErr);
-      res.status(503).json({
-        error: 'Coordinator dispatch failed — try again or provide agentId explicitly.',
-        detail: coordinatorErr instanceof Error ? coordinatorErr.message : String(coordinatorErr),
-      });
-      return;
+    if (!dispatchResult) {
+      try {
+        dispatchResult = await dispatchViaCoordinator(coordinatorInput, {
+          ...(model ? { model } : {}),
+        });
+      } catch (coordinatorErr) {
+        console.error('[runs] coordinator dispatch error:', coordinatorErr);
+        res.status(503).json({
+          error: 'Coordinator dispatch failed — try again or provide agentId explicitly.',
+          detail: coordinatorErr instanceof Error ? coordinatorErr.message : String(coordinatorErr),
+        });
+        return;
+      }
     }
 
     const { decision } = dispatchResult;
 
-    if (decision.kind === 'skip') {
-      res.status(422).json({ error: 'Coordinator skipped this issue', reason: decision.reason });
-      return;
-    }
-
-    if (decision.kind === 'ambiguous') {
-      res.status(409).json({
-        error: 'Coordinator could not determine a single agent — please pick one',
-        candidates: decision.suggestedAgents,
-        question: decision.question,
-      });
+    if (decision.kind !== 'dispatch') {
+      if (!deterministicDecision) {
+        await persistCoordinatorRoutingDecision({
+          projectId,
+          issueId,
+          decision,
+          matchedRule: 'coordinator:llm',
+          db,
+        });
+      }
+      handleCoordinatorNonDispatch(res, decision);
       return;
     }
 
@@ -527,7 +596,14 @@ projectRunsRouter.get('/:runId', async (req: Request, res: Response) => {
       res.status(404).json({ error: 'Run not found' });
       return;
     }
-    res.json(run);
+    const worktreePath = run.workspaceStrategy === 'worktree' ? run.workspacePath : null;
+    res.json({
+      ...run,
+      lifecycle: buildRunLifecycleMetadata({
+        issueRun: run,
+        worktreeExists: await resolveWorktreeExists(worktreePath),
+      }),
+    });
   } catch (err) {
     handleError(res, err);
   }

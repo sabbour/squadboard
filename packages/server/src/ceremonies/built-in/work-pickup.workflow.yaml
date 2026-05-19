@@ -1,0 +1,24 @@
+apiVersion: squad.io/v1
+kind: Ceremony
+metadata:
+  name: work-pickup
+  displayName: Work Pickup
+  description: Required default run plan for assigning Ready cards to the best available project agent.
+spec:
+  trigger:
+    type: agent-signal
+    signalName: board.ready
+  steps:
+    - id: confirm-ready
+      kind: route
+      description: Confirm the card is in Ready and has enough context for an agent to start.
+    - id: choose-agent
+      kind: agent-task
+      agent: coordinator
+      prompt: |
+        Select the best available Spark project agent using labels, routing rules, role fit,
+        dependencies, and current run load. Leave ambiguous cards visible instead of forcing a bad assignment.
+    - id: start-work
+      kind: notify
+      target: project-timeline
+

@@ -1,0 +1,48 @@
+---
+title: Feature overview
+description: Map of Squadboard's product capabilities and feature areas.
+---
+
+import {ClipboardTaskListLtrRegular, ChartMultipleRegular, PlugConnectedRegular, SettingsRegular} from '@fluentui/react-icons';
+import {IconCard, IconGrid, Screenshot, ScreenshotGrid} from '../../src/components/FluentDoc';
+
+# Features
+
+Squadboard combines a durable work board, deterministic orchestration, and LLM-assisted ambiguity handling. The feature set is grouped by how users experience the product.
+
+<IconGrid>
+  <IconCard icon={ClipboardTaskListLtrRegular} title="Core orchestration">Board cards, routing decisions, agent runs, and audit history.</IconCard>
+  <IconCard icon={ChartMultipleRegular} title="Automation">Ceremonies, schedules, lifecycle close-out, and opt-in monitor decisions.</IconCard>
+  <IconCard icon={PlugConnectedRegular} title="Integrations">GitHub, MCP, SDK, CLI, imports, and Squad Apps.</IconCard>
+  <IconCard icon={SettingsRegular} title="Operations">Project settings, portability, costs, health, and reliability surfaces.</IconCard>
+</IconGrid>
+
+<ScreenshotGrid>
+  <Screenshot src="/img/scenarios/spark-03-board-plan.png" alt="Spark board with launch-planning work." caption="The board is the operational center for project work." />
+  <Screenshot src="/img/scenarios/spark-06-agents.png" alt="Spark project agents." caption="Project agents and charters keep role context explicit." />
+  <Screenshot src="/img/scenarios/spark-11-ceremonies.png" alt="Spark ceremonies list." caption="Ceremonies make recurring project rituals durable." />
+  <Screenshot src="/img/scenarios/spark-13-mcp-list.png" alt="Spark MCP servers page." caption="MCP connects external clients through explicit tool surfaces." />
+</ScreenshotGrid>
+
+| Area | Start here |
+| --- | --- |
+| Core orchestration | [Workflow engine](./workflow-engine.md), [Copilot CLI + Squad coexistence](./copilot-squad-coexistence.md), [Board and runs](./board-and-runs.mdx) |
+| Automation | [Ceremonies and automation](./ceremonies-and-automation.mdx), [Agents and workspaces](./agents-and-workspaces.mdx) |
+| Integrations | [GitHub, MCP, SDK, and CLI](./integrations.mdx), [Storage provider alignment](../user-guide/storage-provider.mdx), [Squad tools and hooks](../user-guide/squad-tools-hooks.mdx) |
+| Operations | [Reliability and real-time UI](./reliability-and-ui.md), [Configuration](../user-guide/configuration.mdx), [Security](../user-guide/security.md) |
+
+## What is included now
+
+- Durable workflow runs with lease and heartbeat recovery.
+- Server-owned coordinator routing with deterministic prefilters.
+- Agent run context that mirrors the Copilot CLI + Squad driver experience.
+- Board, run drawer, activity feed, and WebSocket event updates.
+- Ceremonies, schedules, GitHub event triggers, and lifecycle automation.
+- Scribe close-out through daemon/coordinator lifecycle paths.
+- Ralph-style monitor decisions for opted-in projects.
+- MCP and SDK entry points for Copilot CLI, VS Code, scripts, and services.
+- A local-first multi-agent inner loop that can run before work is mirrored to GitHub.
+
+## Design principle
+
+Squadboard should make deterministic decisions in code whenever the answer is concrete, and use LLM calls only for semantic ambiguity such as role fit, summarization, and interpreting human instructions.

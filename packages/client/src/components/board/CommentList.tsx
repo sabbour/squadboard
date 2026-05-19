@@ -31,9 +31,9 @@ const SYSTEM_EVENT_ICONS: Record<string, { icon: React.ReactNode; color: string;
   'review.timeout.auto_approve':{ icon: <CheckmarkCircle20Regular />, color: '#3fb950', label: 'Auto-approved' },
   'review.timeout.auto_reject': { icon: <Warning20Regular />,       color: '#f85149', label: 'Auto-rejected' },
   'review.timeout.escalate':    { icon: <Warning20Regular />,       color: '#d29922', label: 'Review escalated' },
-  'deliverable.submitted':      { icon: <Document20Regular />,      color: '#388bfd', label: 'Deliverable submitted' },
-  'deliverable.approved':       { icon: <CheckmarkCircle20Regular />, color: '#3fb950', label: 'Deliverable approved' },
-  'deliverable.changes_requested':{ icon: <ArrowSync20Regular />,   color: '#d29922', label: 'Deliverable: changes requested' },
+  'deliverable.submitted':      { icon: <Document20Regular />,      color: '#388bfd', label: 'Output submitted' },
+  'deliverable.approved':       { icon: <CheckmarkCircle20Regular />, color: '#3fb950', label: 'Output approved' },
+  'deliverable.changes_requested':{ icon: <ArrowSync20Regular />,   color: '#d29922', label: 'Output changes requested' },
   'deliverable.peer_review_requested':{ icon: <PersonChat20Regular />, color: '#388bfd', label: 'Peer review requested' },
   'column.changed':             { icon: <ArrowSync20Regular />,     color: '#388bfd', label: 'Column changed' },
 }

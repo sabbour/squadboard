@@ -31,11 +31,11 @@ import {
 // Helpers
 // ---------------------------------------------------------------------------
 
-function emitCompleted(sweepId: string, durationMs = 5): void {
+function emitCompleted(sweepId: string, durationMs = 5, projectIds?: string[]): void {
   eventBus.emitHeartbeatEvent('heartbeat.sweep.completed', {
     sweepId,
     durationMs,
-    result: { acted: 1, errors: 0 },
+    result: { acted: 1, errors: 0, projectIds },
   });
 }
 
@@ -152,5 +152,16 @@ describe('Bug 2 — seq numbers are unique across ring buffer entries', () => {
     const { sweeps, cursor } = getRecentSweeps();
     const maxSeq = Math.max(...sweeps.map((e) => e.seq));
     expect(cursor).toBe(maxSeq);
+  });
+});
+
+describe('Project-scoped heartbeat history', () => {
+  it('keeps system-wide events and filters explicit project events', () => {
+    emitCompleted('stale-presence');
+    emitCompleted('pickup-ready', 5, ['project-a']);
+    emitCompleted('ralph-monitor', 5, ['project-b']);
+
+    const { sweeps } = getRecentSweeps({ projectId: 'project-a' });
+    expect(sweeps.map((event) => event.sweepId)).toEqual(['stale-presence', 'pickup-ready']);
   });
 });

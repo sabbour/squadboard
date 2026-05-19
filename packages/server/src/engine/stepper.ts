@@ -1,6 +1,6 @@
 import { sql, eq } from 'drizzle-orm';
 import { getDb, schema, type DrizzleDb } from '../db/index.js';
-import { resolveWorkspace } from './workspace.js';
+import { resolveWorkspaceLifecycle } from './workspace.js';
 import { executeAgentRun } from '../sdk/bridge.js';
 import { recordRunCompletion } from '../services/output-validator.js';
 import { eventBus } from '../realtime/event-bus.js';
@@ -38,6 +38,8 @@ export async function claimAndRun(db: DrizzleDb): Promise<void> {
   });
 
   if (!claimedId) return;
+
+  await syncRunIssueColumn(db, claimedId, 'in_progress');
 
   // Spawn worker asynchronously — do not await so the dispatcher tick returns quickly.
   runWorker(claimedId).catch((err: unknown) => {
@@ -111,13 +113,18 @@ export async function runWorker(issueRunId: string): Promise<void> {
   // --- Resolve workspace ---
   let workspacePath: string;
   try {
-    workspacePath = await resolveWorkspace(issueRunId, run.workspaceStrategy, {
+    const workspace = await resolveWorkspaceLifecycle(issueRunId, run.workspaceStrategy, {
       agentName: agent.name,
       issueTitle: issue.title,
     });
+    workspacePath = workspace.workspacePath;
     await db
       .update(issueRuns)
-      .set({ workspacePath, updatedAt: new Date() })
+      .set({
+        workspacePath,
+        ...(workspace.branch ? { gitBranch: workspace.branch } : {}),
+        updatedAt: new Date(),
+      })
       .where(eq(issueRuns.id, issueRunId));
   } catch (err: unknown) {
     await markFailed(db, issueRunId, `Workspace error: ${String(err)}`);
@@ -166,6 +173,7 @@ export async function runWorker(issueRunId: string): Promise<void> {
       issueBody: effectiveBody,
       workspacePath,
       projectSquadPath: project.path,
+      workspaceStrategy: run.workspaceStrategy,
     });
 
     clearInterval(heartbeatTimer);
@@ -188,6 +196,7 @@ export async function runWorker(issueRunId: string): Promise<void> {
         result.output ?? '',
         workflowVersionId,
       );
+      await syncRunIssueColumn(db, issueRunId, 'review');
       // ── Flow event: issue_run ended (completed) ────────────────────────────
       eventBus.emitFlowEvent('flow.instance.ended', project.id, { instanceId: issueRunId, status: 'completed' });
     } else {
@@ -223,6 +232,57 @@ async function markFailed(
       updatedAt: new Date(),
     })
     .where(eq(schema.issueRuns.id, issueRunId));
+  await syncRunIssueColumn(db, issueRunId, 'review');
+}
+
+async function syncRunIssueColumn(
+  db: DrizzleDb,
+  issueRunId: string,
+  semantic: 'in_progress' | 'review',
+): Promise<void> {
+  try {
+    const result = await db.execute(sql`
+      WITH run_issue AS (
+        SELECT issues.id AS issue_id, issues.project_id AS project_id
+        FROM issue_runs
+        JOIN issues ON issues.id = issue_runs.issue_id
+        WHERE issue_runs.id = ${issueRunId}
+      ),
+      target AS (
+        SELECT column_meta.column_id AS column_id
+        FROM column_meta
+        JOIN run_issue ON run_issue.project_id = column_meta.project_id
+        WHERE column_meta.semantic = ${semantic}
+        ORDER BY column_meta.position ASC
+        LIMIT 1
+      ),
+      updated AS (
+        UPDATE issues
+        SET status = target.column_id,
+            updated_at = NOW()
+        FROM target, run_issue
+        WHERE issues.id = run_issue.issue_id
+          AND issues.status <> target.column_id
+        RETURNING issues.id AS issue_id, issues.project_id, issues.status, issues.position
+      )
+      SELECT * FROM updated
+    `);
+    const [row] = result.rows as Array<{
+      issue_id: string;
+      project_id: string;
+      status: string;
+      position: number | null;
+    }>;
+    if (!row) return;
+
+    eventBus.emitIssueEvent('issue.moved', row.project_id, {
+      issueId: row.issue_id,
+      column: row.status,
+      position: row.position ?? undefined,
+    });
+  } catch (err) {
+    console.error(`[stepper] failed to sync issue column for run ${issueRunId} (${semantic}):`, err);
+  }
 }
 
 /**

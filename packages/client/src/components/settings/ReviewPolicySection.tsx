@@ -17,6 +17,7 @@ import {
 } from '../../api/review-policies.ts'
 import { ReviewPolicyPicker } from '../reviews/ReviewPolicyPicker.tsx'
 import { ReviewPolicyHeader } from '../reviews/ReviewPolicyHeader.tsx'
+import { useUnsavedChangesWarning } from '../../hooks/useUnsavedChangesWarning.ts'
 
 export interface ReviewPolicySectionProps {
   projectId: string
@@ -67,6 +68,7 @@ export function ReviewPolicySection({ projectId }: ReviewPolicySectionProps) {
   const [dirty, setDirty] = useState(false)
   const [savedAt, setSavedAt] = useState<number | null>(null)
   const [submitError, setSubmitError] = useState<string | null>(null)
+  useUnsavedChangesWarning(dirty)
 
   useEffect(() => {
     if (data && !dirty) setDraft(data.stored)

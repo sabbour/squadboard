@@ -106,6 +106,15 @@ export async function listIssues(projectId: string, filters: ListIssuesFilters =
     labelsByIssueId.set(row.issueId, existing);
   }
 
+  const assigneeIds = [...new Set(rows.map((r) => r.assigneeId).filter((id): id is string => Boolean(id)))];
+  const assigneeRows = assigneeIds.length > 0
+    ? await db
+        .select({ id: schema.agents.id, name: schema.agents.name, role: schema.agents.role })
+        .from(schema.agents)
+        .where(inArray(schema.agents.id, assigneeIds))
+    : [];
+  const assigneesById = new Map(assigneeRows.map((agent) => [agent.id, agent]));
+
   // Stream G Phase 2A (G2.6): Batch-fetch the most recent worktree run with git data per issue.
   // Uses a raw SQL DISTINCT ON (issue_id) ordered by created_at DESC — the most efficient pattern
   // for "latest row per group" in Postgres without a lateral join.
@@ -176,6 +185,7 @@ export async function listIssues(projectId: string, filters: ListIssuesFilters =
   return rows.map((r) => ({
     ...r,
     labels: labelsByIssueId.get(r.id) ?? [],
+    assignee: r.assigneeId ? (assigneesById.get(r.assigneeId) ?? null) : null,
     github: githubByIssueId.get(r.id) ?? null,
   }));
 }
@@ -248,7 +258,7 @@ async function refreshCiState(runId: string, prNumber: number): Promise<void> {
 
 export async function getIssue(projectId: string, id: string) {
   const db = getDb();
-  const { issues, comments, issueLabels, labels } = schema;
+  const { issues, comments, issueLabels, labels, agents } = schema;
 
   const [issue] = await db
     .select()
@@ -269,10 +279,19 @@ export async function getIssue(projectId: string, id: string) {
     .innerJoin(labels, eq(issueLabels.labelId, labels.id))
     .where(eq(issueLabels.issueId, id));
 
+  const [assignee] = issue.assigneeId
+    ? await db
+        .select({ id: agents.id, name: agents.name, role: agents.role })
+        .from(agents)
+        .where(eq(agents.id, issue.assigneeId))
+        .limit(1)
+    : [];
+
   return {
     ...issue,
     comments: issueComments,
     labels: issueLabelsRows.map((r) => r.label),
+    assignee: assignee ?? null,
   };
 }
 
@@ -291,7 +310,7 @@ export async function createIssue(input: {
   projectId: string;
   title: string;
   body?: string;
-  status?: 'backlog' | 'todo' | 'in_progress' | 'in_review' | 'done';
+  status?: 'backlog' | 'ready' | 'in_progress' | 'in_review' | 'done';
   position?: number;
   archived?: boolean;
   completedAt?: Date | null;

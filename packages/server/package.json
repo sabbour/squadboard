@@ -18,14 +18,16 @@
   ],
   "repository": {
     "type": "git",
-    "url": "https://github.com/asabbour/squadboard.git"
+    "url": "https://github.com/sabbour/squadboard.git"
   },
-  "homepage": "https://github.com/asabbour/squadboard#readme",
+  "homepage": "https://github.com/sabbour/squadboard#readme",
   "publishConfig": {
     "access": "public"
   },
   "scripts": {
     "dev": "tsx watch src/index.ts",
+    "dev:postgresql": "tsx watch src/cli/index.ts start --squad-storage postgresql",
+    "dev:fs": "tsx watch src/cli/index.ts start --squad-storage fs",
     "build": "tsc",
     "start": "node dist/index.js",
     "test": "vitest",

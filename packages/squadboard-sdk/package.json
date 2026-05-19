@@ -26,9 +26,9 @@
   ],
   "repository": {
     "type": "git",
-    "url": "https://github.com/asabbour/squadboard.git"
+    "url": "https://github.com/sabbour/squadboard.git"
   },
-  "homepage": "https://github.com/asabbour/squadboard#readme",
+  "homepage": "https://github.com/sabbour/squadboard#readme",
   "publishConfig": {
     "access": "public"
   },

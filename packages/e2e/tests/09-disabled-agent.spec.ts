@@ -49,7 +49,7 @@ async function createProjectViaApi(stamp: number): Promise<string> {
   const projectId = env.data.projectId
 
   // Fresh projects have no column_meta rows — calling GET /columns seeds the
-  // 5 default columns (backlog, todo, in_progress, in_review, done) automatically.
+  // 5 default columns (backlog, ready, in_progress, in_review, done) automatically.
   // This mirrors what the UI does when a project board is first loaded.
   const colRes = await ctx.get(`/api/projects/${projectId}/columns`)
   expect(colRes.ok(), `seed columns: ${colRes.status()} — ${await colRes.text()}`).toBeTruthy()
