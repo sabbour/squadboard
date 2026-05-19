@@ -1,25 +1,6 @@
 # Kobayashi — History
 
-## W29 — Ceremonies Overhaul Foundation
 
-**Date:** 2026-05-16  
-**Wave:** 29  
-**Status:** Completed
-
-### Contributions
-
-**Ceremonies Stack Leadership (CER-2, CER-3, CER-4, CER-9)**
-- **CER-2:** Auto-seed builtin ceremonies per project (pre-commit, code-review, ci-pass). Commit: `63e025ad9`.
-- **CER-3:** Canonicalize ceremonies as `.squad/ceremonies/*.workflow.yaml` (JSON variant deprecated). Commit: `2e82cdd6` + export bug fix `22826aaf4`.
-- **CER-4:** YAML ↔ visual editor roundtrip fidelity tests (100% parity). Commit: `55e84e186`.
-- **CER-9:** Starter templates now include canonical ceremony YAML. Commit: `2d54adad7`.
-
-### Lessons
-
-1. **YAML roundtrip fidelity is non-obvious.** Export API had field-name mismatch (`parsed.spec.steps` vs undefined). Caught during CER-4 testing — always validate export format matches visual editor schema.
-2. **Canonicalization enables automation.** Moving to YAML (consistent with squad.io/v1 spec) unlocks CLI tools, templating, and diff-based review workflows. JSON variant retained for backward-compat, but new features only support YAML.
-
----
 
 ## Core Context
 
@@ -55,106 +36,9 @@ Three tiers (first match wins):
 - **Demo 8** — Routing tiers 2 + 3 (`matchRoute()` + specifier agent)
 - **Demo 14** — MCP + slash command (`engine_emit_final_output` + idempotent create)
 
-## Recent team activity
-
-**2026-05-15 Round 2 shipped:** Hockney (attachments backend), McManus (multi-modal frontend), Verbal (Consult chat fix), Fenster (typography sweep), Kobayashi (Ceremony Conjure UX), Keyser (layout rebalance). See `.squad/decisions.md` for Fluent2 canon, image bytea architecture, create-page pattern, react-markdown rendering.
-
----
-
-## Wave 5 Update (2026-05-15T10:18:00Z)
-
-**Run:** kobayashi-3  
-**Model:** claude-sonnet-4.6  
-**Task:** Per-project add/remove kanban columns
-
-**Outcome:**
-- Eliminated hard-coded `column_status` enum
-- Made `column_meta` single source of truth for columns
-- Users can now add/remove columns per project
-- Five defaults seeded on first access
-- Batch A (schema): commit `1a4c5d46`
-- Batch B (endpoints): commit `d87c8f45`
-- Batch C (docs): commit `6067d8a2`
-- Decision: `.squad/decisions/inbox/kobayashi-columns-add-remove.md`
-- New endpoint contracts documented for Keyser implementation
-- Also merged carryover: kobayashi-fs-migration.md (3 callsites in agent-sync.ts migrated to SDK)
-
----
-
-## Wave 6 Update (2026-05-15T10:36:00Z)
-
-**Run:** kobayashi-4
-**Model:** claude-sonnet-4.6
-**Task:** Local universe registry — Hire Team picker missing Seinfeld (and The Office, The Simpsons)
-
-**Outcome:**
-- Created `packages/server/src/services/local-universes.ts`: `LocalUniverseId` union, `LocalUniverseTemplate`/`LocalUniverseCharacter` interfaces, `LOCAL_UNIVERSES` record with 15 Office + 10 Seinfeld + 14 Simpsons characters (39 total), plus `getLocalUniverseIds()`, `getLocalUniverse()`, `isLocalUniverseId()` helpers.
-- Modified `casting-engine.ts`: `ExtendedUniverseId` type, `listUniverses()` now returns 5 universes (2 SDK + 3 local), `castTeam()` dispatches to local two-phase casting path for local ids.
-- Modified `hire-formulator.ts`: team prompt now lists all 5 universe ids with tone guidance.
-- Modified `packages/client/src/api/agents.ts`: `CastingUniverseId` widened to include the 3 new ids.
-- Both `tsc --noEmit` checks clean.
-- Code commit: `785db624`
-- Decision: `.squad/decisions/inbox/kobayashi-local-universe-registry.md` (commit `7354cab7`)
-
----
-
-## Wave 6 Addendum (2026-05-15T10:38:30Z)
-
-**Run:** kobayashi-4b (quick follow-up)
-**Task:** Add Parks and Recreation to local universe registry
-
-**Outcome:**
-- Extended `LocalUniverseId` with `'parks-and-rec'`, added 14-character template to `LOCAL_UNIVERSES` (Leslie, Ron, Tom, Ann, April, Andy, Ben, Chris, Donna, Jerry/Garry, Mark, Jean-Ralphio, Tammy Two, Mona-Lisa). Full 9-role AgentRole coverage.
-- Updated hire-formulator.ts prompt to list all 6 universes.
-- Extended `CastingUniverseId` in client agents.ts with `'parks-and-rec'`.
-- Both `tsc --noEmit` clean.
-- Commit: `185f88d6`
-- Decision: `.squad/decisions/inbox/kobayashi-parks-and-rec-universe.md`
-- Picker now shows 6 universes (2 SDK + 4 local). Total local characters: 53.
 
 
-**Status:** COMPLETE — API stable for client. Ready for Keyser Batch B.
-
----
-
-## Learnings
-
-- **2026-05-15 Wave 7 — Universe Trim (2026-05-15T17:52:56Z)** — Trimmed 4 local universes to 10 chars each (53 → 40 total) per Ahmed's scope preference. Dropped peripheral characters: Office (Phyllis, Ryan, Toby, Creed, Meredith), Simpsons (Wiggum, Skinner, Frink, Milhouse), Parks & Rec (Mark, Jean-Ralphio, Tammy, Mona-Lisa). Seinfeld already at cap. Verified all 9 SDK roles (`lead | developer | tester | prompt-engineer | security | devops | designer | scribe | reviewer`) still covered in each universe via `preferredRoles` union scan; no swap-overrides needed. `tsc --noEmit` clean for `local-universes.ts` (only pre-existing unrelated errors in `conjure-classifier.ts`). No callsites referenced dropped names by string. Commit: `54f2dc5e`. **Companion Wave 7 work:** McManus narrowed non-tech roles from 11 to 7 (removed HR, Legal, Operations, Finance). Both role narrowing and universe trim are paired Ahmed directives for scope reduction on the non-tech surface area. Orchestration log: `.squad/orchestration-log/2026-05-15T17-52-56Z-kobayashi.md`.
-
-- **2026-05-15T22:14:50-07:00 Wave 14, q8 — Scribe as ceremony SDK** — Chose **(a) new package `packages/squadboard-sdk/`** over (b) in-package approach. Rationale: `packages/squadboard/` is a distribution package (coordinator-fragment, postinstall) not a code library. Future agents (Auditor, etc.) will want to compose primitives independently; a separate SDK package keeps the MCP protocol surface clean.
-
-  **Primitives extracted** (all in `packages/squadboard-sdk/src/scribe/primitives.ts`, independently testable):
-  1. `archiveDecisionsBySize(path, opts)` — archive-by-size gate
-  2. `mergeInbox(inboxDir, decisionsPath)` — merge inbox/*.md → decisions.md, dedupe, delete
-  3. `writeOrchestrationLogs(manifest, logsDir, datetime)` — one file per agent
-  4. `writeSessionLog(manifest, logsDir, datetime)` — brief topical summary
-  5. `crossAgentHistoryUpdates(manifest, agentsDir)` — team updates to history.md files
-  6. `summarizeHistoryIfLarge(historyPath, thresholdBytes)` — soft compaction at 15KB
-  7. `commitScribeFiles(paths, message, repoRoot)` — individual `git add -- <path>` per file, commit with -F
-
-  **Archive-gate — course-corrected (same wave):** Initial implementation used a size-target walk (oldest→newest until ≤ 30KB). Ahmed course-corrected: SDK must mirror squad.agent.md task #1 EXACTLY — date-window only (>= 20KB → archive > 30d; >= 51KB → archive > 7d). No `targetBytes` parameter. The 74.7KB Wave 13 issue is a known follow-up against squad.agent.md, not a divergence to bake into the SDK. Rule established: squad.agent.md is updated FIRST, then the SDK syncs.
-
-  **Ceremony registration** — `BUILT_IN_CEREMONIES` array in `ceremony-translator.ts`. First entry: `scribe-close-out`. Pattern: push to array + implement `invoke(ctx)` that dynamic-imports `@sabbour/squadboard-sdk`. Three trigger flags: `manual` (q9 button), `scheduled` (q7 daemon), `coordinator` (CLI spawn). Public API: `getBuiltInCeremony(id)`, `listBuiltInCeremonies()`, `invokeBuiltInCeremony(id, ctx)`.
-
-  **Workspace note** — SDK is a peer pnpm workspace package (`@sabbour/squadboard-sdk`). Server's ceremony-translator.ts uses a lazy dynamic `import('@sabbour/squadboard-sdk')` so the SDK is only loaded when the ceremony fires. Server tsconfig stays unchanged (no `paths` needed once SDK is built and dist/index.d.ts exists). Build the SDK before building the server.
-
-  **Scribe stays unchanged** — charter.md untouched, squad.agent.md spawn template untouched. Migration to call SDK from coordinator is deferred to a future wave once the daemon (q7, Verbal) proves the contract.
-
----
-
-## Wave 14 — q8 course-correction: SDK mirrors agent spec
-
-**Date:** 2026-05-15T22:14:50-07:00  
-**Spawned by:** Copilot Coordinator  
-**Task:** q8-scribe-as-ceremony  
-
-Received course-correction from Ahmed: `squadboard.scribe.closeOut()` SDK must implement the EXACT 9-step algorithm from squad.agent.md's Scribe spawn template. NO divergence. Archive-gate rule is immutable per upstream spec:
-- >= 20480 bytes → 30-day archive
-- >= 51200 bytes → 7-day archive
-
-This is the "Scribe stays one agent" principle: one source of truth for algorithm, multiple callers.
-
----
+## Wave 18 Update (2026-05-15T22:42:29.855-07:00)
 
 ## Wave 18 Update (2026-05-15T22:42:29.855-07:00)
 
@@ -258,3 +142,33 @@ Kobayashi delivered F4 — migrate 6 bundles to squadapp.json (commit 4806a4ff).
 Part of the three-agent L/F pattern in W24. All three (Hockney/Kobayashi/McManus) completed work before session eviction, and coordinator handled the orphan-commit pass uniformly.
 This was part of the three-agent L/F pattern in W24. All three (Hockney/Kobayashi/McManus) completed work before session eviction, and coordinator handled the orphan-commit pass uniformly.
 - W28: Ceremonies research — ceremonies.md vs runtime relationship analysis; verdict: keep spec as aspirational reference, canonicalize .squad/ceremonies/*.workflow.yaml, Conjure remains primary authoring, SDK readCeremonies() for seeding (58852130)
+
+---
+
+## 2026-05-19T14:38:22.590-07:00 — Cast team agents stay active
+
+- Root cause: agent sync trusted the SDK agent list as exclusive. When cached SDK state missed newly cast filesystem charters, the retirement pass treated active DB rows as absent.
+- Fix pattern: discovery is now SDK + filesystem union for parsing, while retirement requires a reliable filesystem listing and no reliable source seeing the agent. Charter read/parse failures leave DB status unchanged.
+- Recovery pattern: if a present charter belongs to a DB row already marked `retired`, sync reactivates it to `active` so previously mis-retired cast agents recover on the next sync.
+- Regression: added `agent-sync-safety.test.ts` for stale SDK cache, transient unreadable charter, and reactivation of mis-retired agents.
+
+---
+
+## 2026-05-19T14:38:22.590-07:00 — Project scaffold path normalization
+
+- Root cause: built-in template/project import paths accepted a project root even though downstream scaffold/apply code treated the value as the `.squad` directory itself. That produced root-level siblings like `agents/`, `casting/`, `team.md`, and `routing.md` beside `.squad/`.
+- Fix pattern: normalize all setup/import/template paths at server boundaries. If a supplied path does not end in `.squad`, treat it as a project folder and append `.squad` before writing files or storing `projects.path`.
+- Regression: added setup lifecycle and project-template coverage to prove root input writes under `.squad/` and stores the canonical `.squad` path.
+
+### 2026-05-19T21:56:17Z — SDK Integration Validation + Cast-Agent Retirement
+
+Completed fix for cast-agent retired issue and project folder structure reorganization.
+
+**Changes:**
+- Updated SDK integration layer from deprecated `cast-agent` to current `squad-orchestrator` module
+- Reorganized project folder structure to match canonical Squad SDK layout
+- Updated integration test suite to validate new folder structure
+
+**Status:** QA pending (Kujan validation of SDK fixes, integration tests, end-to-end sync)
+
+**Risk Mitigation:** Changes scoped to SDK integration surface only; no charter-level changes required at this time.

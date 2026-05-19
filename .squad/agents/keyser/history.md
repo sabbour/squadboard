@@ -4,11 +4,8 @@
 **Wave:** 29  
 **Status:** Completed
 
-### Contributions
 
-**Routes & Trigger Filters (MC-8, CER-5)**
-- **MC-8:** Run button coordinator wiring — `routes/runs.ts` POST `/api/projects/:pid/issues/:iid/runs` now makes `agentId` optional. If omitted, dispatch routed through coordinator. Commit: `9ca4d18b8`.
-- **CER-5:** Expanded GitHub event trigger filters — added `pull_request_review_thread`, `release`, `deployment` to eligible ceremony triggers. Commit: `4e27e7efc`.
+### 
 
 ### Lessons
 
@@ -16,25 +13,8 @@
 
 ---
 
-## W22 Lesson — Conjure Misdiagnosis Correction
 
-**Date:** 2026-05-16  
-**Wave:** 22
-
-The Conjure misdesign lesson: W15/W19/W21 all misdiagnosed Conjure as a label problem on the Consult surface rather than a missing modal. The root causes were:
-
-1. The classifier file (`conjure-classifier.ts`) existed, creating the false impression that "Conjure is implemented — just needs UI"
-2. The design spec lived in `decisions-archive.md` (lines 1666–1960), not `decisions.md` — agents reading only `decisions.md` missed the canonical design
-3. No verbatim spec quotes in W15/W19/W21 close-out docs — the absence of quotes was the single best leading indicator of misdiagnosis
-
-**Hardening for future work:**
-- **ALWAYS quote the spec verbatim** — minimum 3 consecutive lines — in any decision doc closing out a feature. Absence of quotes is a red flag that the agent inferred from code rather than reading the actual spec.
-- **Before claiming a missing feature is shipped,** verify that the component file named in the spec actually exists in the codebase. If the spec says "build ConjureModal.tsx," search for ConjureModal.tsx. If it doesn't exist, it's not shipped, no matter what labels you renamed.
-- **Mention both decisions.md AND decisions-archive.md** when dispatching agents against design specs. Archive content is just as authoritative as live decisions, but it's easy to miss.
-
-This wave's Keyser-w22 correctly quoted 3 spec lines verbatim in the close-out doc — this pattern should be mandatory for all future feature closures.
-
----
+## 
 
 ## W23 Lesson — Fluent Icon Sweep at Scale
 
@@ -49,39 +29,22 @@ This wave's Keyser-w22 correctly quoted 3 spec lines verbatim in the close-out d
 
 ---
 
-## W24 Close-Out
 
-**Date:** 2026-05-16  
-**Status:** Completed
+## 
 
 ### Summary
 
 Keyser delivered W24 UX feature set: Conjure↔Consult re-swap + collapsible left navigation. Multiple commits (6cd1ae15, 55b4383f, 0f6315f9). Self-committed with proper co-author attribution. Build verified green before commit.
 
-### Lineage
 
-- **Todo 1:** w24-ux-conjure-consult-swap (Commit: 6cd1ae15)
-  - Top-bar button: Conjure wand → Consult (ChatHelp icon)
-  - Left-nav Consult entry removed
-  - Route `/consult/new` still exists via top-bar button
-
-- **Todo 2:** w24-ux-collapsible-nav (Commit: 6cd1ae15)
-  - Collapse/expand toggle for left sidebar
-  - Icons-only when collapsed (56–64px width)
-  - Persists to localStorage (`squadboard.nav.collapsed`)
-  - Smooth CSS transition (200ms ease)
-  - Tooltips on icons when collapsed
-  - Section headers hidden when collapsed
+### 
 
 ### Build Status
 
 ✓ Green (tsc + vite, 7.05s, zero type errors)
 
-### Pattern
 
-No orphan-completion. Keyser self-committed with proper workflow.
-
----
+### 
 
 ## Compaction Note
 
@@ -90,11 +53,8 @@ Current focus: W21–W24. For earlier context, search `.squad/decisions.md` by w
 
 ---
 
-## W24 Lessons — Conjure/Consult Re-Swap + Collapsible Nav
 
-**Date:** 2026-05-16
-**Wave:** 24
-**Commits:** 6cd1ae15 (Item A — Conjure→Consult swap + nav removal), 55b4383f (Item B — collapsible nav, empty commit — changes were in first commit since both items were in Layout.tsx)
+## 
 
 ### Conjure/Consult Re-Swap — Pattern
 
@@ -104,32 +64,16 @@ This is the **2nd correction in 3 waves** (W22 put Conjure in the top bar; W24 r
 2. **Treat top-bar buttons as product-level decisions, not dev-level layout.** Before changing any top-bar button (add/remove/relabel), re-read the last 3 directives in `decisions/inbox/` regardless of what the spec says.
 3. **Checklist for Conjure/Consult entry-point changes:** (a) re-read canonical Conjure spec at `decisions-archive.md` lines 1666–1960; (b) read the most recent directive in `decisions/inbox/`; (c) verify Board FAB, keyboard shortcuts, and ConjureModal are untouched.
 
-### NavDrawer Collapse — Approach Used
 
-**Approach: Hybrid CSS-width + conditional Tooltip wrapping.**
-- Applied a `navDrawerCollapsed` makeStyles class (`width: 56px; minWidth: 56px; overflow: hidden`) to the NavDrawer when collapsed, with a CSS `transition: 'width 200ms ease'` in the base `navDrawer` style.
-- Conditionally rendered each NavItem's label text (`{navCollapsed ? null : 'Label'}`) to hide text when collapsed.
-- Wrapped every NavItem in a Fluent `<Tooltip>` with `positioning="after"` and `hideDelay={0}` when collapsed, for proper hover hints.
-- Logo image hidden when collapsed (`{!navCollapsed && <div ...logo...>}`) since the horizontal image would overflow 56px.
-- NavSectionHeaders hidden when collapsed (`{!navCollapsed && <NavSectionHeader>...`).
-- localStorage key: `'squadboard.nav.collapsed'` (boolean string).
-
-**Why not pure CSS (approach 1):** CSS-only couldn't handle Tooltip wrapping — Tooltip requires a proper React component tree child. The hybrid gives a smooth width transition (CSS) with proper Tooltip UX (conditional JSX).
-
-**Why not full conditional render (approach 2):** Would duplicate all NavItem logic. The hybrid keeps a single NavDrawer component tree, with only label text + Tooltip rendering conditionally.
-
-**Caveat for testers:** Fluent NavItem with no children (collapsed state) renders icon-only. The selected highlight still works via `selectedValue` on NavDrawer. Section headers are absent in collapsed state — no grouping visual — acceptable for 56px icon-only mode.
-
----
+### 
 
 ## W25 — Collapsed Nav Regression Fix (commit f5d03f4f)
 
 **Date:** 2026-05-16  
 **Wave:** 25
 
-### Bug 1 — Toggle alignment when expanded
 
-The `navCollapseToggle` wrapper was always `justifyContent: 'center'`. Added `navCollapseToggleExpanded` with `justifyContent: 'flex-end'` + `paddingInlineEnd: tokens.spacingHorizontalS`, applied via `mergeClasses` when `!navCollapsed`. Toggle now right-aligns when expanded (push-away affordance) and stays centered when collapsed.
+### 
 
 ### Bug 2 — NavItems not clickable in collapsed mode ⚠️ (CRITICAL LESSON)
 
@@ -151,14 +95,8 @@ The `navCollapseToggle` wrapper was always `justifyContent: 'center'`. Added `na
 ```
 `navLabelHidden: { display: 'none' }` in makeStyles. The span keeps the click target alive in the DOM; CSS suppresses the visible text. Selected state, tooltips, and keyboard nav all still work.
 
-### Learnings
 
-- **NEVER render Fluent `NavItem` without children in any clickable context.** Without children, the click target does not exist — clicks silently die. No runtime error, no console warning.
-- **`Tooltip relationship="label"` ≠ click target.** It only sets aria-labelledby. It does not wrap the child in a button.
-- **Option A (hidden span) is the right pattern for icon-only nav:** deterministic, keyboard-accessible, tooltip-compatible, minimal diff.
-
-
----
+### 
 
 ## W25 Close-Out
 
@@ -174,10 +112,8 @@ See `.squad/decisions.md` for full details.
 
 ---
 
-## W26 — Four-Bug Batch (commit 53cba6eb)
 
-**Date:** 2026-05-16  
-**Wave:** 26
+## 
 
 ### Bug 1 (P0) — Routing tab crash
 
@@ -191,13 +127,8 @@ See `.squad/decisions.md` for full details.
 
 **Lesson:** When the server might return `200 OK` with an error object instead of the typed array, React Query treats it as valid data. Defensive `Array.isArray` in list components is always warranted when `refetchInterval` is active.
 
-### Bug 2 — Action buttons opening side panel
 
-**Root cause:** Footer row (assignee + RunButton) was inside `<div onClick={() => onOpen(issue)}>`. All clicks in the footer propagated to open the detail panel.
-
-**Fix pattern:** Move footer OUTSIDE the clickable-title div. Add `stopPropagation` on footer for defense in depth. Restructure assignee to a Reassign button with inline agent picker dropdown (same dropdown pattern as RunButton). New `useAssignIssue` hook in issues.ts sends `PATCH /api/projects/:id/issues/:id` with `{ assigneeId }`.
-
-**Lesson:** Any interactive element inside an `onClick` wrapper needs `stopPropagation`. Always audit new UI features for accidental nesting inside card click zones.
+### 
 
 ### Bug 3 — "Investigate in Conjure" dead button
 
@@ -205,29 +136,16 @@ See `.squad/decisions.md` for full details.
 
 **Lesson:** Dead action buttons should be removed immediately, not hidden or disabled. `navigate()` to a route that doesn't work is a silent failure that confuses users.
 
-### Bug 4 — Heartbeat nav scope regression (3rd recurrence)
 
-**Root cause:** `handleNavItemSelect('heartbeat')` hardcoded `/heartbeat` regardless of project context.
-
-**Fix:** `id ? /projects/${id}/heartbeat : /heartbeat` — same pattern used for `diagnostics`. Added matching `includes('/heartbeat')` check in `getSelectedValue` so the nav item highlights correctly when on `/projects/:id/heartbeat`.
-
-**Lesson:** Every new nav item in Layout.tsx must be audited for project-scope preservation. The W22 directive ("no jarring scope changes") applies to ALL nav items, not just the ones explicitly called out. A checklist should be added to Layout.tsx PR reviews: "Does every nav item preserve `/projects/:id/` prefix when in project context?"
-
----
+### 
 
 ## W26 — Run Button Regression Fix (post-batch-1)
 
 **Date:** 2026-05-16  
 **Wave:** 26
 
-### Root Cause
 
-The W26 four-bug batch (commit `53cba6eb`) correctly moved the RunButton outside the `onClick→onOpen` title wrapper. The click handler itself was NOT dropped — `startRun.mutate` fires when Run is clicked. The regression was a **visual feedback gap**:
-
-- **Before W26:** Clicking Run also triggered `onOpen(issue)` (panel opened as incidental side-effect), giving Brady immediate visual confirmation.
-- **After W26:** The footer's `stopPropagation` correctly blocks the panel open, but the button's `style` only responded to `activeAgents.length === 0`, NOT to `startRun.isPending`. The button became `disabled` while looking identical — Brady saw nothing happen and concluded "Run is broken."
-
-Confirmed: click IS firing, API call IS being made. No downstream dispatch/heartbeat issue.
+### 
 
 ### Fix
 
@@ -237,9 +155,8 @@ Confirmed: click IS firing, API call IS being made. No downstream dispatch/heart
 - Button text changes to `Starting…` while pending (was `▶ Run` even when disabled).
 - Background dims slightly while pending for visual affordance.
 
-### Test Infrastructure Added
 
-No test runner existed in `packages/client`. Added vitest + @testing-library/react + jsdom + @testing-library/user-event. 3 tests written and passing for RunButton.
+### 
 
 ### Lesson
 
@@ -247,16 +164,8 @@ When visual feedback depends on an incidental side-effect of a bug (panel openin
 
 ---
 
-## W26 Learning 1: UI Event Bubbling Regressions
 
-**Date:** 2026-05-16  
-**Commit:** 53cba6eb
-
-Moved RunButton outside `onClick={onOpen}` wrapper to fix event bubbling. Unintended side-effect: users lost the visual cue that their click was received (panel opening was the confirmation). Rule: when removing accidental feedback, add explicit feedback. Fixed by extending isPending logic into button style (cursor, opacity, text transition, background dim). Commit 57429237 added visual feedback + 3 component tests using vitest.
-
-**Pattern:** Footer/action-area refactors need explicit visual feedback for async operations. Component tests should cover isPending states.
-
----
+## 
 
 ## W26 Learning 2: Error Boundary for Non-Array Data
 
@@ -266,35 +175,20 @@ Moved RunButton outside `onClick={onOpen}` wrapper to fix event bubbling. Uninte
 RoutingLogTable crashed on `entries.map` when server returned non-array (e.g., `{ error: "..." }`). Also crashed on `entry.score.toFixed(2)` when score was a string. Fixes: (a) guard with `!Array.isArray(entries) || entries.length === 0`, (b) type-check score before `.toFixed()`, (c) wrap entire routing section with ErrorBoundary. Pattern: defensive rendering for tables + ErrorBoundary escape hatch prevents app-wide crashes from malformed API responses.
 
 **Pattern:** Assume server data can be malformed. Type-check before calling methods. Use ErrorBoundary for data-intensive sections.
-## W24 Close-Out
 
-**Date:** 2026-05-16  
-**Status:** Completed
+## 
 
 ### Summary
 
 Keyser delivered W24 UX feature set: Conjure↔Consult re-swap + collapsible left navigation. Multiple commits (6cd1ae15, 55b4383f, 0f6315f9). Self-committed with proper co-author attribution. Build verified green before commit.
 
-### Lineage
 
-- **Todo 1:** w24-ux-conjure-consult-swap (Commit: 6cd1ae15)
-  - Top-bar button: Conjure wand → Consult (ChatHelp icon)
-  - Left-nav Consult entry removed
-  - Route `/consult/new` still exists via top-bar button
-
-- **Todo 2:** w24-ux-collapsible-nav (Commit: 6cd1ae15)
-  - Collapse/expand toggle for left sidebar
-  - Icons-only when collapsed (56–64px width)
-  - Persists to localStorage (`squadboard.nav.collapsed`)
-  - Smooth CSS transition (200ms ease)
-  - Tooltips on icons when collapsed
-  - Section headers hidden when collapsed
+### 
 
 ### Build Status
 
 ✓ Green (tsc + vite, 7.05s, zero type errors)
 
-### Pattern
 
-No orphan-completion. Keyser self-committed with proper workflow.
-- W28: CER-1 + CER-8 — origin badges (templateId → sourceYamlPath → parentNarrativeId → user-created), audit endpoint, orphan/dead detection, CeremonyAudit diagnostics page (0604f914)
+### 
+

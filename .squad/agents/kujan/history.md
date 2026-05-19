@@ -45,6 +45,18 @@ Every demo ships with a passing E2E test. Critical durability suites land in:
 
 <!-- Append learnings below -->
 
+### 2026-05-19T14:38:22.590-07:00 — Startup script static gate + agent-sync retirement regression
+
+Verified Hockney's startup-script change with a no-process static gate: root `start` exactly fans out backend, client, and docs dev scripts; `cli:start` still targets the CLI package; docs `dev`/`serve`/`start` all bind port 3002. I did not launch the long-lived dev fan-out in the shared worktree, so the residual risk is runtime orchestration only, not script wiring.
+
+Added `packages/server/src/__tests__/agent-sync-retired-regression.test.ts` to pin the cast/hired-agent invariant: an active newly hired agent with a folder on disk must not be marked retired just because the SDK listing skipped an unparsable charter. Focused command currently fails with `result.removed === 1`, which confirms Kobayashi's production fix has not landed in this worktree yet.
+
+Added `packages/server/src/__tests__/squad-create-structure.test.ts` for the Squadboard project-creation folder invariant. It invokes the `POST /api/squad/create` handler with real filesystem scaffolding under a repo-local scratch path and asserts `agents/`, `casting/`, `decisions/`, `log/`, `orchestration-log/`, `skills/`, `team.md`, `routing.md`, `decisions.md`, and `ceremonies.md` exist only under `.squad/`, never as project-root siblings. Focused command passed: `pnpm --filter @sabbour/squadboard test -- --run src/__tests__/squad-create-structure.test.ts`.
+
+### 2026-05-19T14:11:32.649-07:00 — PGlite issue_runs claim regression coverage
+
+Added `packages/server/src/__tests__/pglite-issue-runs-claim.test.ts` for the ready-workflow-step PGlite failure. Pattern: use in-memory `PGlite`, initialize the real server schema through `initDb(PGLITE_SENTINEL)` with automatic migration snapshotting disabled, then manually apply forward SQL migrations from `packages/server/src/db/migrations/` through the pool adapter. The test creates an `issue_runs` row plus representative dependent FK rows (`step_runs`, `issue_run_events`, `routing_log`, `review_events`, `deliverables`) before running the exact claim update to `running`; this defends against malformed PGlite RI triggers without touching the user data directory or production code. Focused command passed: `pnpm --filter @sabbour/squadboard test -- --run src/__tests__/pglite-issue-runs-claim.test.ts`.
+
 ### 2026-05-15 — QA investigation: spam loop, agent registry, client crashes
 
 Conducted read-only investigation into four suspected issues (dispatched by Squad coordinator):
@@ -120,3 +132,20 @@ Wrote end-to-end regression suite (`packages/e2e/tests/10-cast-team.spec.ts`, 7.
 
 **Fixture helper:** Added `createProjectViaApi()` to `packages/e2e/tests/fixtures.ts` — direct API call to `POST /api/squad/create` returns `projectId`. The existing `createProject()` UI-based helper is unreliable in WSL/headless Chromium (Fluent v9 controlled inputs don't respond to Playwright `fill()` in headless mode). Tests 07–09 already adopted API pattern; test 10 standardizes on it. Created button selector also fixed from `getByRole('button', { name: 'Create' })` to `getByRole('button', { name: 'Create new' })` to disambiguate post-Templates feature.
 - W28: JIS client — useRunStream hook + LiveRunViewer component (T7,T8), Watch button on running cards (T9), reconnect with event replay + 3-strike WS failure counter + tests (T10,T12) (aa909f30, fff70477)
+
+### 2026-05-19T21:56:17Z — Two-Way Sync Audit QA + SDK Validation In Progress
+
+Running final verification pass on two-way sync audit artifacts and Kobayashi SDK integration fixes.
+
+**Active Work:**
+- Kobayashi SDK validation: cast-agent retirement, project structure reorganization, integration tests
+- McManus audit artifact validation: Audit skill generalizability, test coverage metrics
+- Storage provider validation: PostgreSQL provider test suite (72/72 passing), PGlite regression tests passing
+
+**Test Suites Passing:**
+- `pglite-issue-run-events-catalog-repair.test.ts` — Catalog repair validation
+- `pglite-issue-runs-claim.test.ts` — Issue run claim/recovery validation
+
+**Validation Gate:** Full regression suite pending before next spawn wave. Blocking issues will escalate to team coordinator.
+
+**Key Learning:** In-memory PGlite test instances must bootstrap real schema + migrations; test catalog repairs against genuine constraint triggers, not mocks.

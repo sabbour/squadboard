@@ -38,3 +38,33 @@ McManus delivered F5 — spec gap fixes + schema updates (commit ffdd71cb). Work
 ### Notes
 
 Part of the three-agent L/F pattern in W24. All three (Hockney/Kobayashi/McManus) completed work before session eviction, and coordinator handled uniformly.
+
+---
+
+## Learnings
+
+### 2026-05-19T14:47:51.758-07:00 — Squad ↔ Squadboard two-way sync status
+
+- Produced architecture report `.squad/reports/two-way-sync-status.md`.
+- Key architecture call: do not describe PostgreSQL-backed `.squad` state as continuous two-way sync. Current behavior is mode authority: filesystem mode owns real `.squad/`; PostgreSQL mode owns `squad_storage` after first filesystem import; external clients use hosted PostgreSQL or the Squadboard MCP/API broker.
+- Key dogfood call: make `captureDirective()` / `POST /api/inbox/directive-captures` the single coordinator seam for directive markdown, DB inbox, MCP capture, and close-out status.
+- Hot lanes to avoid duplicating: Kobayashi owns cast agents staying active; Kujan owns retired-agent and project-root structure regression sign-off; Hockney owns PGlite `issue_runs` repair and storage launch wiring.
+- Validation evidence: focused server suite for agent-sync, project structure, directive capture, PostgreSQL provider, and PGlite run-claim/catalog repair passed 97 tests.
+
+### 2026-05-19T21:56:17Z — Two-Way Sync Architecture Review + Audit Skill Delivery
+
+Completed architecture-level review of backlog ↔ board sync, MCP capture, decision flow, and storage provider unification.
+
+**Deliverables:**
+1. **Sync Status Report** — Reviewed all sync layers; recommended directive capture as single dogfood seam; mode-authoritative `.squad` filesystem strategy.
+2. **Reusable Audit Skill** — Structured checklist for future two-way sync audits; generalizable across teams.
+3. **Validation Artifacts** — Audit confirmed no circular dependencies; directive flow is clean; no product code required for this audit.
+
+**Recommendations Recorded:**
+- Treat `.squad` filesystem as mode-authoritative; board as eventual consumer
+- Avoid continuous two-way sync overhead; adopt directive capture as standard feature intake seam
+- Use `captureDirective()` / `POST /api/inbox/directive-captures` for unified coordinator routing
+
+**Test Results:** Focused server suite (7 files, 97 tests) passed; markdown formatting clean; git diff --check passed.
+
+**Key Learning:** Architecture reviews thrive when treating decision flow (not just code flow) as first-class. Dogfood seam identification prevents infinite sync rathole.
