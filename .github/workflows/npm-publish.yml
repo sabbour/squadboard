@@ -1,0 +1,72 @@
+name: Publish npm packages
+
+on:
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: Run npm publish with --dry-run and no token requirement.
+        type: boolean
+        default: true
+      dist_tag:
+        description: npm dist-tag to apply.
+        type: choice
+        default: prealpha
+        options:
+          - prealpha
+          - preview
+
+permissions:
+  contents: read
+
+concurrency:
+  group: npm-publish-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    name: Publish npm packages
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+          registry-url: https://registry.npmjs.org
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build publishable packages
+        run: pnpm run npm:build
+
+      - name: Configure npm auth
+        if: ${{ inputs.dry_run == false }}
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          if [ -z "${NODE_AUTH_TOKEN:-}" ]; then
+            echo "::error::NPM_TOKEN secret is required for real npm publish."
+            exit 1
+          fi
+          pnpm config set //registry.npmjs.org/:_authToken "${NODE_AUTH_TOKEN}"
+
+      - name: Dry-run publish
+        if: ${{ inputs.dry_run == true }}
+        run: |
+          pnpm --filter @sabbour/squadboard-sdk publish --dry-run --no-git-checks --access public --tag "${{ inputs.dist_tag }}"
+          pnpm --filter @sabbour/squadboard-cli publish --dry-run --no-git-checks --access public --tag "${{ inputs.dist_tag }}"
+          pnpm --filter @sabbour/squadboard publish --dry-run --no-git-checks --access public --tag "${{ inputs.dist_tag }}"
+
+      - name: Publish
+        if: ${{ inputs.dry_run == false }}
+        run: |
+          pnpm --filter @sabbour/squadboard-sdk publish --no-git-checks --access public --tag "${{ inputs.dist_tag }}"
+          pnpm --filter @sabbour/squadboard-cli publish --no-git-checks --access public --tag "${{ inputs.dist_tag }}"
+          pnpm --filter @sabbour/squadboard publish --no-git-checks --access public --tag "${{ inputs.dist_tag }}"

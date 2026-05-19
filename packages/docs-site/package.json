@@ -1,6 +1,6 @@
 {
   "name": "@sabbour/squadboard-docs",
-  "version": "0.1.0",
+  "version": "0.1.0-prealpha.0",
   "private": true,
   "scripts": {
     "build": "node scripts/docusaurus.mjs build",

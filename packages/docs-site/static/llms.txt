@@ -12,7 +12,7 @@ Machine-readable entry point for the Squadboard documentation site.
 - [Integrations](/squadboard/docs/features/integrations) - GitHub, MCP, SDK, CLI, and bundle integration surfaces.
 - [Feature overview](/squadboard/docs/features/overview) - Map of Squadboard's product capabilities and feature areas.
 - [Reliability and real-time UI](/squadboard/docs/features/reliability-and-ui) - Persistence, backup/restore, migration safety, live updates, and operational visibility.
-- [Current alpha limits](/squadboard/docs/features/roadmap-gaps) - Current alpha constraints and feature areas that remain intentionally future work.
+- [Current pre-alpha limits](/squadboard/docs/features/roadmap-gaps) - Current pre-alpha constraints and feature areas that remain intentionally future work.
 - [Workflow engine](/squadboard/docs/features/workflow-engine) - Durable workflow execution, recovery, retries, and step orchestration.
 - [Getting Started](/squadboard/docs/getting-started/index) - Install Squadboard, create your first project, and follow the Spark tutorials.
 - [Installation](/squadboard/docs/getting-started/installation) - Install dependencies, start the local app, and build the docs site.

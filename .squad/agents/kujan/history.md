@@ -149,3 +149,13 @@ Running final verification pass on two-way sync audit artifacts and Kobayashi SD
 **Validation Gate:** Full regression suite pending before next spawn wave. Blocking issues will escalate to team coordinator.
 
 **Key Learning:** In-memory PGlite test instances must bootstrap real schema + migrations; test catalog repairs against genuine constraint triggers, not mocks.
+
+### 2026-05-19T15:29:23.373-07:00 — Pre-alpha release/docs validation gate
+
+Validated the current shared worktree after Hockney/Redfoot release-readiness and docs changes appeared. Safe targeted checks passed: `pnpm install --frozen-lockfile`, publishable package builds for `@sabbour/squadboard`, `@sabbour/squadboard-sdk`, and `@sabbour/squadboard-cli`, `pnpm docs:build`, and npm pack dry-runs for the three publishable packages. Docusaurus built 41 pages and generated `llms.txt` / `llms-full.txt`.
+
+Release/docs invariants flagged:
+- User directive says the software must be labeled **pre-alpha**. Refined terminology scan found 15 public release/docs lines still using **Alpha** / **Current alpha limits** / **alpha software** without **pre-alpha** across README and Docusaurus pages. This is a release-copy blocker until Redfoot normalizes terminology.
+- `.github/workflows/` still only contains Squad triage/heartbeat/label workflows; no docs-build or npm-package-build release-readiness workflow is present yet. Treat CI release automation as pending Hockney output.
+
+No Hockney/Redfoot-owned source or docs files were edited by QA; only this history entry and the validation decision drop were added.

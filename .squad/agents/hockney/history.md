@@ -238,3 +238,11 @@ Hockney-close-w24 dispatched in parallel to run build + main FF + smoke tests be
 
 ### 
 
+
+### 2026-05-19T15:29:23.373-07:00 — Pre-alpha GitHub/npm readiness
+
+- Renamed the local integration branch from `main` to `dev`; no local `dev` branch existed, so the rename was safe and did not touch file contents.
+- Release mechanics now treat `@sabbour/squadboard-sdk`, `@sabbour/squadboard-cli`, and `@sabbour/squadboard` as the publishable npm set for this phase. Versions and publish configs use `0.1.0-prealpha.0` plus the `prealpha` dist-tag.
+- `pnpm publish` must be invoked through workspace `--filter`; using `pnpm -C` / `--dir` with `publish` leaked extra argv into the delegated npm command and failed with `EUSAGE`.
+- Publish builds must clean `dist` before `tsc`; otherwise stale compiled test files can enter the npm tarball. Server build also copies built-in `.workflow.yaml` ceremony assets into `dist/ceremonies/built-in` so package runtime reads succeed after publish.
+- Validation run: frozen install metadata, npm package builds, npm publish dry-run, docs build, and workflow YAML parsing all passed.

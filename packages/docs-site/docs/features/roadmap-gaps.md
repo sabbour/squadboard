@@ -1,11 +1,11 @@
 ---
-title: Current alpha limits
-description: Current alpha constraints and feature areas that remain intentionally future work.
+title: Current pre-alpha limits
+description: Current pre-alpha constraints and feature areas that remain intentionally future work.
 ---
 
-# Current alpha limits
+# Current pre-alpha limits
 
-The current alpha focuses on Copilot CLI + Squad coexistence, durable orchestration, and local-first operation. Some capabilities are intentionally constrained until the product has more dogfood evidence and clearer policy controls.
+The current pre-alpha focuses on Copilot CLI + Squad coexistence, durable orchestration, and local-first operation. Some capabilities are intentionally constrained until the product has more dogfood evidence and clearer policy controls.
 
 ## Current limits
 

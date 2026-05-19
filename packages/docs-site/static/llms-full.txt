@@ -448,13 +448,13 @@ The Heartbeat page shows the background sweeps that keep a project moving:
 
 Project Heartbeat pages show project context while preserving system-level sweeps that are not tied to a single project, such as stale browser presence cleanup.
 
-## Current alpha limits
+## Current pre-alpha limits
 
 Source: /squadboard/docs/features/roadmap-gaps
 
-# Current alpha limits
+# Current pre-alpha limits
 
-The current alpha focuses on Copilot CLI + Squad coexistence, durable orchestration, and local-first operation. Some capabilities are intentionally constrained until the product has more dogfood evidence and clearer policy controls.
+The current pre-alpha focuses on Copilot CLI + Squad coexistence, durable orchestration, and local-first operation. Some capabilities are intentionally constrained until the product has more dogfood evidence and clearer policy controls.
 
 ## Current limits
 
@@ -510,7 +510,7 @@ Retries, waits, fan-out, and approvals are deterministic engine behavior. Agents
 
 Source: /squadboard/docs/getting-started/index
 
-Start here if you are setting up Squadboard for the first time or evaluating the alpha workflow with the Spark project. Read the pages in order if you want one continuous path: install locally, finish the quickstart, then continue into the Spark tutorials.
+Start here if you are setting up Squadboard for the first time or evaluating the pre-alpha workflow with the Spark project. Read the pages in order if you want one continuous path: install locally, finish the quickstart, then continue into the Spark tutorials.
 
 The tutorials follow the same operating flow throughout: create Spark, review the team, delegate cards by moving them to Ready, approve the work that needs judgment, and watch the board, ceremonies, and MCP surfaces stay in sync.
 
@@ -1198,7 +1198,7 @@ Squadboard keeps Copilot CLI and upstream [Squad](https://github.com/bradygaster
 
 ## Is Squadboard production-ready?
 
-No. Squadboard is alpha software. Expect breaking changes, incomplete flows, and areas that still need validation. Keep human review in the loop.
+No. Squadboard is pre-alpha software. Expect breaking changes, incomplete flows, and areas that still need validation. Keep human review in the loop.
 
 ## Is Ralph enabled by default?
 
@@ -1210,7 +1210,7 @@ No. Squadboard's Ralph-equivalent monitor is board-first. It looks at cards in t
 
 ## Is visual ceremony design done?
 
-Not fully. The visual designer covers common linear flows, route/agent/approval steps, and fan-out child authoring. Advanced branching, dynamic fan-out, nested retry wrappers, and unusual external wait-event patterns still require YAML review in the alpha.
+Not fully. The visual designer covers common linear flows, route/agent/approval steps, and fan-out child authoring. Advanced branching, dynamic fan-out, nested retry wrappers, and unusual external wait-event patterns still require YAML review in the pre-alpha.
 
 ## Can Squadboard be a Squad StorageProvider through PostgreSQL?
 
@@ -1286,7 +1286,7 @@ These pages are for quick lookup when you already know the workflow and need a s
 
 <IconGrid>
   <IconCard icon={DocumentCopyRegular} title="FAQ" to="/reference/faq">
-    Short answers about local-first operation, upstream Squad, autonomy, and alpha expectations.
+    Short answers about local-first operation, upstream Squad, autonomy, and pre-alpha expectations.
   </IconCard>
   <IconCard icon={WrenchRegular} title="Troubleshooting" to="/reference/troubleshooting">
     Diagnose product runtime issues such as stuck runs, GitHub sync, and MCP connectivity.
@@ -1467,7 +1467,7 @@ Open **Templates** from the project navigation. Use **Review** to inspect a cere
 
 Built-in ceremonies are normal Squadboard ceremonies once deployed. They can run on issue entry, schedules, manual triggers, or project lifecycle events depending on their template configuration.
 
-The built-in ceremony catalog is intentionally small in the alpha. Use **Review** before applying one so you can see the exact YAML, prompts, approvers, and timeouts.
+The built-in ceremony catalog is intentionally small in the pre-alpha. Use **Review** before applying one so you can see the exact YAML, prompts, approvers, and timeouts.
 
 | Ceremony | Use it when | What it does |
 | --- | --- | --- |
@@ -1660,7 +1660,7 @@ Ready means ready to run. In Progress means an active run exists. Squadboard sho
 
 ## Close-out and continuation
 
-When work reaches review or delivery, lifecycle loops can trigger Scribe-style close-out and ceremony work. Ralph-style monitoring is opt-in alpha automation that can choose the next eligible work item, but every decision should remain visible through audit records rather than hidden background action.
+When work reaches review or delivery, lifecycle loops can trigger Scribe-style close-out and ceremony work. Ralph-style monitoring is opt-in pre-alpha automation that can choose the next eligible work item, but every decision should remain visible through audit records rather than hidden background action.
 
 ## Where upstream Squad fits
 
@@ -1710,7 +1710,7 @@ Deterministic prefilters cover named-agent requests, blocked parents, human-only
 
 A human-only operation is work the coordinator must not assign to an agent automatically because it touches high-trust project controls. Current examples include publishing authentication changes, code signing, billing configuration, and organization-level secret rotation. Squadboard leaves those cards queued with a visible skip reason so a project owner can decide what to do next.
 
-## Current alpha limits
+## Current pre-alpha limits
 
 - Ralph can recommend and log follow-up actions for GitHub issues and PRs that were not created by Ready-column pickup. It does not automatically merge PRs or apply fixes yet; those actions still require explicit human approval.
 - When two agents look similarly qualified, Squadboard records the selected agent and rationale in routing history so reviewers can audit why the assignment happened.
@@ -2034,7 +2034,7 @@ The LLM does not own hard safety decisions. Deterministic code owns dependency g
 
 ## Responsible AI stance
 
-Squadboard is alpha software. Keep human review on code changes, GitHub writes, imports, and any workflow that affects shared repositories. Use it for bounded assistance and auditable orchestration, not unchecked production automation.
+Squadboard is pre-alpha software. Keep human review on code changes, GitHub writes, imports, and any workflow that affects shared repositories. Use it for bounded assistance and auditable orchestration, not unchecked production automation.
 
 ## Squad Apps
 

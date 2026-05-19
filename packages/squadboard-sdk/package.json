@@ -1,7 +1,7 @@
 {
   "name": "@sabbour/squadboard-sdk",
-  "version": "0.1.0",
-  "description": "Library-first SDK for Squadboard ceremonies and agent primitives. Separate from the @sabbour/squadboard MCP distribution package.",
+  "version": "0.1.0-prealpha.0",
+  "description": "Pre-alpha library-first SDK for Squadboard ceremonies and agent primitives. Separate from the @sabbour/squadboard MCP distribution package.",
   "type": "module",
   "license": "MIT",
   "main": "./dist/index.js",
@@ -30,10 +30,12 @@
   },
   "homepage": "https://github.com/sabbour/squadboard#readme",
   "publishConfig": {
-    "access": "public"
+    "access": "public",
+    "tag": "prealpha"
   },
   "scripts": {
-    "build": "tsc",
+    "clean": "node -e \"require('node:fs').rmSync('dist', { recursive: true, force: true })\"",
+    "build": "pnpm run clean && tsc",
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
     "prepublishOnly": "pnpm run build"

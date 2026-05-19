@@ -29,4 +29,4 @@ The LLM does not own hard safety decisions. Deterministic code owns dependency g
 
 ## Responsible AI stance
 
-Squadboard is alpha software. Keep human review on code changes, GitHub writes, imports, and any workflow that affects shared repositories. Use it for bounded assistance and auditable orchestration, not unchecked production automation.
+Squadboard is pre-alpha software. Keep human review on code changes, GitHub writes, imports, and any workflow that affects shared repositories. Use it for bounded assistance and auditable orchestration, not unchecked production automation.

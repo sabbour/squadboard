@@ -1,12 +1,15 @@
 {
   "name": "@sabbour/squadboard-monorepo",
-  "version": "0.1.0",
-  "description": "Local-first kanban + workflow board for Squad agents",
+  "version": "0.1.0-prealpha.0",
+  "description": "Pre-alpha local-first kanban + workflow board for Squad agents",
   "license": "MIT",
   "private": true,
   "type": "module",
+  "packageManager": "pnpm@9.15.9",
   "scripts": {
     "build": "pnpm -r build",
+    "npm:build": "pnpm --filter @sabbour/squadboard-sdk run build && pnpm --filter @sabbour/squadboard-cli run build && pnpm --filter @sabbour/squadboard run build",
+    "npm:publish:dry-run": "pnpm --filter @sabbour/squadboard-sdk publish --dry-run --no-git-checks --access public --tag prealpha && pnpm --filter @sabbour/squadboard-cli publish --dry-run --no-git-checks --access public --tag prealpha && pnpm --filter @sabbour/squadboard publish --dry-run --no-git-checks --access public --tag prealpha",
     "dev": "pnpm --parallel --filter @sabbour/squadboard --filter @sabbour/squadboard-client run dev",
     "dev:postgresql": "pnpm --parallel --filter @sabbour/squadboard --filter @sabbour/squadboard-client run dev:postgresql",
     "dev:fs": "pnpm --parallel --filter @sabbour/squadboard --filter @sabbour/squadboard-client run dev:fs",

@@ -84,6 +84,49 @@ Shipped full Squadboard coordinator extension framework: fragment (~200 lines), 
 - **F6 (Wave 26+):** Squad App marketplace + upgrade path
 - **Starters migration:** Migrate legacy starters to Squad App format per W25 roadmap
 
+---
+
+## Wave 18 (Continued) — Release Readiness: Pre-Alpha Copy Normalization (2026-05-19T15:45:00-07:00)
+
+**Scope:** Fix Kujan's rejection of Hockney's release-readiness work; normalize 13 remaining `alpha` references to `pre-alpha` in public docs.
+
+**Context:** Hockney locked out (reviewer rejection lockout); Redfoot owns copy fix independently (no code changes, no workflow/package mechanics touched).
+
+### Deliverables Shipped
+
+1. **Normalized 10 product maturity `alpha` → `pre-alpha` references:**
+   - packages/docs-site/docs/user-guide/built-ins.mdx (1 ref)
+   - packages/docs-site/docs/user-guide/security.md (1 ref)
+   - packages/docs-site/docs/user-guide/coordinator-loops.mdx (1 ref)
+   - packages/docs-site/docs/user-guide/copilot-squad-coexistence.md (1 ref)
+   - packages/docs-site/docs/reference/index.mdx (1 ref)
+   - packages/docs-site/docs/reference/faq.md (2 refs)
+   - packages/docs-site/docs/features/roadmap-gaps.md (3 refs in title/description/intro)
+   - packages/docs-site/docs/getting-started/index.mdx (1 ref)
+
+2. **Validation:**
+   - ✅ Docusaurus build succeeded cleanly
+   - ✅ No remaining product maturity `alpha` references (without "pre-") in public docs
+   - ✅ All 10 normalized to `pre-alpha`
+   - ✅ README.md already correct (not counted in the 13 Kujan flagged)
+
+3. **Decision captured** → `.squad/decisions/inbox/redfoot-prealpha-copy-normalization.md`
+   - Terminology locked: `pre-alpha` (not `alpha`) in all user-facing copy
+   - Rationale: Consistent with SemVer 0.1.0-prealpha.0 and existing README labeling
+   - Scope: Docusaurus site, README.md, release notes
+
+### Key Insight
+
+Squadboard's product maturity label must be consistent: **pre-alpha** (experimental, breaking changes expected) not **alpha** (more stable).
+
+### Success Criteria Met
+
+- ✅ All 10 product maturity `alpha` references normalized to `pre-alpha`
+- ✅ Docusaurus build passes
+- ✅ No code/package/workflow changes (Hockney's scope, not Redfoot's)
+- ✅ Terminology decision locked for team
+- ✅ Ready for Hockney to resume release-readiness work
+
 ## Team Update — undefined
 
 Run: w18

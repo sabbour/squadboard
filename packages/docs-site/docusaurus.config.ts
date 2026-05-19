@@ -2,8 +2,8 @@ import type {Config} from '@docusaurus/types';
 import type * as Preset from '@docusaurus/preset-classic';
 
 const config: Config = {
-  title: 'Squadboard',
-  tagline: 'A local-first workflow board for deterministic multi-agent orchestration.',
+  title: 'Squadboard (pre-alpha)',
+  tagline: 'Pre-alpha local-first workflow board for deterministic multi-agent orchestration.',
   favicon: 'img/squadboard.svg',
 
   url: 'https://sabbour.me',
@@ -57,7 +57,7 @@ const config: Config = {
       respectPrefersColorScheme: false,
     },
     navbar: {
-      title: 'Squadboard',
+      title: 'Squadboard (pre-alpha)',
       logo: {
         alt: 'Squadboard',
         src: 'img/squadboard.svg',

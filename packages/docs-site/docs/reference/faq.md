@@ -15,7 +15,7 @@ Squadboard keeps Copilot CLI and upstream [Squad](https://github.com/bradygaster
 
 ## Is Squadboard production-ready?
 
-No. Squadboard is alpha software. Expect breaking changes, incomplete flows, and areas that still need validation. Keep human review in the loop.
+No. Squadboard is pre-alpha software. Expect breaking changes, incomplete flows, and areas that still need validation. Keep human review in the loop.
 
 ## Is Ralph enabled by default?
 
@@ -27,7 +27,7 @@ No. Squadboard's Ralph-equivalent monitor is board-first. It looks at cards in t
 
 ## Is visual ceremony design done?
 
-Not fully. The visual designer covers common linear flows, route/agent/approval steps, and fan-out child authoring. Advanced branching, dynamic fan-out, nested retry wrappers, and unusual external wait-event patterns still require YAML review in the alpha.
+Not fully. The visual designer covers common linear flows, route/agent/approval steps, and fan-out child authoring. Advanced branching, dynamic fan-out, nested retry wrappers, and unusual external wait-event patterns still require YAML review in the pre-alpha.
 
 ## Can Squadboard be a Squad StorageProvider through PostgreSQL?
 

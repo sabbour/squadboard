@@ -68,3 +68,43 @@ Completed architecture-level review of backlog ↔ board sync, MCP capture, deci
 **Test Results:** Focused server suite (7 files, 97 tests) passed; markdown formatting clean; git diff --check passed.
 
 **Key Learning:** Architecture reviews thrive when treating decision flow (not just code flow) as first-class. Dogfood seam identification prevents infinite sync rathole.
+
+---
+
+### 2026-05-19 — Cross-Surface Squad Sync Authority Contract
+
+Authored the foundational architecture contract for cross-surface Squad management: **mode-based authority** (filesystem vs. database), **explicit bootstrap/projection**, and **drift detection**.
+
+**Deliverables:**
+1. **Architecture document** — `docs/setup/cross-surface-squad-sync-contract.md` (20KB)
+   - Two start paths (Squadboard-first, CLI-first) with explicit flows
+   - Storage mode semantics: `fs` (filesystem authority) vs. `postgresql` (database authority)
+   - Bootstrap is one-time import (idempotent); projection is repeatable generation
+   - Client artifacts (`.github/agents/squad.agent.md`, ceremonies defaults) are generated projections
+   - Drift detection via explicit API: `GET /api/projects/:id/sync/status`
+   - Four repair endpoints for user-initiated sync
+
+2. **Decision record** — `.squad/decisions/inbox/mcmanus-cross-surface-sync-contract.md`
+   - Ownership matrix for each component
+   - Specialist assignments (Hockney, Kobayashi, Keyser, Kujan, Redfoot)
+   - API contract, implementation checklist, migration path for existing projects
+
+3. **Key insights:**
+   - SDK is passive (provides storage backends); application decides authority
+   - No continuous two-way mirroring; explicit seams prevent silent divergence
+   - Ceremonies are never empty; defaults seeded on bootstrap
+   - Users choose storage mode at creation; one authority per project lifetime
+   - Retroactive projects default to `fs` mode (safe); offer upgrade to `postgresql` on opt-in
+
+**Ownership clarification:**
+- Squadboard generates client artifacts, not imports them
+- Storage mode determines where `.squad/` is truth
+- Sync is orchestrated by application (four explicit API endpoints), not SDK
+- CLI defaults to filesystem; Squadboard defaults to database
+
+**Next steps for specialists:**
+- Hockney: Schema migration + API endpoints
+- Kobayashi: SDK documentation + bootstrap integration tests
+- Keyser: Team Sync settings panel
+- Kujan: Regression tests across both start paths
+- Redfoot: User-facing setup guide + linked docs

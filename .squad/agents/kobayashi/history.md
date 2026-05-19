@@ -172,3 +172,13 @@ Completed fix for cast-agent retired issue and project folder structure reorgani
 **Status:** QA pending (Kujan validation of SDK fixes, integration tests, end-to-end sync)
 
 **Risk Mitigation:** Changes scoped to SDK integration surface only; no charter-level changes required at this time.
+
+---
+
+## 2026-05-19T15:43:53.554-07:00 — SDK sync ownership contract
+
+- Defined `squadboard.sdk-sync-ownership.v1` in `packages/server/src/sdk/sync-ownership.ts` as the narrow SDK-facing contract for bootstrap/sync ownership.
+- Contract call: the Squad SDK owns session/state primitives; Squadboard owns project scaffold, storage-mode selection, DB/API/MCP behavior, agent sync, and Copilot/CLI projection generation.
+- Mode rule preserved: filesystem mode treats `.squad/` files as live authority; PostgreSQL mode treats `squad_storage` as live authority after one-time filesystem import. No bidirectional mirror is implied.
+- Added `getProjectSyncOwnershipStatus(projectId)` in `sdk-state.ts` so Hockney can expose a read-only status endpoint without schema changes.
+- Regression: `packages/server/src/sdk/sync-ownership.test.ts` pins provider-mode normalization, required/recommended projection status, and surface ownership boundaries.

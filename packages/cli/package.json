@@ -1,7 +1,7 @@
 {
   "name": "@sabbour/squadboard-cli",
-  "version": "0.1.0",
-  "description": "CLI for Squadboard — `npx @sabbour/squadboard init`",
+  "version": "0.1.0-prealpha.0",
+  "description": "Pre-alpha CLI for Squadboard — `npx @sabbour/squadboard-cli init`",
   "license": "MIT",
   "private": false,
   "type": "module",
@@ -9,10 +9,24 @@
   "bin": {
     "squadboard": "./dist/index.js"
   },
+  "files": [
+    "dist"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/sabbour/squadboard.git"
+  },
+  "homepage": "https://github.com/sabbour/squadboard#readme",
+  "publishConfig": {
+    "access": "public",
+    "tag": "prealpha"
+  },
   "scripts": {
-    "build": "tsc",
+    "clean": "node -e \"require('node:fs').rmSync('dist', { recursive: true, force: true })\"",
+    "build": "pnpm run clean && tsc",
     "dev": "tsx src/index.ts",
-    "start": "node dist/index.js"
+    "start": "node dist/index.js",
+    "prepublishOnly": "pnpm run build"
   },
   "dependencies": {
     "open": "^10.1.0"

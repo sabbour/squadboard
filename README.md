@@ -14,6 +14,9 @@
   <a href="#">
     <img alt="Self-Hosted" src="https://img.shields.io/badge/deployment-self--hosted-orange.svg" />
   </a>
+  <a href="#">
+    <img alt="Project Status" src="https://img.shields.io/badge/status-pre--alpha-purple.svg" />
+  </a>
 </p>
 
 ---
@@ -22,9 +25,9 @@
 
 Squadboard is a workflow engine and kanban board for running multi-agent ceremonies on issues. It can act as the durable driver for Copilot CLI + Squad-style work: deterministic routing and lifecycle state stay in the server, while LLMs handle ambiguity inside bounded prompts.
 
-It runs locally by default, syncs to GitHub when you ship, and stores everything in an embedded Postgres-compatible database (no external setup).
+It runs locally by default, syncs to GitHub when you ship, and stores everything in a PGlite-backed Postgres-compatible database (no external setup).
 
-> **Alpha software warning:** Squadboard is pre-1.0, under active development, and not recommended for production or unattended operation. Expect breaking changes, incomplete flows, and sharp edges. Keep human review in the loop for code changes, GitHub writes, and any workflow that affects shared repositories.
+> **Pre-alpha software warning:** Squadboard is pre-alpha, under active development, and not recommended for production or unattended operation. Expect breaking changes, incomplete flows, and sharp edges. Keep human review in the loop for code changes, GitHub writes, and any workflow that affects shared repositories.
 
 ## Who It's For
 
@@ -52,9 +55,9 @@ Before you begin, ensure you have the following installed:
   npm install -g pnpm
   ```
 
-No external Postgres needed — Squadboard runs an embedded Postgres instance locally at `~/.squadboard/data` on macOS, Windows, and Linux (including linux/arm64). The embedded binary ships with all required shared libraries.
+No external Postgres needed — Squadboard uses packaged PGlite locally on macOS, Windows, and Linux (including linux/arm64).
 
-> **Optional override:** Set `DATABASE_URL=postgresql://user:pass@host:port/squadboard` to use an external Postgres instance instead of the embedded one (useful for CI or production deployments).
+> **Optional override:** Set `DATABASE_URL=postgresql://user:pass@host:port/squadboard` to use an external Postgres instance instead of packaged PGlite (useful for CI or production deployments).
 
 ### Installation
 
@@ -82,7 +85,7 @@ This starts:
 - Backend (Express + WebSocket) on http://localhost:3000
 - Frontend (React + Vite) on http://localhost:5173
 - Docs (Docusaurus) on http://localhost:3002
-- Embedded PostgreSQL database (auto-managed, no setup needed)
+- PGlite-backed local database (auto-managed, no setup needed)
 - PostgreSQL-backed Squad state by default; existing `.squad/` files are imported once into an empty DB-backed project
 
 Open http://localhost:5173 in your browser. Docs are available at http://localhost:3002.
@@ -96,7 +99,7 @@ pnpm run dev:postgresql
 ```
 
 Squadboard will:
-- Use the embedded PostgreSQL database automatically (`@electric-sql/pglite`)
+- Use packaged PGlite automatically (`@electric-sql/pglite`)
 - Import any existing `.squad/` files into the database on startup (one-time)
 - Store all future Squad state in PostgreSQL alongside Squadboard product state
 
@@ -425,7 +428,7 @@ See **[Complete Feature List](docs/features.md)** for details on all subsystems.
 ### Reliability
 - Periodic backup + restore CLI/UI
 - 6-invariant safety checks
-- Embedded PGlite storage for local use; external PostgreSQL when state must be shared across processes
+- Packaged PGlite storage for local use; external PostgreSQL when state must be shared across processes
 
 ### Real-time UI
 - Live run drawer (WebSocket push from engine)
@@ -490,7 +493,7 @@ Squadboard is built around bounded AI assistance, not unchecked automation.
 
 ## Status
 
-**Alpha / hacking phase, pre-1.0.** Squadboard is experimental software. Expect breaking changes, missing polish, and behavior that still needs validation. No cloud yet — self-hosted on your machine or your infrastructure.
+**Pre-alpha / hacking phase.** Squadboard is experimental software. Expect breaking changes, missing polish, and behavior that still needs validation. No cloud yet — self-hosted on your machine or your infrastructure.
 
 This is **local git only** during hacking phase. PR workflow resumes on launch.
 

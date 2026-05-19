@@ -43,7 +43,7 @@ Deterministic prefilters cover named-agent requests, blocked parents, human-only
 
 A human-only operation is work the coordinator must not assign to an agent automatically because it touches high-trust project controls. Current examples include publishing authentication changes, code signing, billing configuration, and organization-level secret rotation. Squadboard leaves those cards queued with a visible skip reason so a project owner can decide what to do next.
 
-## Current alpha limits
+## Current pre-alpha limits
 
 - Ralph can recommend and log follow-up actions for GitHub issues and PRs that were not created by Ready-column pickup. It does not automatically merge PRs or apply fixes yet; those actions still require explicit human approval.
 - When two agents look similarly qualified, Squadboard records the selected agent and rationale in routing history so reviewers can audit why the assignment happened.

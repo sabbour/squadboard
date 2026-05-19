@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Coordinator parity foundation:** Coordinator input plumbing, deterministic routing prefilters, visible circuit-breaker decisions, spawn-prompt context, directive capture, automated Scribe close-out, Ralph monitor, and ceremony/worktree lifecycle metadata are now wired with focused coverage.
 - **Close-out automation:** Removed the manual close-out button/API path; Scribe close-out now runs through daemon/coordinator lifecycle automation instead of an explicit user action.
 - **Docs features IA:** Added a Docusaurus Features section with subsections for core orchestration, automation, integrations, operations, and current gaps.
+- **Pre-alpha release readiness:** Added GitHub Actions CI for docs and npm package builds plus manual npm publishing workflow mechanics targeting the `prealpha` dist-tag.
 - **Scenario tutorials:** Added Getting Started scenario tutorials backed by a Playwright screenshot spec that captures project setup, board triage, team casting, Consult, and import/template screens.
 - **Squad Apps and imports docs:** Added user-guide pages explaining Squad Apps, template imports, built-in bundles, import safety, and the relationship to `bradygaster/squad`.
 - **Architecture diagrams:** Enabled Mermaid in the docs site and added user sequence/topology diagrams for coordinator and import flows.
@@ -22,6 +23,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - **Getting Started rewrite:** Collapsed the nine fragmented scenario tutorials into four sequential tutorials that share one continuous Spark project (Connect → Cast → Run the launch wave → Connect Copilot CLI/Squad/MCP). Quickstart is now a true 10-minute end-to-end (capture → Ready → automatic pickup → inspect run → ceremony). Screenshots are now anchored to the step they actually illustrate. Sidebar and tutorial index updated to match.
+- **Pre-alpha labeling:** Package metadata and top-level user-facing surfaces now explicitly identify Squadboard as pre-alpha software.
 - **Consult scope:** Consult is now documented and typed as project-agent/model brainstorming only; legacy user-local-agent policy surfaces were removed from runtime, UI, agent prompts, templates, and docs.
 
 ### Fixed

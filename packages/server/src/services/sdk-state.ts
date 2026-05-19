@@ -36,6 +36,10 @@ import { getDb } from '../db/index.js';
 import { getPool } from '../db/index.js';
 import { projects } from '../db/schema.js';
 import { PostgreSQLStorageProvider } from '../sdk/postgresql-storage-provider.js';
+import {
+  buildSyncOwnershipStatus,
+  type SquadSyncOwnershipStatus,
+} from '../sdk/sync-ownership.js';
 
 // ---------------------------------------------------------------------------
 // Typed errors
@@ -236,6 +240,39 @@ export async function getState(projectId: string): Promise<SquadState> {
  */
 export function invalidateState(projectId: string): void {
   stateCache.delete(projectId);
+}
+
+/**
+ * Build the SDK-facing sync ownership status for a project.
+ *
+ * This does not repair anything and does not query `squad_storage`; it reports
+ * the declared authority mode plus the local projection artifacts Hockney can
+ * expose through a status API later.
+ */
+export async function getProjectSyncOwnershipStatus(
+  projectId: string,
+): Promise<SquadSyncOwnershipStatus> {
+  const storedSquadPath = await resolveSquadPath(projectId);
+  const squadPath = path.basename(storedSquadPath) === '.squad'
+    ? storedSquadPath
+    : path.join(storedSquadPath, '.squad');
+  const projectRoot = path.dirname(squadPath);
+
+  return buildSyncOwnershipStatus({
+    storageProvider: process.env['SQUADBOARD_SQUAD_STORAGE_PROVIDER'] ?? null,
+    projectRoot,
+    squadPath,
+    presence: {
+      squadDir: existsSync(squadPath),
+      agentsDir: existsSync(path.join(squadPath, 'agents')),
+      decisionsInboxDir: existsSync(path.join(squadPath, 'decisions', 'inbox')),
+      teamMd: existsSync(path.join(squadPath, 'team.md')),
+      routingMd: existsSync(path.join(squadPath, 'routing.md')),
+      decisionsMd: existsSync(path.join(squadPath, 'decisions.md')),
+      ceremoniesMd: existsSync(path.join(squadPath, 'ceremonies.md')),
+      copilotAgentMd: existsSync(path.join(projectRoot, '.github', 'agents', 'squad.agent.md')),
+    },
+  });
 }
 
 // ---------------------------------------------------------------------------
