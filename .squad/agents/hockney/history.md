@@ -335,3 +335,12 @@ Hockney-close-w24 dispatched in parallel to run build + main FF + smoke tests be
 ## Learnings
 
 - Express route registration order is a backend invariant: project-scoped static ceremony paths such as `/audit` must be registered before `/:id`, or PostgreSQL will receive reserved words as UUID ceremony ids.
+- Deep review (2026-05-20): `sql.raw()` in `sweepExpiredStepLeases()` splices row IDs into raw SQL — the only hot-path SQL-injection vector. Must use Drizzle's `inArray()` or parameterised `sql.join()` exclusively.
+- Deep review (2026-05-20): heartbeat `setInterval` in `stepper.ts` has no hard timeout. A hung SDK bridge call keeps the lease alive forever, starving the issue_run from sweeper reclaim. Every agent run needs a wall-clock deadline that kills the heartbeat.
+- Deep review (2026-05-20): migrations in `migrations.ts` run statement-by-statement without `BEGIN`/`COMMIT`. Partial migration failures leave schema in inconsistent state. All migration files must execute inside an explicit transaction.
+- Deep review (2026-05-20): sweeper `lease_expires_at < NOW()` has no grace window — a heartbeat arriving 1ms late (event-loop jitter) triggers false reclaim. Adding a 10s grace buffer prevents race between heartbeat write and sweeper read.
+- Deep review (2026-05-20): WebSocket upgrade has zero auth. Any network-adjacent client gets the full event stream including `__global__`. Must validate bearer token on WS upgrade.
+- Deep review (2026-05-20): GitHub fetch calls have no `AbortSignal.timeout()`. A single hung GitHub API response can block the worker indefinitely. All external HTTP must have a wall-clock timeout.
+- 2026-05-20: Workflow advancement must transact around step status changes, spawned child rows, and cursor movement together; otherwise concurrent ticks can leave a completed step with a stale parent cursor or orphaned child run.
+- 2026-05-20: One-shot Squad SDK runs need a hard wall-clock timeout that tears down the SDK session before the engine clears heartbeat state; timing out only at the sweeper layer is too late because the worker can self-renew forever.
+- 2026-05-20: `timed_out` is a first-class terminal engine state. Any terminal-status list used by workflow polling, retries, retrigger UX, fan-out merge logic, or worktree cleanup must treat it the same way as `failed`.
