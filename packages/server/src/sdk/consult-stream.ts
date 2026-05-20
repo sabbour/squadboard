@@ -310,6 +310,14 @@ export async function sendConsultMessage(sessionId: string, userMessage: string)
       role: 'assistant',
       content: directResult.response,
     });
+    // Stream the direct response in word-sized chunks so the UI renders
+    // progressively instead of popping the full message in all at once.
+    const words = directResult.response.split(/(?<=\s)|(?=\s)/);
+    for (const chunk of words) {
+      if (!chunk) continue;
+      eventBus.emitConsultEvent('consult.message_delta', sessionId, { sessionId, delta: chunk });
+      await new Promise<void>((r) => setTimeout(r, 12));
+    }
     eventBus.emitConsultEvent('consult.message_complete', sessionId, {
       sessionId,
       messageId: msg.id,

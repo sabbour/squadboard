@@ -729,6 +729,7 @@ function SessionView({ sessionId, projectId }: { sessionId: string; projectId: s
   // page silently swallowing the error and stalling at "Sending…".
   const [sendError, setSendError] = useState<string | null>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
+  const replyRef = useRef<HTMLTextAreaElement>(null)
 
   // Build streaming buffer: any deltas after the most recent persisted
   // assistant message form a "streaming bubble" until message_complete
@@ -814,6 +815,8 @@ function SessionView({ sessionId, projectId }: { sessionId: string; projectId: s
     if (!text) return
     setSendError(null)
     setDraft('')
+    // Immediately return focus to the reply box so the user can type the next message.
+    requestAnimationFrame(() => replyRef.current?.focus())
     try {
       await sendMut.mutateAsync({ content: text })
     } catch (err) {
@@ -948,6 +951,7 @@ function SessionView({ sessionId, projectId }: { sessionId: string; projectId: s
           </MessageBar>
         )}
         <Textarea
+          textarea={{ ref: replyRef }}
           value={draft}
           onChange={(_, d) => setDraft(d.value)}
           placeholder={session.status === 'active' || session.status === 'idle' ? 'Reply…' : 'This conversation is closed.'}
