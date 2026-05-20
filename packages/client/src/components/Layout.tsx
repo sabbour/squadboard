@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react'
+import React, { Suspense, useState, useEffect, useMemo } from 'react'
 import { Outlet, useParams, useNavigate, useLocation } from 'react-router'
 import { apiFetch } from '../api/client.ts'
 import { useProjects } from '../api/projects.ts'
@@ -43,6 +43,7 @@ import {
 } from '@fluentui/react-icons'
 import type { OnNavItemSelectData } from '@fluentui/react-components'
 import { ConjureProvider, useConjure } from '../context/ConjureContext.tsx'
+import { PageLoading } from './loading/index.tsx'
 import ConjureModal from './conjure/ConjureModal.tsx'
 
 const useStyles = makeStyles({
@@ -589,7 +590,9 @@ function LayoutInner() {
             </Button>
           </div>
         </div>
-        <Outlet />
+        <Suspense fallback={<PageLoading label="Loading page…" />}>
+          <Outlet />
+        </Suspense>
 
         {/* Hoisted ConjureModal — single instance, opened from any entry point */}
         <ConjureModal

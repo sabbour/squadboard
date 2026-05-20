@@ -1,32 +1,34 @@
+import { lazy } from 'react'
 import { Routes, Route, Navigate } from 'react-router'
 import Layout from './components/Layout.tsx'
 import RouteProgressBar from './components/RouteProgressBar.tsx'
-import ProjectPicker from './pages/ProjectPicker.tsx'
-import Apps from './pages/Apps.tsx'
-import Board from './pages/Board.tsx'
-import Agents from './pages/Agents.tsx'
-import Costs from './pages/Costs.tsx'
-import Workflows from './pages/Workflows.tsx'
-import WorkflowEditor from './pages/WorkflowEditor.tsx'
-import CeremonyList from './pages/CeremonyList.tsx'
-import CeremonyEditor from './pages/CeremonyEditor.tsx'
-import CeremonyRuns from './pages/CeremonyRuns.tsx'
-import CeremoniesReview from './pages/CeremoniesReview.tsx'
-import CeremonyAudit from './pages/CeremonyAudit.tsx'
-import Settings from './pages/Settings.tsx'
-import Dashboard from './pages/Dashboard.tsx'
-import Inbox from './pages/Inbox.tsx'
-import ProjectFlow from './pages/ProjectFlow.tsx'
-import Skills from './pages/Skills.tsx'
-import Tools from './pages/Tools.tsx'
-import McpServers from './pages/McpServers.tsx'
-import Consult from './pages/Consult.tsx'
-import Now from './pages/Now.tsx'
-import Diagnostics from './pages/Diagnostics.tsx'
-import Heartbeat from './pages/Heartbeat.tsx'
-import Templates from './pages/Templates.tsx'
-import LoadingGallery from './components/loading/LoadingGallery.tsx'
-import LiveRunViewer from './components/runs/LiveRunViewer.tsx'
+
+const ProjectPicker = lazy(() => import('./pages/ProjectPicker.tsx'))
+const Apps = lazy(() => import('./pages/Apps.tsx'))
+const Board = lazy(() => import('./pages/Board.tsx'))
+const Agents = lazy(() => import('./pages/Agents.tsx'))
+const Costs = lazy(() => import('./pages/Costs.tsx'))
+const Workflows = lazy(() => import('./pages/Workflows.tsx'))
+const WorkflowEditor = lazy(() => import('./pages/WorkflowEditor.tsx'))
+const CeremonyList = lazy(() => import('./pages/CeremonyList.tsx'))
+const CeremonyEditor = lazy(() => import('./pages/CeremonyEditor.tsx'))
+const CeremonyRuns = lazy(() => import('./pages/CeremonyRuns.tsx'))
+const CeremoniesReview = lazy(() => import('./pages/CeremoniesReview.tsx'))
+const CeremonyAudit = lazy(() => import('./pages/CeremonyAudit.tsx'))
+const Settings = lazy(() => import('./pages/Settings.tsx'))
+const Dashboard = lazy(() => import('./pages/Dashboard.tsx'))
+const Inbox = lazy(() => import('./pages/Inbox.tsx'))
+const ProjectFlow = lazy(() => import('./pages/ProjectFlow.tsx'))
+const Skills = lazy(() => import('./pages/Skills.tsx'))
+const Tools = lazy(() => import('./pages/Tools.tsx'))
+const McpServers = lazy(() => import('./pages/McpServers.tsx'))
+const Consult = lazy(() => import('./pages/Consult.tsx'))
+const Now = lazy(() => import('./pages/Now.tsx'))
+const Diagnostics = lazy(() => import('./pages/Diagnostics.tsx'))
+const Heartbeat = lazy(() => import('./pages/Heartbeat.tsx'))
+const Templates = lazy(() => import('./pages/Templates.tsx'))
+const LoadingGallery = lazy(() => import('./components/loading/LoadingGallery.tsx'))
+const LiveRunViewer = lazy(() => import('./components/runs/LiveRunViewer.tsx'))
 
 export default function App() {
   return (

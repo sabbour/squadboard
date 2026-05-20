@@ -59,3 +59,10 @@ Client-side dead code cleanup: 4 UI components removed
 - ✅ 245 client tests pass
 - ✅ `pnpm --filter @sabbour/squadboard-client build` — clean
 - ✅ Commit: a95151cf8
+
+## Learnings
+
+### 2026-05-20 — Route-level code splitting
+- Converted all 26 route-mounted screens in `packages/client/src/App.tsx` to `lazy()` imports.
+- Put the `Suspense` boundary in `Layout.tsx` around `<Outlet />` so sidebar/topbar stay eager while page content loads behind `PageLoading`.
+- Included route-only components outside `src/pages` (`LiveRunViewer`, dev-only `LoadingGallery`) in the lazy set because they are mounted exclusively by routes.
