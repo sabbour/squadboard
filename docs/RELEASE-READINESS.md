@@ -2,6 +2,14 @@
 
 This document outlines the steps to prepare Squadboard for release to npm and GitHub.
 
+## Current Local Readiness Findings
+
+- `pnpm docs:build` succeeds and regenerates `llms.txt`/`llms-full.txt`.
+- `pnpm npm:build` succeeds for the SDK, CLI, and server packages.
+- `pnpm npm:publish:dry-run` succeeds for the publishable packages with the `prealpha` tag.
+- No Git remote is configured in this checkout. `gh repo view sabbour/squadboard` does not currently resolve to a repository, so create/configure the GitHub repository before pushing.
+- Git history is not public-push ready yet: `git count-objects -vH` reports a 282.38 MiB pack and the largest blobs are committed `node_modules`/tool binaries, including a Copilot binary. Clean history before making the repository public.
+
 ## Pre-Release Validation
 
 ### Code Quality

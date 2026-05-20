@@ -49,7 +49,7 @@ Pick your starting point:
 
 - **🚀 [Getting Started](packages/docs-site/docs/getting-started/)** — Clone, install, and run Squadboard locally in 5 minutes.
 - **📦 [Create a Squad App](packages/docs-site/docs/user-guide/squad-apps.mdx)** — Build, test, and publish a reusable workflow template.
-- **📤 [Publishing & Release Checklist](docs/deliverables.md)** — Pre-flight validation before shipping to npm or GitHub.
+- **📤 [Publishing & Release Checklist](docs/RELEASE-READINESS.md)** — Pre-flight validation before shipping to npm or GitHub.
 
 For more details, see the **[full documentation](packages/docs-site/docs/)**.
 
