@@ -28,6 +28,22 @@ const useStyles = makeStyles({
     marginBottom: tokens.spacingVerticalXS,
     display: 'block',
   },
+  introText: {
+    color: tokens.colorNeutralForeground2,
+    fontSize: '13px',
+    lineHeight: '1.45',
+    margin: 0,
+  },
+  section: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: tokens.spacingVerticalS,
+  },
+  sectionHelp: {
+    color: tokens.colorNeutralForeground3,
+    display: 'block',
+    marginTop: '2px',
+  },
   attachRow: {
     display: 'flex',
     gap: tokens.spacingHorizontalS,
@@ -78,6 +94,12 @@ export function AttachWorkflowModal({ projectId, issueId, onClose }: AttachWorkf
     }
   }
 
+  function templateActionLabel(name: string) {
+    const trimmed = name.trim()
+    if (!trimmed) return 'Create plan for this card'
+    return `Create from ${trimmed}`
+  }
+
   async function handleUseTemplate(slug: string) {
     const tpl = templates?.find((t) => t.slug === slug)
     if (!tpl) return
@@ -107,13 +129,22 @@ export function AttachWorkflowModal({ projectId, issueId, onClose }: AttachWorkf
     <Dialog open onOpenChange={(_, data) => { if (!data.open) onClose() }}>
       <DialogSurface style={{ maxWidth: '440px', width: '100%' }}>
         <DialogBody>
-          <DialogTitle>Choose run plan</DialogTitle>
+          <DialogTitle>Override default Work Pickup</DialogTitle>
           <DialogContent>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', paddingTop: '8px' }}>
+              <p className={styles.introText}>
+                This card already uses Work Pickup when it enters Ready. Only choose another run plan if this card needs a different path.
+              </p>
+
               {/* Existing project ceremonies/run plans */}
               {ceremonies && ceremonies.length > 0 && (
-                <div>
-                  <span className={styles.sectionLabel}>Project run plans</span>
+                <div className={styles.section}>
+                  <div>
+                    <span className={styles.sectionLabel}>Use an existing project plan</span>
+                    <Caption1 className={styles.sectionHelp}>
+                      Attach a saved project plan to this card instead of the default Work Pickup plan.
+                    </Caption1>
+                  </div>
                   <div className={styles.attachRow}>
                     <select
                       value={selectedVersionId}
@@ -128,7 +159,7 @@ export function AttachWorkflowModal({ projectId, issueId, onClose }: AttachWorkf
                         padding: '6px 10px',
                       }}
                     >
-                      <option value="">— select a run plan —</option>
+                      <option value="">Select a project plan override</option>
                       {ceremonies
                         .filter((ceremony) => Boolean(ceremony.activeVersionId))
                         .map((ceremony) => (
@@ -142,7 +173,7 @@ export function AttachWorkflowModal({ projectId, issueId, onClose }: AttachWorkf
                       onClick={() => { void handleAttach() }}
                       disabled={!selectedVersionId || busy}
                     >
-                      Use plan
+                      Use selected plan
                     </Button>
                   </div>
                 </div>
@@ -150,8 +181,13 @@ export function AttachWorkflowModal({ projectId, issueId, onClose }: AttachWorkf
 
               {/* Bundled templates */}
               {templates && templates.length > 0 && (
-                <div>
-                  <span className={styles.sectionLabel}>Start from a template</span>
+                <div className={styles.section}>
+                  <div>
+                    <span className={styles.sectionLabel}>Create a new plan for this card</span>
+                    <Caption1 className={styles.sectionHelp}>
+                      Start from a template; Squadboard saves the new plan to this project and attaches it to this card.
+                    </Caption1>
+                  </div>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                     {templates.map((tpl) => (
                       <div key={tpl.slug} className={styles.templateCard}>
@@ -167,7 +203,7 @@ export function AttachWorkflowModal({ projectId, issueId, onClose }: AttachWorkf
                           onClick={() => { void handleUseTemplate(tpl.slug) }}
                           disabled={busy}
                         >
-                          Create and use
+                          {templateActionLabel(tpl.name)}
                         </Button>
                       </div>
                     ))}

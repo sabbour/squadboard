@@ -391,7 +391,7 @@ export default function CardDetail({ projectId, issue, onClose, initialTab }: Ca
                       padding: 0,
                     }}
                   >
-                    {issue.attachedWorkflowId ? 'Change plan' : 'Choose plan'}
+                    {issue.attachedWorkflowId ? 'Change override' : 'Override default'}
                   </button>
                 </div>
 
@@ -411,9 +411,13 @@ export default function CardDetail({ projectId, issue, onClose, initialTab }: Ca
                       <Body1Strong style={{ display: 'block', color: tokens.colorNeutralForeground1, margin: 0 }}>
                         <Settings20Regular style={{ verticalAlign: 'middle', marginRight: '4px' }} />{issue.attachedWorkflowName ?? 'Run plan'}
                       </Body1Strong>
-                      {workflowRun && (
+                      {workflowRun ? (
                         <Caption1 style={{ display: 'block', color: tokens.colorNeutralForeground2, margin: '2px 0 0' }}>
                           Status: {workflowRun.status} · Step {(workflowRun.currentStepIndex ?? 0) + 1}
+                        </Caption1>
+                      ) : (
+                        <Caption1 style={{ display: 'block', color: tokens.colorNeutralForeground2, margin: '2px 0 0' }}>
+                          Overrides the default Work Pickup plan for this card.
                         </Caption1>
                       )}
                     </div>
@@ -450,7 +454,7 @@ export default function CardDetail({ projectId, issue, onClose, initialTab }: Ca
                       <Settings20Regular style={{ verticalAlign: 'middle', marginRight: '4px' }} />Default plan: Work Pickup
                     </Body1Strong>
                     <Caption1 style={{ display: 'block', color: tokens.colorNeutralForeground2, marginTop: '2px' }}>
-                      Runs automatically when this card enters Ready. Label rules can choose a more specific plan.
+                      Work Pickup runs automatically when this card enters Ready. Leave it alone unless this card needs a custom run plan; label rules can still choose a more specific plan.
                     </Caption1>
                   </div>
                 )}
