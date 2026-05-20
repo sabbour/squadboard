@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { Subtitle2, Caption1, tokens } from '@fluentui/react-components'
 import { Dismiss20Regular } from '@fluentui/react-icons'
-import { type Agent, useAgent, useUpdateAgent } from '../../api/agents.ts'
+import { type Agent, useAgent, useDeleteAgentPermanently, useUpdateAgent } from '../../api/agents.ts'
 import { safeRelativeTime } from '../../utils/dates.ts'
 import StatusBadge from './StatusBadge.tsx'
 import CharterEditor from './CharterEditor.tsx'
@@ -39,6 +39,8 @@ export default function AgentDetailPanel({ projectId, agent, onClose }: AgentDet
   const readOnlyAgent = isReadOnlyAgent(agent)
   const { data: detail } = useAgent(projectId, agent.id, { enabled: !readOnlyAgent })
   const updateAgent = useUpdateAgent(projectId)
+  const deleteAgentPermanently = useDeleteAgentPermanently(projectId)
+  const [lifecycleError, setLifecycleError] = useState<string | null>(null)
 
   const current = detail ?? agent
   const currentReadOnly = isReadOnlyAgent(current)
@@ -67,7 +69,13 @@ export default function AgentDetailPanel({ projectId, agent, onClose }: AgentDet
   }
 
   function setStatus(next: 'active' | 'disabled' | 'retired') {
-    updateAgent.mutate({ agentId: current.id, status: next })
+    setLifecycleError(null)
+    updateAgent.mutate(
+      { agentId: current.id, status: next },
+      {
+        onError: (e) => setLifecycleError(e instanceof Error ? e.message : 'Agent update failed'),
+      },
+    )
   }
 
   function handleRetire() {
@@ -80,6 +88,23 @@ export default function AgentDetailPanel({ projectId, agent, onClose }: AgentDet
     }
     setStatus('retired')
   }
+
+  function handleDeleteRetired() {
+    if (
+      !window.confirm(
+        `Permanently delete ${displayName} from Squadboard? This removes the retired agent metadata only; files on disk are left untouched. This cannot be undone.`,
+      )
+    ) {
+      return
+    }
+    setLifecycleError(null)
+    deleteAgentPermanently.mutate(current.id, {
+      onSuccess: onClose,
+      onError: (e) => setLifecycleError(e instanceof Error ? e.message : 'Agent delete failed'),
+    })
+  }
+
+  const lifecyclePending = updateAgent.isPending || deleteAgentPermanently.isPending
 
   return (
     <div
@@ -329,11 +354,18 @@ export default function AgentDetailPanel({ projectId, agent, onClose }: AgentDet
             padding: '12px 20px',
             borderTop: '1px solid var(--border)',
             display: 'flex',
+            alignItems: 'center',
             justifyContent: 'flex-end',
             gap: '8px',
             flexShrink: 0,
           }}
         >
+          {lifecycleError && (
+            <Caption1 style={{ color: '#f85149', marginRight: 'auto' }}>
+              {lifecycleError}
+            </Caption1>
+          )}
+
           {currentReadOnly ? (
             <Caption1 style={{ color: tokens.colorNeutralForeground3 }}>
               Read-only roster entry; no project lifecycle actions are available.
@@ -341,7 +373,7 @@ export default function AgentDetailPanel({ projectId, agent, onClose }: AgentDet
           ) : current.status === 'active' && (
             <button
               onClick={() => setStatus('disabled')}
-              disabled={updateAgent.isPending}
+              disabled={lifecyclePending}
               title="Pause this agent — it stops appearing in pickers and cannot be invoked. Reversible."
               style={{
                 background: 'rgba(210,153,34,0.12)',
@@ -352,17 +384,17 @@ export default function AgentDetailPanel({ projectId, agent, onClose }: AgentDet
                 fontSize: '13px',
                 fontWeight: 500,
                 cursor: 'pointer',
-                opacity: updateAgent.isPending ? 0.6 : 1,
+                opacity: lifecyclePending ? 0.6 : 1,
               }}
             >
-              {updateAgent.isPending ? 'Updating…' : 'Disable Agent'}
+              {updateAgent.isPending ? 'Updating...' : 'Disable Agent'}
             </button>
           )}
 
           {!currentReadOnly && current.status !== 'active' && (
             <button
               onClick={() => setStatus('active')}
-              disabled={updateAgent.isPending}
+              disabled={lifecyclePending}
               title="Bring this agent back online — pickers and runs will accept it again."
               style={{
                 background: 'rgba(63,185,80,0.1)',
@@ -373,17 +405,17 @@ export default function AgentDetailPanel({ projectId, agent, onClose }: AgentDet
                 fontSize: '13px',
                 fontWeight: 500,
                 cursor: 'pointer',
-                opacity: updateAgent.isPending ? 0.6 : 1,
+                opacity: lifecyclePending ? 0.6 : 1,
               }}
             >
-              {updateAgent.isPending ? 'Updating…' : 'Re-enable Agent'}
+              {updateAgent.isPending ? 'Updating...' : 'Re-enable Agent'}
             </button>
           )}
 
           {!currentReadOnly && current.status === 'disabled' && (
             <button
               onClick={handleRetire}
-              disabled={updateAgent.isPending}
+              disabled={lifecyclePending}
               title="Archive this agent — hidden from listings by default. Charter file stays on disk."
               style={{
                 background: 'rgba(139,148,158,0.12)',
@@ -394,10 +426,31 @@ export default function AgentDetailPanel({ projectId, agent, onClose }: AgentDet
                 fontSize: '13px',
                 fontWeight: 500,
                 cursor: 'pointer',
-                opacity: updateAgent.isPending ? 0.6 : 1,
+                opacity: lifecyclePending ? 0.6 : 1,
               }}
             >
               Retire Agent
+            </button>
+          )}
+
+          {!currentReadOnly && current.status === 'retired' && (
+            <button
+              onClick={handleDeleteRetired}
+              disabled={lifecyclePending}
+              title="Permanently remove this retired agent from Squadboard metadata. Files stay on disk."
+              style={{
+                background: 'rgba(248,81,73,0.12)',
+                border: '1px solid rgba(248,81,73,0.45)',
+                borderRadius: 'var(--radius)',
+                color: '#f85149',
+                padding: '6px 16px',
+                fontSize: '13px',
+                fontWeight: 500,
+                cursor: lifecyclePending ? 'default' : 'pointer',
+                opacity: lifecyclePending ? 0.6 : 1,
+              }}
+            >
+              {deleteAgentPermanently.isPending ? 'Deleting...' : 'Delete Agent'}
             </button>
           )}
         </div>

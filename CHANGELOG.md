@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Project Settings Danger Zone:** Settings now includes a destructive project delete section that removes Squadboard metadata by default, with a deselected extra-warning option to also delete the underlying project folder after backend safety checks.
+- **Retired-agent deletion:** Retired project agents can now be permanently deleted from Squadboard metadata, and creating or casting an agent with the same name as a retired project agent reactivates that agent instead of creating a conflicting duplicate.
 - **PostgreSQL-backed Squad StorageProvider adapter (default):** Squadboard now stores Squad state (agents, decisions, skills, ceremonies) in the same PostgreSQL database as product state by default, using local PGlite unless `DATABASE_URL` points to standalone PostgreSQL. Existing `.squad/` files import once into an empty DB-backed project; use `pnpm run dev:fs`, `squadboard init --squad-storage fs`, or `SQUADBOARD_SQUAD_STORAGE_PROVIDER=fs` for filesystem fallback. `squadboard init --write-mcp-config` writes a Copilot CLI MCP config so Copilot plus `squad.agent.md` use Squadboard as the shared-state broker. External Squad CLI direct database access still requires compatible upstream StorageProvider configuration; otherwise use the MCP bridge.
 - **Cross-surface sync E2E coverage:** Playwright now launches both Squadboard backend and client for browser E2E, covers Team Sync status/repair flows, exercises an isolated filesystem-authoritative CLI-first server path, and includes deterministic plus opt-in live Copilot CLI ask-Squad coverage for generated agent projections.
 - **Cross-surface Squad sync architecture & SDK contract:** Squadboard and CLI/Copilot are now designed as interchangeable peer clients over one authoritative Squad state source. The SDK contract (`packages/server/src/sdk/sync-ownership.ts`) defines storage modes (`postgresql` | `filesystem`), bootstrap semantics, artifact projection specs, and repair actions. Backend sync endpoints (`/api/projects/:projectId/squad-sync/*`) and the Settings -> Team Sync panel expose status and explicit repair actions so users can start projects in either Squadboard or CLI/Copilot and continue in the other without data loss.
@@ -31,6 +33,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Conjure issue creation no longer surfaces `Cannot create property 'onUndo' on number` after a successful create; undo callbacks are stored separately from the toast timer ID.
 - `pnpm start dev` now normalizes the compatibility `dev` argument instead of forwarding it into workspace dev scripts, preventing Docusaurus from treating `dev` as a docs path while keeping the docs dev server on port 3002.
 - Server TypeScript build now passes after bringing stale tests/services up to the current agent schema and DB accessor patterns.
 

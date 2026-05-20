@@ -62,7 +62,7 @@ export default function ProjectCard({ project, onClick }: ProjectCardProps) {
   function handleRemove(e: React.MouseEvent) {
     e.stopPropagation()
     if (window.confirm('Remove this project from Squadboard? The files will not be deleted.')) {
-      deleteProject(project.id)
+      deleteProject({ id: project.id })
     }
   }
 

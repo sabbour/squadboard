@@ -179,6 +179,7 @@ export default function ConjureModal({
   const [toastMsg, setToastMsg] = useState<{ text: string; variant: 'success' | 'info' } | null>(null)
   const [heuristicUsed, setHeuristicUsed] = useState(false)
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const undoCallbackRef = useRef<(() => void) | undefined>(undefined)
   const draftKeyRef = useRef<string | null>(null)
   const pendingNavRef = useRef<string | null>(null)
 
@@ -393,16 +394,15 @@ export default function ConjureModal({
   function showToast(msg: string, durationMs = 3000, onUndo?: () => void, variant: 'success' | 'info' = 'success') {
     setToastMsg({ text: msg, variant })
     if (toastTimerRef.current) clearTimeout(toastTimerRef.current)
+    undoCallbackRef.current = onUndo
     toastTimerRef.current = setTimeout(() => {
       setToastMsg(null)
     }, durationMs)
-    // Store undo callback on the timer so the undo button can call it.
-    ;(toastTimerRef.current as unknown as { onUndo?: () => void }).onUndo = onUndo
   }
 
   function handleUndo() {
     if (toastTimerRef.current) {
-      const cb = (toastTimerRef.current as unknown as { onUndo?: () => void }).onUndo
+      const cb = undoCallbackRef.current
       if (cb) cb()
       clearTimeout(toastTimerRef.current)
     }

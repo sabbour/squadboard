@@ -121,6 +121,45 @@ router.post('/', async (req: Request, res: Response) => {
     .limit(1);
 
   if (collision.length > 0) {
+    const existing = collision[0];
+
+    // A retired project-owned agent with the same name is treated as the same agent:
+    // reactivate it rather than rejecting with 409.
+    if (existing.status === 'retired' && existing.agentKind !== 'copilot') {
+      await fs.mkdir(agentDir, { recursive: true });
+      const existingHistoryPath = existing.historyPath
+        ? await fs.access(existing.historyPath).then(() => existing.historyPath).catch(() => null)
+        : null;
+
+      if (!existingHistoryPath) {
+        const freshHistory = `# ${name} — History\n\n## Core Context\n\n- **Role:** ${role}\n- **Joined:** ${new Date().toISOString()}\n\n## Learnings\n\n<!-- Append learnings below -->\n`;
+        await fs.writeFile(historyPath, freshHistory, 'utf-8');
+      }
+
+      // Always write a fresh charter reflecting the new spec.
+      await writeCharter(charterPath, { name, role, model, expertise: expertise ?? [] });
+      const charterHash = await computeCharterHash(charterPath);
+      const charterContent = await fs.readFile(charterPath, 'utf-8');
+
+      const [reactivated] = await db
+        .update(schema.agents)
+        .set({
+          role,
+          model: model ?? null,
+          status: 'active',
+          charterPath,
+          historyPath: existingHistoryPath ?? historyPath,
+          charterHash,
+          charterContent,
+          updatedAt: new Date(),
+        })
+        .where(eq(schema.agents.id, existing.id))
+        .returning();
+
+      res.status(200).json({ ok: true, data: reactivated });
+      return;
+    }
+
     res.status(409).json({ ok: false, error: `Agent "${name}" already exists in this project` });
     return;
   }
@@ -322,6 +361,9 @@ router.post('/hire-team/confirm', async (req: Request, res: Response) => {
       }
 
       const role = member.suggestedRoleId ?? member.role ?? 'developer';
+      const agentDir = path.join(squadPath, 'agents', agentName);
+      const charterPath = path.join(agentDir, 'charter.md');
+      const historyPath = path.join(agentDir, 'history.md');
 
       try {
         // Collision check (DB)
@@ -331,13 +373,49 @@ router.post('/hire-team/confirm', async (req: Request, res: Response) => {
           .where(and(eq(schema.agents.projectId, projectId), eq(schema.agents.name, agentName)))
           .limit(1);
         if (collision.length > 0) {
+          const existing = collision[0];
+          if (existing.status === 'retired' && existing.agentKind !== 'copilot') {
+            const persona = buildPersonaSection(member);
+            const charterContent = generateCharter(role, agentName, persona);
+            if (!charterContent) {
+              errors.push({ agentName, error: `No charter template found for role "${role}"` });
+              continue;
+            }
+
+            await fs.mkdir(agentDir, { recursive: true });
+            await fs.writeFile(charterPath, charterContent, 'utf-8');
+
+            const existingHistoryPath = existing.historyPath
+              ? await fs.access(existing.historyPath).then(() => existing.historyPath).catch(() => null)
+              : null;
+            if (!existingHistoryPath) {
+              const historyContent = `# ${agentName} — History\n\n## Core Context\n\n- **Role:** ${role}\n- **Joined:** ${new Date().toISOString()}\n\n## Learnings\n\n<!-- Append learnings below -->\n`;
+              await fs.writeFile(historyPath, historyContent, 'utf-8');
+            }
+
+            const charterHash = await computeCharterHash(charterPath);
+            const [reactivated] = await db
+              .update(schema.agents)
+              .set({
+                role,
+                model: null,
+                status: 'active',
+                charterPath,
+                historyPath: existingHistoryPath ?? historyPath,
+                charterHash,
+                charterContent,
+                updatedAt: new Date(),
+              })
+              .where(eq(schema.agents.id, existing.id))
+              .returning();
+
+            created.push(reactivated);
+            continue;
+          }
+
           errors.push({ agentName, error: `Agent "${agentName}" already exists in this project` });
           continue;
         }
-
-        const agentDir = path.join(squadPath, 'agents', agentName);
-        const charterPath = path.join(agentDir, 'charter.md');
-        const historyPath = path.join(agentDir, 'history.md');
 
         // Collision check (disk)
         const diskCollision = await fs.access(agentDir).then(() => true).catch(() => false);
@@ -468,10 +546,18 @@ router.patch('/:id', async (req: Request, res: Response) => {
 
 // ---------------------------------------------------------------------------
 // DELETE /api/projects/:projectId/agents/:id
-// Disable agent (status='disabled'); file on disk is untouched.
+//
+// Default (no query param): soft-disable — sets status='disabled', files
+// on disk are untouched. Works for active or already-disabled agents.
+//
+// ?permanent=true: hard-delete the DB row. Only permitted for project-owned
+// agents whose current status is 'retired'. Active, disabled, read-only
+// (virtual-copilot), or non-project agents are rejected with 400/403.
+// The agent folder on disk is intentionally left intact.
 // ---------------------------------------------------------------------------
 router.delete('/:id', async (req: Request, res: Response) => {
   const { projectId, id } = req.params as Record<string, string>;
+  const permanent = req.query.permanent === 'true';
 
   const db = getDb();
 
@@ -486,6 +572,25 @@ router.delete('/:id', async (req: Request, res: Response) => {
     return;
   }
 
+  if (permanent) {
+    if (agent.agentKind === 'copilot') {
+      res.status(403).json({ ok: false, error: 'Read-only agents cannot be permanently deleted' });
+      return;
+    }
+    if (agent.status !== 'retired') {
+      res.status(400).json({
+        ok: false,
+        error: `Only retired agents can be permanently deleted; this agent is "${agent.status}"`,
+      });
+      return;
+    }
+
+    await db.delete(schema.agents).where(eq(schema.agents.id, id));
+    res.json({ ok: true, data: { deleted: true, id } });
+    return;
+  }
+
+  // Default: soft-disable
   const [updated] = await db
     .update(schema.agents)
     .set({ status: 'disabled', updatedAt: new Date() })

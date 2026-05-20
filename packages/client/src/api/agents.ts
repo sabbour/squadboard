@@ -114,6 +114,34 @@ export function useDisableAgent(projectId: string) {
   })
 }
 
+export interface PermanentDeleteResult {
+  deleted: true
+  id: string
+}
+
+/**
+ * Hard-deletes a retired, project-owned agent row from the database.
+ * The agent's folder on disk is left intact.
+ *
+ * The server enforces: only retired project-owned (non-copilot) agents may be
+ * permanently deleted. Active or disabled agents will receive a 400, and
+ * read-only virtual-copilot agents will receive a 403.
+ */
+export function useDeleteAgentPermanently(projectId: string) {
+  const queryClient = useQueryClient()
+  return useMutation<PermanentDeleteResult, Error, string>({
+    mutationFn: (agentId) =>
+      apiFetch<Envelope<PermanentDeleteResult>>(
+        `/api/projects/${projectId}/agents/${agentId}?permanent=true`,
+        { method: 'DELETE' },
+      ).then(unwrap),
+    onSuccess: (_, agentId) => {
+      void queryClient.invalidateQueries({ queryKey: ['agents', projectId] })
+      queryClient.removeQueries({ queryKey: ['agents', projectId, agentId] })
+    },
+  })
+}
+
 export function useAgentCharter(projectId: string, agentId: string) {
   return useQuery<{ content: string }>({
     queryKey: ['agents', projectId, agentId, 'charter'],

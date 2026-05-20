@@ -1,6 +1,9 @@
 import { Router } from 'express';
 import type { Request, Response } from 'express';
 import { eq } from 'drizzle-orm';
+import fs from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
 import { getDb, schema } from '../db/index.js';
 import { createProject } from '../services/project-init.js';
 import { suggestProjectSetup } from '../services/setup-lifecycle.js';
@@ -118,19 +121,146 @@ router.patch('/:id', async (req: Request, res: Response) => {
   res.json(updated);
 });
 
-router.delete('/:id', async (req: Request, res: Response) => {
-  const db = getDb();
-  const deleted = await db
-    .delete(schema.projects)
-    .where(eq(schema.projects.id, req.params.id as string))
-    .returning();
+// ---------------------------------------------------------------------------
+// DELETE /api/projects/:id
+//
+// Body (optional JSON): { deleteFolder?: boolean }
+//   deleteFolder = false (default) → removes metadata only; folder untouched.
+//   deleteFolder = true            → additionally removes the project folder
+//                                   from disk after extensive safety checks.
+//
+// Response: JSON 200 { ok: true, deleted: { metadata: true, folder: string|false, folderError?: string } }
+// ---------------------------------------------------------------------------
 
-  if (deleted.length === 0) {
+/**
+ * Resolve the underlying project folder from the registered path.
+ *
+ * When `projectPath` ends with `.squad` (the typical convention), the folder
+ * is the *parent* of that directory. Otherwise the path is used as-is.
+ *
+ * Returns an error string when the path is absent, unsafe, or points outside
+ * a recognised project directory.
+ */
+async function resolveSafeFolderPath(
+  projectPath: string,
+): Promise<{ ok: true; path: string } | { ok: false; error: string }> {
+  if (!projectPath || projectPath.trim() === '') {
+    return { ok: false, error: 'Project has no path configured' };
+  }
+
+  const rawProjectPath = projectPath.trim();
+  if (!path.isAbsolute(rawProjectPath)) {
+    return { ok: false, error: 'Project path must be absolute' };
+  }
+
+  const resolved = path.resolve(rawProjectPath);
+
+  // If the registered path is the .squad directory itself, operate on its parent.
+  const folderPath =
+    resolved === '/.squad' ||
+    resolved.endsWith('/.squad') ||
+    resolved.endsWith(path.sep + '.squad')
+      ? path.dirname(resolved)
+      : resolved;
+
+  // Refuse to delete filesystem anchors.
+  if (folderPath === '/') {
+    return { ok: false, error: 'Refusing to delete the root directory' };
+  }
+
+  const home = os.homedir();
+  if (folderPath === home) {
+    return { ok: false, error: 'Refusing to delete the home directory' };
+  }
+
+  const cwd = process.cwd();
+  // Refuse if the folder IS the cwd, or if it is an ancestor of the cwd
+  // (which would take out the running server's working directory / repo root).
+  if (folderPath === cwd || cwd.startsWith(folderPath + path.sep)) {
+    return {
+      ok: false,
+      error: 'Refusing to delete the server working directory or one of its ancestors',
+    };
+  }
+
+  // Refuse if the folder is an ancestor of the home directory.
+  if (home.startsWith(folderPath + path.sep)) {
+    return { ok: false, error: 'Refusing to delete an ancestor of the home directory' };
+  }
+
+  // Verify the folder exists and is a directory.
+  try {
+    const stat = await fs.stat(folderPath);
+    if (!stat.isDirectory()) {
+      return { ok: false, error: 'Project path is not a directory' };
+    }
+  } catch {
+    return { ok: false, error: 'Project folder does not exist on disk' };
+  }
+
+  // Require a .squad subdirectory to confirm this is a managed project folder,
+  // guarding against accidental deletion of unrelated directories.
+  const squadDir = path.join(folderPath, '.squad');
+  try {
+    await fs.stat(squadDir);
+  } catch {
+    return {
+      ok: false,
+      error: 'Project folder does not contain a .squad directory — refusing to delete',
+    };
+  }
+
+  return { ok: true, path: folderPath };
+}
+
+router.delete('/:id', async (req: Request, res: Response) => {
+  const deleteFolder = (req.body as { deleteFolder?: unknown })?.deleteFolder === true;
+
+  const db = getDb();
+
+  // Fetch the row first — we need the path for the optional folder delete
+  // and to return a 404 before touching anything.
+  const [project] = await db
+    .select()
+    .from(schema.projects)
+    .where(eq(schema.projects.id, req.params.id as string));
+
+  if (!project) {
     res.status(404).json({ ok: false, error: 'Project not found' });
     return;
   }
 
-  res.status(204).send();
+  // Validate the folder path *before* making any mutations, so a bad path
+  // never leaves the metadata in a half-deleted state.
+  let resolvedFolderPath: string | null = null;
+  if (deleteFolder) {
+    const guard = await resolveSafeFolderPath(project.path);
+    if (!guard.ok) {
+      res.status(400).json({ ok: false, error: guard.error });
+      return;
+    }
+    resolvedFolderPath = guard.path;
+  }
+
+  // Delete project-scoped settings first (no CASCADE on this FK).
+  await db.delete(schema.settings).where(eq(schema.settings.projectId, project.id));
+
+  // Delete the project row (all other child tables carry CASCADE).
+  await db.delete(schema.projects).where(eq(schema.projects.id, project.id));
+
+  // Optionally remove the folder from disk — only after metadata is gone.
+  let folderDeleted: string | false = false;
+  let folderError: string | undefined;
+  if (deleteFolder && resolvedFolderPath) {
+    try {
+      await fs.rm(resolvedFolderPath, { recursive: true, force: true });
+      folderDeleted = resolvedFolderPath;
+    } catch (err) {
+      folderError = err instanceof Error ? err.message : String(err);
+    }
+  }
+
+  res.json({ ok: true, deleted: { metadata: true, folder: folderDeleted, folderError } });
 });
 
 // ---------------------------------------------------------------------------

@@ -1,6 +1,7 @@
 import { useState, useRef } from 'react'
-import { useParams } from 'react-router'
-import { useProject, useUpdateProject } from '../api/projects.ts'
+import { useParams, useNavigate } from 'react-router'
+import { useProject, useUpdateProject, useDeleteProject } from '../api/projects.ts'
+import type { Project } from '../api/projects.ts'
 import { useModels } from '../api/agents.ts'
 import { useBudget } from '../api/costs.ts'
 import { apiFetch } from '../api/client.ts'
@@ -27,6 +28,7 @@ import {
   Caption1,
   Body1,
   Switch,
+  Checkbox,
   tokens,
   Dialog,
   DialogSurface,
@@ -54,10 +56,11 @@ import {
   Eye20Regular,
   Checkmark20Regular,
   ArrowSync20Regular,
+  Delete20Regular,
 } from '@fluentui/react-icons'
 import { PageLoading, SectionLoading } from '../components/loading/index.tsx'
 
-type Section = 'general' | 'display' | 'mcp' | 'sync' | 'budget' | 'reviews' | 'portability' | 'backup' | 'github'
+type Section = 'general' | 'display' | 'mcp' | 'sync' | 'budget' | 'reviews' | 'portability' | 'backup' | 'github' | 'danger'
 
 const SECTIONS: { id: Section; label: string; icon: React.ReactNode }[] = [
   { id: 'general', label: 'General', icon: <TextDescription20Regular /> },
@@ -69,6 +72,7 @@ const SECTIONS: { id: Section; label: string; icon: React.ReactNode }[] = [
   { id: 'portability', label: 'Portability', icon: <FolderArrowRight20Regular /> },
   { id: 'backup', label: 'Backup & Restore', icon: <DatabaseArrowRight20Regular /> },
   { id: 'github', label: 'GitHub', icon: <Branch20Regular /> },
+  { id: 'danger', label: 'Danger Zone', icon: <Delete20Regular /> },
 ]
 
 function SectionHeader({ title, sub }: { title: string; sub?: string }) {
@@ -618,6 +622,201 @@ function PortabilitySection({ projectId, projectName }: { projectId: string; pro
   )
 }
 
+function DangerZoneSection({ project }: { project: Project }) {
+  const [deleteFolder, setDeleteFolder] = useState(false)
+  const [confirmOpen, setConfirmOpen] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const { mutate: deleteProject, isPending } = useDeleteProject()
+  const navigate = useNavigate()
+  const squadPath = project.squadPath
+  const projectFolderPath = displayProjectFolderPath(squadPath)
+
+  function handleConfirm() {
+    setError(null)
+    deleteProject(
+      { id: project.id, deleteFolder: deleteFolder || undefined },
+      {
+        onSuccess: (result) => {
+          if (result.deleted.folderError) {
+            window.alert(
+              `Project metadata was removed, but Squadboard could not delete the folder on disk: ${result.deleted.folderError}`,
+            )
+          }
+          navigate('/')
+        },
+        onError: (e) => setError(e instanceof Error ? e.message : 'Delete failed'),
+      },
+    )
+  }
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', maxWidth: 560 }}>
+      <div
+        style={{
+          border: `1px solid ${tokens.colorPaletteRedBorderActive}`,
+          borderRadius: '8px',
+          overflow: 'hidden',
+        }}
+      >
+        <div
+          style={{
+            background: tokens.colorPaletteRedBackground2,
+            borderBottom: `1px solid ${tokens.colorPaletteRedBorderActive}`,
+            padding: '10px 16px',
+          }}
+        >
+          <Body1 style={{ fontWeight: tokens.fontWeightSemibold, color: tokens.colorPaletteRedForeground1 }}>
+            Danger Zone
+          </Body1>
+        </div>
+
+        <div
+          style={{
+            padding: '16px',
+            display: 'flex',
+            alignItems: 'flex-start',
+            justifyContent: 'space-between',
+            gap: '16px',
+            borderBottom: `1px solid var(--border)`,
+          }}
+        >
+          <div>
+            <Body1 style={{ display: 'block', fontWeight: tokens.fontWeightSemibold }}>
+              Remove project from Squadboard
+            </Body1>
+            <Caption1 style={{ display: 'block', color: tokens.colorNeutralForeground3, marginTop: '4px' }}>
+              Removes this project's metadata from Squadboard. Your files at{' '}
+              <code style={{ fontFamily: tokens.fontFamilyMonospace }}>{squadPath}</code>{' '}
+              will <strong>not</strong> be touched.
+            </Caption1>
+          </div>
+          <Button
+            appearance="outline"
+            style={{
+              flexShrink: 0,
+              borderColor: tokens.colorPaletteRedBorderActive,
+              color: tokens.colorPaletteRedForeground1,
+            }}
+            onClick={() => { setError(null); setConfirmOpen(true) }}
+          >
+            Delete project...
+          </Button>
+        </div>
+
+        <div style={{ padding: '12px 16px' }}>
+          <Checkbox
+            checked={deleteFolder}
+            onChange={(_, data) => setDeleteFolder(Boolean(data.checked))}
+            label={
+              <div>
+                <Body1
+                  style={{
+                    display: 'block',
+                    fontWeight: tokens.fontWeightSemibold,
+                    color: tokens.colorPaletteRedForeground1,
+                  }}
+                >
+                  Also permanently delete the folder on disk
+                </Body1>
+                <Caption1 style={{ display: 'block', color: tokens.colorNeutralForeground3, marginTop: '2px' }}>
+                  Warning: irreversible. The entire directory at{' '}
+                  <code style={{ fontFamily: tokens.fontFamilyMonospace }}>{projectFolderPath}</code>{' '}
+                  and all its contents will be permanently removed from disk. This cannot be undone.
+                </Caption1>
+              </div>
+            }
+          />
+        </div>
+      </div>
+
+      <Dialog open={confirmOpen} onOpenChange={(_, d) => { if (!d.open && !isPending) setConfirmOpen(false) }}>
+        <DialogSurface style={{ maxWidth: 480 }}>
+          <DialogBody>
+            <DialogTitle>
+              {deleteFolder ? 'Permanently delete project and folder?' : 'Remove project from Squadboard?'}
+            </DialogTitle>
+            <DialogContent style={{ display: 'flex', flexDirection: 'column', gap: tokens.spacingVerticalM }}>
+              {deleteFolder ? (
+                <>
+                  <Body1>
+                    This will remove <strong>{project.name}</strong> from Squadboard and{' '}
+                    <strong>permanently delete</strong> the folder at:
+                  </Body1>
+                  <code
+                    style={{
+                      display: 'block',
+                      fontFamily: tokens.fontFamilyMonospace,
+                      color: tokens.colorPaletteRedForeground1,
+                      background: tokens.colorPaletteRedBackground2,
+                      border: `1px solid ${tokens.colorPaletteRedBorderActive}`,
+                      borderRadius: '4px',
+                      padding: '6px 10px',
+                      wordBreak: 'break-all',
+                    }}
+                  >
+                    {projectFolderPath}
+                  </code>
+                  <Body1
+                    style={{
+                      color: tokens.colorPaletteRedForeground1,
+                      fontWeight: tokens.fontWeightSemibold,
+                    }}
+                  >
+                    This action is irreversible. All files in that directory will be gone.
+                  </Body1>
+                </>
+              ) : (
+                <>
+                  <Body1>
+                    This will remove <strong>{project.name}</strong> from Squadboard.
+                  </Body1>
+                  <Body1>
+                    Your files at{' '}
+                    <code style={{ fontFamily: tokens.fontFamilyMonospace }}>{squadPath}</code>{' '}
+                    will not be touched. You can re-add this project later from the project picker using its squad path.
+                  </Body1>
+                </>
+              )}
+              {error && (
+                <Caption1 style={{ color: tokens.colorPaletteRedForeground1 }}>{error}</Caption1>
+              )}
+            </DialogContent>
+            <DialogActions>
+              <Button
+                appearance="secondary"
+                onClick={() => setConfirmOpen(false)}
+                disabled={isPending}
+              >
+                Cancel
+              </Button>
+              <Button
+                appearance="primary"
+                style={{ background: '#da3633', borderColor: '#da3633' }}
+                disabled={isPending}
+                onClick={handleConfirm}
+              >
+                {isPending
+                  ? 'Deleting...'
+                  : deleteFolder
+                    ? 'Delete project and folder'
+                    : 'Remove from Squadboard'}
+              </Button>
+            </DialogActions>
+          </DialogBody>
+        </DialogSurface>
+      </Dialog>
+    </div>
+  )
+}
+
+function displayProjectFolderPath(squadPath: string): string {
+  if (squadPath === '.squad') return '.'
+  if (squadPath === '/.squad') return '/'
+  if (squadPath.endsWith('/.squad')) return squadPath.slice(0, -'/.squad'.length) || '/'
+  if (squadPath.endsWith('\\.squad')) return squadPath.slice(0, -'\\.squad'.length)
+  return squadPath
+}
+
 export default function Settings() {
   const { id: projectId = '' } = useParams<{ id: string }>()
   const { data: project, isLoading, isError } = useProject(projectId)
@@ -631,15 +830,15 @@ export default function Settings() {
     return <div style={{ padding: '32px', color: 'var(--danger)' }}>Failed to load project.</div>
   }
 
-  const navItemStyle = (active: boolean): React.CSSProperties => ({
+  const navItemStyle = (active: boolean, isDanger = false): React.CSSProperties => ({
     display: 'flex',
     alignItems: 'center',
     gap: '8px',
     padding: '7px 12px',
     borderRadius: '6px',
     cursor: 'pointer',
-    background: active ? 'rgba(56,139,253,0.1)' : 'transparent',
-    color: active ? 'var(--text)' : 'var(--text-muted)',
+    background: active ? (isDanger ? 'rgba(218,54,51,0.1)' : 'rgba(56,139,253,0.1)') : 'transparent',
+    color: isDanger ? tokens.colorPaletteRedForeground1 : (active ? 'var(--text)' : 'var(--text-muted)'),
     fontWeight: active ? tokens.fontWeightMedium : tokens.fontWeightRegular,
     fontSize: '13px',
     border: 'none',
@@ -675,7 +874,7 @@ export default function Settings() {
             <button
               key={s.id}
               onClick={() => setActiveSection(s.id)}
-              style={navItemStyle(activeSection === s.id)}
+              style={navItemStyle(activeSection === s.id, s.id === 'danger')}
             >
               <span>{s.icon}</span>
               {s.label}
@@ -793,6 +992,16 @@ export default function Settings() {
                 sub="Recent GitHub events (pushes, PRs, issues, workflow runs) linked to this project."
               />
               <GitHubActivityFeed projectId={projectId} />
+            </>
+          )}
+
+          {activeSection === 'danger' && (
+            <>
+              <SectionHeader
+                title="Danger Zone"
+                sub="Destructive actions. These cannot be undone; read carefully before proceeding."
+              />
+              <DangerZoneSection project={project} />
             </>
           )}
         </div>
