@@ -138,9 +138,13 @@ function normalizeStepShape(step: unknown): unknown {
 }
 
 function normalizeWorkflowDocument(doc: Record<string, unknown>): Record<string, unknown> {
-  if (doc['apiVersion'] === 'squad.io/v1' && doc['kind'] === 'Ceremony' && isRecord(doc['spec'])) {
+  // Detect canonical squad.io/v1 Ceremony format by apiVersion + kind alone.
+  // Do NOT gate on isRecord(spec): if the client emits `spec:` with no children
+  // js-yaml parses spec as null, which would fall through to the legacy path and
+  // produce "'name' is required" + "'steps' is required" errors simultaneously.
+  if (doc['apiVersion'] === 'squad.io/v1' && doc['kind'] === 'Ceremony') {
     const metadata = isRecord(doc['metadata']) ? doc['metadata'] : {};
-    const spec = doc['spec'];
+    const spec: Record<string, unknown> = isRecord(doc['spec']) ? doc['spec'] : {};
     return {
       name: metadata['displayName'] ?? metadata['name'],
       description: metadata['description'],

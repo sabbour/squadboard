@@ -249,3 +249,18 @@ Learning: browser-local UI preferences belong in `packages/client/src/utils/user
 
 - `packages/client/src/components/settings/SquadSyncStatusPanel.tsx`: dry-run `unchanged` / `already_up_to_date` rows are no-op evidence, not preview detail. Hide those paths and summarize the count so meaningful `would-apply` / `failed` changes stay prominent.
 - `packages/client/src/components/settings/__tests__/SquadSyncStatusPanel.test.tsx`: for DB-backed projects without a live filesystem mirror, assert against provider/env-var jargon at the panel level and describe Preview Export as an explicit filesystem handoff.
+
+---
+
+## Built-in ceremony Validate fix — 2026-05-20
+
+**Bug:** Clicking Validate on the built-in "Work Pickup" ceremony returned 2 simultaneous errors — `'name' is required and must be a string` AND `'steps' is required and must be a non-empty array`.
+
+**Root cause:** `normalizeWorkflowDocument` in `workflow-parser.ts` gated the canonical detection on `isRecord(doc['spec'])`. If the client ever emits `spec:` with no child content (js-yaml parses that as `spec: null`), the condition fails and the legacy path is taken. The legacy path finds no top-level `name` or `steps` keys (those are under `metadata` and `spec` in canonical YAML), so BOTH errors fire simultaneously.
+
+**Fix:** Removed `&& isRecord(doc['spec'])` from the canonical detection condition. The canonical branch is now triggered solely by `apiVersion === 'squad.io/v1' && kind === 'Ceremony'`. `spec` defaults to `{}` if it is not a record, so name is extracted from `metadata.displayName` (which always passes) and steps correctly resolves to missing/empty.
+
+**Learnings:**
+- When a canonical document format has `apiVersion/kind` discriminators, canonical detection should be based on those alone — not on nested fields that could be null.
+- A guard like `isRecord(spec)` seems safe but creates a hidden fallthrough: canonical YAML with a null/missing `spec` silently becomes legacy YAML, and BOTH top-level fields fail because neither `name` nor `steps` exist at the legacy flat level.
+- Always add an edge-case test for `spec: null` (empty mapping block) when any nested field is part of a conditional canonical-detection path.
