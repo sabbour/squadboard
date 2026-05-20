@@ -1,5 +1,17 @@
 const BASE = import.meta.env.VITE_API_URL ?? ''
 
+/**
+ * Build a user-facing message for a non-JSON (e.g. HTML 500) error response.
+ * Raw body is logged to the console for debugging but never surfaced in the UI.
+ */
+function nonJsonErrorMessage(status: number, ct: string, rawBody: string): string {
+  console.error(`[apiFetch] non-JSON error response (${status}, ${ct || 'no content-type'}):`, rawBody)
+  if (status >= 500) {
+    return `Server error (${status}) — the operation failed. Please try again or check the server logs.`
+  }
+  return `Request failed (${status}) — unexpected server response. Please try again.`
+}
+
 export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`${BASE}${path}`, {
     headers: { 'Content-Type': 'application/json', ...init?.headers },
@@ -9,11 +21,7 @@ export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> 
     const ct = res.headers.get('content-type') || ''
     const body = await res.text()
     if (!ct.toLowerCase().includes('application/json')) {
-      throw new Error(
-        `API ${res.status}: expected JSON but got ${ct || 'unknown content-type'}. ` +
-        `The endpoint may not exist or the server needs a restart. ` +
-        `First 200 chars: ${body.slice(0, 200)}`
-      )
+      throw new Error(nonJsonErrorMessage(res.status, ct, body))
     }
     // Extract the `error` string from { error: "..." } response bodies so
     // callers see a clean message rather than the raw JSON envelope.
@@ -38,11 +46,7 @@ export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> 
   if (!text) return null as unknown as T
   const ct = res.headers.get('content-type') || ''
   if (!ct.toLowerCase().includes('application/json')) {
-    throw new Error(
-      `API ${res.status}: expected JSON but got ${ct || 'unknown content-type'}. ` +
-      `The endpoint may not exist or the server needs a restart. ` +
-      `First 200 chars: ${text.slice(0, 200)}`
-    )
+    throw new Error(nonJsonErrorMessage(res.status, ct, text))
   }
   return JSON.parse(text) as T
 }

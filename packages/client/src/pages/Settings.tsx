@@ -622,6 +622,20 @@ function PortabilitySection({ projectId, projectName }: { projectId: string; pro
   )
 }
 
+/**
+ * Strips HTML tags and collapses whitespace from an error message so that a
+ * backend 500 HTML page (or any other raw markup) never reaches the modal UI.
+ * Structured JSON error messages from apiFetch are already clean, so this is
+ * purely a safety-net for unexpected responses.
+ */
+function sanitizeApiError(e: unknown): string {
+  const raw = e instanceof Error ? e.message : String(e)
+  // If there are no angle brackets the message is already plain text.
+  if (!raw.includes('<')) return raw
+  const stripped = raw.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim()
+  return stripped || 'Delete failed — an unexpected error occurred.'
+}
+
 function DangerZoneSection({ project }: { project: Project }) {
   const [deleteFolder, setDeleteFolder] = useState(false)
   const [confirmOpen, setConfirmOpen] = useState(false)
@@ -644,7 +658,10 @@ function DangerZoneSection({ project }: { project: Project }) {
           }
           navigate('/')
         },
-        onError: (e) => setError(e instanceof Error ? e.message : 'Delete failed'),
+        onError: (e) => {
+          console.error('[DangerZone] delete project error:', e)
+          setError(sanitizeApiError(e))
+        },
       },
     )
   }

@@ -6,6 +6,7 @@ import {
   getPglite,
   PGLITE_SENTINEL,
   createPoolAdapter,
+  restartPglite,
   type PoolLike,
 } from './pglite.js';
 import { initMigrationLog, applyMigrations } from './migrations.js';
@@ -52,10 +53,25 @@ export async function initDb(connectionOrSentinel: string): Promise<void> {
   if (!_pool) throw new Error('Pool not initialised');
   await initMigrationLog(_pool);
 
+  if (connectionOrSentinel === PGLITE_SENTINEL) {
+    await repairPgliteIssueRunEventsIndexCatalog(_pool);
+    await repairPgliteWorkflowVersionIndexes(_pool);
+  }
+
   // Ensure the current inline base schema exists before historical SQL migrations run.
   // The migration files are additive snapshots from later waves and reference core
   // tables such as issue_runs, so a clean PGlite database must be bootstrapped first.
-  await bootstrapSchema();
+  try {
+    await bootstrapSchema();
+  } catch (err) {
+    if (connectionOrSentinel !== PGLITE_SENTINEL || !isPgliteCatalogCorruptionError(err)) {
+      throw err;
+    }
+    console.warn(
+      '[db] PGlite catalog corruption prevented schema bootstrap; continuing with existing catalog:',
+      err,
+    );
+  }
 
   // Apply migrations unless SKIP_BOOTSTRAP_DDL is set.
   if (process.env.SKIP_BOOTSTRAP_DDL !== '1') {
@@ -155,6 +171,266 @@ export async function repairPgliteIssueRunEventsFkCatalog(pool: PoolLike): Promi
     `[db] repaired PGlite issue_run_events FK catalog (${triggerOids.length} trigger${triggerOids.length === 1 ? '' : 's'})`,
   );
   return triggerOids.length;
+}
+
+const ISSUE_RUN_EVENTS_INDEX_NAMES = [
+  'issue_run_events_pkey',
+  'issue_run_events_run_seq_uniq',
+  'issue_run_events_run_created_idx',
+  'issue_run_events_run_seq_idx',
+] as const;
+
+const ISSUE_RUN_EVENTS_UNIQUE_CONSTRAINT_NAMES = [
+  'issue_run_events_pkey',
+  'issue_run_events_run_seq_uniq',
+] as const;
+
+const WORKFLOW_VERSION_INDEX_NAMES = [
+  'workflow_versions_pkey',
+  'workflow_versions_workflow_version_unique',
+] as const;
+
+function sqlStringList(values: readonly string[]): string {
+  return values.map((value) => `'${value.replaceAll("'", "''")}'`).join(', ');
+}
+
+function sqlNumberList(values: readonly number[]): string {
+  return values.join(', ');
+}
+
+/**
+ * Returns true for PGlite catalog/index corruption errors that can be repaired
+ * by rebuilding known local indexes.
+ */
+export function isPgliteCatalogCorruptionError(err: unknown): boolean {
+  return (
+    err instanceof Error &&
+    (/could not open relation with OID/i.test(err.message) ||
+      /cache lookup failed for (relation|index|constraint) /i.test(err.message) ||
+      /cache lookup failed for attribute/i.test(err.message) ||
+      /heap tid from index tuple/i.test(err.message) ||
+      /pg_attribute catalog is missing/i.test(err.message))
+  );
+}
+
+/**
+ * Repairs a PGlite catalog corruption observed in local dogfood data where the
+ * issue_run_events indexes still have catalog entries, but opening the relation
+ * fails with "could not open relation with OID 66346". The regular REINDEX path
+ * cannot run in that state ("cache lookup failed for relation 66346"), so this
+ * removes only the known broken issue_run_events index/constraint catalog rows,
+ * reopens PGlite to clear syscache state, and recreates those indexes.
+ */
+export async function repairPgliteIssueRunEventsIndexCatalog(pool: PoolLike): Promise<number> {
+  const table = await pool.query<{ issueRunEvents: string | null }>(`
+    SELECT to_regclass('public.issue_run_events')::text AS "issueRunEvents"
+  `);
+  if (!table.rows[0]?.issueRunEvents) return 0;
+
+  try {
+    await pool.query('SELECT COUNT(*)::int AS count FROM issue_run_events');
+    return 0;
+  } catch (err) {
+    if (!isPgliteCatalogCorruptionError(err)) {
+      throw err;
+    }
+  }
+
+  const indexNamesSql = sqlStringList(ISSUE_RUN_EVENTS_INDEX_NAMES);
+  const constraintNamesSql = sqlStringList(ISSUE_RUN_EVENTS_UNIQUE_CONSTRAINT_NAMES);
+
+  const indexRows = await pool.query<{ oid: number }>(`
+    SELECT oid::int AS oid
+    FROM pg_class
+    WHERE relkind = 'i'
+      AND relname IN (${indexNamesSql})
+  `);
+
+  const constraintRows = await pool.query<{ oid: number; conindid: number }>(`
+    SELECT oid::int AS oid, conindid::int AS conindid
+    FROM pg_constraint
+    WHERE conrelid = 'issue_run_events'::regclass
+      AND contype IN ('p', 'u')
+      AND conname IN (${constraintNamesSql})
+  `);
+
+  const indexOids = new Set<number>();
+  for (const row of indexRows.rows) {
+    const oid = Number(row.oid);
+    if (Number.isInteger(oid) && oid > 0) indexOids.add(oid);
+  }
+  for (const row of constraintRows.rows) {
+    const oid = Number(row.conindid);
+    if (Number.isInteger(oid) && oid > 0) indexOids.add(oid);
+  }
+
+  const constraintOids = constraintRows.rows
+    .map((row) => Number(row.oid))
+    .filter((oid) => Number.isInteger(oid) && oid > 0);
+
+  const indexOidList = [...indexOids];
+  const allCatalogOids = [...new Set([...indexOidList, ...constraintOids])];
+  if (indexOidList.length === 0 && constraintOids.length === 0) return 0;
+
+  const allCatalogOidsSql = sqlNumberList(allCatalogOids);
+  await pool.query(`
+    DELETE FROM pg_depend
+    WHERE objid::int IN (${allCatalogOidsSql})
+       OR refobjid::int IN (${allCatalogOidsSql})
+  `);
+
+  if (constraintOids.length > 0) {
+    await pool.query(`
+      DELETE FROM pg_constraint
+      WHERE oid::int IN (${sqlNumberList(constraintOids)})
+    `);
+  }
+
+  if (indexOidList.length > 0) {
+    const indexOidsSql = sqlNumberList(indexOidList);
+    await pool.query(`DELETE FROM pg_index WHERE indexrelid::int IN (${indexOidsSql})`);
+    await pool.query(`DELETE FROM pg_attribute WHERE attrelid::int IN (${indexOidsSql})`);
+    await pool.query(`DELETE FROM pg_class WHERE oid::int IN (${indexOidsSql})`);
+  }
+
+  const reopened = await reopenPgliteConnection();
+  if (!reopened || !_pool) {
+    throw new Error('[db] failed to reopen PGlite after issue_run_events index catalog repair');
+  }
+
+  await _pool.query(`
+    ALTER TABLE issue_run_events
+    ADD CONSTRAINT issue_run_events_pkey PRIMARY KEY (id)
+  `);
+  await _pool.query(`
+    ALTER TABLE issue_run_events
+    ADD CONSTRAINT issue_run_events_run_seq_uniq UNIQUE (run_id, seq)
+  `);
+  await _pool.query(`
+    CREATE INDEX IF NOT EXISTS issue_run_events_run_seq_idx
+    ON issue_run_events (run_id, seq ASC)
+  `);
+  await _pool.query(`
+    CREATE INDEX IF NOT EXISTS issue_run_events_run_created_idx
+    ON issue_run_events (run_id, created_at)
+  `);
+
+  console.warn(
+    `[db] repaired PGlite issue_run_events index catalog (${indexOidList.length} index${indexOidList.length === 1 ? '' : 'es'})`,
+  );
+  return indexOidList.length;
+}
+
+/**
+ * Repairs corrupt workflow_versions indexes seen in local PGlite data. Unlike
+ * issue_run_events, normal REINDEX works here and preserves all ceremony rows.
+ */
+export async function repairPgliteWorkflowVersionIndexes(pool: PoolLike): Promise<number> {
+  const indexNamesSql = sqlStringList(WORKFLOW_VERSION_INDEX_NAMES);
+  const indexes = await pool.query<{ relname: string }>(`
+    SELECT relname
+    FROM pg_class
+    WHERE relkind = 'i'
+      AND relname IN (${indexNamesSql})
+    ORDER BY relname
+  `);
+
+  let repaired = 0;
+  for (const row of indexes.rows) {
+    const relname = WORKFLOW_VERSION_INDEX_NAMES.find((name) => name === row.relname);
+    if (!relname) continue;
+    await pool.query(`REINDEX INDEX ${relname}`);
+    repaired++;
+  }
+
+  if (repaired > 0) {
+    console.warn(
+      `[db] reindexed PGlite workflow_versions indexes (${repaired} index${repaired === 1 ? '' : 'es'})`,
+    );
+  }
+  return repaired;
+}
+
+// ---------------------------------------------------------------------------
+// PGlite stale-OID retry — runtime recovery for "could not open relation with OID"
+// ---------------------------------------------------------------------------
+
+/**
+ * Returns true when the error is a PGlite stale-relation-OID failure.
+ *
+ * PGlite's extended query protocol caches prepared statement plans. When a
+ * migration drops and recreates a table the new relation gets a fresh OID in
+ * pg_class, but an older cached plan still references the previous OID. The
+ * next parameterised query (Drizzle always parameterises) fails with:
+ *   "could not open relation with OID NNNNN"
+ *
+ * The first recovery step is to DEALLOCATE ALL prepared statements so the next
+ * query is re-planned against the current catalog. Some PGlite faults survive
+ * that because the connection has already loaded stale catalog/syscache state;
+ * those require reopening the in-process PGlite connection.
+ */
+function isStaleOidError(err: unknown): boolean {
+  return err instanceof Error && /could not open relation with OID/i.test(err.message);
+}
+
+/**
+ * Clears PGlite's prepared-statement cache (DEALLOCATE ALL) so the next query
+ * recompiles against the current pg_class. No-op in external-Postgres mode.
+ */
+async function discardPgliteStatementCache(): Promise<void> {
+  if (!getPglite() || !_pool) return;
+  try {
+    await _pool.query('DEALLOCATE ALL');
+  } catch (discardErr) {
+    console.warn('[db] DEALLOCATE ALL failed during stale-OID recovery (non-fatal):', discardErr);
+  }
+}
+
+async function reopenPgliteConnection(): Promise<boolean> {
+  const pglite = await restartPglite();
+  if (!pglite) return false;
+
+  _db = drizzlePglite(pglite, { schema });
+  _pool = createPoolAdapter(pglite);
+  await repairPgliteIssueRunEventsFkCatalog(_pool);
+  return true;
+}
+
+/**
+ * Executes `fn`. On a PGlite stale-OID error it clears the prepared-statement
+ * cache and retries. If the retry still sees the same stale-OID failure, it
+ * reopens the PGlite connection and retries once more. In external-Postgres
+ * mode the error is re-thrown immediately.
+ *
+ * Callers must catch any error thrown by the retry — the retry result is
+ * returned directly, so a second OID error propagates to the caller.
+ *
+ * Usage:
+ *   const rows = await withPgliteOidRetry(() =>
+ *     db.select().from(schema.projects).where(eq(schema.projects.id, id))
+ *   );
+ */
+export async function withPgliteOidRetry<T>(fn: () => Promise<T>): Promise<T> {
+  try {
+    return await fn();
+  } catch (err) {
+    if (!isStaleOidError(err) || !getPglite()) {
+      throw err;
+    }
+    console.warn('[db] stale-OID detected — clearing prepared statements and retrying');
+    await discardPgliteStatementCache();
+    try {
+      return await fn();
+    } catch (retryErr) {
+      if (!isStaleOidError(retryErr) || !getPglite()) {
+        throw retryErr;
+      }
+      console.warn('[db] stale-OID persisted after DEALLOCATE ALL — reopening PGlite connection');
+      const reopened = await reopenPgliteConnection();
+      if (!reopened) throw retryErr;
+      return fn();
+    }
+  }
 }
 
 /**

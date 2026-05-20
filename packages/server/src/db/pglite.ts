@@ -147,6 +147,40 @@ export async function startPglite(): Promise<string> {
 }
 
 /**
+ * Reopen the in-process PGlite engine against the same persistent data dir.
+ *
+ * This is intentionally narrower than full database initialisation: callers in
+ * db/index.ts rebind Drizzle/pool handles after reopening. Use this for runtime
+ * recovery from connection-local PGlite cache/catalog faults only.
+ */
+export async function restartPglite(): Promise<PGlite | null> {
+  if (process.env['DATABASE_URL']) return null;
+
+  if (_pglite) {
+    let timeout: ReturnType<typeof setTimeout> | undefined;
+    try {
+      await Promise.race([
+        _pglite.close(),
+        new Promise<never>((_, reject) => {
+          timeout = setTimeout(() => reject(new Error('PGlite close timed out')), 3000);
+        }),
+      ]);
+    } catch (err) {
+      console.warn('[pglite] close during restart did not complete; reopening anyway:', err);
+    } finally {
+      if (timeout) clearTimeout(timeout);
+    }
+    _pglite = null;
+  }
+
+  console.warn('[pglite] reopening WASM Postgres connection');
+  mkdirSync(PGLITE_DATA_DIR, { recursive: true });
+  _pglite = new PGlite(PGLITE_DATA_DIR);
+  await _pglite.waitReady;
+  return _pglite;
+}
+
+/**
  * @deprecated kept for backward compatibility with call sites that imported
  * startEmbeddedPostgres(). Delegates to startPglite().
  */

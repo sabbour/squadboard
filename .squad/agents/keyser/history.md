@@ -210,3 +210,21 @@ After Kujan rejected final release sign-off for an unsafe public maturity label,
 ## Cross-surface sync status UI — 2026-05-19T21:58:16.699-07:00
 
 Implemented Settings → Team Sync as the project-level status surface for Squadboard ↔ CLI/Copilot interchangeability. Lesson: Hockney's route returns both a product API envelope (`authority`, `drift`, `repair.actions`) and legacy/SDK contract concepts, so the frontend panel should normalize evidence before rendering rather than bind copy directly to one backend shape.
+
+---
+
+## W30 — Delete Error UX (2026-05-19T23:37:54.700-07:00)
+
+**Problem:** Danger Zone delete modal displayed raw HTML/stack fragments from a backend 500 (`text/html` response) inside the `<Caption1>` error label — the full `First 200 chars: <!DOCTYPE html>...` string leaked into the UI.
+
+**Root cause:** `apiFetch` included the raw response body (up to 200 chars) in the thrown `Error.message` for non-JSON responses. `DangerZoneSection.onError` passed `e.message` directly to `setError`, which rendered it verbatim.
+
+**Fix:**
+1. `packages/client/src/api/client.ts` — extracted `nonJsonErrorMessage()` helper: logs raw body to `console.error`, throws a clean human message ("Server error (500) — …" or "Request failed (N) — …"). Structured JSON error path unchanged.
+2. `packages/client/src/pages/Settings.tsx` — added `sanitizeApiError()` safety-net helper that strips HTML tags if any ever leak through; wired `console.error` into `onError` so full context is still visible in devtools.
+3. Added 7-test regression file at `packages/client/src/api/__tests__/apiFetch.errors.test.ts`. All pass; typecheck clean.
+
+**Learnings:**
+- Never include raw response bodies in user-facing Error messages — log them, don't surface them.
+- Defence in depth: fix at the API layer AND add a sanitization safety net at the render layer.
+- `vi.stubGlobal('fetch', mock)` is the idiomatic way to mock `fetch` in Vitest (no `global.fetch` assignment needed — avoids TS errors under strict mode).

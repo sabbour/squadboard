@@ -4,7 +4,13 @@ import { eq } from 'drizzle-orm';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { getDb, schema } from '../db/index.js';
+import {
+  getDb,
+  getPool,
+  isPgliteCatalogCorruptionError,
+  schema,
+  withPgliteOidRetry,
+} from '../db/index.js';
 import { createProject } from '../services/project-init.js';
 import { suggestProjectSetup } from '../services/setup-lifecycle.js';
 
@@ -213,17 +219,68 @@ async function resolveSafeFolderPath(
   return { ok: true, path: folderPath };
 }
 
+async function deleteProjectMetadataWithPgliteTriggerBypass(projectId: string): Promise<void> {
+  const pool = getPool();
+  let replicationRoleChanged = false;
+
+  await pool.query('BEGIN');
+  try {
+    await pool.query('DELETE FROM settings WHERE project_id::text = $1', [projectId]);
+    await pool.query('SET session_replication_role = replica');
+    replicationRoleChanged = true;
+    const result = await pool.query('DELETE FROM projects WHERE id::text = $1', [projectId]);
+    if ((result.rowCount ?? 0) === 0) {
+      throw new Error('Project not found during PGlite trigger-bypass deletion');
+    }
+    await pool.query('SET session_replication_role = origin');
+    replicationRoleChanged = false;
+    await pool.query('COMMIT');
+  } catch (err) {
+    if (replicationRoleChanged) {
+      try {
+        await pool.query('SET session_replication_role = origin');
+      } catch (resetErr) {
+        console.error('[projects] failed to restore session_replication_role:', resetErr);
+      }
+    }
+    try {
+      await pool.query('ROLLBACK');
+    } catch (rollbackErr) {
+      console.error('[projects] failed to roll back trigger-bypass project delete:', rollbackErr);
+    }
+    throw err;
+  }
+}
+
 router.delete('/:id', async (req: Request, res: Response) => {
   const deleteFolder = (req.body as { deleteFolder?: unknown })?.deleteFolder === true;
 
-  const db = getDb();
-
   // Fetch the row first — we need the path for the optional folder delete
   // and to return a 404 before touching anything.
-  const [project] = await db
-    .select()
-    .from(schema.projects)
-    .where(eq(schema.projects.id, req.params.id as string));
+  //
+  // withPgliteOidRetry handles transient PGlite stale-OID failures by clearing
+  // prepared statements and, if needed, reopening the PGlite connection.
+  let project: typeof schema.projects.$inferSelect | undefined;
+  try {
+    const rows = await withPgliteOidRetry(() => {
+      const db = getDb();
+      return db
+        .select()
+        .from(schema.projects)
+        .where(eq(schema.projects.id, req.params.id as string));
+    });
+    project = rows[0];
+    if (!project) {
+      const db = getDb();
+      const allProjects = await db.select().from(schema.projects);
+      project = allProjects.find((candidate) => candidate.id === req.params.id);
+    }
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error('[projects] DELETE lookup failed:', msg);
+    res.status(500).json({ ok: false, error: `Database error during project lookup: ${msg}` });
+    return;
+  }
 
   if (!project) {
     res.status(404).json({ ok: false, error: 'Project not found' });
@@ -242,11 +299,56 @@ router.delete('/:id', async (req: Request, res: Response) => {
     resolvedFolderPath = guard.path;
   }
 
-  // Delete project-scoped settings first (no CASCADE on this FK).
-  await db.delete(schema.settings).where(eq(schema.settings.projectId, project.id));
+  // Delete project-scoped settings first (no CASCADE on this FK), then the
+  // project row (all other child tables carry CASCADE).
+  // Same stale-OID retry guard covers both deletes as a single atomic unit.
+  const projectToDelete = project;
+  try {
+    await withPgliteOidRetry(async () => {
+      const db = getDb();
+      await db.delete(schema.settings).where(eq(schema.settings.projectId, projectToDelete.id));
+      await db.delete(schema.projects).where(eq(schema.projects.id, projectToDelete.id));
+    });
+  } catch (err) {
+    if (isPgliteCatalogCorruptionError(err)) {
+      try {
+        console.warn(
+          '[projects] DELETE native cascade hit PGlite catalog corruption; using metadata-only trigger bypass',
+          err,
+        );
+        await deleteProjectMetadataWithPgliteTriggerBypass(projectToDelete.id);
+      } catch (fallbackErr) {
+        const msg = fallbackErr instanceof Error ? fallbackErr.message : String(fallbackErr);
+        console.error('[projects] DELETE trigger-bypass fallback failed:', msg);
+        res
+          .status(500)
+          .json({ ok: false, error: `Database error during project deletion fallback: ${msg}` });
+        return;
+      }
+    } else {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error('[projects] DELETE mutation failed:', msg);
+      res.status(500).json({ ok: false, error: `Database error during project deletion: ${msg}` });
+      return;
+    }
+  }
 
-  // Delete the project row (all other child tables carry CASCADE).
-  await db.delete(schema.projects).where(eq(schema.projects.id, project.id));
+  const remainingProjects = await getDb().select().from(schema.projects);
+  if (remainingProjects.some((candidate) => candidate.id === projectToDelete.id)) {
+    try {
+      console.warn(
+        '[projects] DELETE native path returned without removing the row; using metadata-only trigger bypass',
+      );
+      await deleteProjectMetadataWithPgliteTriggerBypass(projectToDelete.id);
+    } catch (fallbackErr) {
+      const msg = fallbackErr instanceof Error ? fallbackErr.message : String(fallbackErr);
+      console.error('[projects] DELETE trigger-bypass fallback failed:', msg);
+      res
+        .status(500)
+        .json({ ok: false, error: `Database error during project deletion fallback: ${msg}` });
+      return;
+    }
+  }
 
   // Optionally remove the folder from disk — only after metadata is gone.
   let folderDeleted: string | false = false;

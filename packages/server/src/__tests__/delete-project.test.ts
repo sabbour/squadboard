@@ -54,34 +54,55 @@ type ProjectRow = { id: string; path: string; name: string } | null;
 let projectRow: ProjectRow = null;
 let settingsDeleteWhere: unknown = null;
 let projectDeleteWhere: unknown = null;
+let selectError: Error | null = null;
+let settingsDeleteError: Error | null = null;
+
+// When set, the mock's withPgliteOidRetry will simulate the stale-OID path:
+// the first call to fn() throws a stale-OID error, DEALLOCATE is recorded,
+// and the retry (second call) uses the normal mock response.
+let simulateOidRetry = false;
+let oidRetryDeallocateCalled = false;
+// Tracks whether the one-shot OID error for the recovery test has been thrown yet.
+// Reset in beforeEach so each test starts clean.
+let _selectOidErrorConsumed = false;
 
 vi.mock('../db/index.js', () => {
   // settings delete chain
-  const settingsWhereImpl = vi.fn((w: unknown) => {
+  const settingsWhereImpl = vi.fn(async (w: unknown) => {
     settingsDeleteWhere = w;
-    return Promise.resolve([]);
+    if (settingsDeleteError) throw settingsDeleteError;
+    return [];
   });
-  const settingsDeleteImpl = vi.fn(() => ({ where: settingsWhereImpl }));
 
-  // projects delete chain (no .returning() needed anymore)
+  // projects delete chain
   const projectsWhereImpl = vi.fn((w: unknown) => {
     projectDeleteWhere = w;
+    projectRow = null;
     return Promise.resolve([]);
   });
-  const projectsDeleteImpl = vi.fn(() => ({ where: projectsWhereImpl }));
 
   // projects select chain
-  const selectWhereImpl = vi.fn(() => {
-    return Promise.resolve(projectRow ? [projectRow] : []);
+  const selectWhereImpl = vi.fn(async () => {
+    if (selectError) throw selectError;
+    // simulateOidRetry: throw exactly once (one-shot, tracked by _selectOidErrorConsumed).
+    // withPgliteOidRetry catches the OID error, marks oidRetryDeallocateCalled, and
+    // retries; the second call finds _selectOidErrorConsumed=true and returns normally.
+    if (simulateOidRetry && !_selectOidErrorConsumed) {
+      _selectOidErrorConsumed = true;
+      throw new Error('could not open relation with OID 66346');
+    }
+    return projectRow ? [projectRow] : [];
   });
-  const selectFromImpl = vi.fn(() => ({ where: selectWhereImpl }));
+  const selectFromImpl = vi.fn(() => ({
+    where: selectWhereImpl,
+    then: (resolve: (value: unknown) => unknown, reject: (reason?: unknown) => unknown) =>
+      Promise.resolve(projectRow ? [projectRow] : []).then(resolve, reject),
+  }));
   const selectImpl = vi.fn(() => ({ from: selectFromImpl }));
 
   const mockDb = {
     select: selectImpl,
     delete: vi.fn((table: unknown) => {
-      // Route by table reference identity (schema.settings vs schema.projects).
-      // We distinguish by the table object passed.
       const t = table as { _isSettings?: boolean };
       if (t._isSettings) return { where: settingsWhereImpl };
       return { where: projectsWhereImpl };
@@ -90,10 +111,38 @@ vi.mock('../db/index.js', () => {
 
   return {
     getDb: vi.fn(() => mockDb),
+    getPool: vi.fn(() => ({
+      query: vi.fn(async () => ({ rows: [], rowCount: 1 })),
+    })),
+    isPgliteCatalogCorruptionError: vi.fn(
+      (err: unknown) => err instanceof Error && /could not open relation with OID/i.test(err.message),
+    ),
     schema: {
       projects: { id: 'id', _isSettings: false },
       settings: { projectId: 'projectId', _isSettings: true },
     },
+    /**
+     * withPgliteOidRetry mock:
+     *   - By default (simulateOidRetry=false): transparent — calls fn() once.
+     *   - When simulateOidRetry=true: implements the same stale-OID retry logic
+     *     as the real function so tests exercise the full recovery flow end-to-end
+     *     without needing a real PGlite instance.
+     */
+    withPgliteOidRetry: vi.fn(async (fn: () => Promise<unknown>) => {
+      try {
+        return await fn();
+      } catch (err) {
+        if (
+          simulateOidRetry &&
+          err instanceof Error &&
+          /could not open relation with OID/i.test(err.message)
+        ) {
+          oidRetryDeallocateCalled = true; // stands in for the real DEALLOCATE ALL
+          return fn();
+        }
+        throw err;
+      }
+    }),
   };
 });
 
@@ -177,6 +226,11 @@ beforeEach(() => {
   projectDeleteWhere = null;
   rmCalled = null;
   rmError = null;
+  selectError = null;
+  settingsDeleteError = null;
+  simulateOidRetry = false;
+  oidRetryDeallocateCalled = false;
+  _selectOidErrorConsumed = false;
 
   // Clear stat responses.
   for (const k of Object.keys(statResponses)) delete statResponses[k];
@@ -398,5 +452,63 @@ describe('DELETE /api/projects/:id — Danger Zone', () => {
     expect(settingsDeleteWhere).not.toBeNull();
     // projectDeleteWhere is set → projects.delete().where() was called
     expect(projectDeleteWhere).not.toBeNull();
+  });
+
+  // 12. DB select throws (e.g. PGlite stale OID) → JSON 500, not HTML
+  it('returns JSON 500 when the DB select throws (e.g. stale PGlite OID) and retry also fails', async () => {
+    // Both the first attempt AND the retry throw — no recovery possible.
+    selectError = new Error('could not open relation with OID 66346');
+
+    const { req, res, getStatus, getBody } = makeReqRes({ id: 'any-id' });
+    await deleteHandler(req, res);
+
+    expect(getStatus()).toBe(500);
+    const body = getBody() as Record<string, unknown>;
+    expect(body?.ok).toBe(false);
+    expect(String(body?.error)).toMatch(/database error/i);
+    expect(String(body?.error)).toMatch(/66346/);
+    // No filesystem mutation must occur.
+    expect(rmCalled).toBeNull();
+    expect(settingsDeleteWhere).toBeNull();
+    expect(projectDeleteWhere).toBeNull();
+  });
+
+  // 13. DB delete(settings) throws stale-OID mid-deletion → trigger-bypass fallback succeeds.
+  it('falls back to metadata-only trigger bypass when settings delete hits stale PGlite catalog state', async () => {
+    projectRow = { id: 'proj-db-err', path: '/projects/dberr/.squad', name: 'DBErr' };
+    settingsDeleteError = new Error('could not open relation with OID 99999');
+
+    const { req, res, getStatus, getBody } = makeReqRes({ id: 'proj-db-err' });
+    await deleteHandler(req, res);
+
+    expect(getStatus()).toBe(200);
+    const body = getBody() as Record<string, unknown>;
+    expect(body?.ok).toBe(true);
+    expect((body?.deleted as Record<string, unknown>)?.metadata).toBe(true);
+    expect((body?.deleted as Record<string, unknown>)?.folder).toBe(false);
+    expect(rmCalled).toBeNull();
+  });
+
+  // 14. RECOVERY: stale-OID on select → withPgliteOidRetry clears cache → retry succeeds → project deleted
+  it('recovers from stale-OID error on lookup — retries once and deletes project metadata', async () => {
+    projectRow = { id: 'proj-oid-recover', path: '/projects/oid-recover/.squad', name: 'OID Recover' };
+    // First call to db.select() throws "could not open relation with OID 66346".
+    // The withPgliteOidRetry mock simulates the DEALLOCATE ALL + retry, and the
+    // second call succeeds because simulateOidRetry resets the internal counter.
+    simulateOidRetry = true;
+
+    const { req, res, getStatus, getBody } = makeReqRes({ id: 'proj-oid-recover' });
+    await deleteHandler(req, res);
+
+    expect(getStatus()).toBe(200);
+    const body = getBody() as Record<string, unknown>;
+    expect(body?.ok).toBe(true);
+    expect((body?.deleted as Record<string, unknown>)?.metadata).toBe(true);
+    // Recovery path was exercised (DEALLOCATE ALL equivalent was called).
+    expect(oidRetryDeallocateCalled).toBe(true);
+    // Both settings and project rows were deleted.
+    expect(settingsDeleteWhere).not.toBeNull();
+    expect(projectDeleteWhere).not.toBeNull();
+    expect(rmCalled).toBeNull();
   });
 });

@@ -1,4 +1,4 @@
-import express from 'express';
+import express, { type Request, type Response, type NextFunction } from 'express';
 import { createServer } from 'node:http';
 import { existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
@@ -326,6 +326,21 @@ async function main(): Promise<void> {
   // SPA fallback so /mcp doesn't return index.html. Stdio path
   // (packages/server/src/mcp/index.ts) stays for Claude Desktop / Cursor.
   app.use('/mcp', createMcpHttpRouter());
+
+  // Global JSON error handler — registered after all routes, before the SPA
+  // fallback. Express v5 automatically forwards async route rejections here, so
+  // any unhandled DB error (e.g. PGlite stale OID "could not open relation with
+  // OID NNNNN") returns application/json instead of Express's default text/html.
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  app.use((err: unknown, _req: Request, res: Response, _next: NextFunction) => {
+    const status =
+      (err as { status?: number })?.status ??
+      (err as { statusCode?: number })?.statusCode ??
+      500;
+    const message = err instanceof Error ? err.message : 'Internal server error';
+    console.error('[squadboard] unhandled route error:', err);
+    res.status(status).json({ error: message });
+  });
 
   if (existsSync(CLIENT_DIST)) {
     app.use(express.static(CLIENT_DIST));

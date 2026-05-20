@@ -45,6 +45,56 @@ Every demo ships with a passing E2E test. Critical durability suites land in:
 
 <!-- Append learnings below -->
 
+### 2026-05-19T23:37:54.700-07:00 — Delete project stale-OID recovery regression (root cause)
+
+**Failure mode covered:** When `db.delete(schema.settings)` or `db.delete(schema.projects)` throws `could not open relation with OID NNNNN` (stale PGlite prepared-statement plan), `withPgliteOidRetry` must issue `DEALLOCATE ALL` and retry the entire mutation callback — not just return 500 JSON. The deletion must **succeed** on retry.
+
+**Prior round mistake:** First round of tests only proved that DB errors produce JSON 500 (not HTML). That's error formatting, not root-cause coverage. The real contract is: delete SUCCEEDS after one stale-OID error.
+
+**Implementation confirmed present:**
+- `packages/server/src/db/index.ts` exports `withPgliteOidRetry` — catches OID errors, calls `DEALLOCATE ALL`, retries once. In external-Postgres mode re-throws immediately.
+- DELETE handler wraps both select and mutation in `withPgliteOidRetry`.
+- `packages/server/src/__tests__/pglite-oid-retry.test.ts` — 6 unit tests for the wrapper (Hockney's). All pass.
+- `packages/server/src/__tests__/delete-project.test.ts` test 14 — SELECT path recovery (OID on select → retry → 200).
+
+**Critical gap confirmed and filled:**
+- **No test existed for MUTATION path recovery** (OID error on `db.delete(settings)` → DEALLOCATE → retry both deletes → 200). This is the actual screenshot bug path.
+
+**Tests I added (`delete-project-db-error.test.ts`, 6 tests, all green):**
+1. **Mutation OID first attempt → DEALLOCATE → retry → 200 OK + oidRetryDeallocateCalled=true** ← primary missing test
+2. Mutation OID recovery does not attempt filesystem deletion (safety)
+3. `db.delete(projects)` always-throws → 500 JSON no HTML (covers the second statement in the callback, not covered by Hockney's test 13 which only covers settings)
+4. Non-OID error (FK violation) is NOT retried → `oidRetryDeallocateCalled=false`
+5. Mock self-validation: transparent by default
+6. Mock self-validation: one-shot OID — second invocation succeeds without retry
+
+**Test design decision:** The `withPgliteOidRetry` mock uses the same contract as `delete-project.test.ts` — `simulateOidRetry` flag + `_mutationOidConsumed` one-shot flag. This means both test files share the same mock contract, making them independently verifiable.
+
+**Verdict:** Implementation satisfies delete success after stale-OID recovery. The three files (`pglite-oid-retry.test.ts`, `delete-project.test.ts`, `delete-project-db-error.test.ts`) together prove the full recovery contract at every layer.
+
+
+**Failure mode covered:** When Postgres/PGlite throws `could not open relation with OID 66346` during `DELETE /api/projects/:id`, an unguarded async route handler lets the error propagate to Express's default error handler, which responds with `500 text/html`. `apiFetch` detects non-JSON, builds an error whose message contains "First 200 chars: `<!DOCTYPE html>...`", and `setError(e.message)` in `DangerZoneSection` renders that raw HTML string verbatim in the modal's `<Caption1>`.
+
+**What Hockney and Keyser already fixed (confirmed by test runs):**
+- `packages/server/src/routes/projects.ts`: Two separate `try/catch` blocks — one around the select, one around the settings + project deletes — each returns `res.status(500).json({ ok: false, error: "Database error during ...: <msg>" })`.
+- `packages/server/src/index.ts`: 4-arg Express error middleware as a universal fallback.
+- `packages/client/src/api/client.ts`: `nonJsonErrorMessage()` logs raw body to `console.error`, returns a clean user-facing string ("Server error (500) — the operation failed. Please try again or check the server logs.").
+- `packages/client/src/pages/Settings.tsx`: `sanitizeApiError()` strips HTML tags as a belt-and-suspenders second layer.
+
+**Tests I added:**
+- `packages/server/src/__tests__/delete-project-db-error.test.ts` (4 tests) — dedicated file covering legs not in Hockney's additions to `delete-project.test.ts`:
+  1. `db.select()` throws → JSON 500 (overlaps Hockney test 12, adds `invoke()` propagation check)
+  2. `db.delete(settings)` throws → JSON 500 (overlaps Hockney test 13, same addition)
+  3. `db.delete(projects)` throws → JSON 500 (**unique** — no prior coverage for this leg)
+  4. JSON error field contains no raw HTML tags (**unique** assertion angle)
+
+**Tests I removed (redundant):**
+- Drafted `packages/client/src/__tests__/apiFetch-delete-error.test.ts` but removed it — Keyser's `src/api/__tests__/apiFetch.errors.test.ts` (7 tests) covers all client-side invariants already.
+
+**Key learning:** The `invoke()` wrapper pattern (catch any unhandled throw from `await handler(req, res)`, assert `handlerThrew === null`) is cleaner than checking `getStatus() !== initialValue` for detecting handler-propagation failures. It names the failure mode precisely: "handler must NOT propagate DB error to Express."
+
+**Key learning:** When a bug has already been partially fixed and tested by multiple agents before Kujan spawns, the QA job is (1) audit which legs remain uncovered, (2) add only non-redundant coverage, (3) remove any drafted tests that duplicate existing suites.
+
 ### 2026-05-19T18:15:41.495-07:00 — `pnpm start dev` Docusaurus argv regression
 
 Validated the exact failure condition: if `dev` reaches the docs workspace, Docusaurus runs `node scripts/docusaurus.mjs start --host 0.0.0.0 --port 3002 dev` and fails with `ENOENT` for `packages/docs-site/dev`.

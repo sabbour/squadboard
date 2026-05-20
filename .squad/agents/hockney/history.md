@@ -269,3 +269,51 @@ Hockney-close-w24 dispatched in parallel to run build + main FF + smoke tests be
 - Kept authority honest: PostgreSQL mode reports `squad_storage` plus explicit projection repairs only; filesystem mode reports live filesystem authority and skips DB-to-FS projection.
 - Safe repair pattern: create missing files/directories, replace only empty/default ceremony placeholders, and skip divergent or unsafe targets with typed reasons instead of overwriting.
 - Validation: focused squad-sync Vitest coverage and server build passed.
+
+
+### 2026-05-19T23:37:54.700-07:00 — DELETE project JSON failure (stale OID 500 → text/html)
+
+**Symptom:** UI modal showed `API 500: expected JSON but got text/html; charset=utf-8. error: could not open relation with OID 66346` when attempting "Permanently delete project and folder."
+
+**Root causes (two independent failures):**
+1. `DELETE /api/projects/:id` handler had no try/catch around its `db.select()` and `db.delete()` calls. When PGlite's catalog carries a stale OID (same family as the `issue_runs` RI-trigger bug), the thrown error propagates to Express.
+2. No global JSON error handler was registered in `index.ts`. Express's default error handler returns `text/html`, causing the client to see the wrong content type and fail to parse the body.
+
+**Fixes:**
+- `packages/server/src/routes/projects.ts`: wrapped the DB lookup and DB mutation phases of DELETE in separate try/catch blocks. Lookup failure → JSON 500 with `"Database error during project lookup: <msg>"`. Mutation failure → JSON 500 with `"Database error during project deletion: <msg>"`. Safety contracts (metadata-only default, folder guards) are unchanged.
+- `packages/server/src/index.ts`: added a global 4-arg Express error handler (registered after all routes, before the SPA fallback). Ensures every unhandled route error returns `application/json` regardless of which route threw.
+
+**Tests added (delete-project.test.ts):**
+- `selectError` and `settingsDeleteError` fixtures added to the DB mock.
+- Two new regression cases: DB-select-throws → 500 JSON `{ ok: false, error: "Database error during project lookup: …OID 66346" }`; settings-delete-throws → 500 JSON `{ ok: false, error: "Database error during project deletion: …OID 99999" }`.
+- 15/15 tests green; server build clean.
+
+**Key files:** `packages/server/src/routes/projects.ts`, `packages/server/src/index.ts`, `packages/server/src/__tests__/delete-project.test.ts`
+
+**Invariant confirmed:** The dispatcher/stepper/spawner discipline, lease/heartbeat liveness, and sweeper logic are unaffected. This is a pure route-layer fault-tolerance fix.
+
+
+### 2026-05-19T23:37:54.700-07:00 — DELETE stale-OID root-cause fix (withPgliteOidRetry)
+
+**Context:** Previous fix only shaped the 500 as JSON. The delete still failed. Root cause is deeper.
+
+**Root cause:** PGlite's extended query protocol caches prepared statement plans. When a migration cycle drops and recreates a table (e.g. `projects`), the new relation gets a fresh OID in `pg_class`, but older cached plan still references the stale OID. The next parameterised Drizzle query fails with `could not open relation with OID NNNNN`. This is not a trigger-catalog corruption (like the `issue_runs` fix); it is a prepared-statement plan cache staleness.
+
+**Fix: `withPgliteOidRetry<T>(fn)` in `db/index.ts`:**
+- Detects the OID error via `/could not open relation with OID/i` on the error message.
+- In PGlite mode: issues `DEALLOCATE ALL` (clears all prepared-statement caches) then retries `fn()` exactly once. External Postgres re-throws immediately (external PG handles relcache invalidation itself).
+- Helper `discardPgliteStatementCache()` issues `DEALLOCATE ALL` via the pool; failure is non-fatal (logged, not rethrown).
+- Exported so routes can wrap individual operations without knowing the DB mode.
+
+**Updated DELETE handler in `routes/projects.ts`:**
+- Lookup wrapped: `withPgliteOidRetry(() => db.select()...)`
+- Mutation wrapped: `withPgliteOidRetry(async () => { delete settings; delete project; })`
+- Both phases still have outer try/catch for errors that persist after retry.
+
+**Regression tests added:**
+- `delete-project.test.ts` (16 tests): added recovery test (test 14) — first select throws OID error, `withPgliteOidRetry` mock catches it, sets `oidRetryDeallocateCalled`, retries, second call succeeds, delete completes with 200. Uses `_selectOidErrorConsumed` one-shot flag (module-level, reset in beforeEach) to avoid cross-test counter bleed.
+- `pglite-oid-retry.test.ts` (6 tests, NEW): focused tests for the retry utility against a real in-memory PGlite instance. Covers: pass-through on success, immediate re-throw of non-OID errors, DEALLOCATE ALL + retry succeeds (verified via `pg_prepared_statements`), retry fails → re-throw, external-Postgres mode → no retry, case-insensitive OID message detection.
+
+**Key files:** `packages/server/src/db/index.ts`, `packages/server/src/routes/projects.ts`, `packages/server/src/__tests__/delete-project.test.ts`, `packages/server/src/__tests__/pglite-oid-retry.test.ts`.
+
+**Invariant:** Dispatcher/stepper/spawner discipline unaffected. No real folders touched in tests. Safety guards unchanged.
