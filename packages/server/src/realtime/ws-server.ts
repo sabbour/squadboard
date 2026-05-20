@@ -19,12 +19,12 @@
  * terminated to free stale sockets and give the client a clean reconnect.
  */
 import { WebSocketServer, WebSocket } from 'ws';
-import type { IncomingMessage } from 'node:http';
-import type { Server as HttpServer } from 'node:http';
+import type { IncomingMessage, Server as HttpServer } from 'node:http';
 import { randomUUID } from 'node:crypto';
 import { eventBus, type BusEvent } from './event-bus.js';
 import { joinPresence, leavePresence, moveCursor, removeUser } from './presence.js';
 import { getBufferedEvents } from '../sdk/sse-stream.js';
+import { extractRequestToken, type VerifiedAuthToken, verifyPresentedToken } from '../middleware/auth-token.js';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -41,6 +41,11 @@ interface ClientState {
   ws: WebSocket;
   userId: string;
   subscribedProjects: Set<string>;
+  allowedProjectId: string | null;
+}
+
+interface AuthenticatedUpgradeRequest extends IncomingMessage {
+  wsAuth?: VerifiedAuthToken | null;
 }
 
 // ─── State ───────────────────────────────────────────────────────────────────
@@ -51,6 +56,8 @@ const rooms = new Map<string, Set<ClientState>>();
 const clients = new Map<WebSocket, ClientState>();
 // Clients subscribed to every event regardless of project (the /now page).
 const globalClients = new Set<ClientState>();
+// projectId:userId → sender socket for the next presence.updated fan-out.
+const presenceUpdateSenders = new Map<string, WebSocket>();
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -66,6 +73,10 @@ function broadcast(projectId: string, type: string, payload: unknown, excludeWs?
     if (client.ws === excludeWs) continue;
     send(client.ws, type, payload);
   }
+}
+
+function isAuthorizedProject(state: ClientState, projectId: string): boolean {
+  return state.allowedProjectId === null || state.allowedProjectId === projectId;
 }
 
 function subscribeToProject(state: ClientState, projectId: string): void {
@@ -116,6 +127,13 @@ function handleMessage(state: ClientState, raw: string): void {
 
   const { type, payload } = msg;
   const projectId = payload?.projectId;
+
+  if (projectId && !isAuthorizedProject(state, projectId)) {
+    send(state.ws, 'error', {
+      message: `Forbidden project subscription: token grants ${state.allowedProjectId ?? 'no'} project access, not ${projectId}`,
+    });
+    return;
+  }
 
   switch (type) {
     case 'subscribe':
@@ -188,10 +206,22 @@ function handleClose(state: ClientState): void {
 // ─── Bus listener — fan-out to WS clients ─────────────────────────────────────
 
 function onBusEvent(event: BusEvent): void {
-  broadcast(event.projectId, event.type, event.payload);
+  let excludeWs: WebSocket | undefined;
+  if (event.type === 'presence.updated') {
+    const payload = event.payload as { userId?: string };
+    const userId = typeof payload.userId === 'string' ? payload.userId : null;
+    if (userId) {
+      const key = `${event.projectId}:${userId}`;
+      excludeWs = presenceUpdateSenders.get(key);
+      presenceUpdateSenders.delete(key);
+    }
+  }
+
+  broadcast(event.projectId, event.type, event.payload, excludeWs);
   // Phase 19: fan-out to global subscribers (/now view).
   // Deliver every bus event to clients that requested '__global__' scope.
   for (const client of globalClients) {
+    if (client.ws === excludeWs) continue;
     send(client.ws, event.type, event.payload);
   }
 }
@@ -201,6 +231,16 @@ function onBusEvent(event: BusEvent): void {
 let wss: WebSocketServer | null = null;
 
 export const WS_PING_INTERVAL_MS = 15_000;
+export const WS_MAX_PAYLOAD_BYTES = 64 * 1024;
+
+function getUpgradePath(req: IncomingMessage): string {
+  return new URL(req.url ?? '/', 'http://localhost').pathname;
+}
+
+function rejectUpgrade(socket: NodeJS.WritableStream & { destroy(): void }, message: string): void {
+  socket.write(`HTTP/1.1 401 Unauthorized\r\nConnection: close\r\nContent-Type: text/plain\r\n\r\n${message}`);
+  socket.destroy();
+}
 
 export function initWebSocketServer(httpServer: HttpServer): WebSocketServer {
   // Mounted under /api/ws so the dev-server Vite proxy (which only forwards
@@ -210,18 +250,47 @@ export function initWebSocketServer(httpServer: HttpServer): WebSocketServer {
   // sync is critical — a mismatch (e.g. server on /ws, client on /api/ws)
   // leaves the badge stuck on yellow "Reconnecting" forever in dev because
   // every handshake fails immediately.
-  wss = new WebSocketServer({ server: httpServer, path: '/api/ws' });
+  wss = new WebSocketServer({ noServer: true, maxPayload: WS_MAX_PAYLOAD_BYTES });
 
-  wss.on('connection', (ws: WebSocket, _req: IncomingMessage) => {
-    const userId = randomUUID();
+  httpServer.on('upgrade', (req, socket, head) => {
+    if (getUpgradePath(req) !== '/api/ws') return;
+
+    void (async () => {
+      const verification = await verifyPresentedToken(extractRequestToken(req));
+      if (!verification.ok) {
+        rejectUpgrade(socket, verification.message ?? 'Unauthorized');
+        return;
+      }
+      if (verification.authEnabled) {
+        if (!verification.token || verification.token.mode !== 'jwt' || !verification.token.projectId) {
+          rejectUpgrade(socket, 'WebSocket connections require a JWT with a projectId claim.');
+          return;
+        }
+      }
+
+      (req as AuthenticatedUpgradeRequest).wsAuth = verification.token;
+      wss?.handleUpgrade(req, socket, head, (ws) => {
+        wss?.emit('connection', ws, req);
+      });
+    })().catch((err) => {
+      console.error('[ws] upgrade auth error:', err);
+      rejectUpgrade(socket, 'Unauthorized');
+    });
+  });
+
+  wss.on('connection', (ws: WebSocket, req: IncomingMessage) => {
+    const auth = (req as AuthenticatedUpgradeRequest).wsAuth ?? null;
+    const claimedUserId = auth?.subject ?? (typeof auth?.payload?.['userId'] === 'string' ? auth.payload['userId'] : null);
+    const userId = claimedUserId && claimedUserId.trim() ? claimedUserId : randomUUID();
     const state: ClientState = {
       ws,
       userId,
       subscribedProjects: new Set(),
+      allowedProjectId: auth?.projectId ?? null,
     };
     clients.set(ws, state);
 
-    // Send the assigned userId so the client knows who it is
+    // Send the assigned userId so the client knows who it is.
     send(ws, 'connected', { userId });
 
     // W28 J3: 15 s ping/pong heartbeat. Track liveness; terminate on missed pong.

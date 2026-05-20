@@ -9,8 +9,9 @@
  *   5. Health endpoint is exempt even when token is set.
  */
 
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { describe, it, expect, afterEach, vi } from 'vitest';
 import type { Request, Response, NextFunction } from 'express';
+import { SignJWT } from 'jose';
 import { authMiddleware } from '../middleware/auth.js';
 
 // ---------------------------------------------------------------------------
@@ -55,51 +56,64 @@ describe('authMiddleware', () => {
     }
   });
 
-  it('is a no-op (calls next) when SQUADBOARD_AUTH_TOKEN is unset', () => {
+  it('is a no-op (calls next) when SQUADBOARD_AUTH_TOKEN is unset', async () => {
     delete process.env['SQUADBOARD_AUTH_TOKEN'];
     const next = vi.fn();
     const req = makeReq();
     const res = makeRes();
-    authMiddleware(req, res as unknown as Response, next as NextFunction);
+    await authMiddleware(req, res as unknown as Response, next as NextFunction);
     expect(next).toHaveBeenCalledOnce();
     expect(res._status).toBe(0); // never set
   });
 
-  it('rejects with 401 when token is set and Authorization header is absent', () => {
+  it('rejects with 401 when token is set and Authorization header is absent', async () => {
     process.env['SQUADBOARD_AUTH_TOKEN'] = 'secret-token';
     const next = vi.fn();
     const req = makeReq({ headers: {} });
     const res = makeRes();
-    authMiddleware(req, res as unknown as Response, next as NextFunction);
+    await authMiddleware(req, res as unknown as Response, next as NextFunction);
     expect(next).not.toHaveBeenCalled();
     expect(res._status).toBe(401);
   });
 
-  it('rejects with 401 when token is set and wrong token is presented', () => {
+  it('rejects with 401 when token is set and wrong token is presented', async () => {
     process.env['SQUADBOARD_AUTH_TOKEN'] = 'secret-token';
     const next = vi.fn();
     const req = makeReq({ headers: { authorization: 'Bearer wrong-token' } });
     const res = makeRes();
-    authMiddleware(req, res as unknown as Response, next as NextFunction);
+    await authMiddleware(req, res as unknown as Response, next as NextFunction);
     expect(next).not.toHaveBeenCalled();
     expect(res._status).toBe(401);
   });
 
-  it('accepts and calls next when the correct token is presented', () => {
+  it('accepts and calls next when the correct legacy token is presented', async () => {
     process.env['SQUADBOARD_AUTH_TOKEN'] = 'secret-token';
     const next = vi.fn();
     const req = makeReq({ headers: { authorization: 'Bearer secret-token' } });
     const res = makeRes();
-    authMiddleware(req, res as unknown as Response, next as NextFunction);
+    await authMiddleware(req, res as unknown as Response, next as NextFunction);
     expect(next).toHaveBeenCalledOnce();
   });
 
-  it('exempts /api/health even when token is set and no auth header is provided', () => {
+  it('accepts and calls next when a signed JWT is presented', async () => {
+    process.env['SQUADBOARD_AUTH_TOKEN'] = 'secret-token';
+    const next = vi.fn();
+    const jwt = await new SignJWT({ projectId: 'project-123' })
+      .setProtectedHeader({ alg: 'HS256', typ: 'JWT' })
+      .setSubject('user-123')
+      .sign(new TextEncoder().encode('secret-token'));
+    const req = makeReq({ headers: { authorization: `Bearer ${jwt}` } });
+    const res = makeRes();
+    await authMiddleware(req, res as unknown as Response, next as NextFunction);
+    expect(next).toHaveBeenCalledOnce();
+  });
+
+  it('exempts /api/health even when token is set and no auth header is provided', async () => {
     process.env['SQUADBOARD_AUTH_TOKEN'] = 'secret-token';
     const next = vi.fn();
     const req = makeReq({ path: '/api/health', headers: {} });
     const res = makeRes();
-    authMiddleware(req, res as unknown as Response, next as NextFunction);
+    await authMiddleware(req, res as unknown as Response, next as NextFunction);
     expect(next).toHaveBeenCalledOnce();
     expect(res._status).toBe(0);
   });

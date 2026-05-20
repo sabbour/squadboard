@@ -6,6 +6,17 @@ const WS_BASE = (() => {
   return apiBase.replace(/^http/, 'ws')
 })()
 
+function getWsAuthToken(): string | null {
+  const envToken = import.meta.env.VITE_SQUADBOARD_AUTH_TOKEN?.trim()
+  if (envToken) return envToken
+  try {
+    const storedToken = window.localStorage.getItem('squadboard:authToken')?.trim()
+    return storedToken || null
+  } catch {
+    return null
+  }
+}
+
 export type ConnectionState = 'disconnected' | 'connecting' | 'connected' | 'reconnecting'
 
 // ── Typed event payloads ──────────────────────────────────────────────────────
@@ -229,7 +240,10 @@ class WsClient {
     const pid = this.projectId
     if (!pid) return
     this.setConnectionState(this.reconnectAttempts > 0 ? 'reconnecting' : 'connecting')
-    const url = `${WS_BASE}/api/ws`
+    const authToken = getWsAuthToken()
+    const url = authToken
+      ? `${WS_BASE}/api/ws?token=${encodeURIComponent(authToken)}`
+      : `${WS_BASE}/api/ws`
     let ws: WebSocket
     try {
       ws = new WebSocket(url)
