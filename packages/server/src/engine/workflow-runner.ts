@@ -15,7 +15,7 @@
  */
 
 import { eq, and, sql } from 'drizzle-orm';
-import { getDb, schema } from '../db/index.js';
+import { getDb, schema, type DrizzleDb } from '../db/index.js';
 import { resolveRoute } from './router.js';
 import { parseWorkflowYaml } from '../services/workflow-parser.js';
 import type { WorkflowStep, FanOutStep, HandoffStep, NotifyStep } from '../services/workflow-parser.js';
@@ -31,6 +31,8 @@ import type { RequestChangesPolicy } from './peer-reviewer.js';
 import { materializeAndSpawnFanOut, checkFanOutCompletion } from './fan-out.js';
 import { appendSystemComment } from '../services/issues.js';
 import { eventBus } from '../realtime/event-bus.js';
+
+type DbExecutor = DrizzleDb | Parameters<Parameters<DrizzleDb['transaction']>[0]>[0];
 
 // ---------------------------------------------------------------------------
 // Internal helper — look up projectId for a workflow_run (for flow events)
@@ -326,34 +328,38 @@ async function handleRouteStep(
     return;
   }
 
-  // Create issue_run (Invariant 1: routing desugars to agent_run)
-  const [newRun] = await db
-    .insert(issueRuns)
-    .values({
-      issueId: wfRun.issueId,
-      agentId: agent.id,
-      kind: 'agent_run',
-      status: 'pending',
-    })
-    .returning({ id: issueRuns.id });
+  const newRunId = await db.transaction(async (tx) => {
+    // Create issue_run (Invariant 1: routing desugars to agent_run)
+    const [newRun] = await tx
+      .insert(issueRuns)
+      .values({
+        issueId: wfRun.issueId,
+        agentId: agent.id,
+        kind: 'agent_run',
+        status: 'pending',
+      })
+      .returning({ id: issueRuns.id });
 
-  // Link step_run to issue_run; snapshot pinnedAgentRevisions
-  await db
-    .update(stepRuns)
-    .set({
-      issueRunId: newRun.id,
-      status: 'running',
-      pinnedAgentRevisions: JSON.stringify(pinnedRevisions),
-      updatedAt: new Date(),
-    })
-    .where(eq(stepRuns.id, stepRun.id));
+    // Link step_run to issue_run; snapshot pinnedAgentRevisions
+    await tx
+      .update(stepRuns)
+      .set({
+        issueRunId: newRun.id,
+        status: 'running',
+        pinnedAgentRevisions: JSON.stringify(pinnedRevisions),
+        updatedAt: new Date(),
+      })
+      .where(eq(stepRuns.id, stepRun.id));
 
-  await db
-    .update(schema.workflowRuns)
-    .set({ status: 'running', updatedAt: new Date() })
-    .where(eq(schema.workflowRuns.id, wfRun.id));
+    await tx
+      .update(schema.workflowRuns)
+      .set({ status: 'running', updatedAt: new Date() })
+      .where(eq(schema.workflowRuns.id, wfRun.id));
 
-  console.log(`[workflow-runner] route step created issue_run ${newRun.id} → agent ${agent.name}`);
+    return newRun.id;
+  });
+
+  console.log(`[workflow-runner] route step created issue_run ${newRunId} → agent ${agent.name}`);
 }
 
 async function handleAgentRunStep(
@@ -372,29 +378,34 @@ async function handleAgentRunStep(
   // If no issueRunId yet, check if we have a resolvedAgentId (fan_out child path)
   if (!stepRun.issueRunId) {
     if (stepRun.resolvedAgentId) {
+      const resolvedAgentId = stepRun.resolvedAgentId;
       // Fan-out child: create issueRun directly from the pre-resolved agent
-      const [newRun] = await db
-        .insert(issueRuns)
-        .values({
-          issueId: wfRun.issueId,
-          agentId: stepRun.resolvedAgentId,
-          kind: 'agent_run',
-          status: 'pending',
-        })
-        .returning({ id: issueRuns.id });
+      const newRunId = await db.transaction(async (tx) => {
+        const [newRun] = await tx
+          .insert(issueRuns)
+          .values({
+            issueId: wfRun.issueId,
+            agentId: resolvedAgentId,
+            kind: 'agent_run',
+            status: 'pending',
+          })
+          .returning({ id: issueRuns.id });
 
-      await db
-        .update(stepRuns)
-        .set({ issueRunId: newRun.id, status: 'running', updatedAt: new Date() })
-        .where(eq(stepRuns.id, stepRun.id));
+        await tx
+          .update(stepRuns)
+          .set({ issueRunId: newRun.id, status: 'running', updatedAt: new Date() })
+          .where(eq(stepRuns.id, stepRun.id));
 
-      await db
-        .update(schema.workflowRuns)
-        .set({ status: 'running', updatedAt: new Date() })
-        .where(eq(schema.workflowRuns.id, wfRun.id));
+        await tx
+          .update(schema.workflowRuns)
+          .set({ status: 'running', updatedAt: new Date() })
+          .where(eq(schema.workflowRuns.id, wfRun.id));
+
+        return newRun.id;
+      });
 
       console.log(
-        `[workflow-runner] fan-out child agent_run: created issue_run ${newRun.id} ` +
+        `[workflow-runner] fan-out child agent_run: created issue_run ${newRunId} ` +
         `for workflow_run ${wfRun.id}`,
       );
     } else if (stepDef?.type === 'agent_run' && stepDef.agent) {
@@ -418,31 +429,35 @@ async function handleAgentRunStep(
         return;
       }
 
-      const [newRun] = await db
-        .insert(issueRuns)
-        .values({
-          issueId: wfRun.issueId,
-          agentId: agent.id,
-          kind: 'agent_run',
-          status: 'pending',
-          inputContext: stepDef.prompt
-            ? `## Workflow step: ${stepDef.label ?? `Step ${stepRun.stepIndex + 1}`}\n\n${stepDef.prompt}`
-            : null,
-        })
-        .returning({ id: issueRuns.id });
+      const newRunId = await db.transaction(async (tx) => {
+        const [newRun] = await tx
+          .insert(issueRuns)
+          .values({
+            issueId: wfRun.issueId,
+            agentId: agent.id,
+            kind: 'agent_run',
+            status: 'pending',
+            inputContext: stepDef.prompt
+              ? `## Workflow step: ${stepDef.label ?? `Step ${stepRun.stepIndex + 1}`}\n\n${stepDef.prompt}`
+              : null,
+          })
+          .returning({ id: issueRuns.id });
 
-      await db
-        .update(stepRuns)
-        .set({ issueRunId: newRun.id, status: 'running', updatedAt: new Date() })
-        .where(eq(stepRuns.id, stepRun.id));
+        await tx
+          .update(stepRuns)
+          .set({ issueRunId: newRun.id, status: 'running', updatedAt: new Date() })
+          .where(eq(stepRuns.id, stepRun.id));
 
-      await db
-        .update(schema.workflowRuns)
-        .set({ status: 'running', updatedAt: new Date() })
-        .where(eq(schema.workflowRuns.id, wfRun.id));
+        await tx
+          .update(schema.workflowRuns)
+          .set({ status: 'running', updatedAt: new Date() })
+          .where(eq(schema.workflowRuns.id, wfRun.id));
+
+        return newRun.id;
+      });
 
       console.log(
-        `[workflow-runner] agent_run step: created issue_run ${newRun.id} ` +
+        `[workflow-runner] agent_run step: created issue_run ${newRunId} ` +
         `for agent ${agent.name} in workflow_run ${wfRun.id}`,
       );
     }
@@ -460,20 +475,24 @@ async function handleAgentRunStep(
   if (!run) return;
 
   if (run.status === 'completed') {
-    await db
-      .update(stepRuns)
-      .set({ status: 'completed', updatedAt: new Date() })
-      .where(eq(stepRuns.id, stepRun.id));
-    await advanceToNextStep(wfRun.id, wfRun.currentStepIndex ?? 0);
+    await db.transaction(async (tx) => {
+      await tx
+        .update(stepRuns)
+        .set({ status: 'completed', updatedAt: new Date() })
+        .where(eq(stepRuns.id, stepRun.id));
+      await advanceToNextStep(wfRun.id, wfRun.currentStepIndex ?? 0, tx);
+    });
   } else if (run.status === 'failed' || run.status === 'cancelled') {
-    await db
-      .update(stepRuns)
-      .set({ status: run.status, updatedAt: new Date() })
-      .where(eq(stepRuns.id, stepRun.id));
-    await db
-      .update(schema.workflowRuns)
-      .set({ status: 'failed', updatedAt: new Date() })
-      .where(eq(schema.workflowRuns.id, wfRun.id));
+    await db.transaction(async (tx) => {
+      await tx
+        .update(stepRuns)
+        .set({ status: run.status, updatedAt: new Date() })
+        .where(eq(stepRuns.id, stepRun.id));
+      await tx
+        .update(schema.workflowRuns)
+        .set({ status: 'failed', updatedAt: new Date() })
+        .where(eq(schema.workflowRuns.id, wfRun.id));
+    });
     console.warn(`[workflow-runner] workflow_run ${wfRun.id} failed at agent_run step ${stepRun.stepIndex}`);
     // ── Flow event: workflow_run ended (failed) ──────────────────────────────
     const pid = await getProjectIdForWorkflowRun(wfRun.id);
@@ -572,33 +591,38 @@ async function handleApproveStep(
     if (reviewerAgentIds.length === 0) {
       // No reviewers available — auto-approve and advance.
       console.warn(`[workflow-runner] approve step has no eligible reviewers — auto-approving`);
-      await db
-        .update(stepRuns)
-        .set({ status: 'completed', reviewDecision: 'approve', updatedAt: new Date() })
-        .where(eq(stepRuns.id, stepRun.id));
-      await advanceToNextStep(wfRun.id, wfRun.currentStepIndex ?? 0);
+      await db.transaction(async (tx) => {
+        await tx
+          .update(stepRuns)
+          .set({ status: 'completed', reviewDecision: 'approve', updatedAt: new Date() })
+          .where(eq(stepRuns.id, stepRun.id));
+        await advanceToNextStep(wfRun.id, wfRun.currentStepIndex ?? 0, tx);
+      });
       return;
     }
 
-    // Create peer_review issueRuns (Invariant 1).
-    await createPeerReviewRuns(
-      wfRun.id,
-      stepRun.id,
-      wfRun.issueId,
-      reviewerAgentIds,
-      priorOutput,
-    );
+    await db.transaction(async (tx) => {
+      // Create peer_review issueRuns (Invariant 1).
+      await createPeerReviewRuns(
+        wfRun.id,
+        stepRun.id,
+        wfRun.issueId,
+        reviewerAgentIds,
+        priorOutput,
+        tx,
+      );
 
-    // Mark approve step_run as running (stepper will tick it).
-    await db
-      .update(stepRuns)
-      .set({ status: 'running', updatedAt: new Date() })
-      .where(eq(stepRuns.id, stepRun.id));
+      // Mark approve step_run as running (stepper will tick it).
+      await tx
+        .update(stepRuns)
+        .set({ status: 'running', updatedAt: new Date() })
+        .where(eq(stepRuns.id, stepRun.id));
 
-    await db
-      .update(workflowRuns)
-      .set({ status: 'running', updatedAt: new Date() })
-      .where(eq(workflowRuns.id, wfRun.id));
+      await tx
+        .update(workflowRuns)
+        .set({ status: 'running', updatedAt: new Date() })
+        .where(eq(workflowRuns.id, wfRun.id));
+    });
 
     console.log(
       `[workflow-runner] approve step ${stepRun.stepIndex} for workflow_run ${wfRun.id} ` +
@@ -650,8 +674,10 @@ async function handleApproveStep(
 
     if (blocked) {
       // Re-queue the prior agent_run step with reviewer feedback injected.
-      await injectReviewerFeedback(stepRun.id, wfRun.id, decisions);
-      await requeuePriorStep(wfRun, stepRun);
+      await db.transaction(async (tx) => {
+        await injectReviewerFeedback(stepRun.id, wfRun.id, decisions, tx);
+        await requeuePriorStep(wfRun, stepRun, tx);
+      });
       const requestChangesCount = decisions.filter((d) => d.decision === 'request_changes').length;
       await appendSystemComment({
         issueId: wfRun.issueId,
@@ -674,12 +700,14 @@ async function handleApproveStep(
       );
     } else {
       // All reviewers approved (and quorum met if configured) — advance.
-      await recordApproval(stepRun.id, wfRun.id, decisions);
-      await db
-        .update(stepRuns)
-        .set({ status: 'completed', updatedAt: new Date() })
-        .where(eq(stepRuns.id, stepRun.id));
-      await advanceToNextStep(wfRun.id, wfRun.currentStepIndex ?? 0);
+      await db.transaction(async (tx) => {
+        await recordApproval(stepRun.id, wfRun.id, decisions, tx);
+        await tx
+          .update(stepRuns)
+          .set({ status: 'completed', updatedAt: new Date() })
+          .where(eq(stepRuns.id, stepRun.id));
+        await advanceToNextStep(wfRun.id, wfRun.currentStepIndex ?? 0, tx);
+      });
       const approvalCount = decisions.filter((d) => d.decision === 'approve').length;
       await appendSystemComment({
         issueId: wfRun.issueId,
@@ -745,19 +773,21 @@ async function handleFanOutStep(
 
       // Mark parent stepRun as waiting_children (transaction already set 'splitting',
       // but post-COMMIT we advance to 'waiting_children')
-      await db
-        .update(stepRuns)
-        .set({
-          status: 'waiting_children',
-          splitTargets: JSON.stringify(childIds) as unknown as typeof stepRun.splitTargets,
-          updatedAt: new Date(),
-        })
-        .where(eq(stepRuns.id, stepRun.id));
+      await db.transaction(async (tx) => {
+        await tx
+          .update(stepRuns)
+          .set({
+            status: 'waiting_children',
+            splitTargets: JSON.stringify(childIds) as unknown as typeof stepRun.splitTargets,
+            updatedAt: new Date(),
+          })
+          .where(eq(stepRuns.id, stepRun.id));
 
-      await db
-        .update(workflowRuns)
-        .set({ status: 'running', updatedAt: new Date() })
-        .where(eq(workflowRuns.id, wfRun.id));
+        await tx
+          .update(workflowRuns)
+          .set({ status: 'running', updatedAt: new Date() })
+          .where(eq(workflowRuns.id, wfRun.id));
+      });
 
       const mode = stepDef.mode ?? 'serial';
       console.log(
@@ -779,14 +809,16 @@ async function handleFanOutStep(
       }
     } catch (err: unknown) {
       console.error(`[workflow-runner] fan_out materialization failed:`, err);
-      await db
-        .update(stepRuns)
-        .set({ status: 'failed', updatedAt: new Date() })
-        .where(eq(stepRuns.id, stepRun.id));
-      await db
-        .update(workflowRuns)
-        .set({ status: 'failed', updatedAt: new Date() })
-        .where(eq(workflowRuns.id, wfRun.id));
+      await db.transaction(async (tx) => {
+        await tx
+          .update(stepRuns)
+          .set({ status: 'failed', updatedAt: new Date() })
+          .where(eq(stepRuns.id, stepRun.id));
+        await tx
+          .update(workflowRuns)
+          .set({ status: 'failed', updatedAt: new Date() })
+          .where(eq(workflowRuns.id, wfRun.id));
+      });
     }
     return;
   }
@@ -810,14 +842,16 @@ async function handleFanOutStep(
         `[workflow-runner] fan_out step ${stepRun.stepIndex} failed: a child failed ` +
         `and on_child_failure='fail_fast'`,
       );
-      await db
-        .update(stepRuns)
-        .set({ status: 'failed', updatedAt: new Date() })
-        .where(eq(stepRuns.id, stepRun.id));
-      await db
-        .update(workflowRuns)
-        .set({ status: 'failed', updatedAt: new Date() })
-        .where(eq(workflowRuns.id, wfRun.id));
+      await db.transaction(async (tx) => {
+        await tx
+          .update(stepRuns)
+          .set({ status: 'failed', updatedAt: new Date() })
+          .where(eq(stepRuns.id, stepRun.id));
+        await tx
+          .update(workflowRuns)
+          .set({ status: 'failed', updatedAt: new Date() })
+          .where(eq(workflowRuns.id, wfRun.id));
+      });
       return;
     }
 
@@ -828,17 +862,18 @@ async function handleFanOutStep(
       2,
     );
 
-    await db
-      .update(stepRuns)
-      .set({ status: 'completed', output: mergedOutput, updatedAt: new Date() })
-      .where(eq(stepRuns.id, stepRun.id));
+    await db.transaction(async (tx) => {
+      await tx
+        .update(stepRuns)
+        .set({ status: 'completed', output: mergedOutput, updatedAt: new Date() })
+        .where(eq(stepRuns.id, stepRun.id));
+      await advanceToNextStep(wfRun.id, wfRun.currentStepIndex ?? 0, tx);
+    });
 
     console.log(
       `[workflow-runner] fan_out step ${stepRun.stepIndex} completed (${results.length} children, ` +
       `strategy=${mergeStrategy})`,
     );
-
-    await advanceToNextStep(wfRun.id, wfRun.currentStepIndex ?? 0);
   }
 }
 
@@ -881,11 +916,13 @@ async function handleHandoffStep(
   if (!targetAgent) {
     console.error(`[workflow-runner] handoff step: agent '${stepDef.to}' not found`);
     // Fail gracefully — skip the handoff but don't block the workflow
-    await db
-      .update(stepRuns)
-      .set({ status: 'completed', updatedAt: new Date() })
-      .where(eq(stepRuns.id, stepRun.id));
-    await advanceToNextStep(wfRun.id, wfRun.currentStepIndex ?? 0);
+    await db.transaction(async (tx) => {
+      await tx
+        .update(stepRuns)
+        .set({ status: 'completed', updatedAt: new Date() })
+        .where(eq(stepRuns.id, stepRun.id));
+      await advanceToNextStep(wfRun.id, wfRun.currentStepIndex ?? 0, tx);
+    });
     return;
   }
 
@@ -912,41 +949,44 @@ async function handleHandoffStep(
     ? `## Handoff Message\n\n${stepDef.message}\n\n---\n\n${priorOutput}`
     : priorOutput;
 
-  // Create a new issueRun for the target agent (Invariant 1: kind='agent_run')
-  const [newRun] = await db
-    .insert(issueRuns)
-    .values({
-      issueId: wfRun.issueId,
-      agentId: targetAgent.id,
-      kind: 'agent_run',
-      status: 'pending',
-      inputContext: inputContext || null,
-    })
-    .returning({ id: issueRuns.id });
+  const newRunId = await db.transaction(async (tx) => {
+    // Create a new issueRun for the target agent (Invariant 1: kind='agent_run')
+    const [newRun] = await tx
+      .insert(issueRuns)
+      .values({
+        issueId: wfRun.issueId,
+        agentId: targetAgent.id,
+        kind: 'agent_run',
+        status: 'pending',
+        inputContext: inputContext || null,
+      })
+      .returning({ id: issueRuns.id });
 
-  // Update issue assignee to target agent
-  await db
-    .update(issues)
-    .set({ assigneeId: targetAgent.id, updatedAt: new Date() })
-    .where(eq(issues.id, wfRun.issueId));
+    // Update issue assignee to target agent
+    await tx
+      .update(issues)
+      .set({ assigneeId: targetAgent.id, updatedAt: new Date() })
+      .where(eq(issues.id, wfRun.issueId));
 
-  // Mark handoff step completed immediately (fire-and-forget; stepper picks up the new run)
-  await db
-    .update(stepRuns)
-    .set({ issueRunId: newRun.id, status: 'completed', updatedAt: new Date() })
-    .where(eq(stepRuns.id, stepRun.id));
+    // Mark handoff step completed immediately (fire-and-forget; stepper picks up the new run)
+    await tx
+      .update(stepRuns)
+      .set({ issueRunId: newRun.id, status: 'completed', updatedAt: new Date() })
+      .where(eq(stepRuns.id, stepRun.id));
 
-  await db
-    .update(workflowRuns)
-    .set({ status: 'running', updatedAt: new Date() })
-    .where(eq(workflowRuns.id, wfRun.id));
+    await tx
+      .update(workflowRuns)
+      .set({ status: 'running', updatedAt: new Date() })
+      .where(eq(workflowRuns.id, wfRun.id));
+
+    await advanceToNextStep(wfRun.id, wfRun.currentStepIndex ?? 0, tx);
+    return newRun.id;
+  });
 
   console.log(
     `[workflow-runner] handoff step ${stepRun.stepIndex} → agent '${stepDef.to}' ` +
-    `(issue_run ${newRun.id}); workflow advancing`,
+    `(issue_run ${newRunId}); workflow advancing`,
   );
-
-  await advanceToNextStep(wfRun.id, wfRun.currentStepIndex ?? 0);
 }
 
 async function handleNotifyStep(
@@ -957,18 +997,20 @@ async function handleNotifyStep(
   const db = getDb();
   const { stepRuns } = schema;
 
-  if (stepRun.status !== 'completed') {
-    await db
-      .update(stepRuns)
-      .set({
-        status: 'completed',
-        output: stepDef ? JSON.stringify({ target: stepDef.target ?? null, message: stepDef.message ?? null }) : null,
-        updatedAt: new Date(),
-      })
-      .where(eq(stepRuns.id, stepRun.id));
-  }
+  await db.transaction(async (tx) => {
+    if (stepRun.status !== 'completed') {
+      await tx
+        .update(stepRuns)
+        .set({
+          status: 'completed',
+          output: stepDef ? JSON.stringify({ target: stepDef.target ?? null, message: stepDef.message ?? null }) : null,
+          updatedAt: new Date(),
+        })
+        .where(eq(stepRuns.id, stepRun.id));
+    }
 
-  await advanceToNextStep(wfRun.id, wfRun.currentStepIndex ?? 0);
+    await advanceToNextStep(wfRun.id, wfRun.currentStepIndex ?? 0, tx);
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -985,8 +1027,8 @@ async function handleNotifyStep(
 async function requeuePriorStep(
   wfRun: typeof schema.workflowRuns.$inferSelect,
   approveStepRun: typeof schema.stepRuns.$inferSelect,
+  db: DbExecutor = getDb(),
 ): Promise<void> {
-  const db = getDb();
   const { stepRuns, workflowRuns, issueRuns } = schema;
 
   const priorIndex = approveStepRun.stepIndex - 1;
@@ -1104,8 +1146,11 @@ function buildFeedbackContext(comment: string, suggestions: string[]): string {
 // advanceToNextStep
 // ---------------------------------------------------------------------------
 
-async function advanceToNextStep(workflowRunId: string, currentIndex: number): Promise<void> {
-  const db = getDb();
+async function advanceToNextStep(
+  workflowRunId: string,
+  currentIndex: number,
+  db: DbExecutor = getDb(),
+): Promise<void> {
   const { workflowRuns, stepRuns } = schema;
 
   const nextIndex = currentIndex + 1;

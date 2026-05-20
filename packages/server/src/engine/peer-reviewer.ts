@@ -17,7 +17,9 @@
  */
 
 import { eq, and } from 'drizzle-orm';
-import { getDb, schema } from '../db/index.js';
+import { getDb, schema, type DrizzleDb } from '../db/index.js';
+
+type DbExecutor = DrizzleDb | Parameters<Parameters<DrizzleDb['transaction']>[0]>[0];
 
 // ---------------------------------------------------------------------------
 // Types
@@ -65,8 +67,8 @@ export async function createPeerReviewRuns(
   issueId: string,
   reviewerAgentIds: string[],
   priorOutput: string,
+  db: DbExecutor = getDb(),
 ): Promise<string[]> {
-  const db = getDb();
   const { issueRuns } = schema;
 
   if (reviewerAgentIds.length === 0) {
@@ -232,8 +234,8 @@ export async function injectReviewerFeedback(
   stepRunId: string,
   workflowRunId: string,
   decisions: ReviewDecision[],
+  db: DbExecutor = getDb(),
 ): Promise<void> {
-  const db = getDb();
   const { stepRuns, reviewEvents } = schema;
 
   const blockingDecisions = decisions.filter((d) => d.decision === 'request_changes');
@@ -286,8 +288,8 @@ export async function recordApproval(
   stepRunId: string,
   workflowRunId: string,
   decisions: ReviewDecision[],
+  db: DbExecutor = getDb(),
 ): Promise<void> {
-  const db = getDb();
   const { stepRuns, reviewEvents } = schema;
 
   const approvals = decisions.filter((d) => d.decision === 'approve');
