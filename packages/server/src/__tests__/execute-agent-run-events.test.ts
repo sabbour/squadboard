@@ -26,11 +26,15 @@ const {
   getAgentSessionError,
   setAgentSessionError,
   setAgentSessionResult,
+  getAgentSessionEvents,
+  setAgentSessionEvents,
 } = vi.hoisted(() => {
   const mockEmitIssueRunEvent = vi.fn();
   const registeredSessions = new Map<string, unknown>();
+  type MockAgentSessionEvent = { type: string; payload: Record<string, unknown> };
 
   let _agentSessionError: Error | null = null;
+  let _agentSessionEvents: MockAgentSessionEvent[] = [];
   let _agentSessionResult = {
     output: 'Agent produced this output.',
     resolvedModel: 'gpt-4o',
@@ -47,6 +51,8 @@ const {
     getAgentSessionError: () => _agentSessionError,
     setAgentSessionError: (e: Error | null) => { _agentSessionError = e; },
     setAgentSessionResult: (r: typeof _agentSessionResult) => { _agentSessionResult = r; },
+    getAgentSessionEvents: () => _agentSessionEvents,
+    setAgentSessionEvents: (events: MockAgentSessionEvent[]) => { _agentSessionEvents = events; },
   };
 });
 
@@ -118,9 +124,14 @@ vi.mock('../engine/active-issue-sessions.js', () => ({
 // ---------------------------------------------------------------------------
 
 vi.mock('../sdk/squad-client.js', () => ({
-  createAgentSession: vi.fn(async () => {
+  createAgentSession: vi.fn(async (opts: {
+    onEvent?: (event: { type: string; payload: Record<string, unknown> }) => void | Promise<void>;
+  } = {}) => {
     const err = getAgentSessionError();
     if (err) throw err;
+    for (const event of getAgentSessionEvents()) {
+      await opts.onEvent?.(event);
+    }
     return getAgentSessionResult();
   }),
 }));
@@ -209,6 +220,7 @@ beforeEach(() => {
   registeredSessions.clear();
   mockEmitIssueRunEvent.mockClear();
   setAgentSessionError(null);
+  setAgentSessionEvents([]);
   setAgentSessionResult({
     output:        'Agent produced this output.',
     resolvedModel: 'gpt-4o',
@@ -252,6 +264,9 @@ describe('executeAgentRun() — success path event emissions', () => {
     expect(finish!.payload).toMatchObject({
       durationMs:  expect.any(Number),
       cost:        expect.any(String),
+      status:      'completed',
+      outputAvailable: true,
+      outputSummary: 'Agent produced this output.',
       tokenCounts: { input: expect.any(Number), output: expect.any(Number) },
     });
   });
@@ -270,6 +285,64 @@ describe('executeAgentRun() — success path event emissions', () => {
     const metric = events.find((e) => e.type === 'issue.run.metric');
     expect(metric).toBeDefined();
     expect(metric!.payload).toMatchObject({ inputTokens: 100, outputTokens: 200 });
+  });
+
+  it('forwards live SDK token, tool, and usage events to issue.run events', async () => {
+    setAgentSessionEvents([
+      { type: 'message_delta', payload: { delta: 'working…' } },
+      { type: 'tool.call', payload: { toolName: 'bash', args: { command: 'pnpm test' } } },
+      { type: 'tool.result', payload: { toolName: 'bash', result: { resultType: 'success' } } },
+      { type: 'usage', payload: { inputTokens: 10, outputTokens: 20, model: 'gpt-4o', cost: 0.000325 } },
+      { type: 'turn_start', payload: { raw: true } },
+    ]);
+
+    await executeAgentRun(makeInput());
+    const events = getEmittedEvents();
+
+    expect(events).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          type: 'issue.run.token',
+          payload: expect.objectContaining({ kind: 'message_delta', delta: 'working…' }),
+        }),
+        expect.objectContaining({
+          type: 'issue.run.tool_call',
+          payload: expect.objectContaining({ toolName: 'bash', args: { command: 'pnpm test' } }),
+        }),
+        expect.objectContaining({
+          type: 'issue.run.tool_result',
+          payload: expect.objectContaining({ toolName: 'bash', result: { resultType: 'success' } }),
+        }),
+        expect.objectContaining({
+          type: 'issue.run.token',
+          payload: expect.objectContaining({ kind: 'usage', inputTokens: 10, outputTokens: 20, cost: 0.000325 }),
+        }),
+        expect.objectContaining({
+          type: 'issue.run.metric',
+          payload: expect.objectContaining({ kind: 'activity', phase: 'turn_start' }),
+        }),
+      ]),
+    );
+  });
+
+  it('emits parsed structured output metadata on finish when the final message is JSON', async () => {
+    setAgentSessionResult({
+      output:        '{"ok":true,"items":[1,2]}',
+      resolvedModel: 'gpt-4o',
+      inputTokens:   100,
+      outputTokens:  200,
+      tokensUsed:    300,
+      costUsd:       '0.01',
+    });
+
+    await executeAgentRun(makeInput());
+    const events = getEmittedEvents();
+    const finish = events.find((e) => e.type === 'issue.run.finish');
+
+    expect(finish!.payload).toMatchObject({
+      structuredOutputSource: 'json',
+      structuredOutput: { ok: true, items: [1, 2] },
+    });
   });
 
   it('does NOT emit issue.run.error on success', async () => {
@@ -299,7 +372,11 @@ describe('executeAgentRun() — error path event emissions', () => {
     const events = getEmittedEvents();
     const errEvent = events.find((e) => e.type === 'issue.run.error');
     expect(errEvent).toBeDefined();
-    expect(errEvent!.payload.message).toBe('SDK exploded');
+    expect(errEvent!.payload).toMatchObject({
+      message: 'SDK exploded',
+      errorMessage: 'SDK exploded',
+      status: 'failed',
+    });
   });
 
   it('does NOT emit issue.run.finish on error', async () => {

@@ -5,6 +5,7 @@ import { getDb } from '../db/index.js';
 import { issueRuns, projects as projectsTable } from '../db/schema.js';
 import { eq } from 'drizzle-orm';
 import { createAgentSession } from './squad-client.js';
+import type { AgentSessionEvent } from './squad-client.js';
 import { OutputStreamer } from './output-streamer.js';
 import { CostTracker } from './cost-tracker.js';
 import { BudgetGuard, BudgetExceededError } from './budget-guard.js';
@@ -101,6 +102,101 @@ export interface AgentRunOutput {
   budgetExceeded?: boolean;
 }
 
+function pickString(obj: unknown, ...keys: string[]): string | undefined {
+  if (!obj || typeof obj !== 'object') return undefined;
+  const o = obj as Record<string, unknown>;
+  for (const key of keys) {
+    const value = o[key];
+    if (typeof value === 'string') return value;
+    if (value && typeof value === 'object') {
+      const nested = pickString(value, ...keys);
+      if (nested !== undefined) return nested;
+    }
+  }
+  return undefined;
+}
+
+function trimOutputSummary(output: string, max = 240): string {
+  const oneLine = output.replace(/\s+/g, ' ').trim();
+  return oneLine.length <= max ? oneLine : `${oneLine.slice(0, max - 1)}…`;
+}
+
+function parseStructuredOutput(output: string): {
+  structuredOutput?: unknown;
+  structuredOutputSource?: 'json' | 'fenced-json';
+} {
+  const trimmed = output.trim();
+  if (!trimmed) return {};
+  try {
+    return { structuredOutput: JSON.parse(trimmed), structuredOutputSource: 'json' };
+  } catch {
+    // Fall through to fenced JSON extraction.
+  }
+
+  const fenced = trimmed.match(/```(?:json)?\s*([\s\S]*?)\s*```/i);
+  if (!fenced?.[1]) return {};
+  try {
+    return { structuredOutput: JSON.parse(fenced[1]), structuredOutputSource: 'fenced-json' };
+  } catch {
+    return {};
+  }
+}
+
+async function forwardAgentSessionEvent(
+  session: RunningIssueSessionImpl,
+  event: AgentSessionEvent,
+): Promise<void> {
+  const payload = event.payload;
+  switch (event.type) {
+    case 'session.created':
+      await session.emit('issue.run.metric', {
+        kind: 'sdk_session',
+        status: 'running',
+        ...payload,
+      });
+      return;
+    case 'message_delta':
+      await session.emit('issue.run.token', {
+        kind: 'message_delta',
+        delta: pickString(payload, 'delta', 'content', 'text') ?? '',
+      });
+      return;
+    case 'reasoning_delta':
+      await session.emit('issue.run.token', {
+        kind: 'reasoning_delta',
+        delta: pickString(payload, 'delta', 'content', 'text') ?? '',
+      });
+      return;
+    case 'usage':
+      await session.emit('issue.run.token', {
+        kind: 'usage',
+        ...payload,
+      });
+      return;
+    case 'tool.call':
+      await session.emit('issue.run.tool_call', payload);
+      return;
+    case 'tool.result':
+      await session.emit('issue.run.tool_result', payload);
+      return;
+    case 'turn_start':
+    case 'turn_end':
+    case 'idle':
+      await session.emit('issue.run.metric', {
+        kind: 'activity',
+        phase: event.type,
+        ...payload,
+      });
+      return;
+    case 'error':
+      await session.emit('issue.run.error', {
+        message: pickString(payload, 'message', 'error') ?? 'SDK session error',
+        ...payload,
+      });
+      return;
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Invariant 1 — the ONE function the stepper calls for an agent_run step.
 // Engine reads task.assignee directly from the agent record and calls
@@ -178,6 +274,7 @@ export async function executeAgentRun(input: AgentRunInput): Promise<AgentRunOut
       systemPrompt: spawnPrompt,
       agentModel: validateModel(input.agent.model ?? null, input.agent.name),
       projectDefaultModel: projectRow?.defaultModel ?? null,
+      onEvent: (event) => forwardAgentSessionEvent(session, event),
     });
 
     // Emit turn event with the agent's response text.
@@ -211,8 +308,12 @@ export async function executeAgentRun(input: AgentRunInput): Promise<AgentRunOut
     // Emit finish event with summary metrics.
     await session.emit('issue.run.finish', {
       agentName: input.agent.name,
+      status: 'completed',
       durationMs,
       cost: result.costUsd,
+      outputAvailable: Boolean(result.output),
+      outputSummary: trimOutputSummary(result.output),
+      ...parseStructuredOutput(result.output),
       tokenCounts: {
         input: result.inputTokens,
         output: result.outputTokens,
@@ -236,7 +337,11 @@ export async function executeAgentRun(input: AgentRunInput): Promise<AgentRunOut
     const errorMessage = err instanceof Error ? err.message : String(err);
 
     // Emit error event — catch any secondary error so we don't obscure the original.
-    await session.emit('issue.run.error', { message: errorMessage }).catch(() => {});
+    await session.emit('issue.run.error', {
+      message: errorMessage,
+      errorMessage,
+      status: 'failed',
+    }).catch(() => {});
 
     await db
       .update(issueRuns)
