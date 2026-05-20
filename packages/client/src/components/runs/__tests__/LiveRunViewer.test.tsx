@@ -15,10 +15,11 @@ import { MemoryRouter, Route, Routes } from 'react-router'
 
 // ─── Hoisted mocks ────────────────────────────────────────────────────────────
 
-const { mockUseRunStream, mockSteer } = vi.hoisted(() => {
+const { mockUseRunStream, mockSteer, mockRetry } = vi.hoisted(() => {
   const mockSteer = vi.fn().mockResolvedValue(undefined)
+  const mockRetry = vi.fn()
   const mockUseRunStream = vi.fn()
-  return { mockUseRunStream, mockSteer }
+  return { mockUseRunStream, mockSteer, mockRetry }
 })
 
 vi.mock('../../../hooks/useRunStream.ts', () => ({
@@ -54,6 +55,7 @@ function makeStream(overrides: Partial<ReturnType<typeof mockUseRunStream>['retu
     lastSeq: 0,
     error: null,
     steer: mockSteer,
+    retry: mockRetry,
     ...overrides,
   }
 }
@@ -83,6 +85,38 @@ const EVENTS = [
     eventType: 'issue.run.turn',
     payload: { runId: 'run-abc', seq: 1, role: 'assistant', content: 'Working...' },
     createdAt: '2026-05-16T06:00:01.000Z',
+  },
+]
+
+const LIVE_CONSOLE_EVENTS = [
+  {
+    id: 'e1', runId: 'run-abc', seq: 0,
+    eventType: 'issue.run.start',
+    payload: { runId: 'run-abc', seq: 0, agentName: 'Kujan', model: 'gpt-5.3-codex' },
+    createdAt: '2026-05-16T06:00:00.000Z',
+  },
+  {
+    id: 'e2', runId: 'run-abc', seq: 1,
+    eventType: 'issue.run.turn',
+    payload: {
+      runId: 'run-abc',
+      seq: 1,
+      role: 'assistant',
+      content: 'Testing live run recovery and streamed log lines.',
+    },
+    createdAt: '2026-05-16T06:00:01.000Z',
+  },
+  {
+    id: 'e3', runId: 'run-abc', seq: 2,
+    eventType: 'issue.run.tool_call',
+    payload: { runId: 'run-abc', seq: 2, toolName: 'bash', command: 'pnpm test -- --run live' },
+    createdAt: '2026-05-16T06:00:02.000Z',
+  },
+  {
+    id: 'e4', runId: 'run-abc', seq: 3,
+    eventType: 'issue.run.tool_result',
+    payload: { runId: 'run-abc', seq: 3, toolName: 'bash', output: 'live run tests passed' },
+    createdAt: '2026-05-16T06:00:03.000Z',
   },
 ]
 
@@ -154,6 +188,37 @@ describe('LiveRunViewer', () => {
       renderViewer()
       expect(screen.getByText(/Run started — Fenster/)).toBeInTheDocument()
     })
+
+    it('streams timeline log lines with useful visible summaries', () => {
+      mockUseRunStream.mockReturnValue(makeStream({ events: LIVE_CONSOLE_EVENTS, status: 'live' }))
+      renderViewer()
+
+      expect(screen.getByText('Running')).toBeInTheDocument()
+      expect(screen.getByText(/Testing live run recovery and streamed log lines/)).toBeInTheDocument()
+      expect(screen.getByText(/Called bash — pnpm test -- --run live/)).toBeInTheDocument()
+      expect(screen.getByText(/Result from bash — live run tests passed/)).toBeInTheDocument()
+    })
+
+    it('surfaces recovery markers such as server restart in the timeline', () => {
+      mockUseRunStream.mockReturnValue(makeStream({
+        events: [
+          ...EVENTS,
+          {
+            id: 'e-recovery',
+            runId: 'run-abc',
+            seq: 2,
+            eventType: 'issue.run.metric',
+            payload: { runId: 'run-abc', seq: 2, kind: 'recovery', message: '[recovered: server restarted]' },
+            createdAt: '2026-05-16T06:00:02.000Z',
+          },
+        ],
+        status: 'live',
+      }))
+
+      renderViewer()
+
+      expect(screen.getByText('Recovery: [recovered: server restarted]')).toBeInTheDocument()
+    })
   })
 
   describe('empty state', () => {
@@ -174,10 +239,59 @@ describe('LiveRunViewer', () => {
       expect(screen.getByText('Connection refused')).toBeInTheDocument()
     })
 
-    it('shows finished badge when status is finished', () => {
-      mockUseRunStream.mockReturnValue(makeStream({ status: 'finished' }))
+    it('uses terminal run error events when the socket has no transport error', () => {
+      mockUseRunStream.mockReturnValue(makeStream({
+        events: [
+          ...EVENTS,
+          {
+            id: 'e-error',
+            runId: 'run-abc',
+            seq: 2,
+            eventType: 'issue.run.error',
+            payload: {
+              runId: 'run-abc',
+              seq: 2,
+              message: 'Agent emitted no structured output after restart',
+            },
+            createdAt: '2026-05-16T06:00:02.000Z',
+          },
+        ],
+        status: 'error',
+        error: null,
+      }))
+
       renderViewer()
+
+      expect(screen.getAllByText('Agent emitted no structured output after restart')).toHaveLength(1)
+    })
+  })
+
+  describe('finished state', () => {
+    it('shows completed output from the finish event', () => {
+      mockUseRunStream.mockReturnValue(makeStream({
+        events: [
+          ...EVENTS,
+          {
+            id: 'e-finish',
+            runId: 'run-abc',
+            seq: 2,
+            eventType: 'issue.run.finish',
+            payload: {
+              runId: 'run-abc',
+              seq: 2,
+              durationMs: 3120,
+              output: 'Final answer: live run viewer regression suite passed.',
+            },
+            createdAt: '2026-05-16T06:00:03.000Z',
+          },
+        ],
+        status: 'finished',
+      }))
+
+      renderViewer()
+
       expect(screen.getByText('Finished')).toBeInTheDocument()
+      expect(screen.getByText(/Final answer: live run viewer regression suite passed/)).toBeInTheDocument()
     })
   })
 

@@ -1,10 +1,11 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useIssueRuns, useRetriggerRun, type RunStatus } from '../../api/runs.ts'
 import { useAgents } from '../../api/agents.ts'
 import RunStatusBadge from './RunStatusBadge.tsx'
 import RunOutputPanel from './RunOutputPanel.tsx'
 import CostDisplay from './CostDisplay.tsx'
 import Avatar from '../Avatar.tsx'
+import { ChevronDown20Regular, ChevronRight20Regular } from '@fluentui/react-icons'
 
 interface RunHistoryProps {
   projectId: string
@@ -24,12 +25,33 @@ function canRetrigger(status: RunStatus): boolean {
   return status === 'failed' || status === 'cancelled' || status === 'completed'
 }
 
+function isActiveRun(status: RunStatus): boolean {
+  return status === 'pending' || status === 'running'
+}
+
+function runSummary(status: RunStatus): string {
+  if (status === 'pending') return 'Queued and waiting for an agent'
+  if (status === 'running') return 'Live now — streaming progress below'
+  if (status === 'completed') return 'Completed run'
+  if (status === 'failed') return 'Failed run — inspect error and recovery markers'
+  return 'Cancelled run'
+}
+
 export default function RunHistory({ projectId, issueId }: RunHistoryProps) {
   const { data: runs, isLoading } = useIssueRuns(projectId, issueId)
   const { data: agents } = useAgents(projectId)
   const [expandedRunId, setExpandedRunId] = useState<string | null>(null)
+  const [hasAutoExpanded, setHasAutoExpanded] = useState(false)
   const [retriggerError, setRetriggerError] = useState<string | null>(null)
   const retriggerRun = useRetriggerRun(projectId)
+
+  useEffect(() => {
+    if (hasAutoExpanded || !runs || runs.length === 0) return
+    const active = runs.find((run) => isActiveRun(run.status))
+    const latest = runs[runs.length - 1]
+    setExpandedRunId((active ?? latest).id)
+    setHasAutoExpanded(true)
+  }, [hasAutoExpanded, runs])
 
   if (isLoading) {
     return <p style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Loading runs…</p>
@@ -37,21 +59,36 @@ export default function RunHistory({ projectId, issueId }: RunHistoryProps) {
 
   if (!runs || runs.length === 0) {
     return (
-      <p style={{ fontSize: '13px', color: 'var(--text-muted)', textAlign: 'center', padding: '24px 0' }}>
-        No runs yet. Use the ▶ Run button on the card.
-      </p>
+      <div
+        style={{
+          border: '1px dashed var(--border)',
+          borderRadius: '10px',
+          padding: '28px 20px',
+          textAlign: 'center',
+          color: 'var(--text-muted)',
+          background: 'var(--bg)',
+        }}
+      >
+        <div style={{ fontSize: '14px', fontWeight: 700, color: 'var(--text)', marginBottom: '6px' }}>
+          No runs yet
+        </div>
+        <div style={{ fontSize: '13px' }}>
+          Start a run to see live status, workspace, logs, outputs, and flow context here.
+        </div>
+      </div>
     )
   }
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
       {runs.map((run) => {
         const agent = agents?.find((a) => a.id === run.agentId)
         const isExpanded = expandedRunId === run.id
+        const active = isActiveRun(run.status)
         const retriggerDisabled = retriggerRun.isPending || runs.some((r) => r.status === 'pending' || r.status === 'running')
 
         return (
-          <div key={run.id} style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+          <div key={run.id} style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
             <div
               role="button"
               tabIndex={0}
@@ -65,40 +102,75 @@ export default function RunHistory({ projectId, issueId }: RunHistoryProps) {
               }}
               style={{
                 display: 'flex',
-                alignItems: 'center',
-                gap: '10px',
+                alignItems: 'stretch',
+                gap: '12px',
                 background: 'var(--bg)',
-                border: `1px solid ${isExpanded ? '#388bfd' : 'var(--border)'}`,
-                borderRadius: '6px',
-                padding: '8px 12px',
+                border: `1px solid ${isExpanded ? '#388bfd' : active ? 'rgba(88,166,255,0.45)' : 'var(--border)'}`,
+                borderRadius: '10px',
+                padding: '12px',
                 cursor: 'pointer',
                 textAlign: 'left',
                 width: '100%',
                 boxSizing: 'border-box',
+                boxShadow: active ? '0 0 0 1px rgba(88,166,255,0.12)' : undefined,
               }}
             >
               {/* Agent avatar */}
-              <Avatar
-                name={agent?.name ?? run.agentId}
-                avatarUrl={undefined}
-                size={24}
-              />
+              <div style={{ paddingTop: '2px' }}>
+                <Avatar
+                  name={agent?.name ?? run.agentId}
+                  avatarUrl={undefined}
+                  size={32}
+                />
+              </div>
 
-              {/* Agent name */}
-              <span style={{ flex: 1, fontSize: '12px', fontWeight: 500, color: 'var(--text)' }}>
-                {agent?.name ?? run.agentId}
-              </span>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', marginBottom: '4px' }}>
+                  <span style={{ fontSize: '14px', fontWeight: 700, color: 'var(--text)' }}>
+                    {agent?.name ?? run.agentId}
+                  </span>
+                  <RunStatusBadge status={run.status} />
+                </div>
+                <div style={{ fontSize: '12px', color: 'var(--text-muted)', lineHeight: 1.4 }}>
+                  {runSummary(run.status)}
+                </div>
+                {run.workspacePath && (
+                  <div
+                    style={{
+                      marginTop: '5px',
+                      fontSize: '11px',
+                      color: 'var(--text-muted)',
+                      fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap',
+                    }}
+                    title={run.workspacePath}
+                  >
+                    {run.workspacePath}
+                  </div>
+                )}
+              </div>
 
-              {/* Status badge */}
-              <RunStatusBadge status={run.status} />
-
-              {/* Duration */}
-              <span style={{ fontSize: '11px', color: 'var(--text-muted)', minWidth: '40px', textAlign: 'right' }}>
-                {duration(run.startedAt, run.completedAt)}
-              </span>
-
-              {/* Cost */}
-              <CostDisplay costUsd={run.costUsd} costTokens={run.costTokens} />
+              <div
+                style={{
+                  display: 'grid',
+                  gridTemplateColumns: 'repeat(2, auto)',
+                  alignContent: 'center',
+                  gap: '6px 12px',
+                  color: 'var(--text-muted)',
+                  fontSize: '11px',
+                }}
+              >
+                <span style={{ textTransform: 'uppercase', letterSpacing: '0.05em' }}>Elapsed</span>
+                <span style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
+                  {duration(run.startedAt, run.completedAt)}
+                </span>
+                <span style={{ textTransform: 'uppercase', letterSpacing: '0.05em' }}>Cost</span>
+                <span style={{ textAlign: 'right' }}>
+                  <CostDisplay costUsd={run.costUsd} costTokens={run.costTokens} />
+                </span>
+              </div>
 
               {canRetrigger(run.status) && (
                 <button
@@ -109,7 +181,10 @@ export default function RunHistory({ projectId, issueId }: RunHistoryProps) {
                     retriggerRun.mutate(
                       { runId: run.id, issueId },
                       {
-                        onSuccess: (newRun) => setExpandedRunId(newRun.id),
+                        onSuccess: (newRun) => {
+                          setExpandedRunId(newRun.id)
+                          setHasAutoExpanded(true)
+                        },
                         onError: (err) => setRetriggerError(err.message),
                       },
                     )
@@ -137,8 +212,8 @@ export default function RunHistory({ projectId, issueId }: RunHistoryProps) {
               )}
 
               {/* Expand chevron */}
-              <span style={{ fontSize: '10px', color: 'var(--text-muted)', marginLeft: '4px' }}>
-                {isExpanded ? '▲' : '▼'}
+              <span style={{ color: 'var(--text-muted)', marginLeft: '2px', display: 'inline-flex', alignItems: 'center' }}>
+                {isExpanded ? <ChevronDown20Regular /> : <ChevronRight20Regular />}
               </span>
             </div>
 

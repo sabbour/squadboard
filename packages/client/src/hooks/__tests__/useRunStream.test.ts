@@ -412,6 +412,21 @@ describe('useRunStream', () => {
       expect(mockDisconnect).toHaveBeenCalled()
     })
 
+    it('can keep the shared wsClient connected on unmount', async () => {
+      mockApiFetch.mockResolvedValueOnce(makeEventsResponse([], 0))
+
+      const { unmount } = renderHook(() =>
+        useRunStream(RUN_ID, PROJECT_ID, ISSUE_ID, { disconnectOnUnmount: false }),
+      )
+      await waitFor(() => expect(mockConnect).toHaveBeenCalled())
+
+      unmount()
+      expect(mockDisconnect).not.toHaveBeenCalled()
+      for (const type of ISSUE_RUN_EVENT_TYPES) {
+        expect(mockOff).toHaveBeenCalledWith(type, expect.any(Function))
+      }
+    })
+
     it('does not update state after unmount (no leak)', async () => {
       const slowFetch = new Promise<ReturnType<typeof makeEventsResponse>>((resolve) =>
         setTimeout(() => resolve(makeEventsResponse([], 0)), 50),

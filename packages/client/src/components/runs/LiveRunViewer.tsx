@@ -82,25 +82,73 @@ function eventIcon(eventType: string) {
   return <ChevronRight20Regular />
 }
 
+function payloadString(
+  payload: Record<string, unknown>,
+  keys: string[],
+): string | null {
+  for (const key of keys) {
+    const value = payload[key]
+    if (typeof value === 'string' && value.trim()) return value.trim()
+  }
+  return null
+}
+
+function snippet(value: string, max = 120): string {
+  const oneLine = value.replace(/\s+/g, ' ').trim()
+  return oneLine.length > max ? `${oneLine.slice(0, max - 1)}…` : oneLine
+}
+
+function recoveryMessage(payload: Record<string, unknown>): string | null {
+  const kind = payloadString(payload, ['kind', 'marker', 'type'])
+  const message = payloadString(payload, ['message', 'line', 'summary'])
+  if (kind === 'recovery' || message?.toLowerCase().includes('recovered')) {
+    return message ? snippet(message) : 'server recovered'
+  }
+  return null
+}
+
+function errorMessage(payload: Record<string, unknown>): string {
+  return payloadString(payload, ['message', 'errorMessage', 'error']) ?? 'unknown'
+}
+
+function latestRunError(events: IssueRunEventRow[]): string | null {
+  for (let i = events.length - 1; i >= 0; i--) {
+    const evt = events[i]
+    if (evt.eventType === 'issue.run.error') return errorMessage(evt.payload)
+  }
+  return null
+}
+
 function eventSummary(event: IssueRunEventRow): string {
   const p = event.payload
   switch (event.eventType) {
     case 'issue.run.start':
       return `Run started${p.agentName ? ` — ${String(p.agentName)}` : ''}`
-    case 'issue.run.turn':
-      return `Turn ${event.seq + 1}${p.role ? ` (${String(p.role)})` : ''}`
+    case 'issue.run.turn': {
+      const content = payloadString(p, ['content', 'message', 'text', 'delta'])
+      return `Turn ${event.seq + 1}${p.role ? ` (${String(p.role)})` : ''}${content ? ` — ${snippet(content)}` : ''}`
+    }
     case 'issue.run.token':
       return `Tokens — in: ${p.inputTokens ?? 0}, out: ${p.outputTokens ?? 0}`
-    case 'issue.run.tool_call':
-      return `Called ${String(p.toolName ?? 'tool')}`
-    case 'issue.run.tool_result':
-      return `Result from ${String(p.toolName ?? 'tool')}`
-    case 'issue.run.metric':
+    case 'issue.run.tool_call': {
+      const content = payloadString(p, ['command', 'input', 'args', 'message'])
+      return `Called ${String(p.toolName ?? p.name ?? 'tool')}${content ? ` — ${snippet(content)}` : ''}`
+    }
+    case 'issue.run.tool_result': {
+      const content = payloadString(p, ['output', 'stdout', 'stderr', 'result', 'content', 'message'])
+      return `Result from ${String(p.toolName ?? p.name ?? 'tool')}${content ? ` — ${snippet(content)}` : ''}`
+    }
+    case 'issue.run.metric': {
+      const recovery = recoveryMessage(p)
+      if (recovery) return `Recovery: ${recovery}`
       return `Metric recorded (seq ${event.seq})`
-    case 'issue.run.finish':
-      return `Run finished${p.durationMs != null ? ` in ${Math.round(Number(p.durationMs) / 100) / 10}s` : ''}`
+    }
+    case 'issue.run.finish': {
+      const output = payloadString(p, ['output', 'finalOutput', 'summary', 'result'])
+      return `Run finished${p.durationMs != null ? ` in ${Math.round(Number(p.durationMs) / 100) / 10}s` : ''}${output ? ` — ${snippet(output)}` : ''}`
+    }
     case 'issue.run.error':
-      return `Error: ${String(p.message ?? 'unknown')}`
+      return `Error: ${errorMessage(p)}`
     case 'issue.run.steered':
       return `Steered by ${String(p.actor ?? 'user')}: "${String(p.message ?? '').slice(0, 60)}"`
     default:
@@ -320,6 +368,7 @@ function SteerBar({
 export default function LiveRunViewer() {
   const { projectId = '', issueId = '', runId = '' } = useParams()
   const { events, status, error, steer, retry } = useRunStream(runId || null, projectId, issueId)
+  const terminalError = error?.message ?? latestRunError(events)
 
   // Derive metrics from the event log
   const [elapsed, setElapsed] = useState('—')
@@ -461,7 +510,7 @@ export default function LiveRunViewer() {
       {status === 'error' && (
         <MessageBar intent="error">
           <MessageBarBody>
-            {error?.message ?? 'An error occurred'}
+            {terminalError ?? 'An error occurred'}
             {' '}
             <Button size="small" appearance="transparent" onClick={retry} style={{ padding: 0, minWidth: 0, textDecoration: 'underline' }}>
               Retry

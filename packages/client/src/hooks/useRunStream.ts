@@ -79,6 +79,10 @@ export interface RunStreamResult {
   retry: () => void
 }
 
+export interface RunStreamOptions {
+  disconnectOnUnmount?: boolean
+}
+
 // ─── Constants ───────────────────────────────────────────────────────────────
 
 export const ISSUE_RUN_EVENT_TYPES = [
@@ -189,7 +193,9 @@ export function useRunStream(
   runId: string | null,
   projectId: string,
   issueId: string,
+  options: RunStreamOptions = {},
 ): RunStreamResult {
+  const disconnectOnUnmount = options.disconnectOnUnmount ?? true
   const [events, setEvents] = useState<IssueRunEventRow[]>([])
   const [run, setRun] = useState<IssueRunStreamSnapshot | null>(null)
   const [status, setStatus] = useState<RunStatus>('idle')
@@ -401,9 +407,9 @@ export function useRunStream(
       mountedRef.current = false
       for (const h of handlers) wsClient.off(h.type, h.fn as never)
       unsubState()
-      wsClient.disconnect()
+      if (disconnectOnUnmount) wsClient.disconnect()
     }
-  }, [runId, projectId, issueId, fetchEvents])
+  }, [runId, projectId, issueId, fetchEvents, disconnectOnUnmount])
 
   return { events, run, status, lastSeq, error, steer, retry }
 }
