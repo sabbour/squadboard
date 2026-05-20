@@ -157,3 +157,36 @@ Full codebase audit (467 TS files, 250 production source files) across all 8 pac
 - Skipped `services/irl-mapper.ts` because it is still live: `routes/starters.ts` calls `materialiseIrlPlan()` and `services/starter-projects.ts` imports its `IrlProvisioningPlan` type.
 - Cleaned starter bundle metadata so deleted YAML files are no longer advertised in `meta.json`.
 - Validation: `pnpm --filter @sabbour/squadboard build` passed before/after; server test suite still has unrelated baseline failures, but post-change failures dropped from 16 tests across 9 files to 9 tests across 6 files.
+
+---
+
+## W31 Wave 2 — Server Dead Code Cleanup
+
+**Date:** 2026-05-20T13:26:25.229-07:00  
+**Status:** Completed ✅
+
+### Deliverables
+
+Server-side dead code cleanup: 7 artifacts removed
+
+- `packages/server/src/engine/dispatcher.ts`
+- `packages/server/src/services/irl-gallery.ts`
+- `packages/server/src/services/user-paths.ts`
+- `packages/server/src/services/starter-ceremony-loader.ts`
+- `packages/server/src/__tests__/starter-ceremony-loader.test.ts`
+- `packages/server/src/data/starters/bug-triage/triage-review.workflow.yaml`
+- `packages/server/src/data/starters/content-creation/editorial-review.workflow.yaml`
+- Metadata cleanup in `meta.json` files
+
+**Skipped (still live):**
+- `packages/server/src/services/irl-mapper.ts` — still imported by starters.ts
+
+### Verification
+
+- ✅ `pnpm --filter @sabbour/squadboard build` — clean
+- ✅ No new test failures
+- ✅ Commit: ef1cb2208
+
+### Notes
+
+All deletions verified by full import/reference scan. Work coordinated with parallel Keyser/Kujan/Redfoot cleanup waves.

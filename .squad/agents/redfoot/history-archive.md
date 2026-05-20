@@ -1,166 +1,527 @@
-# Redfoot — History
+# Redfoot History Archive
 
-## Core Context
+**Archived:** 2026-05-20
+**Original size:** 27543 bytes
 
-- **Project:** Squadboard — local-first kanban + workflow board for [Squad](https://github.com/bradygaster/squad) agents
-- **Package:** `@sabbour/squadboard` · Local install: `npx @sabbour/squadboard init` · MIT · Self-hosted
-- **Role:** DevRel / Docs
-- **Joined:** 2026-05-14T08:17:03Z
-- **Hired by:** Ahmed Sabbour
-- **PRD:** `/home/asabbour/.copilot/session-state/b22555db-ec9d-4ffd-9266-4553cda5bb11/research/squad-web-design-v4.md`
+# Redfoot — Session History
 
-## Audience I write for
+**Last Updated:** 2026-05-20T13:09:21Z
 
-From PRD §1.2:
-- **Solo developers** running 1–3 Squad agents who want a board, not a terminal log
-- **Small teams** sharing a `.squad/` directory who need workflow gates without inventing them in agent prompts
-- **Agent builders** shipping workflows as first-class artifacts — versioned, auditable, demonstrable
+## Executive Summary
 
-The line that frames every doc: *"If you have one agent and one task at a time, you don't need this; `squad chat` is fine."*
+Documentation specialist. Core focus: technical writing, documentation completeness, terminology consistency, user-facing content quality. Conducts prose audits and identifies gaps in API reference, developer guides, and user workflows. Recent major work includes comprehensive WebSocket documentation audit (protocol gaps, dead code detection) and docs simplification/terminology cleanup. Maintains audit trails and produces detailed findings reports.
 
-## What I'll never do (PRD §1.4)
+**Key domains:**
+- API reference documentation
+- WebSocket protocol documentation
+- User guide and workflow documentation
+- Terminology standardization and consistency
+- Docs audit and gap analysis
+- Technical prose quality and clarity
 
-- Position Squadboard as a Squad replacement
-- Position it as a Coordinator wrapper
-- Frame it as CI/CD, generic chat UI, multi-tenant SaaS, or a marketplace
-
-## Roadmap I deliver against
-
-Every demo ships with:
-- A 30-second elevator pitch ("what's new")
-- A getting-started walkthrough (commands + screenshots)
-- An entry in CHANGELOG.md
-- An update to the relevant section of the README
-
-Major doc cuts:
-- **Demo 1** — README + first-install guide
-- **Demo 6** — Workflow YAML cookbook (first version)
-- **Demo 9** — Reviews & approvals guide
-- **Demo 10** — Fan-out + handoff cookbook entry
-- **Demo 11** — Workflow editor walkthrough
-- **Demo 14** — MCP tool reference
-- **Demo 15** — GitHub sync setup guide
-
-## Learnings
-
-- **2026-05-14 PRD Copy Pass (tagged):** Tagged to perform copy pass on `docs/prd.md` (voice/clarity, no content changes — the five invariants are paste-locked and canonical).
-- **2026-05-14 PRD Copy Pass (completed):** Completed copy pass on `docs/prd.md`. 5 surgical edits, ~1% shrink (12,331 → 12,195 bytes), no content changes. Tightened vision, simplified scope/architecture, polished tech-stack links, removed instructional trailer. ✅ Approved as publish-ready for hacking phase.
-- **2026-05-14 Top-level README (completed):** Authored `README.md` at project root (5,024 bytes). Hero banner (horizontal SVG) + 10 sections (show-before-tell: quick-start precedes architecture). Both SVGs referenced per brand guidelines. All content sourced from PRD; zero invention. Hacking-phase compliant (no contributing/CI badges). Decision file + decision inbox entry logged. Ready for Scribe commit.
-- **2026-05-14 README merged:** Decision entry merged into `decisions.md` by Scribe. Inbox file deleted. README + brand assets (both SVGs + square PNG) committed. Skipped Windows NTFS metadata files (`:Zone.Identifier`, `:sec.endpointdlp` — DLP scanner artifacts).
-- **2026-05-14 Demo stubs (completed):** Created 15 per-demo user-facing doc stubs in `docs/demos/` (demo-01 through demo-15). Each stub: status 🔴, layer, prerequisites, "Run it" commands (mostly TBD for hacking phase), observables from PRD. Stubs follow template exactly. Pattern: `demo-NN-{slug}.md`. Decision file logged to inbox.
-- **2026-05-14 Getting Started section (completed):** Added comprehensive `## Getting Started` section to README.md (157 lines, 6 subsections). Covers prerequisites (Node ≥20, pnpm ≥8, no external DB), installation (clone + pnpm install), initialization (auto-managed at startup), dual-start paths (full app or components), CLI reference (squadboard init / mcp), MCP integration for Claude Desktop / Cursor with config snippets, GitHub sync setup (UI + curl API), production build, and dev database studio. All commands sourced from actual package.json scripts and source code inspection. Inserted after intro, before "What you get", maintaining scannability via fenced code blocks and headings. Commit: `bdc2ab1`. ✅
-- **2026-05-14 MCP docs fix (completed):** Removed all Claude Desktop and Cursor references from README MCP Integration section. Rewrote to show VS Code (with MCP extension) and GitHub Copilot CLI integration separately. Both use the same stdio JSON config format — `.vscode/mcp.json` (project-level, commit to repo) vs. `~/.copilot/mcp-config.json` (user-level). Clarified that `squadboard mcp` CLI command starts the stdio server. Config paths updated to `node packages/cli/dist/index.js mcp` with guidance on path adjustment. Commit: `3c93923`. ✅
-
-- **2026-05-14 MCP docs (backlog batch 1):** Integrated into backlog batch 1 orchestration. Decision recorded, inbox entry merged to decisions.md. Team session log updated.
-
-## Wave 10 Docs Refresh — 2026-05-15
-
-- **Scope:** Wave 10 (Streams A–E) introduced dogfood loop, cost multipliers, templates, agent lifecycle semantics, and ceremony redesigns. Docs needed refresh to cover MCP `capture` tool, `list_agents` status filtering (disabled vs retired), cost models, templates, and end-to-end setup.
-
-- **Files changed:**
-  - `packages/server/src/mcp/README.md` — Updated `list_agents` table entry to mention status filtering. Added detailed "Tool Reference" section with examples for `list_agents` (B9 semantics: active | disabled | retired | all) and `capture` (A4 dogfood loop). Added link to `.squad/dogfood.md`.
-  - `docs/mcp-config-example.json` — Created as a reference template for `.copilot/mcp-config.json` setup, with `SQUADBOARD_DEFAULT_PROJECT_ID` placeholder.
-  - `README.md` (root) — Added three subsections after "Build for Production":
-    - **Dogfood Mode** — When running under Copilot CLI with Squad coordinator, directives auto-capture to Squadboard board. References `.squad/dogfood.md` and MCP tool reference.
-    - **Cost Tracking** — Explains two cost models (legacy USD vs GitHub Copilot multipliers). Shows env var + API methods to switch. Points to `packages/server/src/sdk/cost-tracker.ts`.
-    - **Templates** — Brief section on save-as-template API + on-disk mirror at `.squad/squadboard/templates/`. Shows curl example.
-  - `CHANGELOG.md` — Created with Wave 10 section. Grouped features by stream (A: Dogfood, B: Semantics, D: Pricing/Ceremony/Templates, E: Docs). Added "Upgrade Notes" subsection with explicit instructions for `SQUADBOARD_COST_MODEL` env var and dogfood setup. Created template for future releases (0.1.0 initial hacking phase, versioning guidelines).
-
-- **Verification:**
-  - `pnpm build` passed all 4 workspace projects with no regressions. ✅
-  - Skimmed each doc for "first 60 seconds rule" (runnable command early):
-    - MCP README: Transport table + tool list appears early, followed by examples. ✅
-    - Root README: Prerequisites, clone, `pnpm install`, `pnpm run dev` in first 70 lines. ✅
-    - CHANGELOG: Human-readable for operators; "Upgrade Notes" subsection makes migration path explicit. ✅
-
-- **Patterns discovered:**
-  - Wave 10 docs bridge three audiences: (1) End users (Dogfood, Cost Tracking, Templates), (2) MCP clients (tool reference + examples), (3) Operators (CHANGELOG upgrade notes). Each section explicitly references upstream docs (`.squad/dogfood.md`, `packages/server/src/sdk/cost-tracker.ts`).
-  - `capture` tool docs are critical entry point for understanding the dogfood loop; must be co-located with `list_agents` + project-ID resolution.
-  - CHANGELOG format: Group by stream/feature, then list concrete changes, then provide operator-facing upgrade notes with code samples.
-
-- **Open questions for Kujan (CHANGELOG coordination):**
-  - Should the Wave 10 section header stay generic ("Wave 10: Dogfood + Multipliers + Templates") or reference specific streams/PRs?
-  - Are there additional breaking changes or deprecations I should surface in the Upgrade Notes (e.g., any config format changes, deprecated endpoints)?
-  - Should CHANGELOG include commit hashes / PR references, or keep it narrative-only for now (hacking phase)?
-  - Is the 0.1.0 template appropriate for this release, or should we wait for a formal v1.0 roadmap?
-
-
-## Squadboard Coordinator Extension Framework — 2026-05-15 (Q4)
-
-### Deliverables Shipped (3 files)
-
-1. **Coordinator fragment** (`packages/squadboard/coordinator-fragment.md`) — 160 lines. Detection-guarded fragment written in Squad coordinator voice (terse, imperative). Sections:
-   - Detection block (scan for `squadboard_` tools).
-   - Tool inventory table (11 tools by use case: capture, read board, manage cards, run agents, project discovery, slash commands, routing metadata).
-   - Capture-on-directive workflow (additive with existing `.squad/decisions/inbox/` flow).
-   - Close-out symmetry (second `capture` call with `done:` prefix + first 60 chars + sha for manual dedup).
-   - Project routing (default via `SQUADBOARD_DEFAULT_PROJECT_ID`; no per-capture prompts).
-   - Status read-outs (when user asks "what's on the board?").
-   - Boundaries (don't bypass reviewer rules, don't mark done without evidence, don't duplicate cards).
-   - Override mechanism (project-local `.squad/extensions/coordinator/squadboard.md` wins; user can remove auto-installed marker to customize).
-
-2. **Postinstall script** (`packages/squadboard/scripts/postinstall-coordinator-fragment.mjs`) — 95 lines ESM Node.js. Idempotent + diff-aware:
-   - Install to `~/.squad/extensions/coordinator/squadboard.md`.
-   - SHA-256 matching for no-op detection.
-   - `<!-- squadboard:auto-installed -->` marker at line 1 signals file ownership.
-   - If marker present + content differs → upgrade silently.
-   - If marker absent + content differs → save `.new` alongside (diff-aware user override).
-   - Respects `SQUADBOARD_SKIP_POSTINSTALL=1` env var (CI/Docker).
-   - Always exits 0 (postinstall must not break npm install).
-
-3. **Plugin-author guide** (`docs/plugins/squad-coordinator-extensions.md`) — 300 lines. Warm peer-to-peer voice ("your plugin can do this too"):
-   - What this enables (extend Squad without forking upstream `squad.agent.md`).
-   - Where fragments live (user-global `~/.squad/extensions/coordinator/` vs project-local `<repo>/.squad/extensions/coordinator/`).
-   - Fragment shape & style guidelines (≤200 lines, detection-guarded, Squad-coordinator voice, table-based tool inventory).
-   - Naming convention (use package/service name: `squadboard.md`, `trello.md`, not `extension.md`).
-   - Installation pattern with pseudocode (postinstall script reference + key idempotency points).
-   - Upgrade story (postinstall runs on every npm install; users stay in sync; user can customize by removing marker).
-   - User override (project-local > global; whole-file replacement).
-   - Upstream PR dependency (Q3: McManus + upstream maintainer extends Squad preamble for auto-loading; Q4 ships in-tree; Q5 patcher as safety net).
-   - Anti-patterns (don't contradict upstream, don't dispatch agents, don't use repo-specific paths, don't assume Squad file structure, don't fail silently).
-   - Testing checklist (fresh install, idempotency, upgrade, user override, session test).
-   - FAQ (filename collisions, async ops, cross-tool calls, Squad upgrades, non-npm distribution).
-
-### Fragment-Format Conventions Established
-
-1. Auto-installed marker as line 1: `<!-- {package}:auto-installed -->`
-2. Detection block before workflows.
-3. Tool inventory table: "When | Tool | What It Does".
-4. Workflow sections organized by user intent, not signature.
-5. Boundaries section explaining what NOT to do.
-6. Override mechanism documented.
-7. ≤200 lines, imperative coordinator voice.
-
-### Postinstall-Script Conventions Established
-
-1. Target: `~/.squad/extensions/coordinator/{fragment-name}.md`
-2. Marker pattern: `<!-- {package}:auto-installed -->`
-3. Exit 0 always (never break npm install).
-4. Env var: `{PACKAGE}_SKIP_POSTINSTALL` for CI.
-5. Idempotency via marker + SHA.
-6. User feedback: ✅ installed, ✅ up-to-date, 🔄 upgraded, ⚠️  user-edited.
-
-### Decision Document
-
-Created `.squad/decisions/inbox/redfoot-squadboard-coordinator-fragment.md`:
-- Summarizes all three deliverables.
-- Documents design decisions (detection-guarded, capture-on-directive additive, close-out symmetry, project routing).
-- Explains relationship to Q3 (upstream PR) and Q5 (fallback patcher).
-- Lists conventions established (fragment format, postinstall script, plugin-author guide framing).
-- Notes what's NOT in scope (upstream discovery, UI, marketplace).
-- Success criteria: ✅ all met.
-
-### Key Learnings
-
-- **Dual-file pattern:** In-tree authoritative source (`packages/squadboard/coordinator-fragment.md`) lives in the codebase; deployed to user's global config via postinstall (`~/.squad/extensions/coordinator/squadboard.md`). Users can customize project-local copy without affecting global. Enables both upstream updates (refreshed fragment in source) and local flexibility (project overrides).
-
-- **Postinstall idempotency via marker:** The `<!-- {package}:auto-installed -->` marker is the key to safe upgrades. Presence = "we own this file; safe to replace". Absence + content differs = "user has customized; back off, save .new instead". This pattern is reusable for any plugin.
-
-- **Plugin-author guide as ecosystem enabler:** By documenting this mechanism explicitly, we invite Trello, Aspire, internal-tools, and future plugins to extend Squad via fragments. The guide is warm and peer-to-peer ("your plugin can do this too"), not prescriptive. Reference implementations (Squadboard's postinstall script + coordinator fragment) are the canonical examples.
-
-- **Contingency plan visibility:** Q3 (upstream PR by McManus) is the ideal path (auto-load fragments from Squad preamble). Q4 ships in-tree + postinstall works today. Q5 (fallback patcher) is a safety net if Q3 misses timeline. Documenting all three makes the contingency visible and gives the team confidence to ship Q4 without blocking on Q3.
-
-- **Detection-guarding prevents silent no-ops:** Fragments that activate only when MCP tools are present avoid confusion. If a user hasn't installed the Trello MCP server, the Trello fragment is skipped entirely (no errors, no strange behavior). This makes fragments safe to ship globally without assuming the user has every service installed.
+**Current status:** WebSocket docs audit complete with 5 priority fixes identified. Terminology cleanup wave concluded.
 
 ---
 
+## Wave 20 — Docs Simplification & Terminology Cleanup (2026-05-20T23:59:00-07:00)
+
+**Scope:** Remove project-specific language ("Spark") from docs, ensure consistent Squad Apps terminology, verify no screenshots, and validate docs build.
+
+### Deliverables Shipped
+
+1. **Getting-Started Index Updated** — Removed "Spark" from descriptions and page titles
+   - Changed "follow the Spark tutorials" to "follow tutorials to master the workflow board"
+   - Made learning path and project references generic, but kept instructional clarity
+
+2. **Tutorials Refactored to Generic Project Names**
+   - Tutorial 1 (connect-spark → create-project): "Create your project" instead of "Connect Spark"
+   - Tutorial 2 (cast-the-team): Generic "your project" language
+   - Tutorial 3 (run-the-launch-wave → run-a-workflow): Generic workflow framing
+   - Tutorial 4 (connect-tools): Generic project + tool reference
+   - All tutorials still use concrete example project names in instructions (e.g., "MyProject"), but descriptions no longer frame Spark as the primary use case
+
+3. **Quickstart Refactored** — Made example more generic
+   - Removed "Create the Spark project" framing
+   - Changed to "Create your first project"
+   - Updated ceremony reference to "default launch-review ceremony" instead of "Spark Launch Review"
+
+4. **Documentation Validation**
+   - Verified no embedded screenshots in docs-site (only logo/social-card static assets remain)
+   - Confirmed "Squad Apps" terminology used consistently throughout
+   - Cost model already uses "ai_credits" (GitHub AI Credits) — no changes needed
+   - Docs build passes: `pnpm docs:build` succeeds with 41 pages compiled
+
+5. **Structure Verified**
+   - Squad Apps guide (squad-apps.mdx) properly distinguishes Squad Apps from templates
+   - Storage/sync documentation (storage-provider.mdx) already provides detailed sync guidance
+   - README.md points to correct docs paths without over-emphasizing Spark
+   - Terminology consistency verified across all user-guide pages
+
+### Learning
+
+- **Avoid product example names in headings/descriptions**, even if they're helpful in walkthroughs. Use generic "project" language in meta (title, description) but concrete example names in step-by-step instructions. This prevents docs from seeming project-specific while keeping walkthrough clarity.
+- **Docs build should be a gate**. Ran `pnpm docs:build` after changes to catch issues early. No broken links or rendering errors appeared.
+- **The three-way split matters**: Templates (save local state) vs. Squad Apps (full portable package) vs. upstream Squad plugins (shared skills). Docs already explain this well in the comparison table.
+
+### No Further Docs Added
+
+- **E2E testing guide**: Tutorials already cover end-to-end workflow validation (Tutorial 3). No separate test suite docs needed for docs-site.
+- **Release/Publish guide**: `docs/RELEASE-READINESS.md` already covers pre-release checklist. Consider surfacing in docs-site if external teams will publish Squad Apps, but not blocking for current scope.
+- **Sync guide**: `storage-provider.mdx` already provides comprehensive sync guidance (four configuration recipes, storage boundary explanation). No collapse needed.
+
+### Next Steps
+
+- Monitor user feedback on whether generic project references feel less welcoming
+- Consider adding a "Squad App showcase" index if many Apps emerge
+- Revisit E2E testing docs only if users report test coverage gaps
+
+## Wave 19 — Cross-Surface Squad Sync: SDK Contract & Client API (2026-05-20T22:00:00-07:00)
+
+**Scope:** Define and document cross-surface Squad state authority, storage modes, bootstrap semantics, artifact projection, and repair contract. No user-facing API endpoints yet (pending Hockney backend implementation).
+
+### Deliverables Shipped
+
+1. **SDK Sync Ownership Contract** — `packages/server/src/sdk/sync-ownership.ts` (~250 lines)
+   - Pure, schema-free contract for authority analysis
+   - Defines `SquadSyncStorageContract` (postgresql | filesystem modes)
+   - Exports `SquadSyncOwnershipStatus` with bootstrap, projection, surfaces, and repair actions
+   - Ceremony defaults marked as **required**, not recommended
+   - Ready for backend API consumption; tests pass
+
+2. **Client API Contract** — `packages/client/src/api/squad.ts` (~200 lines updates)
+   - TypeScript types for `SquadSyncStatus`, `SquadSyncFileCheck`, drift detection
+   - React hooks: `useSquadSyncStatus()` (polling), `useRepairSquadSync()` (mutations)
+   - Namespaced under `/api/projects/:projectId/squad-sync`
+   - Comment: "intentionally not consumed by visible UI until Hockney lands it"
+   - Envelope pattern with `ok: boolean` and structured error handling
+
+3. **Architectural Contract Doc** — `docs/setup/cross-surface-squad-sync-contract.md` (complete)
+   - Source-of-truth modes: `fs` (filesystem authority) and `postgresql` (database authority)
+   - Bootstrap semantics: one-time import from filesystem on first DB write
+   - Projection semantics: `.squad/`, `.github/agents/squad.agent.md`, ceremony defaults generated from authority
+   - Drift detection: how to identify when surfaces diverge
+   - Startup flows: Squadboard-first vs. CLI-first with examples
+   - API namespace decision locked: `/api/projects/:projectId/squad-sync/...`
+
+4. **Implementation Plan Updated** — `docs/setup/cross-surface-sync-implementation-plan.md` (finalized)
+   - All API routes defined with pseudo-code and test specs
+   - Hockney tasks (H1–H6): schema migration, status endpoint, projection, agent generation, repair
+   - Keyser + Fenster tasks (K1–K4): UI components, import workflow, settings panel
+   - Kujan tasks (Q1–Q3): end-to-end tests, scenario coverage
+   - Ceremony invariant locked: `.squad/ceremonies.md` required; empty ceremonies are health warnings
+
+5. **Feature Docs Updated**
+   - `feat-2026-05-19-define-cross-surface-squad-sync-ownership.md` → Status: "In Progress" with implementation status section
+   - `feat-2026-05-20-cross-surface-squad-state-authority-and-sync.md` → Status: "In Progress" with split-wave notes
+
+6. **README Section Added** — New "Cross-Surface Squad Sync" section
+   - User-facing promise: Squadboard and CLI/Copilot are interchangeable peer clients
+   - Storage modes explained (PostgreSQL default, filesystem opt-in)
+   - Path 1 (Squadboard-first) and Path 2 (CLI-first) workflows with setup steps
+   - Sync status API and repair commands (with note that UI comes in Wave 20)
+   - Why this matters: eliminates data loss on mode switch
+   - No false claims of continuous mirroring; emphasis on "projection/repair on demand"
+
+7. **CHANGELOG Entry** — Honest entry about foundation work
+   - SDK contract + client API complete and ready
+   - Backend routes pending Hockney implementation (Wave 20)
+   - Clarifies that user-facing behavior is still incoming
+   - Flags ceremony defaults as now-required invariant
+
+### Key Principles Locked
+
+1. **Mode-based authority, not continuous sync:** Each project locks to one source-of-truth at creation. We mirror *when asked*, not continuously.
+2. **Explicit vs. implicit:** Bootstrap is one-time import; projection is repeatable generation from authoritative state.
+3. **No false claims:** SDK & client contracts are complete, but backend routes are pending. Documentation does not call this "working" until Hockney's routes land.
+4. **Ceremony invariant:** `.squad/ceremonies.md` must exist and be non-empty. Missing ceremonies are health warnings requiring repair, not valid steady states.
+5. **Precision over marketing:** Use "mode-based authority" and "projection/repair on demand" instead of "two-way sync" until end-to-end tests prove both directions work.
+
+### Design Decisions Captured
+
+**Terminology:**
+- Authority → source of truth (DB or filesystem)
+- Storage mode → postgresql (default) or filesystem (opt-in)
+- Bootstrap → one-time import from filesystem when DB is empty
+- Projection → generated artifacts (`.squad/`, `.github/agents/squad.agent.md`)
+- Drift → when surfaces diverge (missing files, stale content, conflicting state)
+- Repair → user-initiated sync or regeneration actions
+
+**API Namespace Decision:**
+- Canonical: `/api/projects/:projectId/squad-sync/...`
+- Matches existing project-resource conventions
+- Avoids overloading generic "sync" or GitHub sync terminology
+- Locked in implementation plan and feature docs
+
+**Ceremony Defaults:**
+- Seeded from template: `docs/templates/ceremonies-defaults.md`
+- 5 built-in ceremonies: Simple Review, Bug Fix, RFC, Spike, Pair Programming
+- Required (not recommended) in SDK contract
+- Empty ceremonies = drift warning = repair action required
+
+### Doc Debt Resolved
+
+- ✅ "How do I switch from Squadboard to CLI/Copilot without losing my team?" → README section + architecture doc
+- ✅ "What's the source of truth?" → Locked in feature specs and contract doc
+- ✅ "What happens if I have no ceremonies?" → Now a health warning (SDK defined); repair action available
+- ✅ "Is this two-way sync?" → No. It's mode-based authority + projection on demand. Docs use precise language.
+- ✅ "What does Hockney need to do?" → Implementation plan has exact routes, schemas, tests
+
+### What's NOT Shipped (Pending Hockney Wave 20)
+
+- Backend API routes (queue, status, repair, agent generation)
+- Schema migration (`projects.storage_provider_mode` column)
+- Import/detect workflows in project setup
+- UI sync status panel
+- End-to-end tests for both start paths
+
+### Success Criteria Met
+
+- ✅ SDK contract pure and schema-free (testable, versioned)
+- ✅ Client API ready (types + hooks); no UI consumption yet
+- ✅ Architectural semantics fully documented with examples
+- ✅ API namespace locked; implementation plan ready
+- ✅ README explains user-facing promise without false claims
+- ✅ CHANGELOG honest: what's here (contract), what's pending (backend)
+- ✅ Feature docs reflect progress (In Progress, not Backlog)
+- ✅ No code modifications outside SDK/client/docs (preserve dirty tree)
+
+### Key Insights Locked
+
+1. **Ceremony defaults are non-negotiable:** The SDK now enforces that `.squad/ceremonies.md` exists and has content. This prevents the "empty ceremonies" state from being a valid configuration.
+2. **Projection vs. Authority:** Filesystem `.squad/` in PostgreSQL mode is a *projection*, not the source of truth. This distinction is critical for avoiding data loss on direction switches.
+3. **Bootstrap once, not repeatedly:** Marked by `__bootstrap_metadata` key. Re-import requires explicit `force: true` API call. Prevents accidental overwrites.
+4. **Precise language matters:** "Two-way sync" implies continuous mirroring, which doesn't exist. Using "mode-based authority" and "on-demand projection/repair" is more accurate and sets correct user expectations.
+5. **Both start paths must work:** We cannot call this feature complete until both Squadboard-first → CLI continuation AND CLI-first → Squadboard continuation are tested end-to-end.
+
+### Open Items (Handed to Hockney)
+
+- H1: Schema migration — `projects.storage_provider_mode` column
+- H2: Bootstrap metadata in `squad_storage`
+- H3–H6: Five API endpoints + route mounting
+- Hockney's route implementation is a prerequisite for Keyser's UI and Kujan's tests
+
+---
+
+## Wave 13 Learnings — Q4 coordinator framework shipped
+
+**Added by:** Scribe (Wave 13 close-out)  
+**Date:** 2026-05-15T19:39:32-07:00
+
+### Q4 delivery complete
+
+Shipped full Squadboard coordinator extension framework: fragment (~200 lines), postinstall script (idempotent + diff-aware), plugin-author guide (~300 lines). All live in tree and documented.
+
+**Dependency flagged:** Q3 task on McManus's plate (upstream PR to squad-duck for generic extension discovery). Your Q4 work assumes that PR eventually lands; Q5 has a fallback patcher if Q3 timeline slips.
+
+---
+
+## Wave 18 — Squad Apps & Templates Documentation (2026-05-19T15:30:00-07:00)
+
+**Scope:** Pending documentation work on Squad Apps, bundles, and template system.
+
+### Deliverables Shipped
+
+1. **`docs/concepts/squad-apps-and-templates.md`** — 340 lines
+   - Quick-reference table: Squad App vs Template vs Plugin vs Starter
+   - Implementation map: canonical files, modules, discovery flow
+   - When-to-use guide with concrete examples
+   - Common Q&A section
+   - Links to authoritative specs (`squadapp-spec.md`, ceremonies docs, MCP setup)
+
+2. **Feature spec updates** — Two features marked complete:
+   - `feat-2026-05-19-document-squad-apps-implementation-map` → Status: Done
+   - `feat-2026-05-19-explain-squad-app-vs-project-template` → Status: Done
+
+3. **Terminology decision captured** → `.squad/decisions/inbox/redfoot-squad-apps-terminology.md`
+   - Canonical definitions: Squad App, Bundle, Project/Team/Workflow Templates, Starter Projects
+   - Locked team notation for consistent vocabulary
+   - Evidence trail linking to implementation files
+
+4. **Docs IA updated** → `docs/README.md`
+   - Added link to new Squad Apps & Templates concept page
+
+### Key Insights Locked
+
+**Distinction:** Squad Apps (portable bundles with versioning) vs Templates (DB-backed snapshots without versioning).
+
+| Artifact | Scope | Authored | Versioned | Marketplace |
+|----------|-------|----------|-----------|------------|
+| Squad App | Full project | Devs shipping configs | ✅ SemVer | ✅ (F6+) |
+| Project/Team/Workflow Template | Granular slices | End users ("Save" button) | ❌ | ❌ |
+| Bundle | Runtime structure | Computed on apply | ✅ (tied to app) | — |
+| Starter Project | Full project | Build-time generation | ❌ | — (legacy) |
+
+**Discovery implementation:**
+- **Bundles:** `packages/server/src/services/builtin-bundles.ts` lazy-scans `bundles/` on first API call
+- **API:** `packages/server/src/routes/templates.ts` serves all template endpoints
+- **Frontend:** `packages/client/src/pages/Templates.tsx` + `packages/client/src/api/templates.ts` (hooks)
+
+**Pre-alpha labeling:** README.md already flags "Alpha software warning" with clear expectations. No additional labeling needed beyond what Hockney/Verbal manage in release copy.
+
+### Design Principles Established
+
+- **Terminology is precise:** Squad Apps ≠ Bundles ≠ Templates. Each has a specific meaning.
+- **Implementation is discoverable:** Canonical files and modules are listed in implementation map for builders extending the system.
+- **User guidance is concrete:** "When to use each" section includes real-world examples (legal doc review, Q3 sprint clone, standard agent roster, RFC ceremony).
+
+### Doc Debt Resolved
+
+- ✅ "Where are Squad Apps implemented?" → `packages/server/src/services/builtin-bundles.ts`
+- ✅ "How does Squadboard discover them?" → Lazy scan + in-memory cache on `GET /api/templates/builtin-projects`
+- ✅ "What's the difference between a Squad App and a project template?" → Published in new concept page
+- ✅ "When should users choose each?" → When-to-use section with 4 concrete examples
+
+### Success Criteria Met
+
+- ✅ Clear implementation map (canonical files, modules, discovery flow)
+- ✅ Conceptual distinction (Squad App vs Template vs Plugin) explained with tables
+- ✅ When-to-use guidance tied to real examples
+- ✅ Terminology locked for team (decision captured in inbox)
+- ✅ Pre-alpha status already present in README
+- ✅ Links to authoritative specs (squadapp-spec.md, ceremonies.md, MCP setup)
+- ✅ Feature specs marked Done
+
+### Next Steps (Flagged)
+
+- **F4 (Wave 24+):** Curate built-in Squad Apps for `bundles/` directory
+- **F5 (Wave 25+):** Automated export → Squad App workflow; git URL installer
+- **F6 (Wave 26+):** Squad App marketplace + upgrade path
+- **Starters migration:** Migrate legacy starters to Squad App format per W25 roadmap
+
+---
+
+## Wave 18 (Continued) — Release Readiness: Pre-Alpha Copy Normalization (2026-05-19T15:45:00-07:00)
+
+**Scope:** Fix Kujan's rejection of Hockney's release-readiness work; normalize 13 remaining `alpha` references to `pre-alpha` in public docs.
+
+**Context:** Hockney locked out (reviewer rejection lockout); Redfoot owns copy fix independently (no code changes, no workflow/package mechanics touched).
+
+### Deliverables Shipped
+
+1. **Normalized 10 product maturity `alpha` → `pre-alpha` references:**
+   - packages/docs-site/docs/user-guide/built-ins.mdx (1 ref)
+   - packages/docs-site/docs/user-guide/security.md (1 ref)
+   - packages/docs-site/docs/user-guide/coordinator-loops.mdx (1 ref)
+   - packages/docs-site/docs/user-guide/copilot-squad-coexistence.md (1 ref)
+   - packages/docs-site/docs/reference/index.mdx (1 ref)
+   - packages/docs-site/docs/reference/faq.md (2 refs)
+   - packages/docs-site/docs/features/roadmap-gaps.md (3 refs in title/description/intro)
+   - packages/docs-site/docs/getting-started/index.mdx (1 ref)
+
+2. **Validation:**
+   - ✅ Docusaurus build succeeded cleanly
+   - ✅ No remaining product maturity `alpha` references (without "pre-") in public docs
+   - ✅ All 10 normalized to `pre-alpha`
+   - ✅ README.md already correct (not counted in the 13 Kujan flagged)
+
+3. **Decision captured** → `.squad/decisions/inbox/redfoot-prealpha-copy-normalization.md`
+   - Terminology locked: `pre-alpha` (not `alpha`) in all user-facing copy
+   - Rationale: Consistent with SemVer 0.1.0-prealpha.0 and existing README labeling
+   - Scope: Docusaurus site, README.md, release notes
+
+### Key Insight
+
+Squadboard's product maturity label must be consistent: **pre-alpha** (experimental, breaking changes expected) not **alpha** (more stable).
+
+### Success Criteria Met
+
+- ✅ All 10 product maturity `alpha` references normalized to `pre-alpha`
+- ✅ Docusaurus build passes
+- ✅ No code/package/workflow changes (Hockney's scope, not Redfoot's)
+- ✅ Terminology decision locked for team
+- ✅ Ready for Hockney to resume release-readiness work
+
+## Team Update — undefined
+
+Run: w18
+
+- **verbal**: Stream G phase 2A (G2.3 comment + G2.5 merge PR with CI gate + G2.6 card badges)
+- **keyser**: Settings batch (Backup/Restore UI + GitHub Integration Settings)
+
+**Scope:** Four related deliverables to close docs gap after 16 waves of heavy build.
+
+### Deliverables Shipped (4 files)
+
+1. **README.md rewrite** — 8 required sections: What It Is, Who It's For, Getting Started, First Run (60-second walkthrough), Concepts at a Glance, Features Summary, Squad Integration, Links. Embedded feature list; replaced Architecture section with links to PRD.
+
+2. **`/docs/concepts/ceremonies.md`** — 370 lines. TL;DR, mental model (ASCII diagram), 5 built-in ceremonies (Simple Review, Bug Fix, RFC, Spike, Pair-Programming), trigger types, custom YAML example, Ceremony vs Workflow Q&A, lifecycle, workflow step catalogue (11 steps), linking to saved workflows, common patterns, links.
+   - **Sourced from:** McManus W16 decision (Model C split: ceremonies are triggers; workflows are execution graphs).
+
+3. **`/docs/features.md`** — 280 lines. Feature breakdown by subsystem: Workflow Engine, Project Bundles, Ceremonies, GitHub Integration (W16+W17), Reliability, Real-time UI, SDK+MCP, Conjure, Project Settings, Database, CLI, Roadmap (W18+).
+   - **Sourced from:** Git commits (W15–W17), package.json, MCP server tools, decision files.
+
+4. **`/docs/setup/mcp-install.md`** — 440 lines. Quick start (Copilot CLI + VS Code snippets), 10-tool table, auth (stdio vs HTTP), config examples, per-tool reference (list_projects through get_routing), troubleshooting (connectivity, discovery, auth, project resolution), links.
+   - **Sourced from:** `packages/server/src/mcp/server.ts` (canonical tool list).
+
+### Design Principles Established
+
+- **Show before tell:** Commands first, prose second. Every doc starts with runnable code.
+- **Voice:** Warm, peer-to-peer. Treat reader as busy developer. No adjectives; verbs + nouns + outcomes.
+- **Hierarchy:** README → concepts → features → setup. Each doc links, doesn't duplicate.
+- **Audit trail:** Feature list sourced from code (MCP tools, package.json, commits), not guessed. Concepts tied to McManus W16 decision (Model C).
+
+### Doc Debt Inventoried (Wave 18+)
+
+10 features not yet documented:
+- Workflow Editor UI (Demo 11, Hockney)
+- Advanced fan-out patterns (Hockney)
+- Webhook listener / external wait_event (Verbal)
+- Cost dashboards + forecasting (Hockney)
+- Agent leaderboard (Hockney)
+- Burndown charts (Hockney)
+- Custom PR merge strategies (Verbal, W17 in progress)
+- Cloud backup (S3, Azure Blob)
+- RBAC for multi-tenant (TBD)
+- Audit log exports (TBD)
+
+### Key Decisions Locked
+
+1. **Ceremony nomenclature:** McManus W16 Model C is now canonical. Ceremonies = triggers; Workflows = steps.
+2. **5 built-in ceremonies:** Simple Review, Bug Fix, RFC, Spike, Pair-Programming (curated per McManus W16; removed 4 others to community pool).
+3. **MCP tool count:** 10 tools documented (per Phase 18 in server.ts). Project-scoped tools support `projectId` args + HTTP header fallback.
+4. **README structure:** 8 sections (What It Is, Who It's For, Getting Started, First Run, Concepts, Features, Squad Integration, Links). No Architecture section (replaced with PRD link).
+
+### Screenshot Needs (Flagged to Fenster)
+
+- First Run walkthrough (kanban, ceremony drawer, live output)
+- Ceremony Templates tab (5 built-ins)
+- Workflow step catalogue (visual legend)
+- MCP in action (Copilot CLI tool call)
+
+### Success Criteria Met
+
+- ✅ README passes "60-second rule" (commands early)
+- ✅ Ceremonies page: mental model + all 5 built-ins + examples
+- ✅ Features list: audit-sourced from code (W15–W17)
+- ✅ MCP docs: all 10 tools + troubleshooting
+- ✅ All docs follow show-before-tell style
+- ✅ Links checked; no duplicate content
+
+### Decision File
+
+Created `.squad/decisions/inbox/redfoot-w17-docs-catchup.md` documenting:
+- All 4 deliverables (files, changes, sourcing)
+- Design decisions (hierarchy, voice, audit trail)
+- Open doc debt (10 items for W18+)
+- Screenshot needs (for Fenster)
+- Success criteria (all met)
+
+
+## Team Update — undefined
+
+Run: w17
+
+- **verbal**: Stream G phase 2A (G2.3 comment + G2.5 merge PR with CI gate + G2.6 card badges)
+- **keyser**: Settings batch (Backup/Restore UI + GitHub Integration Settings)
+
+## Learnings — Documentation Gaps Audit (2026-05-20)
+
+### What I found
+- Root README is strong (612 lines, badges, install, first run, MCP, GitHub sync, cross-surface sync) but lacks ToC, npm/CI badges, and Contributing section.
+- CHANGELOG.md is thorough and follows Keep a Changelog format.
+- **4 of 6 major packages have no README** — critically, all 3 published npm packages (cli, server, squadboard-sdk) are missing READMEs.
+- Docs-site has 41 pages with good structure (Getting Started, User Guide, Features, Developer Guide, Reference).
+- 129 REST route handlers across 41 files — **no OpenAPI spec, no consolidated endpoint reference**.
+- MCP tools are the best-documented API surface (README + docs-site page).
+- WebSocket protocol documented only in source code header comment, not in any user-facing doc.
+- Ceremony YAML reference is strong in `docs/ceremonies/` but not surfaced in docs-site.
+- SDK has ~1.4 JSDoc per export (good); server services at 64% coverage; routes are sparsely documented.
+- No env var reference page, no CLI reference page in docs-site.
+
+### Top 5 priorities (by user impact)
+1. Package READMEs for published npm packages (cli, server, sdk)
+2. REST API endpoint reference (129 handlers undocumented)
+3. Environment variable reference page
+4. WebSocket protocol documentation
+5. CI/npm badges + Contributing guide
+
+### Process learning
+- The `docs/ceremonies/` directory has great content that should be canonical and linked from docs-site rather than duplicated.
+- The split between `docs/` (internal reference) and `packages/docs-site/docs/` (public docs) is well-structured but creates risk of content existing in one place but not the other.
+
+## Delivered — Package READMEs (2026-05-20T13:26)
+
+**COMPLETED** Priority #1 from above: Package READMEs for all 3 published npm packages.
+
+### Written
+1. **@sabbour/squadboard-cli** — CLI entry point. Explains two commands (`init` and `mcp`), storage options, MCP config workflow, and development flow. 122 lines.
+2. **@sabbour/squadboard-sdk** — Library SDK for ceremonies and bundle schemas. Explains scribe module, sub-entry points, and type exports. Covers closeOut() flow and bundle schema types. 94 lines.
+3. **@sabbour/squadboard** — Main server. Explains kanban + workflows + ceremonies, local-first design, REST API coverage, storage, environment, development, and MCP integration. 169 lines.
+
+### Style
+- Minimal, verbs-first (no fluff)
+- Show code before prose
+- Separated into Usage / API / Development sections
+- Each README under 150 lines as specified
+- Callouts for monorepo internal references and pre-alpha caveats
+
+### Commit
+```
+docs: add README for cli, squadboard-sdk, and server packages
+
+These packages had no documentation. Added minimal READMEs
+explaining purpose, usage, and exports.
+```
+
+### Next priorities
+- REST API endpoint reference (129 handlers; no OpenAPI spec)
+- Environment variable reference
+- WebSocket protocol documentation
+
+---
+
+## W31 Wave 2 — Package Documentation
+
+**Date:** 2026-05-20T13:26:25.229-07:00  
+**Status:** Completed ✅
+
+### Deliverables
+
+Wrote READMEs for all 3 published npm packages (previously undocumented):
+
+1. **@sabbour/squadboard-cli** (122 lines)
+   - CLI entry point; two modes (init, mcp); storage options
+   - Audience: npm installers, MCP host users
+
+2. **@sabbour/squadboard-sdk** (94 lines)
+   - Library SDK for ceremonies and bundle schemas
+   - Main API: `squadboard.scribe.closeOut()`, fine-grained imports
+   - Audience: SDK consumers, ceremony integrations
+
+3. **@sabbour/squadboard** (169 lines)
+   - Main server package combining kanban, workflows, ceremonies, agents, MCP
+   - Audience: MCP consumers, self-hosters, local development
+
+### Metrics
+
+- Total: 385 lines of documentation
+- Average: 128 lines per package
+- All marked pre-alpha with appropriate caveats
+- Minimal scope: only documented what's actually exposed
+
+### Design Decisions
+
+- No aspirational content; only current surface
+- Show runnable code examples first
+- Separate by audience
+- Consistent API tables format
+- Internal package dependencies noted
+
+### Verification
+
+- ✅ All READMEs follow minimum viable style
+- ✅ Code examples accurate to package.json exports
+- ✅ Each README under 150 lines
+- ✅ Commit: 4f0062e87
+
+### Follow-Up Priorities
+
+1. REST API endpoint reference (129 routes)
+2. Environment variable reference page
+3. WebSocket protocol documentation
+4. CLI reference page in docs-site
+5. Contributing guide for root README
+
+### Notes
+
+Work coordinated with parallel McManus/Keyser/Kujan cleanup waves. Documentation significantly improves npm package discoverability.

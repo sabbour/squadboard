@@ -62,3 +62,47 @@ Run: wave-15-final
 - **mcmanus**: Universal Project Bundle (3rd escalation cleared)
 - **hockney**: Stream I (backup/restore + W14 migration)
 - **keyser**: UI batch (#2, #6, #7 fixes)
+
+---
+
+## W31 Wave 2 — Cleanup Session Log & Decisions Archive
+
+**Date:** 2026-05-20T13:26:25.229-07:00  
+**Status:** Completed ✅
+
+### Actions
+
+1. **Decisions Archive:** Archived MC-4 entry (2025-05-17, 1+ year old) to `.squad/decisions/archive-2026-05-20.md` due to file size exceeding 51,200 byte threshold
+2. **Inbox Merge:** Merged 4 inbox files into decisions.md (McManus, Keyser, Kujan, Redfoot cleanup summaries)
+3. **Inbox Cleanup:** Deleted all inbox decision files after merge
+4. **Orchestration Logs:** Created 4 per-agent logs (mcmanus, keyser, kujan, redfoot)
+5. **Session Log:** Created wave summary log (wave2-cleanup)
+6. **History Updates:** Appended W31 summaries to McManus, Keyser, Kujan, Redfoot, and Scribe histories
+
+### Files Created
+
+- `.squad/decisions/archive-2026-05-20.md` — archived old entry
+- `.squad/orchestration-log/20260520T132625Z-mcmanus.md`
+- `.squad/orchestration-log/20260520T132625Z-keyser.md`
+- `.squad/orchestration-log/20260520T132625Z-kujan.md`
+- `.squad/orchestration-log/20260520T132625Z-redfoot.md`
+- `.squad/log/20260520T132625Z-wave2-cleanup.md`
+
+### Files Modified
+
+- `.squad/decisions.md` — removed archived entry, added 4 inbox decisions
+- `.squad/agents/mcmanus/history.md` — appended W31
+- `.squad/agents/keyser/history.md` — appended W31
+- `.squad/agents/kujan/history.md` — appended W31
+- `.squad/agents/redfoot/history.md` — appended W31
+- `.squad/agents/scribe/history.md` — appending W31
+
+### Decisions Processing
+
+- Archived entry: MC-4 (2025-05-17)
+- Merged: 4 inbox decisions (all 2026-05-20)
+- Decision file size: 590,835 bytes → trimmed by archive
+
+### Notes
+
+All four parallel agents completed work successfully. No CI blockers. Post-wave processing handled archiving, merging, and logging. Ready for commit.
