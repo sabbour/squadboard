@@ -7,6 +7,7 @@ import { eventBus } from '../realtime/event-bus.js';
 
 const LEASE_TTL_SECONDS = 90;
 const HEARTBEAT_INTERVAL_MS = 30_000;
+const DEFAULT_AGENT_RUN_TIMEOUT_MS = 10 * 60_000;
 
 /**
  * Claim exactly one pending issue_run and execute it.
@@ -109,6 +110,7 @@ export async function runWorker(issueRunId: string): Promise<void> {
 
   // Resolve the workflow version attached to this issue (for Invariant 4)
   const workflowVersionId = await resolveWorkflowVersionId(db, run.issueId);
+  const runTimeoutMs = run.kind === 'agent_run' ? resolveAgentRunTimeoutMs() : undefined;
 
   // --- Resolve workspace ---
   let workspacePath: string;
@@ -132,7 +134,14 @@ export async function runWorker(issueRunId: string): Promise<void> {
   }
 
   // --- Start heartbeat (every 30 s, extends lease by 90 s) ---
-  const heartbeatTimer = setInterval(async () => {
+  let heartbeatTimer: ReturnType<typeof setInterval> | undefined;
+  const stopHeartbeat = () => {
+    if (!heartbeatTimer) return;
+    clearInterval(heartbeatTimer);
+    heartbeatTimer = undefined;
+  };
+
+  heartbeatTimer = setInterval(async () => {
     try {
       await db.execute(sql`
         UPDATE issue_runs
@@ -174,9 +183,16 @@ export async function runWorker(issueRunId: string): Promise<void> {
       workspacePath,
       projectSquadPath: project.path,
       workspaceStrategy: run.workspaceStrategy,
+      timeoutMs: runTimeoutMs,
     });
 
-    clearInterval(heartbeatTimer);
+    stopHeartbeat();
+
+    if (result.timedOut) {
+      await markTimedOut(db, issueRunId, result.errorMessage ?? 'Agent run timed out');
+      eventBus.emitFlowEvent('flow.instance.ended', project.id, { instanceId: issueRunId, status: 'timed_out' });
+      return;
+    }
 
     if (result.success) {
       // Persist cost fields first (recordRunCompletion handles status + output)
@@ -205,7 +221,7 @@ export async function runWorker(issueRunId: string): Promise<void> {
       eventBus.emitFlowEvent('flow.instance.ended', project.id, { instanceId: issueRunId, status: 'failed' });
     }
   } catch (err: unknown) {
-    clearInterval(heartbeatTimer);
+    stopHeartbeat();
     await markFailed(db, issueRunId, err instanceof Error ? err.message : String(err));
     // ── Flow event: issue_run ended (failed — exception path) ─────────────────
     eventBus.emitFlowEvent('flow.instance.ended', project.id, { instanceId: issueRunId, status: 'failed' });
@@ -215,6 +231,12 @@ export async function runWorker(issueRunId: string): Promise<void> {
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
+
+function resolveAgentRunTimeoutMs(): number {
+  const raw = process.env.SQUADBOARD_AGENT_RUN_TIMEOUT_MS;
+  const parsed = raw ? Number.parseInt(raw, 10) : Number.NaN;
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : DEFAULT_AGENT_RUN_TIMEOUT_MS;
+}
 
 async function markFailed(
   db: DrizzleDb,
@@ -234,6 +256,50 @@ async function markFailed(
       updatedAt: now,
     })
     .where(eq(schema.issueRuns.id, issueRunId));
+}
+
+async function markTimedOut(
+  db: DrizzleDb,
+  issueRunId: string,
+  errorMessage: string,
+): Promise<void> {
+  console.error(`[stepper] run ${issueRunId} timed out: ${errorMessage}`);
+  const now = new Date();
+  const { issueRuns, stepRuns } = schema;
+
+  await db.transaction(async (tx) => {
+    await tx
+      .update(issueRuns)
+      .set({
+        status: 'timed_out',
+        errorMessage,
+        leaseExpiresAt: null,
+        heartbeatAt: null,
+        completedAt: now,
+        updatedAt: now,
+      })
+      .where(eq(issueRuns.id, issueRunId));
+
+    const [linkedStep] = await tx
+      .select({ id: stepRuns.id, workflowRunId: stepRuns.workflowRunId })
+      .from(stepRuns)
+      .where(eq(stepRuns.issueRunId, issueRunId))
+      .limit(1);
+
+    if (!linkedStep) return;
+
+    await tx
+      .update(stepRuns)
+      .set({ status: 'timed_out', updatedAt: now })
+      .where(eq(stepRuns.id, linkedStep.id));
+
+    await tx.execute(sql`
+      UPDATE workflow_runs
+      SET status = 'failed', updated_at = ${now}
+      WHERE id = ${linkedStep.workflowRunId}
+        AND status NOT IN ('completed', 'failed', 'cancelled', 'timed_out')
+    `);
+  });
 }
 
 async function syncRunIssueColumn(

@@ -184,7 +184,7 @@ export async function getFlowAgents(projectId: string): Promise<FlowAgentsRespon
       ) cur_step ON true
       LEFT JOIN issue_runs step_ir ON step_ir.id = cur_step.issue_run_id
       WHERE i.project_id = ${projectId}::uuid
-        AND wr.status NOT IN ('completed', 'failed', 'cancelled')
+        AND wr.status NOT IN ('completed', 'failed', 'cancelled', 'timed_out')
     ),
 
     -- ── B: active standalone issue_runs (not linked to any step_run) ───────
@@ -212,7 +212,7 @@ export async function getFlowAgents(projectId: string): Promise<FlowAgentsRespon
       FROM issue_runs ir
       JOIN issues i ON ir.issue_id = i.id
       WHERE i.project_id = ${projectId}::uuid
-        AND ir.status NOT IN ('completed', 'failed', 'cancelled')
+        AND ir.status NOT IN ('completed', 'failed', 'cancelled', 'timed_out')
         AND NOT EXISTS (SELECT 1 FROM step_runs sr WHERE sr.issue_run_id = ir.id)
     ),
 
@@ -241,7 +241,7 @@ export async function getFlowAgents(projectId: string): Promise<FlowAgentsRespon
       FROM issue_runs ir
       JOIN issues i ON ir.issue_id = i.id
       WHERE i.project_id = ${projectId}::uuid
-        AND ir.status IN ('completed', 'failed', 'cancelled')
+        AND ir.status IN ('completed', 'failed', 'cancelled', 'timed_out')
         AND ir.updated_at >= NOW() - INTERVAL '24 hours'
         AND NOT EXISTS (SELECT 1 FROM step_runs sr WHERE sr.issue_run_id = ir.id)
       ORDER BY ir.updated_at DESC

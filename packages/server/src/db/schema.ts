@@ -204,7 +204,7 @@ export type NewColumnMeta = typeof columnMeta.$inferInsert;
 // ---------------------------------------------------------------------------
 
 // Demo 10 adds 'splitting' (fan_out in progress) and 'waiting_children' (fan_out waiting for children)
-export const runStatusEnum = pgEnum('run_status', ['pending', 'running', 'completed', 'failed', 'cancelled', 'splitting', 'waiting_children']);
+export const runStatusEnum = pgEnum('run_status', ['pending', 'running', 'completed', 'failed', 'cancelled', 'timed_out', 'splitting', 'waiting_children']);
 export const workspaceStrategyEnum = pgEnum('workspace_strategy', ['scratch', 'dir', 'worktree']);
 
 // Invariant 1: routing desugars to issue_runs with kind='agent_run'.

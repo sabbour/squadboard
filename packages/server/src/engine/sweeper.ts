@@ -111,7 +111,7 @@ export async function sweepExpiredStepLeases(db: DrizzleDb): Promise<number> {
         status     = 'failed',
         updated_at = NOW()
       WHERE id = ${step.workflow_run_id}
-        AND status NOT IN ('completed', 'failed', 'cancelled')
+        AND status NOT IN ('completed', 'failed', 'cancelled', 'timed_out')
     `);
     console.log(`[sweeper] step_run ${step.id} exhausted retries — workflow_run ${step.workflow_run_id} failed`);
   }

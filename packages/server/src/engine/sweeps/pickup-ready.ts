@@ -430,7 +430,7 @@ export const pickupReadySweep: Sweep = {
                 .where(
                   and(
                     eq(issueRuns.issueId, issue.id),
-                    inArray(issueRuns.status, ['completed', 'failed', 'cancelled']),
+                    inArray(issueRuns.status, ['completed', 'failed', 'cancelled', 'timed_out']),
                   ),
                 )
                 .orderBy(asc(issueRuns.createdAt))

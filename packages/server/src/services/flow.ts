@@ -674,7 +674,7 @@ export async function getIssueFlow(projectId: string, issueId: string): Promise<
       };
       // Best-effort timestamps from createdAt/updatedAt
       if (sr.createdAt) node.startedAt = toIso(sr.createdAt);
-      if (sr.updatedAt && (sr.status === 'completed' || sr.status === 'failed' || sr.status === 'cancelled')) {
+      if (sr.updatedAt && (sr.status === 'completed' || sr.status === 'failed' || sr.status === 'cancelled' || sr.status === 'timed_out')) {
         node.completedAt = toIso(sr.updatedAt);
       }
       stepRuns.push(node);

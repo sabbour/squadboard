@@ -617,7 +617,7 @@ export async function checkFanOutCompletion(
         issueId: c.issue_id,
         status: c.status,
         completed: c.status === 'completed',
-        failed: c.status === 'failed',
+        failed: c.status === 'failed' || c.status === 'timed_out',
         output: lastOutput,
       };
     }),
@@ -649,7 +649,7 @@ export async function checkFanOutCompletion(
             UPDATE workflow_runs
                SET status = 'cancelled', updated_at = NOW()
              WHERE parent_workflow_run_id = ${parentWorkflowRunId}
-               AND status NOT IN ('completed', 'failed', 'cancelled')
+               AND status NOT IN ('completed', 'failed', 'cancelled', 'timed_out')
           `,
         );
       }

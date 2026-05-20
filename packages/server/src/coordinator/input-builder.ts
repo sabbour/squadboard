@@ -135,7 +135,7 @@ export function mapCoordinatorRecentRuns(
   const agentIdToName = new Map(agents.map((agent) => [agent.id, agent.name]));
 
   return rows
-    .filter((row) => ['completed', 'failed', 'cancelled'].includes(row.status))
+    .filter((row) => ['completed', 'failed', 'cancelled', 'timed_out'].includes(row.status))
     .slice(0, 5)
     .map((row) => {
       const started = toTime(row.startedAt);
@@ -146,7 +146,7 @@ export function mapCoordinatorRecentRuns(
         outcome:
           row.status === 'completed'
             ? 'success' as const
-            : row.status === 'failed'
+            : row.status === 'failed' || row.status === 'timed_out'
               ? 'failed' as const
               : 'abandoned' as const,
         durationMs: started != null && completed != null ? Math.max(0, completed - started) : 0,

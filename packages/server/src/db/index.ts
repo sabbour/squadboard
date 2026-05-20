@@ -862,6 +862,11 @@ async function bootstrapSchema(): Promise<void> {
     EXCEPTION WHEN duplicate_object THEN NULL;
     END $$;
 
+    DO $$ BEGIN
+      ALTER TYPE run_status ADD VALUE IF NOT EXISTS 'timed_out';
+    EXCEPTION WHEN duplicate_object THEN NULL;
+    END $$;
+
     -- Fan-out columns on workflow_runs (parent/child relationships)
     ALTER TABLE workflow_runs
       ADD COLUMN IF NOT EXISTS parent_workflow_run_id TEXT,

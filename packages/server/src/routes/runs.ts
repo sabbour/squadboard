@@ -35,7 +35,7 @@ import {
 const CIRCUIT_BREAKER_MIN_FAILURES = 3;
 const CIRCUIT_BREAKER_WINDOW_MS = 30 * 60 * 1000;
 const ACTIVE_RUN_STATUSES = ['pending', 'running'] as const;
-const RETRIGGERABLE_RUN_STATUSES = ['completed', 'failed', 'cancelled'] as const;
+const RETRIGGERABLE_RUN_STATUSES = ['completed', 'failed', 'cancelled', 'timed_out'] as const;
 
 /** Sanitize a branch name — reject any shell-unsafe characters */
 function sanitizeBranchName(name: string): string {
@@ -522,7 +522,7 @@ issueRunsRouter.post('/:runId/retrigger', async (req: Request, res: Response) =>
 // ---------------------------------------------------------------------------
 
 const MAX_EVENT_LIMIT = 500;
-const TERMINAL_RUN_STATUSES = new Set(['completed', 'failed', 'cancelled']);
+const TERMINAL_RUN_STATUSES = new Set(['completed', 'failed', 'cancelled', 'timed_out']);
 
 type IssueRunRow = typeof schema.issueRuns.$inferSelect;
 
@@ -1014,7 +1014,7 @@ projectRunsRouter.post('/:runId/cancel', async (req: Request, res: Response) => 
       return;
     }
 
-    if (run.status === 'completed' || run.status === 'failed' || run.status === 'cancelled') {
+    if (run.status === 'completed' || run.status === 'failed' || run.status === 'cancelled' || run.status === 'timed_out') {
       res.status(409).json({ error: `Run is already ${run.status}` });
       return;
     }
@@ -1345,7 +1345,7 @@ projectRunsRouter.get('/:runId/stream', async (req: Request, res: Response) => {
       }
 
       // Send status events and terminate stream when run finishes
-      const terminal = ['completed', 'failed', 'cancelled'];
+      const terminal = ['completed', 'failed', 'cancelled', 'timed_out'];
       if (terminal.includes(run.status)) {
         sendEvent({ type: 'done', status: run.status, output: run.output });
         clearInterval(poll);

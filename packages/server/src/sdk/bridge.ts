@@ -4,7 +4,7 @@ import type { Agent } from '../db/schema.js';
 import { getDb } from '../db/index.js';
 import { issueRuns, projects as projectsTable } from '../db/schema.js';
 import { eq } from 'drizzle-orm';
-import { createAgentSession } from './squad-client.js';
+import { AgentRunTimeoutError, createAgentSession } from './squad-client.js';
 import type { AgentSessionEvent } from './squad-client.js';
 import { OutputStreamer } from './output-streamer.js';
 import { CostTracker } from './cost-tracker.js';
@@ -91,6 +91,7 @@ export interface AgentRunInput {
   workspacePath: string;
   projectSquadPath: string; // path to .squad/ directory
   workspaceStrategy?: string | null;
+  timeoutMs?: number;
 }
 
 export interface AgentRunOutput {
@@ -100,6 +101,7 @@ export interface AgentRunOutput {
   costUsd?: string;
   errorMessage?: string;
   budgetExceeded?: boolean;
+  timedOut?: boolean;
 }
 
 function pickString(obj: unknown, ...keys: string[]): string | undefined {
@@ -275,6 +277,7 @@ export async function executeAgentRun(input: AgentRunInput): Promise<AgentRunOut
       agentModel: validateModel(input.agent.model ?? null, input.agent.name),
       projectDefaultModel: projectRow?.defaultModel ?? null,
       onEvent: (event) => forwardAgentSessionEvent(session, event),
+      timeoutMs: input.timeoutMs,
     });
 
     // Emit turn event with the agent's response text.
@@ -340,8 +343,12 @@ export async function executeAgentRun(input: AgentRunInput): Promise<AgentRunOut
     await session.emit('issue.run.error', {
       message: errorMessage,
       errorMessage,
-      status: 'failed',
+      status: err instanceof AgentRunTimeoutError ? 'timed_out' : 'failed',
     }).catch(() => {});
+
+    if (err instanceof AgentRunTimeoutError) {
+      return { success: false, output: '', errorMessage, timedOut: true };
+    }
 
     await db
       .update(issueRuns)

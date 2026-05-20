@@ -54,7 +54,7 @@ export interface CeremonyLifecycleMetadata {
   cleanup: LifecycleCleanupMetadata;
 }
 
-const TERMINAL_STATUSES = new Set(['completed', 'failed', 'cancelled']);
+const TERMINAL_STATUSES = new Set(['completed', 'failed', 'cancelled', 'timed_out']);
 const RUNNING_STATUSES = new Set(['running', 'splitting', 'waiting_children']);
 
 function toIso(value: Date | string | null | undefined): string | null {

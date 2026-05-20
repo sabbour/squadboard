@@ -177,7 +177,7 @@ export async function advanceWorkflowRun(workflowRunId: string): Promise<void> {
     .where(eq(workflowRuns.id, workflowRunId))
     .limit(1);
 
-  if (!wfRun || wfRun.status === 'completed' || wfRun.status === 'failed' || wfRun.status === 'cancelled') return;
+  if (!wfRun || wfRun.status === 'completed' || wfRun.status === 'failed' || wfRun.status === 'cancelled' || wfRun.status === 'timed_out') return;
 
   const currentIndex = wfRun.currentStepIndex ?? 0;
 
@@ -482,7 +482,7 @@ async function handleAgentRunStep(
         .where(eq(stepRuns.id, stepRun.id));
       await advanceToNextStep(wfRun.id, wfRun.currentStepIndex ?? 0, tx);
     });
-  } else if (run.status === 'failed' || run.status === 'cancelled') {
+  } else if (run.status === 'failed' || run.status === 'cancelled' || run.status === 'timed_out') {
     await db.transaction(async (tx) => {
       await tx
         .update(stepRuns)
@@ -1209,7 +1209,7 @@ export async function tickWorkflowAdvancement(): Promise<void> {
   // Find all active workflow_runs (including children waiting for their first step)
   const activeRuns = await db.execute(sql`
     SELECT id FROM workflow_runs
-    WHERE status NOT IN ('completed', 'failed', 'cancelled')
+    WHERE status NOT IN ('completed', 'failed', 'cancelled', 'timed_out')
     ORDER BY created_at
   `);
 

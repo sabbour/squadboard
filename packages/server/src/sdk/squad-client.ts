@@ -7,6 +7,13 @@ import { estimateCost } from './pricing.js';
 const MAX_CHARTER_PROMPT_CHARS = 8_000;
 const SEND_AND_WAIT_TIMEOUT_MS = 120_000;
 
+export class AgentRunTimeoutError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'AgentRunTimeoutError';
+  }
+}
+
 export interface SessionOptions {
   agentName: string;
   charterPath: string;
@@ -18,6 +25,7 @@ export interface SessionOptions {
   agentModel?: string | null; // optional — agent's configured model
   projectDefaultModel?: string | null; // optional — project-level default
   onEvent?: AgentSessionEventHandler;
+  timeoutMs?: number;
 }
 
 export interface SessionResult {
@@ -154,6 +162,8 @@ async function sendAndWaitWithTimeout<TSession>(
   client: { sendAndWait: (session: TSession, input: { prompt: string }, timeout?: number) => Promise<unknown> },
   session: TSession,
   prompt: string,
+  timeoutMs = SEND_AND_WAIT_TIMEOUT_MS,
+  onTimeout?: () => Promise<void>,
 ): Promise<unknown> {
   let timeoutHandle: ReturnType<typeof setTimeout> | undefined;
   try {
@@ -161,8 +171,11 @@ async function sendAndWaitWithTimeout<TSession>(
       client.sendAndWait(session, { prompt }),
       new Promise<never>((_, reject) => {
         timeoutHandle = setTimeout(() => {
-          reject(new Error(`sendAndWait timeout after ${SEND_AND_WAIT_TIMEOUT_MS / 1000}s`));
-        }, SEND_AND_WAIT_TIMEOUT_MS);
+          void (async () => {
+            await onTimeout?.().catch(() => {});
+            reject(new AgentRunTimeoutError(`sendAndWait timeout after ${timeoutMs / 1000}s`));
+          })();
+        }, timeoutMs);
       }),
     ]);
   } finally {
@@ -192,7 +205,29 @@ export async function createAgentSession(options: SessionOptions): Promise<Sessi
   let observedOutputTokens: number | undefined;
   let observedModel: string | undefined;
   let session: Awaited<ReturnType<typeof client.createSession>> | null = null;
+  let sessionClosed = false;
   const listeners: Array<{ type: string; handler: (event: unknown) => void }> = [];
+
+  const abortActiveSession = async () => {
+    if (sessionClosed) return;
+    sessionClosed = true;
+    const abortable = session as { abort?: () => Promise<void>; close?: () => Promise<void> } | null;
+    if (abortable?.abort) {
+      try {
+        await abortable.abort();
+      } catch {
+        // Best-effort.
+      }
+    }
+    if (abortable?.close) {
+      try {
+        await abortable.close();
+      } catch {
+        // Best-effort.
+      }
+    }
+    await client.disconnect().catch(() => {});
+  };
 
   const attach = (eventType: AgentSessionEventType, handler: (event: unknown) => void) => {
     if (!session) return;
@@ -280,7 +315,13 @@ export async function createAgentSession(options: SessionOptions): Promise<Sessi
       void emitAgentSessionEvent(options.onEvent, 'error', asRecord(event));
     });
 
-    const result = await sendAndWaitWithTimeout(client, session, options.task);
+    const result = await sendAndWaitWithTimeout(
+      client,
+      session,
+      options.task,
+      options.timeoutMs ?? SEND_AND_WAIT_TIMEOUT_MS,
+      abortActiveSession,
+    );
 
     const output = extractOutput(result);
     const inputTokens = observedInputTokens ?? Math.ceil((systemPrompt.length + options.task.length) / 4);
@@ -306,6 +347,8 @@ export async function createAgentSession(options: SessionOptions): Promise<Sessi
         }
       }
     }
-    await client.disconnect().catch(() => {});
+    if (!sessionClosed) {
+      await client.disconnect().catch(() => {});
+    }
   }
 }

@@ -132,7 +132,7 @@ export async function collectReviewDecisions(stepRunId: string): Promise<{
   }
 
   const allComplete = reviewRuns.every(
-    (r) => r.status === 'completed' || r.status === 'failed' || r.status === 'cancelled',
+    (r) => r.status === 'completed' || r.status === 'failed' || r.status === 'cancelled' || r.status === 'timed_out',
   );
 
   const decisions: ReviewDecision[] = [];
