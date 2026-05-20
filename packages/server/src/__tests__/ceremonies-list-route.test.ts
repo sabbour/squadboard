@@ -153,6 +153,7 @@ vi.mock('express', () => ({
       routeRegistrations.push({ method: 'DELETE', path });
       handlers.DELETE[path] = fns[fns.length - 1]!;
     }),
+    param: vi.fn(),
   })),
 }));
 

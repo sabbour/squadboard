@@ -187,6 +187,7 @@ vi.mock('express', () => ({
       handlers.DELETE ??= {};
       handlers.DELETE[path] = fns[fns.length - 1]!;
     }),
+    param: vi.fn(),
   })),
 }));
 

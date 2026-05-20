@@ -293,6 +293,18 @@ function extractFirstMarkdownHeading(markdown: string): string | null {
 
 export const ceremoniesRouter = Router({ mergeParams: true });
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+// Guard: reject non-UUID ceremony ids before any /:id route runs.
+// PGlite throws a hard crash when a non-UUID value reaches a UUID column.
+ceremoniesRouter.param('id', (req, res, next, id) => {
+  if (!UUID_RE.test(id)) {
+    res.status(404).json({ error: 'Ceremony not found' });
+    return;
+  }
+  next();
+});
+
 // GET / — list ceremonies for a project (filters: kind, triggerKind)
 ceremoniesRouter.get('/', async (req: Request, res: Response) => {
   try {

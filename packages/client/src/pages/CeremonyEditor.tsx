@@ -973,7 +973,7 @@ function CeremonyEditorInner({ projectId, ceremonyId }: { projectId: string; cer
                               <div style={{ display: 'flex', gap: 8 }}>
                                 <Dropdown
                                   placeholder="Pick an agent…"
-                                  value={step.agent}
+                                  value={step.agent ?? ''}
                                   selectedOptions={step.agent ? [step.agent] : []}
                                   onOptionSelect={(_, d) => updateStep(i, { agent: d.optionValue })}
                                   style={{ minWidth: 200 }}
@@ -1350,7 +1350,7 @@ function CeremonyEditorInner({ projectId, ceremonyId }: { projectId: string; cer
                         <div style={{ display: 'flex', gap: 8 }}>
                           <Dropdown
                             placeholder="Pick an agent…"
-                            value={step.agent}
+                            value={step.agent ?? ''}
                             selectedOptions={step.agent ? [step.agent] : []}
                             onOptionSelect={(_, d) => updateStep(i, { agent: d.optionValue })}
                             disabled={readOnly}

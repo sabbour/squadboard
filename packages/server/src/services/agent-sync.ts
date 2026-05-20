@@ -38,7 +38,10 @@ export async function syncAgentsFromDisk(
   const sdkNames = new Set<string>();
   try {
     sdkAgents = await getAgents(projectId);
-    for (const name of await sdkAgents.list()) sdkNames.add(name);
+    for (const name of await sdkAgents.list()) {
+      // Skip internal directories (e.g. _alumni) — they are not real agents.
+      if (!name.startsWith('_')) sdkNames.add(name);
+    }
   } catch (sdkErr) {
     console.warn('[agent-sync] SDK agents.list() failed; continuing with fs scan:', sdkErr);
   }

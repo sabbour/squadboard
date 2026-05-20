@@ -131,6 +131,7 @@ vi.mock('express', async () => {
         handlers['DELETE'][path] = fns[fns.length - 1]!;
       }),
       use: vi.fn(),
+      param: vi.fn(),
     };
     return router;
   }
