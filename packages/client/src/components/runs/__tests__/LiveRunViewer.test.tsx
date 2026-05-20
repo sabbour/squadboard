@@ -8,7 +8,7 @@
  *  - role="log" + aria-live="polite" on event stream
  */
 
-import { describe, it, expect, vi, beforeEach, beforeAll } from 'vitest'
+import { afterEach, describe, it, expect, vi, beforeEach, beforeAll } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes } from 'react-router'
@@ -51,6 +51,7 @@ beforeAll(() => {
 function makeStream(overrides: Partial<ReturnType<typeof mockUseRunStream>['return']> = {}) {
   return {
     events: [],
+    run: null,
     status: 'live',
     lastSeq: 0,
     error: null,
@@ -126,6 +127,10 @@ describe('LiveRunViewer', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mockUseRunStream.mockReturnValue(makeStream())
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
   })
 
   describe('loading state', () => {

@@ -182,22 +182,31 @@ describe('useRunStream', () => {
 
     it('sets a useful error when initial events contain issue.run.error', async () => {
       const events = [
-        { id: 'e1', runId: RUN_ID, seq: 0, eventType: 'issue.run.start', payload: { runId: RUN_ID, seq: 0 }, createdAt: new Date().toISOString() },
+        { id: 'e1', runId: RUN_ID, seq: 0, eventType: 'issue.run.start', payload: { runId: RUN_ID, seq: 0 }, createdAt: '2026-05-20T14:00:00.000Z' },
         {
           id: 'e2',
           runId: RUN_ID,
           seq: 1,
           eventType: 'issue.run.error',
           payload: { runId: RUN_ID, seq: 1, message: 'Agent emitted no structured output' },
-          createdAt: new Date().toISOString(),
+          createdAt: '2026-05-20T14:02:00.000Z',
         },
       ]
-      mockApiFetch.mockResolvedValueOnce(makeEventsResponse(events, 2))
+      mockApiFetch.mockResolvedValueOnce(makeEventsResponse(
+        events,
+        2,
+        makeRunSnapshot({
+          status: 'running',
+          startedAt: '2026-05-20T14:00:00.000Z',
+        }),
+      ))
 
       const { result } = renderHook(() => useRunStream(RUN_ID, PROJECT_ID, ISSUE_ID))
 
       await waitFor(() => expect(result.current.status).toBe('error'))
       expect(result.current.error?.message).toBe('Agent emitted no structured output')
+      expect(result.current.run?.status).toBe('failed')
+      expect(result.current.run?.completedAt).toBe('2026-05-20T14:02:00.000Z')
     })
 
     it('maps failed run snapshots to a useful error even before error events replay', async () => {
