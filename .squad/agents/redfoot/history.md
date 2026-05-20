@@ -1,13 +1,82 @@
 # Redfoot Agent History
 
-**Last summarized:** 2026-05-20T14:01:32Z
+**Last summarized:** 2026-05-20T21:14:55Z
 **Archive:** See `history-archive.md` for full history
 
 ## Quick Summary
 
-**Total waves:** 5
+**Total waves:** 6
 
 ## Latest Activity
+
+---
+
+## W31 Wave 7 — Comprehensive App Reference Documentation
+
+**Date:** 2026-05-20T21:14:55.180-07:00  
+**Status:** Completed ✅
+
+### Task
+
+Create a comprehensive app reference section in the docs-site covering **every page in the Squadboard UI** — every sub-page, every tab, every configuration section. Users should be able to read this reference to understand what any screen does and how to use it.
+
+### Deliverables
+
+1. **19 markdown files in `docs/app-reference/`:**
+   - `index.md` — Overview table of all pages, navigation guide, URL reference
+   - `project-picker.md` — Create/connect projects, storage mode
+   - `now.md` — Global uber-dashboard, sessions/runs/workflows, project filter
+   - `inbox.md` — Captured items, status flow, Conjure integration (global + project-scoped)
+   - `apps.md` — Squad Apps browse/install
+   - `consult.md` — Chat interface, session persistence, project vs global scope
+   - `dashboard.md` — Stats, throughput chart, agent stats, workflow stats
+   - `board.md` — Kanban columns, card detail drawer (4 tabs: Overview/Runs/Outputs/Flow), filters, realtime
+   - `flow.md` — Agents tab (lineage graph), Issues tab (swim-lane)
+   - `agents.md` — Roster, Routing tab (log + test), team portability
+   - `skills.md` — Registry, categories, curated library, create/edit/delete
+   - `tools.md` — Project tool registry, MCP-backed, create/edit/delete
+   - `mcp-servers.md` — Server registry, write-only headers/secrets, warning on update
+   - `costs.md` — Cost tracking, MTD view, breakdown
+   - `ceremonies.md` — List, Editor, Runs, Review, Audit (5 sub-sections in one file)
+   - `templates.md` — 3 tabs (Ceremonies/Teams/Projects), drag-drop import, apply/delete
+   - `settings.md` — ALL 10 sections documented: General, Display, MCP Config, Squad Sync, Budget, Review Policy, Portability, Backup & Restore, GitHub, Danger Zone
+   - `diagnostics-heartbeat.md` — Diagnostics (health checks, status icons) + Heartbeat (sweepers, schedule, enable/disable)
+   - `live-run-viewer.md` — Real-time run monitoring, event stream, steer panel
+
+2. **Update `sidebars.ts`:**
+   - Add "App Reference" category under Product Guide
+   - Wire all 18 sub-pages into the sidebar navigation
+
+3. **Quality verification:**
+   - Docs build passes with 0 broken links
+   - 64 pages generated (up from existing + 19 new)
+   - All files reasonable size; Ceremonies largest at ~8KB (complex multi-section page)
+
+### Design Decisions
+
+- **One file per major page** — Ceremonies, Settings, Templates combine multiple sub-pages because they're all variants of a single feature
+- **URL paths in every file** — Every page includes its route so users know how to navigate
+- **Tabs/sections as sub-headings** — Card Detail 4 tabs, Settings 10 sections, Ceremonies 5 sub-sections
+- **Actions section** — Every page lists every button/action available
+- **Configuration section** — Settings, options, and user preferences clearly documented
+- **Related links** — Cross-references help users jump between related pages
+- **Paperclip style** — Honest, direct, action-focused. No marketing language.
+- **Deep links documented** — Board `?openIssue=`, Settings `?section=`, all URL parameters explained
+
+### Metrics
+
+- **Total lines:** 5,399 (19 new files, sidebars updated)
+- **Average per file:** 284 lines
+- **Build status:** ✅ Passes with 0 errors, 0 broken links
+- **Commit:** 85f85ec72
+
+### Learnings
+
+1. **UI coverage is comprehensive** — 19 pages, ~50 tabs/sections, 100+ actionable buttons
+2. **Settings is a mega-page** — 10 distinct sections covering very different concerns
+3. **Ceremonies is a feature triangle** — List, Editor, Runs/Audit (all interconnected)
+4. **Card Detail Drawer is rich** — Each of 4 tabs serves a different purpose
+5. **Realtime is core** — Board, Now, Consult, Heartbeat all stream live updates
 
 ---
 
