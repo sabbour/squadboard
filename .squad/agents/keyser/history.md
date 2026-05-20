@@ -228,3 +228,24 @@ Implemented Settings → Team Sync as the project-level status surface for Squad
 - Never include raw response bodies in user-facing Error messages — log them, don't surface them.
 - Defence in depth: fix at the API layer AND add a sanitization safety net at the render layer.
 - `vi.stubGlobal('fetch', mock)` is the idiomatic way to mock `fetch` in Vitest (no `global.fetch` assignment needed — avoids TS errors under strict mode).
+
+---
+
+## UI Critical Crash Sweep — 2026-05-20
+
+Learning: keep client-side agent safety in `components/agents/agent-origin.ts`; underscore-prefixed `.squad/agents/*` folders are housekeeping/internal and must render read-only even if a stale DB row reaches the frontend. Shared skill provenance copy now lives in `utils/skill-provenance.ts` so Skills and AgentCapabilities stay consistent.
+
+---
+
+## Project index persistence — 2026-05-20
+
+Learning: browser-local UI preferences belong in `packages/client/src/utils/userPrefs.ts` under the existing `squadboard:prefs` localStorage key. Persist index search/filter/sort there, but keep transient selections in page state so bulk-selection behavior resets safely after refresh.
+
+---
+
+## Learnings
+
+### Sync export preview UX — 2026-05-20T04:16:33.702-07:00
+
+- `packages/client/src/components/settings/SquadSyncStatusPanel.tsx`: dry-run `unchanged` / `already_up_to_date` rows are no-op evidence, not preview detail. Hide those paths and summarize the count so meaningful `would-apply` / `failed` changes stay prominent.
+- `packages/client/src/components/settings/__tests__/SquadSyncStatusPanel.test.tsx`: for DB-backed projects without a live filesystem mirror, assert against provider/env-var jargon at the panel level and describe Preview Export as an explicit filesystem handoff.

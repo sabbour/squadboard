@@ -236,3 +236,11 @@ Added Playwright coverage that launches the backend and client through `webServe
 Validation passed: `pnpm --filter @sabbour/squadboard-e2e test -- --list tests/00-full-stack-launch.spec.ts tests/12-squad-sync.spec.ts tests/13-copilot-cli-launch.spec.ts` and `SQUADBOARD_E2E_REUSE_SERVER=0 SQUADBOARD_E2E_API_BASE=http://127.0.0.1:3104 SQUADBOARD_E2E_BASE_URL=http://127.0.0.1:5178 pnpm --filter @sabbour/squadboard-e2e test -- tests/00-full-stack-launch.spec.ts tests/12-squad-sync.spec.ts tests/13-copilot-cli-launch.spec.ts` (7 passed, 1 live Copilot gate skipped).
 
 Failure mode now covered: Squadboard E2E cannot silently pass while the backend is absent, Team Sync status is stale, ceremony defaults are empty, the Copilot projection is missing, or filesystem-mode CLI-first authority regresses.
+
+### 2026-05-20T04:16:33.702-07:00 — Sync status export UX regression gate
+
+Added focused client regressions for the sync status bug in `SquadSyncStatusPanel.test.tsx`.
+
+**Failure modes covered:** When a database-authoritative project has no live filesystem mirror, the panel must present user-facing actions such as Preview Export without leaking provider/env-var/internal broker jargon (`SQUADBOARD_SQUAD_STORAGE_PROVIDER`, storage provider wording, MCP/API broker, explicit bridge, or magic enable-auto copy). When Preview Export reports only `already_up_to_date` file results, the modal must summarize that no files need updating and must not dump every unchanged `.squad` path or raw `already_up_to_date` status.
+
+**Validation:** Focused command `pnpm --filter @sabbour/squadboard-client test -- --run src/components/settings/__tests__/SquadSyncStatusPanel.test.tsx` is red against the current UI implementation: 2 new regression tests fail, 5 existing tests pass. The failures reproduce the reported bug exactly, so Keyser owns the production UI revision before this suite can go green.

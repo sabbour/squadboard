@@ -3,6 +3,12 @@ import {
   Body1,
   Button,
   Caption1,
+  Dialog,
+  DialogActions,
+  DialogBody,
+  DialogContent,
+  DialogSurface,
+  DialogTitle,
   Spinner,
   Subtitle2,
   tokens,
@@ -20,6 +26,7 @@ import {
   useSquadSyncStatus,
   type SquadSyncArtifactRequirement,
   type SquadSyncCheckStatus,
+  type RepairSquadSyncResult,
   type SquadSyncRepairAction,
   type SquadSyncStatus,
 } from '../../api/squad.ts'
@@ -40,6 +47,7 @@ interface NormalizedRepairAction {
   requestId: SquadSyncRepairAction
   label: string
   reason: string
+  required: boolean
   disabledReason?: string
 }
 
@@ -61,6 +69,8 @@ interface NormalizedStatus {
   repairAvailable: boolean
   repairDisabledReason?: string
   repairActions: NormalizedRepairAction[]
+  manualBridge: boolean
+  dryRunSupported: boolean
   checkedAt?: string
   contractVersion?: string
 }
@@ -86,7 +96,7 @@ const ACTION_LABELS: Record<string, string> = {
   'project-copilot-agent-file': 'Generate CLI/Copilot agent file',
   'generate-github-agent': 'Generate CLI/Copilot agent file',
   'generate-client-artifact': 'Generate CLI/Copilot agent file',
-  'project-squad-to-fs': 'Push Squad state to filesystem',
+  'project-squad-to-fs': 'Export Squadboard state to .squad files',
   rescan_drift: 'Rescan drift',
   'rescan-drift': 'Rescan drift',
   'expose-sync-status-api': 'Backend status API work',
@@ -146,15 +156,15 @@ function formatStatus(status: SquadSyncCheckStatus): string {
 }
 
 function sourceLabel(authority: string | undefined): string {
-  if (authority === 'squad_storage') return 'Squadboard database'
+  if (authority === 'squad_storage') return 'Squadboard'
   if (authority === 'filesystem') return 'Filesystem .squad'
-  if (authority === 'mcp_broker') return 'MCP broker'
+  if (authority === 'mcp_broker') return 'Squadboard bridge'
   return 'Unknown'
 }
 
 function storageLabel(mode: string | undefined): string {
-  if (mode === 'postgresql') return 'PostgreSQL-backed'
-  if (mode === 'filesystem') return 'Filesystem-backed'
+  if (mode === 'postgresql') return 'Squadboard-managed'
+  if (mode === 'filesystem') return 'Filesystem .squad'
   return 'Unknown'
 }
 
@@ -180,22 +190,30 @@ export function normalizeSquadSyncStatus(status: SquadSyncStatus): NormalizedSta
   const serverArtifacts = status.projection?.artifacts ?? []
   const governanceFiles = status.governance?.files ?? []
   const artifacts: NormalizedArtifact[] = serverArtifacts.length > 0
-    ? serverArtifacts.map((artifact) => ({
-      id: artifact.id,
-      label: ARTIFACT_LABELS[artifact.id] ?? artifact.path,
-      path: artifact.path,
-      status: toCheckStatus(artifact.status),
-      requirement: artifact.requirement,
-      purpose: artifact.purpose,
-    }))
-    : governanceFiles.map((file) => ({
-      id: file.label || file.path,
-      label: file.label,
-      path: file.path,
-      status: file.status,
-      requirement: file.requirement ?? (file.required ? 'required' : 'recommended'),
-      purpose: file.message,
-    }))
+    ? serverArtifacts.map((artifact, index) => {
+      const id = artifact.id ?? artifact.path ?? `projection-${index}`
+      const path = artifact.path ?? id
+      return {
+        id,
+        label: ARTIFACT_LABELS[id] ?? path,
+        path,
+        status: toCheckStatus(artifact.status),
+        requirement: artifact.requirement ?? 'recommended',
+        purpose: artifact.purpose,
+      }
+    })
+    : governanceFiles.map((file, index) => {
+      const path = file.path ?? `governance-${index}`
+      const label = file.label ?? path
+      return {
+        id: label || path,
+        label,
+        path,
+        status: toCheckStatus(file.status),
+        requirement: file.requirement ?? (file.required ? 'required' : 'recommended'),
+        purpose: file.message,
+      }
+    })
 
   const requiredArtifacts = artifacts.filter((artifact) => artifact.requirement === 'required')
   const recommendedArtifacts = artifacts.filter((artifact) => artifact.requirement === 'recommended')
@@ -204,7 +222,10 @@ export function normalizeSquadSyncStatus(status: SquadSyncStatus): NormalizedSta
   const source = status.authority?.sourceOfTruth ?? status.storage?.authority ?? status.sourceOfTruth ?? 'unknown'
   const mode = status.authority?.storageMode ?? status.storage?.mode ?? status.storageMode ?? 'unknown'
 
-  const storageDetail = status.authority?.runtime?.note
+  const manualBridge = mode === 'postgresql' && status.authority?.continuousSync === false
+  const storageDetail = manualBridge
+    ? 'Squadboard manages this project. Export .squad files only for a filesystem handoff.'
+    : status.authority?.runtime?.note
     ?? status.authority?.sharedExternalAccess
     ?? status.storage?.sharedExternalAccess
     ?? (status.databaseRuntime && status.databaseRuntime !== 'unknown'
@@ -254,30 +275,39 @@ export function normalizeSquadSyncStatus(status: SquadSyncStatus): NormalizedSta
       : 'Required artifacts are present. Drift hashes are not exposed yet.')
 
   const hasEvidence = artifacts.length > 0 || Boolean(status.summary)
+  const needsNonBlockingRepair = driftDetected || recommendedGaps.length > 0
   const compatibilityTone: Tone = blockingDrift || requiredGaps.length > 0
     ? 'danger'
-    : driftDetected || recommendedGaps.length > 0
+    : needsNonBlockingRepair
       ? 'warning'
       : hasEvidence
         ? 'success'
         : 'neutral'
   const compatibilityTitle = compatibilityTone === 'success'
-    ? 'Ready for Squadboard ↔ CLI/Copilot'
+    ? manualBridge
+      ? 'Ready through Squadboard'
+      : 'Ready for Squadboard ↔ CLI/Copilot'
     : compatibilityTone === 'warning'
-      ? 'Usable, but CLI/Copilot needs repair'
+      ? needsNonBlockingRepair
+        ? 'Usable, but CLI/Copilot needs repair'
+        : 'Ready through Squadboard'
       : compatibilityTone === 'danger'
         ? 'Not ready for peer clients'
         : 'Sync status unknown'
-  const compatibilityMessage = status.summary?.message
-    ?? (mode === 'postgresql'
-      ? 'Squadboard owns the database authority; CLI/Copilot should continue through the generated agent file and MCP/API broker.'
+  const compatibilityMessage = manualBridge
+    ? 'This project lives in Squadboard. CLI/Copilot can keep working through Squadboard, and Preview Export writes .squad files only when you want a filesystem handoff.'
+    : status.summary?.message
+      ?? (mode === 'postgresql'
+        ? 'Squadboard owns this project state; CLI/Copilot should keep working through Squadboard.'
       : mode === 'filesystem'
         ? 'Filesystem .squad is the authority; Squadboard and CLI/Copilot must both write through that filesystem state.'
         : 'The backend has not reported enough evidence to confirm cross-client compatibility.')
 
   const actions = new Map<string, NormalizedRepairAction>()
   for (const action of status.repair?.actions ?? []) {
+    if (!action) continue
     const actionId = typeof action === 'string' ? action : action.id
+    if (!actionId) continue
     const unavailable = typeof action === 'string' ? false : action.available === false
     actions.set(actionId, {
       id: actionId,
@@ -286,6 +316,7 @@ export function normalizeSquadSyncStatus(status: SquadSyncStatus): NormalizedSta
       reason: typeof action === 'string'
         ? 'Backend reported this repair as available.'
         : action.reason,
+      required: typeof action === 'string' ? true : action.required !== false,
       disabledReason: browserDisabledRepairReason(actionId)
         ?? (unavailable
         ? 'Backend marked this repair unavailable.'
@@ -293,11 +324,13 @@ export function normalizeSquadSyncStatus(status: SquadSyncStatus): NormalizedSta
     })
   }
   for (const action of status.repairActions ?? []) {
+    if (!action?.id) continue
     actions.set(action.id, {
       id: action.id,
       requestId: repairRequestId(action.id),
       label: ACTION_LABELS[action.id] ?? action.id,
       reason: action.reason,
+      required: action.mode !== 'manual',
       disabledReason: browserDisabledRepairReason(action.id),
     })
   }
@@ -323,6 +356,8 @@ export function normalizeSquadSyncStatus(status: SquadSyncStatus): NormalizedSta
     repairAvailable,
     repairDisabledReason: status.repair?.disabledReason ?? undefined,
     repairActions,
+    manualBridge,
+    dryRunSupported: status.repair?.dryRunSupported !== false,
     checkedAt: status.checkedAt,
     contractVersion: status.contractVersion,
   }
@@ -443,11 +478,116 @@ interface SquadSyncStatusPanelProps {
   projectId: string
 }
 
+interface PreviewModal {
+  action: NormalizedRepairAction
+  summary: string
+  changes: string[]
+  hiddenNoopCount: number
+  totalChangeCount: number
+  noFileChangesNeeded: boolean
+}
+
+type RepairResultItem = NonNullable<RepairSquadSyncResult['results']>[number]
+type RepairChange = NonNullable<RepairResultItem['changes']>[number]
+
+function previewActionLabel(action: NormalizedRepairAction): 'Repair' | 'Export' {
+  return action.required ? 'Repair' : 'Export'
+}
+
+function previewProgressLabel(action: NormalizedRepairAction): string {
+  return action.required ? 'Repairing…' : 'Exporting…'
+}
+
+function completedActionLabel(action: NormalizedRepairAction): string {
+  return action.required ? 'Repair applied' : 'Export completed'
+}
+
+function pluralize(count: number, singular: string, plural = `${singular}s`): string {
+  return `${count} ${count === 1 ? singular : plural}`
+}
+
+function isNoopPreviewChange(change: RepairChange): boolean {
+  const status = (change.status ?? '').toLowerCase()
+  const reason = (change.reason ?? change.message ?? '').toLowerCase()
+  return status === 'unchanged'
+    || reason.includes('already_up_to_date')
+    || reason.includes('already up to date')
+    || reason.includes('already_exists')
+    || reason.includes('already exists')
+    || reason.includes('no_changes')
+    || reason.includes('no changes')
+}
+
+function isNoChangeResultItem(item: RepairResultItem): boolean {
+  const status = (item.status ?? '').toLowerCase()
+  const reason = (item.reason ?? '').toLowerCase()
+  return status === 'skipped'
+    && (reason.includes('already_up_to_date')
+      || reason.includes('already up to date')
+      || reason.includes('no_changes')
+      || reason.includes('no changes'))
+}
+
+function formatPreviewChange(item: RepairResultItem, change: RepairChange): string {
+  const target = change.path ? ` ${change.path}` : ''
+  const reason = change.reason ?? change.message
+  return `${ACTION_LABELS[item.action] ?? item.action}: ${change.operation}${target} — ${change.status}${reason ? ` (${reason})` : ''}`
+}
+
+function previewResultSummary(action: NormalizedRepairAction, result: RepairSquadSyncResult): string {
+  if (result.repaired?.length) return result.repaired.join(', ')
+  if (result.skipped?.length) {
+    return result.skipped
+      .map((item) => `${ACTION_LABELS[item.action] ?? item.action}: skipped`)
+      .join(', ')
+  }
+  if (result.results?.length) {
+    return result.results
+      .map((item) => `${ACTION_LABELS[item.action] ?? item.action}: ${item.status}`)
+      .join(', ')
+  }
+  return action.label
+}
+
+function buildPreviewModal(action: NormalizedRepairAction, result: RepairSquadSyncResult): PreviewModal {
+  const changes: string[] = []
+  let hiddenNoopCount = 0
+
+  for (const item of result.results ?? []) {
+    for (const change of item.changes ?? []) {
+      if (isNoopPreviewChange(change)) {
+        hiddenNoopCount += 1
+      } else {
+        changes.push(formatPreviewChange(item, change))
+      }
+    }
+  }
+
+  const totalChangeCount = hiddenNoopCount + changes.length
+  const noFileChangesNeeded = changes.length === 0
+    && (hiddenNoopCount > 0 || (result.results?.length ?? 0) > 0 && result.results!.every(isNoChangeResultItem))
+  const actionLabel = previewActionLabel(action)
+  const summary = noFileChangesNeeded
+    ? `${actionLabel} preview complete: no file changes needed.`
+    : `${actionLabel} preview requested: ${previewResultSummary(action, result)}. No changes were applied.`
+
+  return {
+    action,
+    summary,
+    changes,
+    hiddenNoopCount,
+    totalChangeCount,
+    noFileChangesNeeded,
+  }
+}
+
 export function SquadSyncStatusPanel({ projectId }: SquadSyncStatusPanelProps) {
   const statusQuery = useSquadSyncStatus(projectId)
   const repair = useRepairSquadSync(projectId)
-  const [repairMessage, setRepairMessage] = useState<string | null>(null)
-  const [repairError, setRepairError] = useState<string | null>(null)
+  const [previewModal, setPreviewModal] = useState<PreviewModal | null>(null)
+  const [applyMessage, setApplyMessage] = useState<string | null>(null)
+  const [applyError, setApplyError] = useState<string | null>(null)
+  const [isApplying, setIsApplying] = useState(false)
 
   if (statusQuery.isLoading) {
     return <SectionLoading label="Checking sync status…" />
@@ -479,33 +619,122 @@ export function SquadSyncStatusPanel({ projectId }: SquadSyncStatusPanelProps) {
   }
 
   const status = normalizeSquadSyncStatus(statusQuery.data)
+  const requiredRepairActions = status.repairActions.filter((action) => action.required)
+  const manualExportActions = status.repairActions.filter((action) => !action.required)
 
-  async function handleRepair(action: NormalizedRepairAction) {
-    setRepairMessage(null)
-    setRepairError(null)
+  async function handlePreviewRepair(action: NormalizedRepairAction) {
+    setApplyMessage(null)
+    setApplyError(null)
     try {
-      const result = await repair.mutateAsync({ actions: [action.requestId], dryRun: false })
+      const result = await repair.mutateAsync({ actions: [action.requestId], dryRun: true })
+      setPreviewModal(buildPreviewModal(action, result))
+    } catch (error) {
+      setApplyError(error instanceof Error ? error.message : `${previewActionLabel(action)} preview failed`)
+    }
+  }
+
+  async function handleApplyRepair() {
+    if (!previewModal) return
+    setIsApplying(true)
+    try {
+      const result = await repair.mutateAsync({ actions: [previewModal.action.requestId], dryRun: false })
       const repaired = result.repaired?.length
         ? result.repaired.join(', ')
         : result.results?.length
           ? result.results.map((item) => `${ACTION_LABELS[item.action] ?? item.action}: ${item.status}`).join(', ')
-          : action.label
-      setRepairMessage(`Repair requested: ${repaired}. Status will refresh when the backend completes it.`)
+          : previewModal.action.label
+      setPreviewModal(null)
+      setApplyMessage(`${completedActionLabel(previewModal.action)}: ${repaired}.`)
+      void statusQuery.refetch()
     } catch (error) {
-      setRepairError(error instanceof Error ? error.message : 'Repair failed')
+      setApplyError(error instanceof Error ? error.message : `${previewActionLabel(previewModal.action)} failed`)
+      setPreviewModal(null)
+    } finally {
+      setIsApplying(false)
     }
   }
 
+  const isPreviewPending = repair.isPending && !previewModal
+
   return (
-    <div
-      data-testid="squad-sync-status-panel"
-      style={{
-        display: 'flex',
-        flexDirection: 'column',
-        gap: '14px',
-        maxWidth: 980,
-      }}
-    >
+    <>
+      {previewModal && (
+        <Dialog open onOpenChange={(_e, data) => { if (!data.open) setPreviewModal(null) }}>
+          <DialogSurface>
+            <DialogBody>
+              <DialogTitle>
+                {previewModal.action.required ? 'Preview Repair' : 'Preview Export'}
+              </DialogTitle>
+              <DialogContent>
+                <Caption1 style={{ display: 'block', color: tokens.colorNeutralForeground3, marginBottom: '12px' }}>
+                  {previewModal.summary}
+                </Caption1>
+                <div
+                  data-testid="preview-modal-changes"
+                  style={{
+                    maxHeight: '320px',
+                    overflowY: 'auto',
+                    border: '1px solid var(--border)',
+                    borderRadius: '6px',
+                    padding: '10px 12px',
+                    background: 'var(--bg)',
+                  }}
+                >
+                  {previewModal.noFileChangesNeeded ? (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                      <Body1 style={{ display: 'block', fontWeight: tokens.fontWeightSemibold }}>
+                        No file changes needed.
+                      </Body1>
+                      {previewModal.hiddenNoopCount > 0 && (
+                        <Caption1 style={{ color: tokens.colorNeutralForeground3 }}>
+                          {pluralize(previewModal.hiddenNoopCount, 'unchanged file')} already up to date; hidden from this preview.
+                        </Caption1>
+                      )}
+                    </div>
+                  ) : previewModal.changes.length === 0 ? (
+                    <Caption1 style={{ color: tokens.colorNeutralForeground3 }}>No file changes reported.</Caption1>
+                  ) : (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                      {previewModal.hiddenNoopCount > 0 && (
+                        <Caption1 style={{ color: tokens.colorNeutralForeground3 }}>
+                          Showing {pluralize(previewModal.changes.length, 'file change')}; {pluralize(previewModal.hiddenNoopCount, 'unchanged file')} hidden.
+                        </Caption1>
+                      )}
+                      <ul style={{ margin: 0, paddingLeft: '18px' }}>
+                        {previewModal.changes.map((change, index) => (
+                          <li key={`${change}-${index}`}>
+                            <Caption1 style={{ fontFamily: tokens.fontFamilyMonospace }}>{change}</Caption1>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                </div>
+              </DialogContent>
+              <DialogActions>
+                <Button appearance="secondary" onClick={() => setPreviewModal(null)}>Cancel</Button>
+                <Button
+                  appearance="primary"
+                  icon={isApplying ? <Spinner size="tiny" /> : <Wrench20Regular />}
+                  disabled={isApplying}
+                  onClick={() => void handleApplyRepair()}
+                >
+                  {isApplying ? previewProgressLabel(previewModal.action) : previewActionLabel(previewModal.action)}
+                </Button>
+              </DialogActions>
+            </DialogBody>
+          </DialogSurface>
+        </Dialog>
+      )}
+      <div
+        data-testid="squad-sync-status-panel"
+        style={{
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '14px',
+          maxWidth: 980,
+        }}
+      >
       <div style={{ ...cardStyle, display: 'flex', flexDirection: 'column', gap: '12px' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap' }}>
           <StatusPill tone={status.compatibilityTone}>{status.compatibilityTitle}</StatusPill>
@@ -558,15 +787,30 @@ export function SquadSyncStatusPanel({ projectId }: SquadSyncStatusPanelProps) {
         </div>
 
         <div style={{ borderTop: '1px solid var(--border)', paddingTop: '12px' }}>
-          <Subtitle2 as="h3" style={{ display: 'block', marginBottom: '8px' }}>Repair actions</Subtitle2>
+          <Subtitle2 as="h3" style={{ display: 'block', marginBottom: '8px' }}>
+            {requiredRepairActions.length > 0 ? 'Repair actions' : 'Manual export actions'}
+          </Subtitle2>
+          {requiredRepairActions.length === 0 && manualExportActions.length > 0 && (
+            <Caption1 style={{ display: 'block', color: tokens.colorNeutralForeground3, marginBottom: '10px' }}>
+              Use Preview Export only when you want CLI/Copilot file-based tools to receive a .squad handoff. It does not turn on automatic two-way sync.
+            </Caption1>
+          )}
+          {status.repairActions.length > 0 && (
+            <Caption1 style={{ display: 'block', color: tokens.colorNeutralForeground3, marginBottom: '10px' }}>
+              Previews are safe: Preview Repair or Preview Export runs a dry run and opens a modal showing proposed file changes before anything is written.
+            </Caption1>
+          )}
           {status.repairActions.length === 0 ? (
             <Caption1 style={{ color: tokens.colorNeutralForeground3 }}>
               No repair actions reported. Refresh after backend sync routes are available.
             </Caption1>
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-              {status.repairActions.map((action) => {
+              {[...requiredRepairActions, ...manualExportActions].map((action) => {
                 const disabledReason = action.disabledReason
+                  ?? (!status.dryRunSupported
+                    ? 'Preview is not available for this backend response yet.'
+                    : undefined)
                   ?? (!status.repairAvailable
                     ? status.repairDisabledReason ?? 'Automatic repair is not available for this status.'
                     : undefined)
@@ -591,12 +835,12 @@ export function SquadSyncStatusPanel({ projectId }: SquadSyncStatusPanelProps) {
                     </div>
                     <Button
                       appearance="secondary"
-                      icon={repair.isPending ? <Spinner size="tiny" /> : <Wrench20Regular />}
-                      disabled={repair.isPending || Boolean(disabledReason)}
+                      icon={isPreviewPending ? <Spinner size="tiny" /> : <Wrench20Regular />}
+                      disabled={isPreviewPending || Boolean(disabledReason)}
                       data-testid={`repair-action-${action.id}`}
-                      onClick={() => void handleRepair(action)}
+                      onClick={() => void handlePreviewRepair(action)}
                     >
-                      {repair.isPending ? 'Repairing…' : 'Repair'}
+                      {isPreviewPending ? 'Previewing…' : action.required ? 'Preview Repair' : 'Preview Export'}
                     </Button>
                   </div>
                 )
@@ -605,13 +849,14 @@ export function SquadSyncStatusPanel({ projectId }: SquadSyncStatusPanelProps) {
           )}
         </div>
 
-        {repairMessage && (
-          <Caption1 style={{ color: tokens.colorPaletteGreenForeground1 }}>{repairMessage}</Caption1>
+        {applyMessage && (
+          <Caption1 style={{ color: tokens.colorPaletteGreenForeground1 }}>{applyMessage}</Caption1>
         )}
-        {repairError && (
-          <Caption1 style={{ color: tokens.colorPaletteRedForeground1 }}>{repairError}</Caption1>
+        {applyError && (
+          <Caption1 style={{ color: tokens.colorPaletteRedForeground1 }}>{applyError}</Caption1>
         )}
       </div>
     </div>
+    </>
   )
 }
