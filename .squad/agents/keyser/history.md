@@ -281,3 +281,13 @@ Full audit of `packages/client/src/` (130+ files). Findings written to `.squad/d
 - **Dead pages exist.** `LiveSession.tsx` and `StarterDetail.tsx` are defined but never imported or routed. They inflate the bundle and confuse contributors.
 - **Index-based keys widespread.** 15+ list renders use `key={i}` or `key={index}`. Most are in stable-order lists (low risk), but `KanbanBoard` column keys and `CeremonyEditor` step keys can cause state bleed on reorder.
 - **`as unknown` casts on WS/SSE payloads.** Realtime event handlers cast raw server data directly to typed interfaces without runtime validation. A malformed server message will silently corrupt React state.
+
+---
+
+## Dead code cleanup — 2026-05-20T13:26:25.229-07:00
+
+### Learnings
+
+- Delete only after proving zero importers/routes with repo-wide grep; `api/workflows.ts` looked deprecated but still has a live importer in `components/board/CardDetail.tsx`, so it stays.
+- Unrouted pages can still contain internal `navigate('/starters')` calls; router truth lives in `App.tsx`, not in page-local links.
+- Broader `ralph-monitor` search must distinguish dead client hooks from live server sweep/status code and heartbeat labels before deleting the frontend file.
