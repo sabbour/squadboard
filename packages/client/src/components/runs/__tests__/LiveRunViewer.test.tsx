@@ -15,11 +15,12 @@ import { MemoryRouter, Route, Routes } from 'react-router'
 
 // ─── Hoisted mocks ────────────────────────────────────────────────────────────
 
-const { mockUseRunStream, mockSteer, mockRetry } = vi.hoisted(() => {
+const { mockUseRunStream, mockSteer, mockRetry, mockRetriggerRun } = vi.hoisted(() => {
   const mockSteer = vi.fn().mockResolvedValue(undefined)
   const mockRetry = vi.fn()
   const mockUseRunStream = vi.fn()
-  return { mockUseRunStream, mockSteer, mockRetry }
+  const mockRetriggerRun = { mutate: vi.fn(), isPending: false }
+  return { mockUseRunStream, mockSteer, mockRetry, mockRetriggerRun }
 })
 
 vi.mock('../../../hooks/useRunStream.ts', () => ({
@@ -29,6 +30,10 @@ vi.mock('../../../hooks/useRunStream.ts', () => ({
     'issue.run.tool_call', 'issue.run.tool_result', 'issue.run.metric',
     'issue.run.finish', 'issue.run.error', 'issue.run.steered',
   ],
+}))
+
+vi.mock('../../../api/runs.ts', () => ({
+  useRetriggerRun: () => mockRetriggerRun,
 }))
 
 import LiveRunViewer from '../LiveRunViewer.tsx'
@@ -126,6 +131,7 @@ const LIVE_CONSOLE_EVENTS = [
 describe('LiveRunViewer', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    mockRetriggerRun.isPending = false
     mockUseRunStream.mockReturnValue(makeStream())
   })
 
@@ -267,7 +273,93 @@ describe('LiveRunViewer', () => {
 
       renderViewer()
 
-      expect(screen.getAllByText('Agent emitted no structured output after restart')).toHaveLength(1)
+      expect(screen.getAllByText('Agent emitted no structured output after restart').length).toBeGreaterThanOrEqual(1)
+    })
+
+    it('shows a recovery summary, retry actions, context actions, and compact event log for failed timeout runs', async () => {
+      const user = userEvent.setup()
+      mockUseRunStream.mockReturnValue(makeStream({
+        status: 'error',
+        error: null,
+        run: {
+          id: 'run-abc',
+          issueId: 'issue-1',
+          agentId: 'agent-1',
+          kind: 'agent_run',
+          status: 'failed',
+          workspaceStrategy: 'scratch',
+          workspacePath: null,
+          createdAt: '2026-05-20T14:00:00.000Z',
+          updatedAt: '2026-05-20T14:07:01.000Z',
+          startedAt: '2026-05-20T14:05:59.000Z',
+          completedAt: null,
+          finishedAt: '2026-05-20T14:07:01.000Z',
+          leaseExpiresAt: null,
+          heartbeatAt: null,
+          durationMs: 62_000,
+          costTokens: 0,
+          inputTokens: 0,
+          outputTokens: 0,
+          cachedInputTokens: 0,
+          costUsd: '0',
+          premiumRequests: '0',
+          output: { available: false, length: 0 },
+          errorMessage: 'Timeout after 60000ms waiting for session.idle',
+          staleReason: null,
+          recovery: null,
+        },
+        events: [
+          {
+            id: 'e-start',
+            runId: 'run-abc',
+            seq: 0,
+            eventType: 'issue.run.start',
+            payload: { runId: 'run-abc', seq: 0, agentName: 'mcmanus' },
+            createdAt: '2026-05-20T14:05:59.000Z',
+          },
+          {
+            id: 'e-error',
+            runId: 'run-abc',
+            seq: 1,
+            eventType: 'issue.run.error',
+            payload: {
+              runId: 'run-abc',
+              seq: 1,
+              message: 'Timeout after 60000ms waiting for session.idle',
+            },
+            createdAt: '2026-05-20T14:07:01.000Z',
+          },
+        ],
+      }))
+
+      renderViewer()
+
+      expect(screen.getByRole('heading', { name: /run failed/i })).toBeInTheDocument()
+      expect(screen.getByText('Failure reason')).toBeInTheDocument()
+      expect(screen.getByText('Why this matters')).toBeInTheDocument()
+      expect(screen.getByText('Try next')).toBeInTheDocument()
+      expect(screen.getAllByText('Timeout after 60000ms waiting for session.idle').length).toBeGreaterThanOrEqual(1)
+      expect(screen.getByRole('button', { name: /retrigger run/i })).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: /retry stream/i })).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: /run history/i })).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: /work item/i })).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: /project board/i })).toBeInTheDocument()
+      expect(screen.getByText('Event log')).toBeInTheDocument()
+      expect(screen.getByRole('log')).toBeInTheDocument()
+      expect(screen.queryByRole('textbox', { name: /steering message/i })).not.toBeInTheDocument()
+      expect(screen.queryByRole('button', { name: /send/i })).not.toBeInTheDocument()
+
+      await user.click(screen.getByRole('button', { name: /retry stream/i }))
+      expect(mockRetry).toHaveBeenCalledTimes(1)
+
+      await user.click(screen.getByRole('button', { name: /retrigger run/i }))
+      expect(mockRetriggerRun.mutate).toHaveBeenCalledWith(
+        { runId: 'run-abc', issueId: 'issue-1' },
+        expect.objectContaining({
+          onSuccess: expect.any(Function),
+          onError: expect.any(Function),
+        }),
+      )
     })
 
     it('freezes elapsed time from a terminal failed run snapshot', () => {

@@ -8,7 +8,7 @@
  */
 
 import { useRef, useState, useEffect } from 'react'
-import { useParams } from 'react-router'
+import { useNavigate, useParams } from 'react-router'
 import {
   Badge,
   Body1,
@@ -23,16 +23,19 @@ import {
 } from '@fluentui/react-components'
 import {
   ArrowClockwise20Regular,
+  ArrowLeft20Regular,
   Bot20Regular,
   CheckmarkCircle20Regular,
   ChevronDown20Regular,
   ChevronRight20Regular,
   DismissCircle20Regular,
   ErrorCircle20Regular,
+  Open20Regular,
   Play20Regular,
   Send20Regular,
   Wrench20Regular,
 } from '@fluentui/react-icons'
+import { useRetriggerRun } from '../../api/runs.ts'
 import { useRunStream, type IssueRunEventRow, type IssueRunStreamSnapshot, type RunStatus } from '../../hooks/useRunStream.ts'
 
 // ─── Types ──────────────────────────────────────────────────────────────────
@@ -126,6 +129,21 @@ function latestRunError(events: IssueRunEventRow[]): string | null {
     if (evt.eventType === 'issue.run.error') return errorMessage(evt.payload)
   }
   return null
+}
+
+function runSnapshotError(run: IssueRunStreamSnapshot | null | undefined): string | null {
+  if (!run) return null
+  return run.errorMessage?.trim() || run.recovery?.message?.trim() || null
+}
+
+function boardPath(projectId: string): string {
+  return `/projects/${encodeURIComponent(projectId)}/board`
+}
+
+function workItemPath(projectId: string, issueId: string, tab?: 'runs' | 'overview'): string {
+  const params = new URLSearchParams({ openIssue: issueId })
+  if (tab) params.set('tab', tab)
+  return `${boardPath(projectId)}?${params.toString()}`
 }
 
 function eventSummary(event: IssueRunEventRow): string {
@@ -298,7 +316,7 @@ function EventRow({ event }: { event: IssueRunEventRow }) {
 const VIRTUAL_THRESHOLD = 100
 const VIRTUAL_WINDOW = 100
 
-function EventStream({ events }: { events: IssueRunEventRow[] }) {
+function EventStream({ events, compact = false }: { events: IssueRunEventRow[]; compact?: boolean }) {
   const bottomRef = useRef<HTMLDivElement>(null)
 
   // Auto-scroll to bottom on new events
@@ -320,7 +338,9 @@ function EventStream({ events }: { events: IssueRunEventRow[] }) {
       aria-live="polite"
       aria-label="Run event stream"
       style={{
-        flex: 1,
+        flex: compact ? '0 0 auto' : 1,
+        minHeight: compact ? 120 : undefined,
+        maxHeight: compact ? 260 : undefined,
         overflowY: 'auto',
         background: tokens.colorNeutralBackground1,
         contentVisibility: 'auto',
@@ -342,6 +362,184 @@ function EventStream({ events }: { events: IssueRunEventRow[] }) {
       ))}
       <div ref={bottomRef} />
     </div>
+  )
+}
+
+function EventLogSection({ events, compact }: { events: IssueRunEventRow[]; compact: boolean }) {
+  if (!compact) return <EventStream events={events} />
+
+  return (
+    <section
+      aria-label="Run event log"
+      style={{
+        margin: `0 ${tokens.spacingHorizontalL} ${tokens.spacingVerticalL}`,
+        border: `1px solid ${tokens.colorNeutralStroke2}`,
+        borderRadius: tokens.borderRadiusLarge,
+        overflow: 'hidden',
+        background: tokens.colorNeutralBackground1,
+        flex: '0 0 auto',
+      }}
+    >
+      <div
+        style={{
+          padding: `${tokens.spacingVerticalS} ${tokens.spacingHorizontalM}`,
+          borderBottom: `1px solid ${tokens.colorNeutralStroke2}`,
+          display: 'flex',
+          alignItems: 'baseline',
+          justifyContent: 'space-between',
+          gap: tokens.spacingHorizontalM,
+          background: tokens.colorNeutralBackground2,
+        }}
+      >
+        <Text weight="semibold">Event log</Text>
+        <Caption1 style={{ color: tokens.colorNeutralForeground3 }}>
+          {events.length} {events.length === 1 ? 'event' : 'events'} captured
+        </Caption1>
+      </div>
+      <EventStream events={events} compact />
+    </section>
+  )
+}
+
+function EmptyEventState({ terminal }: { terminal: boolean }) {
+  return (
+    <div
+      style={{
+        flex: terminal ? '0 0 auto' : 1,
+        minHeight: terminal ? 140 : undefined,
+        margin: terminal ? `0 ${tokens.spacingHorizontalL} ${tokens.spacingVerticalL}` : undefined,
+        border: terminal ? `1px dashed ${tokens.colorNeutralStroke2}` : undefined,
+        borderRadius: terminal ? tokens.borderRadiusLarge : undefined,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        flexDirection: 'column',
+        gap: tokens.spacingVerticalS,
+        color: tokens.colorNeutralForeground3,
+      }}
+    >
+      <DismissCircle20Regular />
+      <Body1>{terminal ? 'No event log was captured for this run.' : 'Waiting for first event…'}</Body1>
+    </div>
+  )
+}
+
+function FailedRunRecoveryPanel({
+  reason,
+  elapsed,
+  canNavigate,
+  canRetrigger,
+  retriggering,
+  retriggerError,
+  onRetryStream,
+  onRetrigger,
+  onOpenWorkItem,
+  onOpenRunHistory,
+  onOpenProject,
+}: {
+  reason: string | null
+  elapsed: string
+  canNavigate: boolean
+  canRetrigger: boolean
+  retriggering: boolean
+  retriggerError: string | null
+  onRetryStream: () => void
+  onRetrigger: () => void
+  onOpenWorkItem: () => void
+  onOpenRunHistory: () => void
+  onOpenProject: () => void
+}) {
+  return (
+    <section
+      aria-labelledby="failed-run-heading"
+      style={{
+        margin: `${tokens.spacingVerticalL} ${tokens.spacingHorizontalL}`,
+        padding: tokens.spacingHorizontalL,
+        border: `1px solid ${tokens.colorPaletteRedBorder2}`,
+        borderRadius: tokens.borderRadiusXLarge,
+        background: tokens.colorPaletteRedBackground1,
+        display: 'flex',
+        flexDirection: 'column',
+        gap: tokens.spacingVerticalM,
+        boxShadow: tokens.shadow4,
+      }}
+    >
+      <div style={{ display: 'flex', gap: tokens.spacingHorizontalM, alignItems: 'flex-start' }}>
+        <span style={{ color: tokens.colorPaletteRedForeground1, display: 'flex', paddingTop: 2 }}>
+          <ErrorCircle20Regular />
+        </span>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <Text as="h2" id="failed-run-heading" size={500} weight="semibold" style={{ display: 'block', margin: 0 }}>
+            Run failed
+          </Text>
+          <Caption1 style={{ color: tokens.colorNeutralForeground3 }}>
+            Stopped after {elapsed}; this run will not produce completed output until it is retriggered.
+          </Caption1>
+        </div>
+      </div>
+
+      <div
+        style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
+          gap: tokens.spacingHorizontalL,
+        }}
+      >
+        <div style={{ display: 'flex', flexDirection: 'column', gap: tokens.spacingVerticalXS }}>
+          <Caption1 style={{ color: tokens.colorNeutralForeground3, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+            Failure reason
+          </Caption1>
+          <Body1 style={{ overflowWrap: 'anywhere' }}>
+            {reason ?? 'The run ended in an error state before a detailed failure message was recorded.'}
+          </Body1>
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: tokens.spacingVerticalXS }}>
+          <Caption1 style={{ color: tokens.colorNeutralForeground3, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+            Why this matters
+          </Caption1>
+          <Body1>
+            Squadboard cannot treat this run as complete, so outputs and follow-up automation may be missing.
+          </Body1>
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: tokens.spacingVerticalXS }}>
+          <Caption1 style={{ color: tokens.colorNeutralForeground3, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+            Try next
+          </Caption1>
+          <Body1>
+            Check the event log for the last successful step, then retrigger the run or return to the work item to adjust context.
+          </Body1>
+        </div>
+      </div>
+
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: tokens.spacingHorizontalS, alignItems: 'center' }}>
+        <Button
+          appearance="primary"
+          icon={<ArrowClockwise20Regular />}
+          onClick={onRetrigger}
+          disabled={!canRetrigger || retriggering}
+        >
+          {retriggering ? 'Starting…' : 'Retrigger run'}
+        </Button>
+        <Button appearance="secondary" onClick={onRetryStream}>
+          Retry stream
+        </Button>
+        <Button appearance="subtle" icon={<Open20Regular />} onClick={onOpenRunHistory} disabled={!canNavigate}>
+          Run history
+        </Button>
+        <Button appearance="subtle" icon={<Open20Regular />} onClick={onOpenWorkItem} disabled={!canNavigate}>
+          Work item
+        </Button>
+        <Button appearance="subtle" icon={<ArrowLeft20Regular />} onClick={onOpenProject} disabled={!canNavigate}>
+          Project board
+        </Button>
+      </div>
+
+      {retriggerError && (
+        <MessageBar intent="error">
+          <MessageBarBody>{retriggerError}</MessageBarBody>
+        </MessageBar>
+      )}
+    </section>
   )
 }
 
@@ -434,9 +632,12 @@ function SteerBar({
 
 export default function LiveRunViewer() {
   const { projectId = '', issueId = '', runId = '' } = useParams()
+  const navigate = useNavigate()
   const { events, run, status, error, steer, retry } = useRunStream(runId || null, projectId, issueId)
+  const retriggerRun = useRetriggerRun(projectId)
+  const [retriggerError, setRetriggerError] = useState<string | null>(null)
   const visibleStatus = displayStatus(status, run, events)
-  const terminalError = error?.message ?? latestRunError(events)
+  const terminalError = error?.message ?? latestRunError(events) ?? runSnapshotError(run)
 
   // Derive metrics from the event log
   const [now, setNow] = useState(() => Date.now())
@@ -478,6 +679,23 @@ export default function LiveRunViewer() {
   }, [visibleStatus])
 
   const elapsed = elapsedLabel(metrics.startedAt, run, events, now, visibleStatus)
+  const isTerminal = visibleStatus === 'finished' || visibleStatus === 'error'
+  const canNavigateToContext = Boolean(projectId && issueId)
+  const canRetrigger = canNavigateToContext && Boolean(runId) && (run?.status === 'failed' || run?.status === 'cancelled' || run?.status === 'completed' || visibleStatus === 'error')
+
+  function handleRetrigger() {
+    if (!canRetrigger) return
+    setRetriggerError(null)
+    retriggerRun.mutate(
+      { runId, issueId },
+      {
+        onSuccess: (newRun) => {
+          void navigate(`/projects/${encodeURIComponent(projectId)}/issues/${encodeURIComponent(issueId)}/runs/${encodeURIComponent(newRun.id)}/live`)
+        },
+        onError: (err) => setRetriggerError(err.message),
+      },
+    )
+  }
 
   // ── States: loading ──────────────────────────────────────────────────────
 
@@ -581,35 +799,26 @@ export default function LiveRunViewer() {
 
       {/* Error banner */}
       {visibleStatus === 'error' && (
-        <MessageBar intent="error">
-          <MessageBarBody>
-            {terminalError ?? 'An error occurred'}
-            {' '}
-            <Button size="small" appearance="transparent" onClick={retry} style={{ padding: 0, minWidth: 0, textDecoration: 'underline' }}>
-              Retry
-            </Button>
-          </MessageBarBody>
-        </MessageBar>
+        <FailedRunRecoveryPanel
+          reason={terminalError}
+          elapsed={elapsed}
+          canNavigate={canNavigateToContext}
+          canRetrigger={canRetrigger}
+          retriggering={retriggerRun.isPending}
+          retriggerError={retriggerError}
+          onRetryStream={retry}
+          onRetrigger={handleRetrigger}
+          onOpenWorkItem={() => { void navigate(workItemPath(projectId, issueId, 'overview')) }}
+          onOpenRunHistory={() => { void navigate(workItemPath(projectId, issueId, 'runs')) }}
+          onOpenProject={() => { void navigate(boardPath(projectId)) }}
+        />
       )}
 
       {/* Event stream */}
       {events.length === 0 ? (
-        <div
-          style={{
-            flex: 1,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            flexDirection: 'column',
-            gap: tokens.spacingVerticalS,
-            color: tokens.colorNeutralForeground3,
-          }}
-        >
-          <DismissCircle20Regular />
-          <Body1>Waiting for first event…</Body1>
-        </div>
+        <EmptyEventState terminal={isTerminal} />
       ) : (
-        <EventStream events={events} />
+        <EventLogSection events={events} compact={isTerminal} />
       )}
 
       {/* Steer bar — sticky bottom */}
