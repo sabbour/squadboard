@@ -419,6 +419,62 @@ describe('LiveRunViewer', () => {
 
       expect(screen.getByText('21m 59s')).toBeInTheDocument()
     })
+
+    it('uses a failed run snapshot as the shared status source even when the stream still says live', () => {
+      vi.useFakeTimers()
+      vi.setSystemTime(new Date('2026-05-20T14:45:00.000Z'))
+      mockUseRunStream.mockReturnValue(makeStream({
+        status: 'live',
+        error: null,
+        run: {
+          id: 'run-abc',
+          issueId: 'issue-1',
+          agentId: 'agent-1',
+          kind: 'agent_run',
+          status: 'failed',
+          workspaceStrategy: 'scratch',
+          workspacePath: null,
+          createdAt: '2026-05-20T14:00:00.000Z',
+          updatedAt: '2026-05-20T14:07:01.000Z',
+          startedAt: '2026-05-20T14:05:59.000Z',
+          completedAt: null,
+          finishedAt: '2026-05-20T14:07:01.000Z',
+          leaseExpiresAt: null,
+          heartbeatAt: null,
+          durationMs: 62_000,
+          costTokens: 0,
+          inputTokens: 0,
+          outputTokens: 0,
+          cachedInputTokens: 0,
+          costUsd: '0',
+          premiumRequests: '0',
+          output: { available: false, length: 0 },
+          errorMessage: 'Timeout after 60000ms waiting for session.idle',
+          staleReason: null,
+          recovery: null,
+        },
+        events: [{
+          id: 'e-start',
+          runId: 'run-abc',
+          seq: 0,
+          eventType: 'issue.run.start',
+          payload: { runId: 'run-abc', seq: 0, agentName: 'kujan' },
+          createdAt: '2026-05-20T14:05:59.000Z',
+        }],
+      }))
+
+      renderViewer()
+
+      expect(screen.getByText('Failed')).toBeInTheDocument()
+      expect(screen.queryByText('Running')).not.toBeInTheDocument()
+      expect(screen.getByRole('heading', { name: /run failed/i })).toBeInTheDocument()
+      expect(screen.getByText('1m 2s')).toBeInTheDocument()
+      expect(screen.queryByRole('textbox', { name: /steering message/i })).not.toBeInTheDocument()
+
+      vi.advanceTimersByTime(60_000)
+
+      expect(screen.getByText('1m 2s')).toBeInTheDocument()
+    })
   })
 
   describe('finished state', () => {

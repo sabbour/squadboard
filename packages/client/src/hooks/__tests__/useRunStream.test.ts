@@ -134,12 +134,14 @@ const RUN_ID = 'run-abc'
 
 describe('useRunStream', () => {
   beforeEach(() => {
+    mockApiFetch.mockReset()
     vi.clearAllMocks()
     registeredHandlers.clear()
     stateChangeListeners.clear()
   })
 
   afterEach(() => {
+    vi.useRealTimers()
     registeredHandlers.clear()
     stateChangeListeners.clear()
   })
@@ -280,6 +282,56 @@ describe('useRunStream', () => {
       await waitFor(() => expect(result.current.status).toBe('error'))
       expect(result.current.error?.message).toBe('Network error')
     })
+
+    it('polls live streams and adopts a failed snapshot when no terminal event is emitted', async () => {
+      vi.useFakeTimers()
+      const startEvent: IssueRunEventRow = {
+        id: 'e-start',
+        runId: RUN_ID,
+        seq: 0,
+        eventType: 'issue.run.start',
+        payload: { runId: RUN_ID, seq: 0, agentName: 'Kujan' },
+        createdAt: '2026-05-20T14:05:59.000Z',
+      }
+      mockApiFetch
+        .mockResolvedValueOnce(makeEventsResponse(
+          [startEvent],
+          1,
+          makeRunSnapshot({
+            status: 'running',
+            startedAt: '2026-05-20T14:05:59.000Z',
+          }),
+        ))
+        .mockResolvedValueOnce(makeEventsResponse(
+          [],
+          1,
+          makeRunSnapshot({
+            status: 'failed',
+            startedAt: '2026-05-20T14:05:59.000Z',
+            updatedAt: '2026-05-20T14:07:01.000Z',
+            finishedAt: '2026-05-20T14:07:01.000Z',
+            durationMs: 62_000,
+            errorMessage: 'Timeout after 60000ms waiting for session.idle',
+          }),
+        ))
+
+      const { result, unmount } = renderHook(() => useRunStream(RUN_ID, PROJECT_ID, ISSUE_ID))
+      await act(async () => {
+        await Promise.resolve()
+      })
+      expect(result.current.status).toBe('live')
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(5_000)
+      })
+
+      expect(result.current.status).toBe('error')
+      expect(result.current.run?.status).toBe('failed')
+      expect(result.current.run?.durationMs).toBe(62_000)
+      expect(result.current.error?.message).toBe('Timeout after 60000ms waiting for session.idle')
+      expect(result.current.events).toEqual([startEvent])
+      unmount()
+    })
   })
 
   describe('WS event append', () => {
@@ -363,6 +415,35 @@ describe('useRunStream', () => {
       expect(result.current.events).toHaveLength(1)
     })
 
+    it('does not downgrade a terminal failed snapshot when a delayed start event arrives over WS', async () => {
+      mockApiFetch.mockResolvedValueOnce(makeEventsResponse(
+        [],
+        0,
+        makeRunSnapshot({
+          status: 'failed',
+          startedAt: '2026-05-20T14:05:59.000Z',
+          finishedAt: '2026-05-20T14:07:01.000Z',
+          durationMs: 62_000,
+          errorMessage: 'Timeout after 60000ms waiting for session.idle',
+        }),
+      ))
+
+      const { result } = renderHook(() => useRunStream(RUN_ID, PROJECT_ID, ISSUE_ID))
+      await waitFor(() => expect(result.current.status).toBe('error'))
+
+      act(() => {
+        emitWsEvent('issue.run.start', {
+          runId: RUN_ID,
+          seq: 0,
+          agentName: 'Kujan',
+          createdAt: '2026-05-20T14:05:59.000Z',
+        })
+      })
+
+      expect(result.current.run?.status).toBe('failed')
+      expect(result.current.run?.durationMs).toBe(62_000)
+    })
+
     it('registers handlers for all 9 issue.run event types', async () => {
       mockApiFetch.mockResolvedValueOnce(makeEventsResponse([], 0))
       renderHook(() => useRunStream(RUN_ID, PROJECT_ID, ISSUE_ID))
@@ -438,6 +519,58 @@ describe('useRunStream', () => {
       await waitFor(() => expect(result.current.status).toBe('live'))
 
       await expect(result.current.steer('test')).rejects.toThrow('Run not active')
+    })
+
+    it('refreshes the run snapshot when steering discovers the run has silently failed', async () => {
+      const startEvent: IssueRunEventRow = {
+        id: 'e-start',
+        runId: RUN_ID,
+        seq: 0,
+        eventType: 'issue.run.start',
+        payload: { runId: RUN_ID, seq: 0, agentName: 'Kujan' },
+        createdAt: '2026-05-20T14:05:59.000Z',
+      }
+      mockApiFetch
+        .mockResolvedValueOnce(makeEventsResponse(
+          [startEvent],
+          1,
+          makeRunSnapshot({
+            status: 'running',
+            startedAt: '2026-05-20T14:05:59.000Z',
+          }),
+        ))
+        .mockRejectedValueOnce(new Error('Run is not active (status: failed). Only running runs can be steered.'))
+        .mockResolvedValueOnce(makeEventsResponse(
+          [],
+          1,
+          makeRunSnapshot({
+            status: 'failed',
+            startedAt: '2026-05-20T14:05:59.000Z',
+            updatedAt: '2026-05-20T14:07:01.000Z',
+            finishedAt: '2026-05-20T14:07:01.000Z',
+            durationMs: 62_000,
+            errorMessage: 'Timeout after 60000ms waiting for session.idle',
+          }),
+        ))
+
+      const { result } = renderHook(() => useRunStream(RUN_ID, PROJECT_ID, ISSUE_ID))
+      await waitFor(() => expect(result.current.status).toBe('live'))
+
+      let caught: unknown = null
+      await act(async () => {
+        try {
+          await result.current.steer('??')
+        } catch (err) {
+          caught = err
+        }
+      })
+
+      expect(caught).toBeInstanceOf(Error)
+      expect((caught as Error).message).toMatch(/status: failed/)
+      await waitFor(() => expect(result.current.status).toBe('error'))
+      expect(result.current.run?.status).toBe('failed')
+      expect(result.current.events).toEqual([startEvent])
+      expect(mockApiFetch).toHaveBeenCalledWith(expect.stringContaining('since_seq=1'))
     })
 
     it('throws when runId is null', async () => {

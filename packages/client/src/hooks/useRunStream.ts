@@ -132,6 +132,13 @@ function resolveStatusFromEvents(
   return fallback
 }
 
+function mergeEventRows(prev: IssueRunEventRow[], fresh: IssueRunEventRow[]): IssueRunEventRow[] {
+  if (fresh.length === 0) return prev
+  const seen = new Set(prev.map((event) => `${event.eventType}:${event.seq}`))
+  const next = fresh.filter((event) => !seen.has(`${event.eventType}:${event.seq}`))
+  return next.length ? [...prev, ...next] : prev
+}
+
 function applyEventToRunSnapshot(
   run: IssueRunStreamSnapshot | null,
   event: IssueRunEventRow,
@@ -231,8 +238,10 @@ export function useRunStream(
   // Refs for stable values inside async callbacks
   const lastSeqRef = useRef(0)
   const statusRef = useRef<RunStatus>('idle')
+  const eventsRef = useRef<IssueRunEventRow[]>([])
   const mountedRef = useRef(true)
   const reconnectFailuresRef = useRef(0)
+  const pollInFlightRef = useRef(false)
 
   function applyStatus(s: RunStatus) {
     statusRef.current = s
@@ -253,17 +262,50 @@ export function useRunStream(
     [runId, projectId, issueId],
   )
 
+  const applyFetchedEvents = useCallback(
+    (
+      data: EventsResponse,
+      options: { replace?: boolean; fallback?: RunStatus } = {},
+    ) => {
+      const nextRun = applyEventsToRunSnapshot(data.run, data.events)
+      const nextEvents = options.replace
+        ? data.events
+        : mergeEventRows(eventsRef.current, data.events)
+
+      eventsRef.current = nextEvents
+      setRun(nextRun)
+      setEvents(nextEvents)
+
+      const nextSeq = Math.max(options.replace ? 0 : lastSeqRef.current, data.nextSeq)
+      lastSeqRef.current = nextSeq
+      setLastSeq(nextSeq)
+      setError(latestErrorFromEvents(nextEvents) ?? errorFromRunSnapshot(nextRun))
+      applyStatus(resolveStatusFromEvents(nextEvents, nextRun, options.fallback ?? statusRef.current))
+    },
+    [],
+  )
+
   // ── steer ─────────────────────────────────────────────────────────────────
 
   const steer = useCallback(
     async (message: string): Promise<void> => {
       if (!runId) throw new Error('No active run to steer')
-      await apiFetch<{ ok: boolean; eventSeq: number }>(
-        `/api/projects/${projectId}/issues/${issueId}/runs/${runId}/steer`,
-        { method: 'POST', body: JSON.stringify({ message }) },
-      )
+      try {
+        await apiFetch<{ ok: boolean; eventSeq: number }>(
+          `/api/projects/${projectId}/issues/${issueId}/runs/${runId}/steer`,
+          { method: 'POST', body: JSON.stringify({ message }) },
+        )
+      } catch (err) {
+        try {
+          const data = await fetchEvents(lastSeqRef.current)
+          if (mountedRef.current) applyFetchedEvents(data, { fallback: statusRef.current })
+        } catch {
+          // Preserve and rethrow the original steering failure; the caller shows it inline.
+        }
+        throw err
+      }
     },
-    [runId, projectId, issueId],
+    [runId, projectId, issueId, fetchEvents, applyFetchedEvents],
   )
 
   // ── retry ─────────────────────────────────────────────────────────────────
@@ -284,19 +326,23 @@ export function useRunStream(
     if (!runId) {
       applyStatus('idle')
       setEvents([])
+      eventsRef.current = []
       setRun(null)
       setError(null)
       lastSeqRef.current = 0
       setLastSeq(0)
+      pollInFlightRef.current = false
       return
     }
 
     applyStatus('loading')
     setEvents([])
+    eventsRef.current = []
     setRun(null)
     setError(null)
     lastSeqRef.current = 0
     setLastSeq(0)
+    pollInFlightRef.current = false
 
     wsClient.connect(projectId)
 
@@ -305,13 +351,7 @@ export function useRunStream(
     fetchEvents()
       .then((data) => {
         if (!mountedRef.current) return
-        const nextRun = applyEventsToRunSnapshot(data.run, data.events)
-        setRun(nextRun)
-        setEvents(data.events)
-        lastSeqRef.current = data.nextSeq
-        setLastSeq(data.nextSeq)
-        setError(latestErrorFromEvents(data.events) ?? errorFromRunSnapshot(nextRun))
-        applyStatus(resolveStatusFromEvents(data.events, nextRun, 'live'))
+        applyFetchedEvents(data, { replace: true, fallback: 'live' })
       })
       .catch((err: unknown) => {
         if (!mountedRef.current) return
@@ -344,9 +384,15 @@ export function useRunStream(
         setEvents((prev) => {
           // Deduplicate by (eventType, seq)
           if (prev.some((e) => e.eventType === type && e.seq === seq)) return prev
-          return [...prev, row]
+          const next = [...prev, row]
+          eventsRef.current = next
+          return next
         })
-        setRun((prev) => applyEventToRunSnapshot(prev, row))
+        setRun((prev) => {
+          if (prev && isTerminalDbStatus(prev.status) && !isTerminalEvent(row.eventType)) return prev
+          const next = applyEventToRunSnapshot(prev, row)
+          return next
+        })
 
         const nextSeq = seq + 1
         if (nextSeq > lastSeqRef.current) {
@@ -400,23 +446,9 @@ export function useRunStream(
         fetchEvents(lastSeqRef.current)
           .then((data) => {
             if (!mountedRef.current) return
-            const nextRun = applyEventsToRunSnapshot(data.run, data.events)
-            setRun(nextRun)
-            if (data.events.length > 0) {
-              setEvents((prev) => {
-                const seqs = new Set(prev.map((e) => `${e.eventType}:${e.seq}`))
-                const fresh = data.events.filter(
-                  (e) => !seqs.has(`${e.eventType}:${e.seq}`),
-                )
-                return fresh.length ? [...prev, ...fresh] : prev
-              })
-              lastSeqRef.current = data.nextSeq
-              setLastSeq(data.nextSeq)
-            }
             // Successful replay — reset failure counter
             reconnectFailuresRef.current = 0
-            setError(latestErrorFromEvents(data.events) ?? errorFromRunSnapshot(nextRun))
-            applyStatus(resolveStatusFromEvents(data.events, nextRun, 'live'))
+            applyFetchedEvents(data, { fallback: 'live' })
           })
           .catch(() => {
             // GET replay failed — WS is connected but we couldn't fetch catch-up events.
@@ -429,15 +461,38 @@ export function useRunStream(
       }
     })
 
+    // ── Silent terminal-status catch-up ────────────────────────────────────
+
+    const STATUS_POLL_MS = 5000
+    const pollId = setInterval(() => {
+      const currentStatus = statusRef.current
+      if (currentStatus !== 'live' && currentStatus !== 'reconnecting') return
+      if (pollInFlightRef.current) return
+
+      pollInFlightRef.current = true
+      fetchEvents(lastSeqRef.current)
+        .then((data) => {
+          if (!mountedRef.current) return
+          applyFetchedEvents(data, { fallback: currentStatus })
+        })
+        .catch(() => {
+          // WebSocket is still the primary live channel; keep the current status on poll failure.
+        })
+        .finally(() => {
+          pollInFlightRef.current = false
+        })
+    }, STATUS_POLL_MS)
+
     // ── Cleanup ───────────────────────────────────────────────────────────
 
     return () => {
       mountedRef.current = false
       for (const h of handlers) wsClient.off(h.type, h.fn as never)
       unsubState()
+      clearInterval(pollId)
       if (disconnectOnUnmount) wsClient.disconnect()
     }
-  }, [runId, projectId, issueId, fetchEvents, disconnectOnUnmount])
+  }, [runId, projectId, issueId, fetchEvents, applyFetchedEvents, disconnectOnUnmount])
 
   return { events, run, status, lastSeq, error, steer, retry }
 }

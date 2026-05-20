@@ -206,11 +206,11 @@ function terminalEvent(events: IssueRunEventRow[]): IssueRunEventRow | undefined
 }
 
 function displayStatus(status: RunStatus, run: IssueRunStreamSnapshot | null | undefined, events: IssueRunEventRow[]): RunStatus {
+  if (run?.status === 'failed' || run?.status === 'cancelled') return 'error'
+  if (run?.status === 'completed') return 'finished'
   const terminal = terminalEvent(events)
   if (terminal?.eventType === 'issue.run.error') return 'error'
   if (terminal?.eventType === 'issue.run.finish') return 'finished'
-  if (run?.status === 'failed' || run?.status === 'cancelled') return 'error'
-  if (run?.status === 'completed') return 'finished'
   return status
 }
 
