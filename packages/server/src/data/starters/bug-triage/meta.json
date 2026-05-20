@@ -26,8 +26,7 @@
     "issues.json",
     "package.json",
     "squad.config.ts",
-    "tsconfig.json",
-    "triage-review.workflow.yaml"
+    "tsconfig.json"
   ],
   "htmlUrl": "https://github.com/bradygaster/Squad-IRL/tree/main/bug-triage",
   "bundledAt": "2026-05-15T07:48:07.667Z"

@@ -149,3 +149,11 @@ Full codebase audit (467 TS files, 250 production source files) across all 8 pac
 - The Electron package is architecturally incomplete — README claims client embedding but the renderer is a health-check stub.
 
 **Deliverable:** `.squad/decisions/inbox/mcmanus-deep-review-architecture.md`
+
+### 2026-05-20T13:33:00-07:00 — Server dead-code cleanup pass
+
+- Deleted confirmed-dead server files: `engine/dispatcher.ts`, `services/irl-gallery.ts`, `services/user-paths.ts`, `services/starter-ceremony-loader.ts`, its dedicated test, and the two starter-only `*.workflow.yaml` assets.
+- `dispatcher.ts` was only hanging off a stray unused import in `src/index.ts`; removed that edge first, then deleted the file.
+- Skipped `services/irl-mapper.ts` because it is still live: `routes/starters.ts` calls `materialiseIrlPlan()` and `services/starter-projects.ts` imports its `IrlProvisioningPlan` type.
+- Cleaned starter bundle metadata so deleted YAML files are no longer advertised in `meta.json`.
+- Validation: `pnpm --filter @sabbour/squadboard build` passed before/after; server test suite still has unrelated baseline failures, but post-change failures dropped from 16 tests across 9 files to 9 tests across 6 files.

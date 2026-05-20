@@ -24,8 +24,7 @@
     "index.ts",
     "package.json",
     "squad.config.ts",
-    "tsconfig.json",
-    "editorial-review.workflow.yaml"
+    "tsconfig.json"
   ],
   "htmlUrl": "https://github.com/bradygaster/Squad-IRL/tree/main/content-creation",
   "bundledAt": "2026-05-15T07:48:07.931Z"

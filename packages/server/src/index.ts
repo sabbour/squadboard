@@ -46,7 +46,6 @@ import systemRouter from './routes/system.js';
 import './services/heartbeat.js';
 import { createMcpHttpRouter } from './mcp/http-transport.js';
 import { setDefaultProjectId } from './mcp/server.js';
-import { dispatcher } from './engine/dispatcher.js';
 import { heartbeat } from './engine/heartbeat.js';
 import { applyHeartbeatConfig } from './engine/heartbeat-config.js';
 import { stuckIssueRunsSweep } from './engine/sweeps/stuck-issue-runs.js';
