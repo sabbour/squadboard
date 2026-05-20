@@ -230,3 +230,25 @@ Additive to existing `squadboard.sdk-sync-ownership.v1` contract. Does not chang
 - Curated visible built-in Project Templates to exactly Content Creation, Open Source, Research Spike, and Feature Kanban; hidden defaults remain on disk but are not selectable.
 - Generalized the old AKS Feature Kanban into `feature-kanban` with product/PM agents, reusable PM skills, agent-run ceremonies, and no AKS/Azure/Kubernetes/internal-tool dependencies.
 - Content Creation should stay intentionally small: one Writer, one Editor, four obvious columns, and two lightweight ceremonies.
+
+## Learnings
+
+### 2026-05-20T10:58:25-07:00 — Deep SDK Bridge & Integration Review
+
+- **HookPipeline is dead infrastructure:** `globalPipeline` and `registerOutputValidationHook` are defined but never called. Invariant 4 validation runs exclusively through Hockney's `recordRunCompletion()` in `output-validator.ts`. Decision needed: wire it or delete it.
+- **CharterCompiler doesn't inline identity files:** `spawn-prompt.ts` tells agents to read `wisdom.md`/`now.md` via tool calls, but never compiles them into the system prompt. This is a gap vs. the charter spec that says "three-layer memory composition fed into every system prompt."
+- **Duplicate pricing tables:** `cost-tracker.ts` and `pricing.ts` each maintain their own `MODEL_PRICING` dictionaries with different key formats. Must consolidate to avoid drift.
+- **fan-out-adapter leaks SquadClient:** Each fan-out child creates a new `SquadClient` that is only disconnected inside `sendMessage`'s finally. If `sendMessage` is never called, the connection leaks.
+- **No timeout on `sendAndWait`:** If the LLM provider hangs, the worker thread blocks indefinitely. Heartbeat sweeper reclaims the step_run but the SDK client leaks.
+- **OutputStreamer WS path is dead for bridge runs:** Constructed without `projectId`, so the WS push codepath never fires. `RunningIssueSessionImpl` handles all eventing.
+- **`pickString`/`pickNumber` quadruplicated** across bridge.ts, squad-client.ts, squad-stream.ts, consult-stream.ts. Should be extracted to `sdk/helpers.ts`.
+- **`engine_emit_final_output` MCP tool never implemented** — it's on the Demo 14 roadmap but no code exists.
+- **Structured output from agents is never schema-validated** before being emitted to the event bus. The `parseStructuredOutput` function in bridge.ts extracts JSON but doesn't validate it.
+- **Session lifecycle is solid:** `executeAgentRun` creates the session before try, disposes in finally. `RunningLiveSession.close()` is idempotent. `activeIssueSessions.register()` overwrites silently (documented as caller-dispose responsibility).
+- Full findings: `.squad/decisions/inbox/kobayashi-deep-review-sdk.md`
+
+### 2026-05-20T12:51:52-07:00 — SDK prompt boundary + timeout hardening
+
+- **Charter invariant:** raw charter text must never be spliced straight into `systemMessage`; the bridge now wraps charter payload in `<charter>` boundaries, XML-escapes angle brackets, and truncates oversized content at 8k chars with a warning.
+- **Liveness invariant:** `sendAndWait` now has a 120s hard timeout so hung providers fail closed and release the SDK client in `finally`.
+- **HookPipeline decision:** deleted `hook-pipeline.ts` instead of wiring it, because Invariant 4 already executes in `recordRunCompletion()` and the orphaned singleton had zero consumers. A second validation path would create split-brain completion semantics.
