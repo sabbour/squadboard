@@ -264,6 +264,23 @@ describe('LiveRunViewer', () => {
 
       expect(screen.getAllByText('Agent emitted no structured output after restart')).toHaveLength(1)
     })
+
+    it('freezes elapsed time from a terminal failed run snapshot', () => {
+      mockUseRunStream.mockReturnValue(makeStream({
+        status: 'error',
+        error: new Error('Recovered failed run'),
+        run: {
+          startedAt: '2026-05-16T06:00:00.000Z',
+          completedAt: null,
+          finishedAt: '2026-05-16T06:00:05.000Z',
+          updatedAt: '2026-05-16T06:00:06.000Z',
+        },
+      }))
+
+      renderViewer()
+
+      expect(screen.getByText('0m 5s')).toBeInTheDocument()
+    })
   })
 
   describe('finished state', () => {

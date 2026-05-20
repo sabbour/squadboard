@@ -91,6 +91,7 @@ function makeRunSnapshot(overrides: Partial<IssueRunStreamSnapshot> = {}): Issue
     updatedAt: '2026-05-20T14:00:00.000Z',
     startedAt: null,
     completedAt: null,
+    finishedAt: null,
     leaseExpiresAt: null,
     heartbeatAt: null,
     durationMs: null,
@@ -266,11 +267,14 @@ describe('useRunStream', () => {
       const { result } = renderHook(() => useRunStream(RUN_ID, PROJECT_ID, ISSUE_ID))
       await waitFor(() => expect(result.current.status).toBe('live'))
 
+      const finishedAt = '2026-05-20T14:00:03.000Z'
       act(() => {
-        emitWsEvent('issue.run.finish', { runId: RUN_ID, seq: 5, durationMs: 3000 })
+        emitWsEvent('issue.run.finish', { runId: RUN_ID, seq: 5, createdAt: finishedAt, durationMs: 3000 })
       })
 
       expect(result.current.status).toBe('finished')
+      expect(result.current.run?.completedAt).toBe(finishedAt)
+      expect(result.current.run?.finishedAt).toBe(finishedAt)
     })
 
     it('sets a useful error on issue.run.error WS event', async () => {
@@ -279,16 +283,20 @@ describe('useRunStream', () => {
       const { result } = renderHook(() => useRunStream(RUN_ID, PROJECT_ID, ISSUE_ID))
       await waitFor(() => expect(result.current.status).toBe('live'))
 
+      const finishedAt = '2026-05-20T14:00:05.000Z'
       act(() => {
         emitWsEvent('issue.run.error', {
           runId: RUN_ID,
           seq: 2,
+          createdAt: finishedAt,
           message: 'Worker crashed after restart',
         })
       })
 
       expect(result.current.status).toBe('error')
       expect(result.current.error?.message).toBe('Worker crashed after restart')
+      expect(result.current.run?.completedAt).toBe(finishedAt)
+      expect(result.current.run?.finishedAt).toBe(finishedAt)
     })
 
     it('deduplicates events with the same (eventType, seq)', async () => {

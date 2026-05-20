@@ -10,6 +10,10 @@ const runsMock = vi.hoisted(() => ({
     agentId: string
     status: 'pending' | 'running' | 'completed' | 'failed' | 'cancelled'
     workspaceStrategy: 'scratch'
+    startedAt?: string | null
+    completedAt?: string | null
+    finishedAt?: string | null
+    updatedAt?: string | null
   }>,
   retrigger: {
     mutate: vi.fn(),
@@ -61,6 +65,24 @@ describe('RunHistory retrigger', () => {
     render(<RunHistory projectId="project-1" issueId="issue-1" />)
 
     expect(screen.getByRole('button', { name: /retrigger run run-1/i })).toBeInTheDocument()
+  })
+
+  it('uses finishedAt to freeze elapsed time for terminal failed runs', () => {
+    runsMock.issueRuns = [{
+      id: 'run-1',
+      issueId: 'issue-1',
+      agentId: 'agent-1',
+      status: 'failed',
+      workspaceStrategy: 'scratch',
+      startedAt: '2026-05-20T14:00:00.000Z',
+      completedAt: null,
+      finishedAt: '2026-05-20T14:00:05.000Z',
+      updatedAt: '2026-05-20T14:00:06.000Z',
+    }]
+
+    render(<RunHistory projectId="project-1" issueId="issue-1" />)
+
+    expect(screen.getByText('5s')).toBeInTheDocument()
   })
 
   it('starts a new run from the failed run when retrigger is clicked', async () => {

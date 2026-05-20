@@ -40,6 +40,7 @@ export interface IssueRunStreamSnapshot {
   updatedAt: string | null
   startedAt: string | null
   completedAt: string | null
+  finishedAt: string | null
   leaseExpiresAt: string | null
   heartbeatAt: string | null
   durationMs: number | null
@@ -165,6 +166,7 @@ function applyEventToRunSnapshot(
       ...run,
       status: 'completed',
       completedAt: event.createdAt,
+      finishedAt: event.createdAt,
       updatedAt: event.createdAt,
       durationMs: typeof p.durationMs === 'number' ? p.durationMs : run.durationMs,
       costUsd: typeof p.cost === 'string' ? p.cost : run.costUsd,
@@ -179,12 +181,23 @@ function applyEventToRunSnapshot(
       ...run,
       status: 'failed',
       completedAt: run.completedAt ?? event.createdAt,
+      finishedAt: run.finishedAt ?? event.createdAt,
       updatedAt: event.createdAt,
       errorMessage: typeof p.message === 'string' ? p.message : run.errorMessage,
     }
   }
 
   return run
+}
+
+function applyEventsToRunSnapshot(
+  run: IssueRunStreamSnapshot,
+  events: IssueRunEventRow[],
+): IssueRunStreamSnapshot {
+  return events.reduce<IssueRunStreamSnapshot>(
+    (current, event) => applyEventToRunSnapshot(current, event) ?? current,
+    run,
+  )
 }
 
 // ─── Hook ────────────────────────────────────────────────────────────────────
@@ -279,12 +292,13 @@ export function useRunStream(
     fetchEvents()
       .then((data) => {
         if (!mountedRef.current) return
-        setRun(data.run)
+        const nextRun = applyEventsToRunSnapshot(data.run, data.events)
+        setRun(nextRun)
         setEvents(data.events)
         lastSeqRef.current = data.nextSeq
         setLastSeq(data.nextSeq)
-        setError(latestErrorFromEvents(data.events) ?? errorFromRunSnapshot(data.run))
-        applyStatus(resolveStatusFromEvents(data.events, data.run, 'live'))
+        setError(latestErrorFromEvents(data.events) ?? errorFromRunSnapshot(nextRun))
+        applyStatus(resolveStatusFromEvents(data.events, nextRun, 'live'))
       })
       .catch((err: unknown) => {
         if (!mountedRef.current) return
@@ -373,7 +387,8 @@ export function useRunStream(
         fetchEvents(lastSeqRef.current)
           .then((data) => {
             if (!mountedRef.current) return
-            setRun(data.run)
+            const nextRun = applyEventsToRunSnapshot(data.run, data.events)
+            setRun(nextRun)
             if (data.events.length > 0) {
               setEvents((prev) => {
                 const seqs = new Set(prev.map((e) => `${e.eventType}:${e.seq}`))
@@ -387,8 +402,8 @@ export function useRunStream(
             }
             // Successful replay — reset failure counter
             reconnectFailuresRef.current = 0
-            setError(latestErrorFromEvents(data.events) ?? errorFromRunSnapshot(data.run))
-            applyStatus(resolveStatusFromEvents(data.events, data.run, 'live'))
+            setError(latestErrorFromEvents(data.events) ?? errorFromRunSnapshot(nextRun))
+            applyStatus(resolveStatusFromEvents(data.events, nextRun, 'live'))
           })
           .catch(() => {
             // GET replay failed — WS is connected but we couldn't fetch catch-up events.

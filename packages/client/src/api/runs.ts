@@ -20,10 +20,14 @@ export interface IssueRun {
   errorMessage?: string
   costTokens?: number
   costUsd?: string
-  startedAt?: string
-  completedAt?: string
-  leaseExpiresAt?: string
-  heartbeatAt?: string
+  createdAt?: string | null
+  updatedAt?: string | null
+  startedAt?: string | null
+  completedAt?: string | null
+  finishedAt?: string | null
+  durationMs?: number | null
+  leaseExpiresAt?: string | null
+  heartbeatAt?: string | null
 }
 
 const BASE = import.meta.env.VITE_API_URL ?? 'http://localhost:3000'

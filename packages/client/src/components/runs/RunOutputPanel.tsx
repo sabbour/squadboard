@@ -108,13 +108,8 @@ function plainLogLine(line: string): string {
   return trimmed.replace(/^\[(.*)\]$/, '$1')
 }
 
-function formatElapsed(startedAt: string | undefined, completedAt: string | undefined, now: number): string {
-  if (!startedAt) return 'Not started'
-  const start = new Date(startedAt).getTime()
-  if (Number.isNaN(start)) return '—'
-  const completed = completedAt ? new Date(completedAt).getTime() : now
-  const end = Number.isNaN(completed) ? now : completed
-  const secs = Math.max(0, Math.round((end - start) / 1000))
+function formatDurationMs(durationMs: number): string {
+  const secs = Math.max(0, Math.round(durationMs / 1000))
   if (secs < 60) return `${secs}s`
   const minutes = Math.floor(secs / 60)
   const seconds = secs % 60
@@ -122,7 +117,21 @@ function formatElapsed(startedAt: string | undefined, completedAt: string | unde
   return `${Math.floor(minutes / 60)}h ${minutes % 60}m`
 }
 
-function formatTime(value?: string): string {
+function formatElapsed(
+  run: Pick<IssueRun, 'startedAt' | 'completedAt' | 'updatedAt' | 'durationMs' | 'status'>,
+  now: number,
+): string {
+  if (isTerminalStatus(run.status) && typeof run.durationMs === 'number') return formatDurationMs(run.durationMs)
+  if (!run.startedAt) return 'Not started'
+  const start = new Date(run.startedAt).getTime()
+  if (Number.isNaN(start)) return '—'
+  const terminalAt = run.completedAt ?? (isTerminalStatus(run.status) ? run.updatedAt : undefined)
+  const parsedEnd = terminalAt ? new Date(terminalAt).getTime() : (isTerminalStatus(run.status) ? start : now)
+  const end = Number.isNaN(parsedEnd) ? (isTerminalStatus(run.status) ? start : now) : parsedEnd
+  return formatDurationMs(end - start)
+}
+
+function formatTime(value: string | null | undefined): string {
   if (!value) return '—'
   const date = new Date(value)
   if (Number.isNaN(date.getTime())) return '—'
@@ -378,6 +387,25 @@ function normalizeStreamStatus(status?: string): IssueRun['status'] | null {
   return null
 }
 
+function isTerminalStatus(status: IssueRun['status']): boolean {
+  return status === 'completed' || status === 'failed' || status === 'cancelled'
+}
+
+function terminalEventStatus(eventType: string): IssueRun['status'] | null {
+  if (eventType === 'issue.run.finish') return 'completed'
+  if (eventType === 'issue.run.error') return 'failed'
+  return null
+}
+
+function latestTerminalEvent(events: IssueRunEventRow[]): IssueRunEventRow | undefined {
+  return [...events].reverse().find((event) => terminalEventStatus(event.eventType))
+}
+
+function durationFromTerminalEvent(event: IssueRunEventRow | undefined): number | undefined {
+  const value = event?.payload.durationMs
+  return typeof value === 'number' ? value : undefined
+}
+
 function runSuffix(runId: string): string {
   return runId.length <= 8 ? runId : runId.slice(-8)
 }
@@ -418,18 +446,39 @@ interface RunOutputPanelProps {
 export default function RunOutputPanel({ projectId, run, agent }: RunOutputPanelProps) {
   const bottomRef = useRef<HTMLDivElement>(null)
   const { events, run: streamRun, status: streamStatus, steer } = useStructuredRunStream(run.id, projectId, run.issueId, { disconnectOnUnmount: false })
-  const effectiveStatus = normalizeStreamStatus(streamRun?.status) ?? run.status
+  const terminalEvent = latestTerminalEvent(events)
+  const eventStatus = terminalEvent ? terminalEventStatus(terminalEvent.eventType) : null
+  const streamRunStatus = normalizeStreamStatus(streamRun?.status)
+  const effectiveStatus =
+    eventStatus
+    ?? (streamRunStatus && isTerminalStatus(streamRunStatus) ? streamRunStatus : null)
+    ?? (streamStatus === 'finished' ? 'completed' : null)
+    ?? streamRunStatus
+    ?? run.status
+  const terminalAt = isTerminalStatus(effectiveStatus)
+    ? streamRun?.completedAt
+      ?? streamRun?.finishedAt
+      ?? run.completedAt
+      ?? run.finishedAt
+      ?? terminalEvent?.createdAt
+      ?? streamRun?.updatedAt
+      ?? run.updatedAt
+      ?? undefined
+    : undefined
   const effectiveRun: IssueRun = {
     ...run,
     status: effectiveStatus,
-    workspacePath: run.workspacePath ?? streamRun?.workspacePath ?? undefined,
-    startedAt: run.startedAt ?? streamRun?.startedAt ?? undefined,
-    completedAt: run.completedAt ?? streamRun?.completedAt ?? undefined,
-    heartbeatAt: run.heartbeatAt ?? streamRun?.heartbeatAt ?? undefined,
-    leaseExpiresAt: run.leaseExpiresAt ?? streamRun?.leaseExpiresAt ?? undefined,
-    costTokens: run.costTokens ?? streamRun?.costTokens,
-    costUsd: run.costUsd ?? streamRun?.costUsd,
-    errorMessage: run.errorMessage ?? streamRun?.errorMessage ?? undefined,
+    workspacePath: streamRun?.workspacePath ?? run.workspacePath ?? undefined,
+    startedAt: streamRun?.startedAt ?? run.startedAt ?? undefined,
+    completedAt: terminalAt,
+    finishedAt: streamRun?.finishedAt ?? run.finishedAt ?? terminalAt,
+    durationMs: streamRun?.durationMs ?? run.durationMs ?? durationFromTerminalEvent(terminalEvent),
+    updatedAt: streamRun?.updatedAt ?? run.updatedAt ?? undefined,
+    heartbeatAt: streamRun?.heartbeatAt ?? run.heartbeatAt ?? undefined,
+    leaseExpiresAt: streamRun?.leaseExpiresAt ?? run.leaseExpiresAt ?? undefined,
+    costTokens: streamRun?.costTokens ?? run.costTokens,
+    costUsd: streamRun?.costUsd ?? run.costUsd,
+    errorMessage: streamRun?.errorMessage ?? run.errorMessage ?? undefined,
   }
   const isActive = effectiveRun.status === 'running' || effectiveRun.status === 'pending'
   const canSteer = streamStatus === 'live' && effectiveRun.status === 'running'
@@ -455,7 +504,7 @@ export default function RunOutputPanel({ projectId, run, agent }: RunOutputPanel
   const timeline = useMemo(() => buildTimeline(effectiveRun, events, displayLines, recoveryLines), [effectiveRun, events, displayLines, recoveryLines])
   const totals = metricTotals(events, streamRun)
   const activeStep = deriveActiveStep(effectiveRun, events, displayLines)
-  const elapsed = formatElapsed(effectiveRun.startedAt, effectiveRun.completedAt, now)
+  const elapsed = formatElapsed(effectiveRun, now)
   const outputLabel = streamRun?.output?.available
     ? `${streamRun.output.length.toLocaleString()} chars`
     : streamRun?.output?.available === false

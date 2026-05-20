@@ -44,6 +44,7 @@ async function runStaleRunRecovery(): Promise<string[]> {
         SET status       = 'failed',
             stale_reason = 'restart-pickup',
             error_message = COALESCE(error_message, '') || ' [recovered: server restarted]',
+            completed_at = COALESCE(completed_at, NOW()),
             updated_at   = NOW()
       WHERE status = 'running'
       RETURNING id`,
@@ -85,6 +86,7 @@ describe('graceful shutdown — restart-pickup (stale run recovery)', () => {
     const sql: string = mockQuery.mock.calls[0]![0] as string;
     expect(sql).toMatch(/status\s*=\s*'failed'/);
     expect(sql).toMatch(/stale_reason\s*=\s*'restart-pickup'/);
+    expect(sql).toMatch(/completed_at\s*=\s*COALESCE\(completed_at,\s*NOW\(\)\)/);
     expect(sql).toMatch(/WHERE status = 'running'/);
     expect(recovered).toEqual(['run-1', 'run-2']);
   });

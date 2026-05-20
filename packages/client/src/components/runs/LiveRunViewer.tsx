@@ -33,7 +33,7 @@ import {
   Send20Regular,
   Wrench20Regular,
 } from '@fluentui/react-icons'
-import { useRunStream, type IssueRunEventRow, type RunStatus } from '../../hooks/useRunStream.ts'
+import { useRunStream, type IssueRunEventRow, type IssueRunStreamSnapshot, type RunStatus } from '../../hooks/useRunStream.ts'
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -170,12 +170,48 @@ function formatHHMMSS(ts: string): string {
   return d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false })
 }
 
-function elapsedLabel(startedAt: number | null): string {
-  if (!startedAt) return '—'
-  const secs = Math.floor((Date.now() - startedAt) / 1000)
+function timestampMs(value: string | null | undefined): number | null {
+  if (!value) return null
+  const ms = new Date(value).getTime()
+  return Number.isNaN(ms) ? null : ms
+}
+
+function formatElapsedSeconds(totalSeconds: number): string {
+  const secs = Math.max(0, Math.floor(totalSeconds))
   const m = Math.floor(secs / 60)
   const s = secs % 60
   return `${m}m ${s}s`
+}
+
+function terminalEvent(events: IssueRunEventRow[]): IssueRunEventRow | undefined {
+  return [...events].reverse().find((event) => event.eventType === 'issue.run.finish' || event.eventType === 'issue.run.error')
+}
+
+function displayStatus(status: RunStatus, run: IssueRunStreamSnapshot | null | undefined, events: IssueRunEventRow[]): RunStatus {
+  const terminal = terminalEvent(events)
+  if (terminal?.eventType === 'issue.run.error') return 'error'
+  if (terminal?.eventType === 'issue.run.finish') return 'finished'
+  if (run?.status === 'failed' || run?.status === 'cancelled') return 'error'
+  if (run?.status === 'completed') return 'finished'
+  return status
+}
+
+function elapsedLabel(
+  startedAt: number | null,
+  run: IssueRunStreamSnapshot | null | undefined,
+  events: IssueRunEventRow[],
+  now: number,
+  status: RunStatus,
+): string {
+  const startMs = timestampMs(run?.startedAt) ?? startedAt
+  if (!startMs) return '—'
+  if ((status === 'finished' || status === 'error') && typeof run?.durationMs === 'number') {
+    return formatElapsedSeconds(run.durationMs / 1000)
+  }
+  const terminal = terminalEvent(events)
+  const terminalAt = run?.completedAt ?? run?.finishedAt ?? terminal?.createdAt ?? ((status === 'finished' || status === 'error') ? run?.updatedAt : undefined)
+  const endMs = timestampMs(terminalAt) ?? (status === 'finished' || status === 'error' ? startMs : now)
+  return formatElapsedSeconds((endMs - startMs) / 1000)
 }
 
 // ─── EventRow ────────────────────────────────────────────────────────────────
@@ -398,11 +434,12 @@ function SteerBar({
 
 export default function LiveRunViewer() {
   const { projectId = '', issueId = '', runId = '' } = useParams()
-  const { events, status, error, steer, retry } = useRunStream(runId || null, projectId, issueId)
+  const { events, run, status, error, steer, retry } = useRunStream(runId || null, projectId, issueId)
+  const visibleStatus = displayStatus(status, run, events)
   const terminalError = error?.message ?? latestRunError(events)
 
   // Derive metrics from the event log
-  const [elapsed, setElapsed] = useState('—')
+  const [now, setNow] = useState(() => Date.now())
   const metrics: MetricState = (() => {
     const m: MetricState = {
       agentName: null,
@@ -411,7 +448,7 @@ export default function LiveRunViewer() {
       outputTokens: 0,
       costUsd: 0,
       turnCount: 0,
-      startedAt: null,
+      startedAt: timestampMs(run?.startedAt),
     }
     for (const evt of events) {
       const p = evt.payload
@@ -432,13 +469,15 @@ export default function LiveRunViewer() {
     return m
   })()
 
-  // Tick elapsed time
+  // Tick elapsed time only while the run is live.
   useEffect(() => {
-    if (status !== 'live') return
-    setElapsed(elapsedLabel(metrics.startedAt))
-    const id = setInterval(() => setElapsed(elapsedLabel(metrics.startedAt)), 1000)
+    if (visibleStatus !== 'live') return
+    setNow(Date.now())
+    const id = setInterval(() => setNow(Date.now()), 1000)
     return () => clearInterval(id)
-  }, [status, metrics.startedAt])
+  }, [visibleStatus])
+
+  const elapsed = elapsedLabel(metrics.startedAt, run, events, now, visibleStatus)
 
   // ── States: loading ──────────────────────────────────────────────────────
 
@@ -500,16 +539,16 @@ export default function LiveRunViewer() {
           <Badge
             appearance="filled"
             color={
-              status === 'live' && events.length === 0 ? 'warning'
-              : status === 'live' ? 'success'
-              : status === 'finished' ? 'subtle'
-              : status === 'error' ? 'danger'
+              visibleStatus === 'live' && events.length === 0 ? 'warning'
+              : visibleStatus === 'live' ? 'success'
+              : visibleStatus === 'finished' ? 'subtle'
+              : visibleStatus === 'error' ? 'danger'
               : 'warning'
             }
           >
-            {events.length === 0 && status === 'live' ? 'Pending' : statusLabel(status)}
+            {events.length === 0 && visibleStatus === 'live' ? 'Pending' : statusLabel(visibleStatus)}
           </Badge>
-          <Caption1 style={{ color: statusColor(status) }}>
+          <Caption1 style={{ color: statusColor(visibleStatus) }}>
             {elapsed}
           </Caption1>
         </div>
@@ -534,14 +573,14 @@ export default function LiveRunViewer() {
       </div>
 
       {/* Reconnecting banner */}
-      {status === 'reconnecting' && (
+      {visibleStatus === 'reconnecting' && (
         <MessageBar intent="warning">
           <MessageBarBody>Reconnecting to the event stream...</MessageBarBody>
         </MessageBar>
       )}
 
       {/* Error banner */}
-      {status === 'error' && (
+      {visibleStatus === 'error' && (
         <MessageBar intent="error">
           <MessageBarBody>
             {terminalError ?? 'An error occurred'}
@@ -574,7 +613,7 @@ export default function LiveRunViewer() {
       )}
 
       {/* Steer bar — sticky bottom */}
-      {status === 'live' && events.length > 0 && <SteerBar status={status} onSteer={steer} />}
+      {visibleStatus === 'live' && events.length > 0 && <SteerBar status={visibleStatus} onSteer={steer} />}
     </div>
   )
 }

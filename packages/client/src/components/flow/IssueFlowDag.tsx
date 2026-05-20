@@ -168,7 +168,7 @@ function stepFromRun(run: IssueRun, index: number): FlowStepRun {
     label: 'Agent run',
     status: run.status,
     startedAt: run.startedAt ?? null,
-    completedAt: run.completedAt ?? null,
+    completedAt: run.completedAt ?? run.finishedAt ?? null,
     outputSummary: compactText(run.errorMessage ?? run.output),
   })
 }
@@ -204,7 +204,7 @@ function buildInferredDefaultPath(
   const agentName = terminalStep.agentName
   const agentRole = terminalStep.agentRole
   const startedAt = run?.startedAt ?? terminalStep.startedAt
-  const completedAt = run?.completedAt ?? terminalStep.completedAt
+  const completedAt = run?.completedAt ?? run?.finishedAt ?? terminalStep.completedAt
   const failed = terminalStatus === 'failed'
   const active = terminalStatus === 'running' || terminalStatus === 'pending'
   const stepRuns: FlowStepRun[] = [
@@ -328,7 +328,7 @@ function insertRecoveryMarkers(flow: IssueFlow, runs: IssueRun[], eventsByRun: R
         label: 'Recovered after restart',
         status: 'recovered',
         startedAt: run?.startedAt ?? step.startedAt,
-        completedAt: run?.completedAt ?? step.completedAt,
+        completedAt: run?.completedAt ?? run?.finishedAt ?? step.completedAt,
         agentName: step.agentName,
         agentRole: step.agentRole,
         outputSummary: 'Squadboard recovered this run after a restart and continued tracking the session.',

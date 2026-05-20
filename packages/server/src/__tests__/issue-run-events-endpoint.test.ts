@@ -349,6 +349,8 @@ describe('offset + limit pagination', () => {
     const body = res._body as {
       run: {
         status: string;
+        completedAt: string | null;
+        finishedAt: string | null;
         durationMs: number;
         inputTokens: number;
         outputTokens: number;
@@ -360,6 +362,8 @@ describe('offset + limit pagination', () => {
 
     expect(body.run).toMatchObject({
       status: 'failed',
+      completedAt: null,
+      finishedAt: '2026-05-20T14:00:05.000Z',
       durationMs: 5000,
       inputTokens: 10,
       outputTokens: 20,

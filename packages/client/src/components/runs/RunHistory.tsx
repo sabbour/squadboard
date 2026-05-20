@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { useIssueRuns, useRetriggerRun, type RunStatus } from '../../api/runs.ts'
+import { type IssueRun, useIssueRuns, useRetriggerRun, type RunStatus } from '../../api/runs.ts'
 import { useAgents } from '../../api/agents.ts'
 import RunStatusBadge from './RunStatusBadge.tsx'
 import RunOutputPanel from './RunOutputPanel.tsx'
@@ -12,11 +12,18 @@ interface RunHistoryProps {
   issueId: string
 }
 
-function duration(startedAt?: string, completedAt?: string): string {
-  if (!startedAt) return '—'
-  const start = new Date(startedAt).getTime()
-  const end = completedAt ? new Date(completedAt).getTime() : Date.now()
-  const secs = Math.round((end - start) / 1000)
+function duration(run: IssueRun, live: boolean): string {
+  if (!run.startedAt) return '—'
+  if (!live && typeof run.durationMs === 'number') {
+    const secs = Math.max(0, Math.round(run.durationMs / 1000))
+    if (secs < 60) return `${secs}s`
+    return `${Math.floor(secs / 60)}m ${secs % 60}s`
+  }
+  const start = new Date(run.startedAt).getTime()
+  const finishedAt = live ? undefined : run.completedAt ?? run.finishedAt ?? run.updatedAt
+  const end = finishedAt ? new Date(finishedAt).getTime() : live ? Date.now() : start
+  if (Number.isNaN(start) || Number.isNaN(end)) return '—'
+  const secs = Math.max(0, Math.round((end - start) / 1000))
   if (secs < 60) return `${secs}s`
   return `${Math.floor(secs / 60)}m ${secs % 60}s`
 }
@@ -148,7 +155,7 @@ export default function RunHistory({ projectId, issueId }: RunHistoryProps) {
               >
                 <span style={{ textTransform: 'uppercase', letterSpacing: '0.05em' }}>Elapsed</span>
                 <span style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
-                  {duration(run.startedAt, run.completedAt)}
+                  {duration(run, active)}
                 </span>
                 <span style={{ textTransform: 'uppercase', letterSpacing: '0.05em' }}>Cost</span>
                 <span style={{ textAlign: 'right' }}>

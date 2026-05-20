@@ -1,4 +1,4 @@
-import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import RunOutputPanel from '../RunOutputPanel'
 import type { IssueRun } from '../../../api/runs'
@@ -65,6 +65,7 @@ function makeRun(overrides: Partial<IssueRun> = {}): IssueRun {
 function makeStream(overrides: Record<string, unknown> = {}) {
   return {
     events: [],
+    run: null,
     status: 'live',
     lastSeq: 0,
     error: null,
@@ -86,6 +87,10 @@ describe('RunOutputPanel live viewer', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mockUseRunStream.mockReturnValue(makeStream())
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
   })
 
   it('surfaces live status, active step, timeline, and recovery markers', () => {
@@ -152,6 +157,79 @@ describe('RunOutputPanel live viewer', () => {
     expect(screen.getAllByText('Agent process exited with code 1').length).toBeGreaterThan(0)
     expect(screen.getAllByText('Failed').length).toBeGreaterThan(0)
     expect(screen.getByRole('log', { name: /run log timeline/i })).toHaveAttribute('aria-live', 'off')
+  })
+
+  it('lets terminal stream evidence override a stale running snapshot and freezes elapsed time', () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-05-20T14:45:00.000Z'))
+    mockUseRunStream.mockReturnValue(makeStream({
+      status: 'error',
+      run: {
+        id: 'run-1',
+        issueId: 'issue-1',
+        agentId: 'agent-1',
+        status: 'failed',
+        workspaceStrategy: 'scratch',
+        workspacePath: '/tmp/squadboard-run-run-1',
+        startedAt: '2026-05-20T14:00:00.000Z',
+        completedAt: null,
+        finishedAt: '2026-05-20T14:21:59.000Z',
+        updatedAt: '2026-05-20T14:21:59.000Z',
+        durationMs: 1_319_000,
+        costTokens: 0,
+        inputTokens: 0,
+        outputTokens: 0,
+        costUsd: '0.0000',
+        output: { available: false, length: 0 },
+        errorMessage: 'Agent process exited with code 1',
+        recovery: null,
+      },
+      events: [
+        {
+          id: 'evt-error',
+          runId: 'run-1',
+          seq: 2,
+          eventType: 'issue.run.error',
+          payload: { message: 'Agent process exited with code 1' },
+          createdAt: '2026-05-20T14:21:59.000Z',
+        },
+      ],
+    }))
+
+    render(
+      <RunOutputPanel
+        projectId="project-1"
+        run={makeRun({ status: 'running' })}
+        agent={agent}
+      />,
+    )
+
+    expect(screen.getAllByText('Failed').length).toBeGreaterThan(0)
+    expect(screen.getByText('21m 59s')).toBeInTheDocument()
+    expect(screen.queryByRole('textbox', { name: /steer running agent/i })).not.toBeInTheDocument()
+
+    vi.advanceTimersByTime(60_000)
+
+    expect(screen.getByText('21m 59s')).toBeInTheDocument()
+  })
+
+  it('uses finishedAt as the terminal timestamp when completedAt is missing', () => {
+    render(
+      <RunOutputPanel
+        projectId="project-1"
+        run={makeRun({
+          status: 'failed',
+          completedAt: null,
+          finishedAt: '2026-05-20T14:05:00.000Z',
+          output: 'Started work',
+          errorMessage: 'Recovered failed run',
+        })}
+        agent={agent}
+      />,
+    )
+
+    expect(screen.getByText('5m 0s')).toBeInTheDocument()
+    expect(screen.getAllByText('Failed').length).toBeGreaterThan(0)
   })
 
   it('handles completed runs with captured output', () => {

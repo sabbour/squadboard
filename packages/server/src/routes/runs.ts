@@ -426,7 +426,7 @@ issueRunsRouter.get('/', async (req: Request, res: Response) => {
       .from(schema.issueRuns)
       .where(eq(schema.issueRuns.issueId, issueId))
       .orderBy(schema.issueRuns.createdAt);
-    res.json(rows);
+    res.json(rows.map(withRunTimingMetadata));
   } catch (err) {
     handleError(res, err);
   }
@@ -537,16 +537,32 @@ function toEpochMs(value: Date | string | null | undefined): number | null {
   return Number.isFinite(ms) ? ms : null;
 }
 
-function buildRunStreamSnapshot(run: IssueRunRow) {
-  const startedMs = toEpochMs(run.startedAt);
-  const terminalAt = TERMINAL_RUN_STATUSES.has(run.status)
+function terminalTimestamp(run: IssueRunRow): Date | string | null {
+  return TERMINAL_RUN_STATUSES.has(run.status)
     ? (run.completedAt ?? run.updatedAt)
     : null;
+}
+
+function durationMsForRun(run: IssueRunRow, terminalAt = terminalTimestamp(run)): number | null {
+  const startedMs = toEpochMs(run.startedAt);
   const terminalMs = toEpochMs(terminalAt);
-  const durationMs =
-    startedMs !== null && terminalMs !== null
-      ? Math.max(0, terminalMs - startedMs)
-      : null;
+  return startedMs !== null && terminalMs !== null
+    ? Math.max(0, terminalMs - startedMs)
+    : null;
+}
+
+function withRunTimingMetadata(run: IssueRunRow) {
+  const terminalAt = terminalTimestamp(run);
+  return {
+    ...run,
+    finishedAt: toIsoString(terminalAt),
+    durationMs: durationMsForRun(run, terminalAt),
+  };
+}
+
+function buildRunStreamSnapshot(run: IssueRunRow) {
+  const terminalAt = terminalTimestamp(run);
+  const durationMs = durationMsForRun(run, terminalAt);
   const outputLength = run.output?.length ?? 0;
   const updatedAt = toIsoString(run.updatedAt);
 
@@ -562,6 +578,7 @@ function buildRunStreamSnapshot(run: IssueRunRow) {
     updatedAt,
     startedAt: toIsoString(run.startedAt),
     completedAt: toIsoString(run.completedAt),
+    finishedAt: toIsoString(terminalAt),
     leaseExpiresAt: toIsoString(run.leaseExpiresAt),
     heartbeatAt: toIsoString(run.heartbeatAt),
     durationMs,
@@ -754,7 +771,7 @@ projectRunsRouter.get('/:runId', async (req: Request, res: Response) => {
     }
     const worktreePath = run.workspaceStrategy === 'worktree' ? run.workspacePath : null;
     res.json({
-      ...run,
+      ...withRunTimingMetadata(run),
       lifecycle: buildRunLifecycleMetadata({
         issueRun: run,
         worktreeExists: await resolveWorktreeExists(worktreePath),
@@ -787,13 +804,15 @@ projectRunsRouter.post('/:runId/cancel', async (req: Request, res: Response) => 
       return;
     }
 
+    const now = new Date();
     const [updated] = await db
       .update(schema.issueRuns)
       .set({
         status: 'cancelled',
         leaseExpiresAt: null,
         heartbeatAt: null,
-        updatedAt: new Date(),
+        completedAt: now,
+        updatedAt: now,
       })
       .where(eq(schema.issueRuns.id, runId))
       .returning();
@@ -809,7 +828,7 @@ projectRunsRouter.post('/:runId/cancel', async (req: Request, res: Response) => 
       eventBus.emitRunEvent('run.completed', issueRow.projectId, { run: updated });
     }
 
-    res.json(updated);
+    res.json(withRunTimingMetadata(updated));
   } catch (err) {
     handleError(res, err);
   }

@@ -222,6 +222,7 @@ async function markFailed(
   errorMessage: string,
 ): Promise<void> {
   console.error(`[stepper] run ${issueRunId} failed: ${errorMessage}`);
+  const now = new Date();
   await db
     .update(schema.issueRuns)
     .set({
@@ -229,7 +230,8 @@ async function markFailed(
       errorMessage,
       leaseExpiresAt: null,
       heartbeatAt: null,
-      updatedAt: new Date(),
+      completedAt: now,
+      updatedAt: now,
     })
     .where(eq(schema.issueRuns.id, issueRunId));
   await syncRunIssueColumn(db, issueRunId, 'review');

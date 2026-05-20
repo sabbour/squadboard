@@ -149,6 +149,7 @@ async function main(): Promise<void> {
           SET status       = 'failed',
               stale_reason = 'restart-pickup',
               error_message = COALESCE(error_message, '') || ' [recovered: server restarted]',
+              completed_at = COALESCE(completed_at, NOW()),
               updated_at   = NOW()
         WHERE status = 'running'
         RETURNING id`,

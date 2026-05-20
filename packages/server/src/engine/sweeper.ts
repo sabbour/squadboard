@@ -39,6 +39,7 @@ export async function sweepOrphanedRuns(db: DrizzleDb): Promise<number> {
     SET
       status        = 'failed',
       error_message = 'Orphaned: no heartbeat for >120s',
+      completed_at  = COALESCE(completed_at, NOW()),
       updated_at    = NOW()
     WHERE status = 'running'
       AND heartbeat_at < NOW() - INTERVAL '120 seconds'
