@@ -1,0 +1,148 @@
+{
+  "manifest": {
+    "bundleId": "ai-agent-project",
+    "name": "AI Agent Project",
+    "version": "1.0.0",
+    "description": "End-to-end AI agent development: research / build / eval / done kanban, 4 specialist agents (AgentArchitect, PromptEngineer, SafetyReviewer, Evaluator), ceremonies for eval loop and safety review.",
+    "author": "Squadboard Team",
+    "license": "MIT",
+    "schemaVersion": 1
+  },
+
+  "project": {
+    "name": "AI Agent Project",
+    "description": "An AI agent development project managed by Squadboard.",
+    "icon": "🤖"
+  },
+
+  "kanban": {
+    "columns": [
+      { "slug": "research",    "label": "Research",    "order": 0 },
+      { "slug": "build",       "label": "Build",       "order": 1, "wip_limit": 3 },
+      { "slug": "eval",        "label": "Eval",        "order": 2 },
+      { "slug": "done",        "label": "Done",        "order": 3 }
+    ],
+    "defaultColumn": "research"
+  },
+
+  "team": [
+    {
+      "name": "AgentArchitect",
+      "role": "Agent Architect",
+      "persistent": true,
+      "charter": "# AgentArchitect\n\n## Role\nAgent Architect — owns agent design, tool surface, orchestration patterns, and system prompt structure.\n\n## Expertise\n- Agent loop design (ReAct, Plan-and-Execute, Reflection)\n- Tool and function calling API surface\n- Multi-agent coordination patterns\n- Context window and cost management\n\n## Style\nSystems-first. Designs for reliability and observability before optimising for latency or cost.\n"
+    },
+    {
+      "name": "PromptEngineer",
+      "role": "Prompt Engineer",
+      "persistent": true,
+      "charter": "# PromptEngineer\n\n## Role\nPrompt Engineer — owns system prompts, few-shot examples, chain-of-thought patterns, and output schemas.\n\n## Expertise\n- System prompt authoring and iteration\n- Few-shot example curation\n- Chain-of-thought and scratchpad patterns\n- Structured output schemas (JSON mode, function calling)\n\n## Style\nIterative and data-driven. Every prompt change is accompanied by an eval run.\n"
+    },
+    {
+      "name": "SafetyReviewer",
+      "role": "AI Safety Reviewer",
+      "persistent": true,
+      "charter": "# SafetyReviewer\n\n## Role\nAI Safety Reviewer — owns risk assessment, adversarial testing, and responsible AI guardrails.\n\n## Expertise\n- Prompt injection and jailbreak testing\n- Output harm classification\n- Privacy and data handling review\n- Responsible AI policy compliance\n\n## Style\nSceptical by design. Assumes the worst-case input until proven otherwise.\n"
+    },
+    {
+      "name": "Evaluator",
+      "role": "Agent Evaluator",
+      "persistent": true,
+      "charter": "# Evaluator\n\n## Role\nAgent Evaluator — owns the eval suite: golden datasets, metric selection, regression detection, and human review gates.\n\n## Expertise\n- Eval dataset curation and versioning\n- Metric design (accuracy, F1, BLEU, custom)\n- Regression guard automation\n- Human-in-the-loop review protocols\n\n## Style\nMetrics-first. No capability ships without a passing eval baseline.\n"
+    }
+  ],
+
+  "ceremonies": [
+    {
+      "id": "eval-loop",
+      "name": "Eval Loop",
+      "scope": "task",
+      "trigger": {
+        "kind": "on_issue_entry",
+        "config": { "column": "eval" }
+      },
+      "workflowYaml": "name: Eval Loop\nsteps:\n  - type: agent_run\n    label: Run eval suite\n    agent: Evaluator\n    prompt: \"Run the eval suite against the current agent build. Report pass/fail per metric. Flag any regressions versus the last baseline.\"\n    timeout: 45m\n  - type: approve\n    label: Human review gate\n    approvers: []\n    timeout: 24h\n    timeoutAction: notify\n  - type: agent_run\n    label: Update baseline\n    agent: Evaluator\n    prompt: \"If the eval passed, update the golden baseline and commit it. If it failed, open a regression issue and block the build.\"\n    timeout: 20m\n"
+    },
+    {
+      "id": "safety-review",
+      "name": "Safety Review",
+      "scope": "task",
+      "trigger": {
+        "kind": "on_issue_entry",
+        "config": { "label": "safety" }
+      },
+      "workflowYaml": "name: Safety Review\nsteps:\n  - type: agent_run\n    label: Adversarial testing\n    agent: SafetyReviewer\n    prompt: \"Run adversarial inputs against this agent: prompt injection attempts, jailbreaks, harmful output probes, and PII leakage tests. Document all findings.\"\n    timeout: 45m\n  - type: approve\n    label: Safety sign-off\n    approvers: [SafetyReviewer]\n    request_changes_policy: first\n    timeout: 48h\n    timeoutAction: escalate\n"
+    },
+    {
+      "id": "prompt-iteration",
+      "name": "Prompt Iteration",
+      "scope": "task",
+      "trigger": {
+        "kind": "on_issue_entry",
+        "config": { "label": "prompt" }
+      },
+      "workflowYaml": "name: Prompt Iteration\nsteps:\n  - type: agent_run\n    label: Draft prompt variant\n    agent: PromptEngineer\n    prompt: \"Author a new prompt variant for this issue. Include: system prompt diff, few-shot examples, and expected output schema. Explain the hypothesis you're testing.\"\n    timeout: 30m\n  - type: agent_run\n    label: Eval the variant\n    agent: Evaluator\n    prompt: \"Run the eval suite against the new prompt variant. Compare results to the current baseline. Report metric deltas.\"\n    timeout: 45m\n  - type: approve\n    label: Architect approval\n    approvers: [AgentArchitect]\n    request_changes_policy: first\n    timeout: 24h\n    timeoutAction: notify\n"
+    }
+  ],
+
+  "workflows": [],
+
+  "skills": [
+    {
+      "key": "prompt-engineering",
+      "name": "Prompt Engineering",
+      "description": "Structured prompt authoring: system prompt, few-shot examples, chain-of-thought, output schema.",
+      "category": "ai",
+      "promptAddendum": "## Prompt Engineering\n\nFollow this discipline when authoring or modifying prompts:\n\n1. **System prompt first**: write the system prompt before any few-shot examples.\n2. **Hypothesis-driven iteration**: every prompt change has a stated hypothesis and a metric to validate it.\n3. **Few-shot examples**: include 2–5 high-quality, diverse examples covering edge cases.\n4. **Chain-of-thought**: ask the model to reason step-by-step before answering for complex tasks.\n5. **Output schema**: define the expected output format (JSON schema, XML tags, or markdown structure) in the system prompt.\n6. **Eval before shipping**: no prompt change ships without a passing eval run.\n7. **Version prompts**: store prompt versions in source control with changelogs.\n"
+    },
+    {
+      "key": "eval-framework",
+      "name": "Eval Framework",
+      "description": "LLM evaluation discipline: golden dataset, metric selection, regression guard, human-in-the-loop review.",
+      "category": "ai",
+      "promptAddendum": "## Eval Framework\n\nEvery agent capability must have a corresponding eval:\n\n1. **Golden dataset**: curate a labelled dataset of inputs and expected outputs. Minimum 20 examples; cover happy path, edge cases, and adversarial inputs.\n2. **Metric selection**: pick metrics appropriate to the task — accuracy (classification), F1 (extraction), BLEU/ROUGE (generation), or custom rubric-based.\n3. **Regression guard**: run evals on every prompt or model change. A regression (metric drop > threshold) blocks the change.\n4. **Human-in-the-loop**: route eval failures and borderline cases to a human reviewer before overriding.\n5. **Baseline versioning**: commit the baseline scores alongside the prompt version in source control.\n6. **Separate train/eval sets**: never tune prompts on your eval set — it invalidates the measurement.\n"
+    }
+  ],
+
+  "tools": [],
+
+  "mcpServers": [],
+
+  "routing": [
+    {
+      "pattern": "safety",
+      "matchType": "label",
+      "agentName": "SafetyReviewer",
+      "priority": 10,
+      "rawRule": "| safety | SafetyReviewer | Safety-labelled items go to SafetyReviewer. |"
+    },
+    {
+      "pattern": "prompt",
+      "matchType": "label",
+      "agentName": "PromptEngineer",
+      "priority": 20,
+      "rawRule": "| prompt | PromptEngineer | Prompt work goes to PromptEngineer. |"
+    },
+    {
+      "pattern": "eval",
+      "matchType": "label",
+      "agentName": "Evaluator",
+      "priority": 30,
+      "rawRule": "| eval | Evaluator | Eval work goes to Evaluator. |"
+    },
+    {
+      "pattern": "architecture",
+      "matchType": "label",
+      "agentName": "AgentArchitect",
+      "priority": 40,
+      "rawRule": "| architecture | AgentArchitect | Architecture decisions go to AgentArchitect. |"
+    },
+    {
+      "pattern": "catchall",
+      "matchType": "catchall",
+      "agentName": "AgentArchitect",
+      "priority": 99,
+      "rawRule": "| * | AgentArchitect | Unmatched items route to AgentArchitect. |"
+    }
+  ]
+}

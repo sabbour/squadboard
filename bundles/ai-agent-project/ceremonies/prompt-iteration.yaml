@@ -1,0 +1,18 @@
+name: Prompt Iteration
+steps:
+  - type: agent_run
+    label: Draft prompt variant
+    agent: PromptEngineer
+    prompt: "Author a new prompt variant for this issue. Include: system prompt diff, few-shot examples, and expected output schema. Explain the hypothesis you're testing."
+    timeout: 30m
+  - type: agent_run
+    label: Eval the variant
+    agent: Evaluator
+    prompt: "Run the eval suite against the new prompt variant. Compare results to the current baseline. Report metric deltas."
+    timeout: 45m
+  - type: approve
+    label: Architect approval
+    approvers: [AgentArchitect]
+    request_changes_policy: first
+    timeout: 24h
+    timeoutAction: notify

@@ -1,0 +1,7 @@
+name: Issue Triage
+steps:
+  - type: agent_run
+    label: Classify and label the issue
+    agent: Triage
+    prompt: "Classify this issue: check for duplicates, apply severity/priority labels (bug/enhancement/good-first-issue), and move it to Backlog or close it with a clear reason."
+    timeout: 20m

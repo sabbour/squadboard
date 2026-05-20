@@ -12,6 +12,8 @@
  *   - research-spike
  *   - content-writing-project
  *   - ops-runbook-project
+ *   - open-source-project   (added W26)
+ *   - ai-agent-project      (added W26)
  */
 
 import { describe, it, expect } from 'vitest';
@@ -188,4 +190,6 @@ describe('W24 Bundle Migration — squadapp.json conformance', () => {
   validateBundle('research-spike');
   validateBundle('content-writing-project');
   validateBundle('ops-runbook-project');
+  validateBundle('open-source-project');
+  validateBundle('ai-agent-project');
 });

@@ -1,0 +1,132 @@
+{
+  "$schema": "https://squadboard.dev/schemas/squadapp/v1/squadapp.json",
+  "schemaVersion": 1,
+  "appId": "open-source-project",
+  "version": "1.0.0",
+  "name": "Open Source Project",
+  "displayName": "Open Source Project",
+  "description": "Community-driven open source workflow: triage / backlog / in-progress / in-review / done kanban, 4 role-skeleton agents (Maintainer, Contributor, Reviewer, Triage), ceremonies for PR review, issue triage, and release cutting. Squadboard DB is the authority — disk is a projection; use the CLI to sync filesystem changes back.",
+  "kind": "project-template",
+  "author": "Squadboard team",
+  "license": "MIT",
+  "homepage": "https://github.com/sabbour/squadboard",
+  "tags": [
+    "open-source",
+    "community",
+    "github",
+    "versioning",
+    "starter"
+  ],
+  "requires": {
+    "squadboard": ">=0.1.0"
+  },
+  "project": {
+    "name": "Open Source Project",
+    "description": "A community open-source project managed by Squadboard.",
+    "icon": "🌍"
+  },
+  "kanban": {
+    "columns": [
+      { "slug": "triage",      "label": "Triage",       "order": 0 },
+      { "slug": "backlog",     "label": "Backlog",      "order": 1 },
+      { "slug": "in-progress", "label": "In Progress",  "order": 2, "wip_limit": 5 },
+      { "slug": "in-review",   "label": "In Review",    "order": 3 },
+      { "slug": "done",        "label": "Done",         "order": 4 }
+    ],
+    "defaultColumn": "triage"
+  },
+  "team": [
+    {
+      "name": "Maintainer",
+      "role": "Project Maintainer",
+      "persistent": true,
+      "charterPath": "agents/Maintainer/charter.md"
+    },
+    {
+      "name": "Contributor",
+      "role": "Open Source Contributor",
+      "persistent": true,
+      "charterPath": "agents/Contributor/charter.md"
+    },
+    {
+      "name": "Reviewer",
+      "role": "Code Reviewer",
+      "persistent": true,
+      "charterPath": "agents/Reviewer/charter.md"
+    },
+    {
+      "name": "Triage",
+      "role": "Issue Triager",
+      "persistent": true,
+      "charterPath": "agents/Triage/charter.md"
+    }
+  ],
+  "ceremonies": [
+    {
+      "id": "pr-review",
+      "name": "PR Review",
+      "scope": "task",
+      "trigger": {
+        "kind": "on_issue_entry",
+        "config": { "column": "in_review" }
+      },
+      "workflowPath": "ceremonies/pr-review.yaml"
+    },
+    {
+      "id": "issue-triage",
+      "name": "Issue Triage",
+      "scope": "task",
+      "trigger": {
+        "kind": "on_issue_entry",
+        "config": { "column": "triage" }
+      },
+      "workflowPath": "ceremonies/issue-triage.yaml"
+    },
+    {
+      "id": "release-cut",
+      "name": "Release Cut",
+      "scope": "project",
+      "trigger": {
+        "kind": "manual"
+      },
+      "workflowPath": "ceremonies/release-cut.yaml"
+    }
+  ],
+  "skills": [
+    {
+      "key": "semantic-versioning",
+      "name": "Semantic Versioning",
+      "description": "SemVer discipline: MAJOR.MINOR.PATCH with pre-release and build metadata conventions.",
+      "category": "engineering"
+    },
+    {
+      "key": "oss-contribution",
+      "name": "OSS Contribution",
+      "description": "Community contribution workflow: fork → branch → PR → review → merge with changelog entry.",
+      "category": "process"
+    }
+  ],
+  "routing": [
+    { "label": "bug",          "agent": "Triage"      },
+    { "label": "enhancement",  "agent": "Maintainer"  },
+    { "label": "good-first-issue", "agent": "Contributor" },
+    { "label": "review",       "agent": "Reviewer"    }
+  ],
+  "artifacts": {
+    "agents": [
+      "agents/Maintainer/charter.md",
+      "agents/Contributor/charter.md",
+      "agents/Reviewer/charter.md",
+      "agents/Triage/charter.md"
+    ],
+    "ceremonies": [
+      "ceremonies/pr-review.yaml",
+      "ceremonies/issue-triage.yaml",
+      "ceremonies/release-cut.yaml"
+    ],
+    "skills": [
+      "skills/semantic-versioning/SKILL.md",
+      "skills/oss-contribution/SKILL.md"
+    ]
+  }
+}

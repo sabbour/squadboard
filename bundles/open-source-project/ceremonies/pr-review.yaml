@@ -1,0 +1,13 @@
+name: PR Review
+steps:
+  - type: agent_run
+    label: Reviewer checks the PR
+    agent: Reviewer
+    prompt: "Review this PR for correctness, style, test coverage, and security surface. Leave specific, actionable feedback."
+    timeout: 30m
+  - type: approve
+    label: Maintainer merge gate
+    approvers: [Maintainer]
+    request_changes_policy: first
+    timeout: 48h
+    timeoutAction: notify

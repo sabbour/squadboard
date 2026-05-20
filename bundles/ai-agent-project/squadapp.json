@@ -1,0 +1,132 @@
+{
+  "$schema": "https://squadboard.dev/schemas/squadapp/v1/squadapp.json",
+  "schemaVersion": 1,
+  "appId": "ai-agent-project",
+  "version": "1.0.0",
+  "name": "AI Agent Project",
+  "displayName": "AI Agent Project",
+  "description": "End-to-end AI agent development: research / build / eval / done kanban, 4 specialist agents (AgentArchitect, PromptEngineer, SafetyReviewer, Evaluator), ceremonies for eval loop and safety review. Squadboard DB is the authority — disk is a projection; use the CLI to sync filesystem changes back.",
+  "kind": "project-template",
+  "author": "Squadboard team",
+  "license": "MIT",
+  "homepage": "https://github.com/sabbour/squadboard",
+  "tags": [
+    "ai",
+    "agents",
+    "llm",
+    "evaluation",
+    "safety"
+  ],
+  "requires": {
+    "squadboard": ">=0.1.0"
+  },
+  "project": {
+    "name": "AI Agent Project",
+    "description": "An AI agent development project managed by Squadboard.",
+    "icon": "🤖"
+  },
+  "kanban": {
+    "columns": [
+      { "slug": "research",    "label": "Research",    "order": 0 },
+      { "slug": "build",       "label": "Build",       "order": 1, "wip_limit": 3 },
+      { "slug": "eval",        "label": "Eval",        "order": 2 },
+      { "slug": "done",        "label": "Done",        "order": 3 }
+    ],
+    "defaultColumn": "research"
+  },
+  "team": [
+    {
+      "name": "AgentArchitect",
+      "role": "Agent Architect",
+      "persistent": true,
+      "charterPath": "agents/AgentArchitect/charter.md"
+    },
+    {
+      "name": "PromptEngineer",
+      "role": "Prompt Engineer",
+      "persistent": true,
+      "charterPath": "agents/PromptEngineer/charter.md"
+    },
+    {
+      "name": "SafetyReviewer",
+      "role": "AI Safety Reviewer",
+      "persistent": true,
+      "charterPath": "agents/SafetyReviewer/charter.md"
+    },
+    {
+      "name": "Evaluator",
+      "role": "Agent Evaluator",
+      "persistent": true,
+      "charterPath": "agents/Evaluator/charter.md"
+    }
+  ],
+  "ceremonies": [
+    {
+      "id": "eval-loop",
+      "name": "Eval Loop",
+      "scope": "task",
+      "trigger": {
+        "kind": "on_issue_entry",
+        "config": { "column": "eval" }
+      },
+      "workflowPath": "ceremonies/eval-loop.yaml"
+    },
+    {
+      "id": "safety-review",
+      "name": "Safety Review",
+      "scope": "task",
+      "trigger": {
+        "kind": "on_issue_entry",
+        "config": { "label": "safety" }
+      },
+      "workflowPath": "ceremonies/safety-review.yaml"
+    },
+    {
+      "id": "prompt-iteration",
+      "name": "Prompt Iteration",
+      "scope": "task",
+      "trigger": {
+        "kind": "on_issue_entry",
+        "config": { "label": "prompt" }
+      },
+      "workflowPath": "ceremonies/prompt-iteration.yaml"
+    }
+  ],
+  "skills": [
+    {
+      "key": "prompt-engineering",
+      "name": "Prompt Engineering",
+      "description": "Structured prompt authoring: system prompt, few-shot examples, chain-of-thought, output schema.",
+      "category": "ai"
+    },
+    {
+      "key": "eval-framework",
+      "name": "Eval Framework",
+      "description": "LLM evaluation discipline: golden dataset, metric selection, regression guard, human-in-the-loop review.",
+      "category": "ai"
+    }
+  ],
+  "routing": [
+    { "label": "safety",       "agent": "SafetyReviewer"  },
+    { "label": "prompt",       "agent": "PromptEngineer"  },
+    { "label": "eval",         "agent": "Evaluator"       },
+    { "label": "architecture", "agent": "AgentArchitect"  }
+  ],
+  "artifacts": {
+    "agents": [
+      "agents/AgentArchitect/charter.md",
+      "agents/PromptEngineer/charter.md",
+      "agents/SafetyReviewer/charter.md",
+      "agents/Evaluator/charter.md"
+    ],
+    "ceremonies": [
+      "ceremonies/eval-loop.yaml",
+      "ceremonies/safety-review.yaml",
+      "ceremonies/prompt-iteration.yaml"
+    ],
+    "skills": [
+      "skills/prompt-engineering/SKILL.md",
+      "skills/eval-framework/SKILL.md"
+    ]
+  }
+}

@@ -1,0 +1,17 @@
+name: Eval Loop
+steps:
+  - type: agent_run
+    label: Run eval suite
+    agent: Evaluator
+    prompt: "Run the eval suite against the current agent build. Report pass/fail per metric. Flag any regressions versus the last baseline."
+    timeout: 45m
+  - type: approve
+    label: Human review gate
+    approvers: []
+    timeout: 24h
+    timeoutAction: notify
+  - type: agent_run
+    label: Update baseline
+    agent: Evaluator
+    prompt: "If the eval passed, update the golden baseline and commit it. If it failed, open a regression issue and block the build."
+    timeout: 20m

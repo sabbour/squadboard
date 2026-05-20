@@ -2,6 +2,7 @@ import { Routes, Route, Navigate } from 'react-router'
 import Layout from './components/Layout.tsx'
 import RouteProgressBar from './components/RouteProgressBar.tsx'
 import ProjectPicker from './pages/ProjectPicker.tsx'
+import Apps from './pages/Apps.tsx'
 import Board from './pages/Board.tsx'
 import Agents from './pages/Agents.tsx'
 import Costs from './pages/Costs.tsx'
@@ -33,6 +34,8 @@ export default function App() {
       <Routes>
       <Route element={<Layout />}>
         <Route index element={<ProjectPicker />} />
+        {/* W26: Apps marketplace — browse and apply built-in bundle templates */}
+        <Route path="apps" element={<Apps />} />
         <Route path="inbox" element={<Inbox />} />
         {/* Phase 19: global /now view — live activity across all projects */}
         <Route path="now" element={<Now />} />

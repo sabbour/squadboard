@@ -34,6 +34,10 @@ export interface BuiltinBundleEntry {
   version: string;
   /** Absolute path to the bundle directory */
   dir: string;
+  /** Tags sourced from squadapp.json (empty array if absent). */
+  tags: string[];
+  /** App kind from squadapp.json — e.g. 'project-template'. Defaults to 'project-template'. */
+  kind: string;
 }
 
 export interface BuiltinBundleWarning {
@@ -102,6 +106,23 @@ async function scan(): Promise<{ entries: BuiltinBundleEntry[]; bundleMap: Map<s
       const bundle = JSON.parse(raw) as SquadboardBundle;
       validateBundleManifest(slug, bundle);
 
+      // Try to read squadapp.json for enriched metadata (tags, kind).
+      // Non-critical: missing or malformed squadapp.json is silently ignored.
+      let tags: string[] = [];
+      let kind = 'project-template';
+      try {
+        const squadAppRaw = await readFile(join(BUNDLES_DIR, slug, 'squadapp.json'), 'utf-8');
+        const squadApp = JSON.parse(squadAppRaw) as Record<string, unknown>;
+        if (Array.isArray(squadApp['tags'])) {
+          tags = (squadApp['tags'] as unknown[]).filter((t): t is string => typeof t === 'string');
+        }
+        if (typeof squadApp['kind'] === 'string') {
+          kind = squadApp['kind'];
+        }
+      } catch {
+        // squadapp.json absent or malformed — use defaults
+      }
+
       entries.push({
         bundleId: bundle.manifest.bundleId,
         name: bundle.manifest.name,
@@ -109,6 +130,8 @@ async function scan(): Promise<{ entries: BuiltinBundleEntry[]; bundleMap: Map<s
         icon: bundle.project?.icon,
         version: bundle.manifest.version,
         dir: join(BUNDLES_DIR, slug),
+        tags,
+        kind,
       });
       bundleMap.set(bundle.manifest.bundleId, bundle);
     } catch (err) {

@@ -37,6 +37,7 @@ import {
   DocumentBulletList24Regular,
   ChevronDoubleLeftRegular,
   ChevronDoubleRightRegular,
+  AppsListDetail24Regular,
 } from '@fluentui/react-icons'
 import type { OnNavItemSelectData } from '@fluentui/react-components'
 import { ConjureProvider, useConjure } from '../context/ConjureContext.tsx'
@@ -333,6 +334,7 @@ function LayoutInner() {
   function getSelectedValue(): string {
     if (location.pathname === '/' || location.pathname === '') return 'projects'
     if (location.pathname.startsWith('/now')) return 'now'
+    if (location.pathname.startsWith('/apps')) return 'apps'
     if (location.pathname.startsWith('/diagnostics')) return 'diagnostics'
     if (location.pathname.startsWith('/heartbeat')) return 'heartbeat'
     if (id) {
@@ -356,6 +358,8 @@ function LayoutInner() {
     const value = data.value as string
     if (value === 'projects') {
       void navigate('/')
+    } else if (value === 'apps') {
+      void navigate('/apps')
     } else if (value === 'now') {
       void navigate('/now')
     } else if (value === 'diagnostics') {
@@ -414,6 +418,16 @@ function LayoutInner() {
             </Tooltip>
           ) : (
             <NavItem icon={<Eye24Regular />} value="now">Now</NavItem>
+          )}
+
+          {navCollapsed ? (
+            <Tooltip content="Apps" relationship="label" positioning="after" hideDelay={0}>
+              <NavItem icon={<AppsListDetail24Regular />} value="apps">
+                <span className={styles.navLabelHidden}>Apps</span>
+              </NavItem>
+            </Tooltip>
+          ) : (
+            <NavItem icon={<AppsListDetail24Regular />} value="apps">Apps</NavItem>
           )}
 
           {id && (

@@ -1,0 +1,148 @@
+{
+  "manifest": {
+    "bundleId": "open-source-project",
+    "name": "Open Source Project",
+    "version": "1.0.0",
+    "description": "Community-driven open source workflow: triage / backlog / in-progress / in-review / done kanban, 4 role-skeleton agents (Maintainer, Contributor, Reviewer, Triage), ceremonies for PR review, issue triage, and release cutting.",
+    "author": "Squadboard Team",
+    "license": "MIT",
+    "schemaVersion": 1
+  },
+
+  "project": {
+    "name": "Open Source Project",
+    "description": "A community open-source project managed by Squadboard.",
+    "icon": "🌍"
+  },
+
+  "kanban": {
+    "columns": [
+      { "slug": "triage",      "label": "Triage",       "order": 0 },
+      { "slug": "backlog",     "label": "Backlog",      "order": 1 },
+      { "slug": "in-progress", "label": "In Progress",  "order": 2, "wip_limit": 5 },
+      { "slug": "in-review",   "label": "In Review",    "order": 3 },
+      { "slug": "done",        "label": "Done",         "order": 4 }
+    ],
+    "defaultColumn": "triage"
+  },
+
+  "team": [
+    {
+      "name": "Maintainer",
+      "role": "Project Maintainer",
+      "persistent": true,
+      "charter": "# Maintainer\n\n## Role\nProject Maintainer — owns roadmap, merge authority, and community health.\n\n## Expertise\n- Roadmap and priority decisions\n- Merge authority and branch protection\n- Release management and tagging\n- Community standards (code of conduct, contribution guide)\n\n## Style\nDeliberate and transparent. Decisions are documented; reasoning is shared with the community.\n"
+    },
+    {
+      "name": "Contributor",
+      "role": "Open Source Contributor",
+      "persistent": true,
+      "charter": "# Contributor\n\n## Role\nOpen Source Contributor — implements features and bug fixes following contribution guidelines.\n\n## Expertise\n- Feature implementation from issue spec\n- Bug fixing with regression tests\n- Changelog authoring\n- Fork and PR discipline\n\n## Style\nCommunity-first. Small, focused PRs. Every commit links to an issue.\n"
+    },
+    {
+      "name": "Reviewer",
+      "role": "Code Reviewer",
+      "persistent": true,
+      "charter": "# Reviewer\n\n## Role\nCode Reviewer — owns PR quality gates: correctness, style, security, and test coverage.\n\n## Expertise\n- Code quality and correctness review\n- Security surface analysis\n- Test coverage assessment\n- API compatibility review\n\n## Style\nKind but rigorous. Feedback is specific, actionable, and non-blocking where possible.\n"
+    },
+    {
+      "name": "Triage",
+      "role": "Issue Triager",
+      "persistent": true,
+      "charter": "# Triage\n\n## Role\nIssue Triager — classifies and routes incoming issues, ensuring nothing falls through the cracks.\n\n## Expertise\n- Duplicate detection\n- Severity and priority labelling\n- Routing to the right contributor or maintainer\n- Closing stale or won't-fix issues with clear reasoning\n\n## Style\nFast and fair. Every issue gets a label and a next step within one triage cycle.\n"
+    }
+  ],
+
+  "ceremonies": [
+    {
+      "id": "pr-review",
+      "name": "PR Review",
+      "scope": "task",
+      "trigger": {
+        "kind": "on_issue_entry",
+        "config": { "column": "in_review" }
+      },
+      "workflowYaml": "name: PR Review\nsteps:\n  - type: agent_run\n    label: Reviewer checks the PR\n    agent: Reviewer\n    prompt: \"Review this PR for correctness, style, test coverage, and security surface. Leave specific, actionable feedback.\"\n    timeout: 30m\n  - type: approve\n    label: Maintainer merge gate\n    approvers: [Maintainer]\n    request_changes_policy: first\n    timeout: 48h\n    timeoutAction: notify\n"
+    },
+    {
+      "id": "issue-triage",
+      "name": "Issue Triage",
+      "scope": "task",
+      "trigger": {
+        "kind": "on_issue_entry",
+        "config": { "column": "triage" }
+      },
+      "workflowYaml": "name: Issue Triage\nsteps:\n  - type: agent_run\n    label: Classify and label the issue\n    agent: Triage\n    prompt: \"Classify this issue: check for duplicates, apply severity/priority labels (bug/enhancement/good-first-issue), and move it to Backlog or close it with a clear reason.\"\n    timeout: 20m\n"
+    },
+    {
+      "id": "release-cut",
+      "name": "Release Cut",
+      "scope": "project",
+      "trigger": {
+        "kind": "manual"
+      },
+      "workflowYaml": "name: Release Cut\nsteps:\n  - type: agent_run\n    label: Collect release candidates\n    agent: Maintainer\n    prompt: \"Review merged PRs since the last release. Categorise changes as breaking (MAJOR), feature (MINOR), or fix (PATCH) per SemVer. Propose the next version number.\"\n    timeout: 30m\n  - type: agent_run\n    label: Draft changelog\n    agent: Contributor\n    prompt: \"Write the changelog entry for this release. Group by: Breaking Changes, New Features, Bug Fixes, Internal. Each entry links to the originating issue or PR.\"\n    timeout: 30m\n  - type: approve\n    label: Maintainer signs off release\n    approvers: [Maintainer]\n    request_changes_policy: first\n    timeout: 24h\n    timeoutAction: escalate\n"
+    }
+  ],
+
+  "workflows": [],
+
+  "skills": [
+    {
+      "key": "semantic-versioning",
+      "name": "Semantic Versioning",
+      "description": "SemVer discipline: MAJOR.MINOR.PATCH with pre-release and build metadata conventions.",
+      "category": "engineering",
+      "promptAddendum": "## Semantic Versioning\n\nFollow SemVer 2.0.0 (https://semver.org/) for all releases:\n\n- **MAJOR**: incompatible API changes.\n- **MINOR**: new backwards-compatible functionality.\n- **PATCH**: backwards-compatible bug fixes.\n- **Pre-release**: append `-alpha.1`, `-beta.2`, `-rc.1` as needed.\n- **Build metadata**: append `+build.20241231` for informational suffixes.\n\nRules:\n1. Never reuse a version number once published.\n2. 0.y.z is for initial development — anything may change.\n3. Deprecate before removing — give consumers at least one MINOR release of notice.\n4. Tag releases in git: `git tag -a v1.2.3 -m 'Release v1.2.3'`.\n"
+    },
+    {
+      "key": "oss-contribution",
+      "name": "OSS Contribution",
+      "description": "Community contribution workflow: fork → branch → PR → review → merge with changelog entry.",
+      "category": "process",
+      "promptAddendum": "## OSS Contribution Workflow\n\nEvery contribution follows this discipline:\n\n1. **Link to an issue**: every PR must reference a GitHub issue (`Fixes #123`).\n2. **Fork and branch**: work on a personal fork; branch name format `<type>/<short-slug>` (e.g. `fix/null-pointer`, `feat/dark-mode`).\n3. **Small PRs**: one logical change per PR. If a change is large, split it.\n4. **Tests first**: add or update tests before opening the PR.\n5. **Changelog entry**: add a one-line entry to CHANGELOG.md in the appropriate section.\n6. **Squash before merge**: maintainer squashes to keep history clean.\n7. **DCO / CLA**: sign off commits if the project requires it (`git commit --signoff`).\n"
+    }
+  ],
+
+  "tools": [],
+
+  "mcpServers": [],
+
+  "routing": [
+    {
+      "pattern": "bug",
+      "matchType": "label",
+      "agentName": "Triage",
+      "priority": 10,
+      "rawRule": "| bug | Triage | Bug reports go to Triage for classification. |"
+    },
+    {
+      "pattern": "enhancement",
+      "matchType": "label",
+      "agentName": "Maintainer",
+      "priority": 20,
+      "rawRule": "| enhancement | Maintainer | Enhancement requests route to Maintainer for scoping. |"
+    },
+    {
+      "pattern": "good-first-issue",
+      "matchType": "label",
+      "agentName": "Contributor",
+      "priority": 30,
+      "rawRule": "| good-first-issue | Contributor | Good-first issues go to Contributor. |"
+    },
+    {
+      "pattern": "review",
+      "matchType": "label",
+      "agentName": "Reviewer",
+      "priority": 40,
+      "rawRule": "| review | Reviewer | Review-labelled items go to Reviewer. |"
+    },
+    {
+      "pattern": "catchall",
+      "matchType": "catchall",
+      "agentName": "Maintainer",
+      "priority": 99,
+      "rawRule": "| * | Maintainer | Unmatched issues route to Maintainer. |"
+    }
+  ]
+}

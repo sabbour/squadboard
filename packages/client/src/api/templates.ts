@@ -399,6 +399,10 @@ export interface BuiltinProjectTemplate {
   description: string
   icon?: string
   version: string
+  /** Tags sourced from squadapp.json (empty array if absent). */
+  tags?: string[]
+  /** App kind from squadapp.json — e.g. 'project-template'. */
+  kind?: string
 }
 
 /** List built-in project bundle templates scanned from the server's bundles/ directory. */

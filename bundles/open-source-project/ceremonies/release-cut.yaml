@@ -1,0 +1,18 @@
+name: Release Cut
+steps:
+  - type: agent_run
+    label: Collect release candidates
+    agent: Maintainer
+    prompt: "Review merged PRs since the last release. Categorise changes as breaking (MAJOR), feature (MINOR), or fix (PATCH) per SemVer. Propose the next version number."
+    timeout: 30m
+  - type: agent_run
+    label: Draft changelog
+    agent: Contributor
+    prompt: "Write the changelog entry for this release. Group by: Breaking Changes, New Features, Bug Fixes, Internal. Each entry links to the originating issue or PR."
+    timeout: 30m
+  - type: approve
+    label: Maintainer signs off release
+    approvers: [Maintainer]
+    request_changes_policy: first
+    timeout: 24h
+    timeoutAction: escalate
