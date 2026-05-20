@@ -45,6 +45,14 @@ Every demo ships with a passing E2E test. Critical durability suites land in:
 
 <!-- Append learnings below -->
 
+### 2026-05-19T18:15:41.495-07:00 — `pnpm start dev` Docusaurus argv regression
+
+Validated the exact failure condition: if `dev` reaches the docs workspace, Docusaurus runs `node scripts/docusaurus.mjs start --host 0.0.0.0 --port 3002 dev` and fails with `ENOENT` for `packages/docs-site/dev`.
+
+Hockney's fix routes root `start` through `scripts/start-dev.mjs`, normalizing the compatibility form `pnpm start dev` to the fixed workspace fan-out command without forwarding trailing argv. I added `packages/server/src/__tests__/startup-scripts.test.ts` as a black-box regression: it runs the root start script with a fake `pnpm`, captures argv, and asserts every workspace `run dev` invocation has no arguments after `dev`. Hockney's `root-start-script.test.ts` and my black-box startup test both passed.
+
+Validation command passed: `pnpm --filter @sabbour/squadboard test -- --run src/__tests__/root-start-script.test.ts src/__tests__/startup-scripts.test.ts`. Manual normalized-command check passed: `SQUADBOARD_START_PRINT_COMMAND=1 pnpm start dev` printed `pnpm --parallel --filter @sabbour/squadboard --filter @sabbour/squadboard-client --filter @sabbour/squadboard-docs run dev`. Decision: approve.
+
 ### 2026-05-19T14:38:22.590-07:00 — Startup script static gate + agent-sync retirement regression
 
 Verified Hockney's startup-script change with a no-process static gate: root `start` exactly fans out backend, client, and docs dev scripts; `cli:start` still targets the CLI package; docs `dev`/`serve`/`start` all bind port 3002. I did not launch the long-lived dev fan-out in the shared worktree, so the residual risk is runtime orchestration only, not script wiring.

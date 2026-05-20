@@ -2,6 +2,816 @@
 
 ## Active Decisions
 
+### 2026-05-19T18:35:26.660-07:00: User directive
+**By:** Ahmed Sabbour (via Copilot)
+**What:** Squadboard and CLI/Copilot modes are interchangeable. A user can start with either client and carry on working in the other.
+**Why:** User clarified the core acceptance requirement for cross-surface Squad state authority and sync.
+
+# New Feature Added: Define cross-surface Squad sync ownership
+
+**Feature ID:** feat-2026-05-19-define-cross-surface-squad-sync-ownership
+**Date:** 2026-05-19
+**Spec:** docs/features/feat-2026-05-19-define-cross-surface-squad-sync-ownership.md
+
+# New Feature Added: Cross-surface Squad state authority and sync
+
+**Feature ID:** feat-2026-05-20-cross-surface-squad-state-authority-and-sync
+**Date:** 2026-05-20
+**Spec:** docs/features/feat-2026-05-20-cross-surface-squad-state-authority-and-sync.md
+
+# Hockney — Pre-alpha release readiness
+
+**Date:** 2026-05-19T15:29:23.373-07:00  
+**Author:** Hockney  
+**Status:** Accepted
+
+## Decision
+
+Squadboard's GitHub/npm readiness posture is pre-alpha by default:
+
+1. The local integration branch is `dev`. The previous local `main` branch was renamed to `dev` because no local `dev` branch existed.
+2. CI builds the public npm package set and the docs site on `dev`, `main`, pull requests to either branch, and manual dispatch.
+3. npm publishing is manual-only through GitHub Actions. Dry-run is the default and requires no npm secret. Real publish requires the standard `NPM_TOKEN` repository secret.
+4. The default npm dist-tag is `prealpha`; the manual workflow also allows `preview`. It does not offer `latest` during pre-alpha readiness.
+5. The publishable package set for this phase is `@sabbour/squadboard-sdk`, `@sabbour/squadboard-cli`, and `@sabbour/squadboard`.
+6. Package builds clean `dist` before TypeScript compilation. The server build copies built-in `.workflow.yaml` assets into `dist/ceremonies/built-in` so the published package contains runtime ceremony assets.
+
+## Validation
+
+- `pnpm install --frozen-lockfile --ignore-scripts --offline`
+- `pnpm run npm:build`
+- `pnpm run npm:publish:dry-run`
+- `pnpm run docs:build`
+- Workflow YAML parse check for `.github/workflows/ci.yml` and `.github/workflows/npm-publish.yml`
+
+## Notes
+
+No local npm secret is required. Real publish must happen from GitHub Actions with `secrets.NPM_TOKEN` configured.
+
+# Hockney decision — normalize `pnpm start dev`
+
+## Decision
+
+Route the root `start` script through `scripts/start-dev.mjs`, which ignores the exact compatibility argument `dev` and rejects any other unsupported argument instead of forwarding it into every workspace `dev` script.
+
+## Rationale
+
+`pnpm start dev` appends `dev` to the root script command, turning the recursive workspace launch into `run dev dev`. Docusaurus interprets the extra positional `dev` as a path and fails with `ENOENT` for `packages/docs-site/dev`.
+
+Normalizing at the root is safer than teaching only the docs wrapper to ignore leaked arguments: backend, frontend, and docs all receive a clean, deterministic `pnpm --parallel ... run dev` command, and future accidental positional arguments fail fast at the boundary.
+
+## Validation
+
+- Focused Vitest coverage in `packages/server/src/__tests__/root-start-script.test.ts`
+- `SQUADBOARD_START_PRINT_COMMAND=1 pnpm start dev` prints `pnpm --parallel --filter @sabbour/squadboard --filter @sabbour/squadboard-client --filter @sabbour/squadboard-docs run dev` with no trailing forwarded `dev`
+
+# Hockney — Sync rejection revision
+
+**Date:** 2026-05-19T15:43:53.554-07:00  
+**Author:** Hockney  
+**Status:** Accepted
+
+## Namespace decision
+
+Use `/api/projects/:projectId/squad-sync/...` for the cross-surface Squad/Squadboard sync API.
+
+Rationale: existing API conventions expose project-scoped resources under `/api/projects/:projectId/{resource}`. `squad-sync` is specific to Squad governance state and avoids ambiguity with GitHub sync or generic synchronization routes.
+
+Canonical endpoints in the contract are:
+
+- `GET /api/projects/:projectId/squad-sync/status`
+- `POST /api/projects/:projectId/squad-sync/repair`
+- `POST /api/projects/:projectId/squad-sync/project-squad-to-fs`
+- `POST /api/projects/:projectId/squad-sync/generate-github-agent`
+
+## Ceremony invariant
+
+`.squad/ceremonies.md` is required and must contain seeded, non-placeholder defaults. Missing, empty, or placeholder-only ceremonies are not a valid steady state; they are a sync health warning and require the `seed-ceremony-defaults` repair action.
+
+`sync-ownership.ts` now reports `ceremoniesDefaultsPresent` separately from file presence so callers can distinguish “file exists” from “usable ceremonies are seeded.”
+
+## Validation
+
+- `pnpm --filter @sabbour/squadboard test -- --run src/sdk/sync-ownership.test.ts`
+- `pnpm --filter @sabbour/squadboard run build`
+- `pnpm --filter @sabbour/squadboard-client typecheck`
+
+# Keyser decision — Sync status UI waits for real status API
+
+**Decision:** Do not render a cross-surface sync status panel from guessed client-side state. Add the frontend API contract first, then wire a visible Settings panel after backend status/repair endpoints exist.
+
+**Proposed UI location:** Settings → Sync status, adjacent to MCP Config and Portability.
+
+**Required backend contract:**
+
+- `GET /api/projects/:projectId/squad-sync/status`
+- `POST /api/projects/:projectId/squad-sync/repair`
+
+**Status fields the UI needs:** source of truth, storage mode/runtime, governance projection files present/missing, ceremonies defaults present/missing, drift detected, and repair action availability.
+
+**Reason:** Current surfaces expose pieces (`.squad` path, setup scaffolding, MCP health, agent sync) but no evidence-backed project sync-health endpoint. A static panel would look precise while hiding drift.
+
+# Decision: SDK/client artifact contract for interchangeable Squadboard and CLI/Copilot
+
+- **Date:** 2026-05-19T18:35:26.660-07:00
+- **Author:** Kobayashi
+- **Status:** Proposed implementation contract
+- **Contract name:** `squadboard.sdk-client-artifact.v1`
+
+## Context
+
+The user clarified that Squadboard and CLI/Copilot modes are interchangeable: a user can start with either client and continue in the other. That means no surface is only a one-time importer, exporter, or passive viewer. The existing mode-authority rule still stands, but both clients must read and write through the active authority for the project.
+
+This contract is additive to `squadboard.sdk-sync-ownership.v1`. It does not change the Squad SDK. The Squadboard bridge adapts to SDK contracts; it does not fork or patch SDK internals.
+
+## Decision summary
+
+1. A project has one Squad state authority at a time: filesystem `.squad/` or `squad_storage`.
+2. Both Squadboard and CLI/Copilot must target that same authority when they mutate Squad state.
+3. Generated client instruction files are projections, not independent state stores.
+4. `.squad` hydration and export are explicit operations with status, checksums, and drift reporting.
+5. Ceremonies are part of the shared Squad state bundle and must never be silently empty on either start path.
+6. Missing or stale projections degrade the target client and must be reported with repair actions; they must not silently choose a new source of truth.
+
+## Boundary with the Squad SDK
+
+The SDK owns:
+
+- `SquadClient.createSession({ systemMessage })`, `SquadSession`, `sendAndWait`, session cleanup, and result harvesting.
+- `StorageProvider` and `SquadState` collection contracts.
+- `EventBus`, `HookPipeline`, `CostTracker`, OTel span shapes, and structured session events.
+
+Squadboard owns:
+
+- Authority selection and persistence.
+- Project bootstrap, repair, status, and drift APIs.
+- Generated client artifacts for Copilot/CLI.
+- Mapping state changes to either filesystem `.squad/` or `squad_storage`.
+- MCP broker behavior for external clients.
+- `engine_emit_final_output(json)` exposure and fallback parsing for agent-run results.
+
+The SDK must remain authority-agnostic. If a required artifact operation is missing, propose it upstream; do not patch SDK internals inside Squadboard.
+
+## Interchangeability rule
+
+Mode authority is not client ownership.
+
+- In filesystem-authority mode, `.squad/` files are live state. CLI/Copilot reads and writes them directly. Squadboard must also write Squad-state mutations through the filesystem provider when the project path is available. If Squadboard cannot safely write the filesystem authority, the mutation must be blocked with an actionable status instead of being stored only in DB as a divergent copy.
+- In PostgreSQL-authority mode, `squad_storage` is live state after explicit bootstrap/import. Squadboard writes directly to `squad_storage`. CLI/Copilot must use the generated client artifact plus Squadboard MCP/API broker for durable state changes. Direct filesystem edits become local drift until explicitly imported or discarded.
+
+This supersedes any wording that makes Squadboard merely advisory in filesystem mode. Advisory display is acceptable for read-only views, not for successful write operations.
+
+## Generated client artifact contract
+
+### Artifact identity
+
+The generated client artifact is a coordinator projection rendered from authoritative Squad state.
+
+- Primary Copilot/Squad path: `.github/agents/squad.agent.md`.
+- Alternate client path: `agent.md`, only when the selected client profile resolves that path.
+- If multiple client profiles are enabled, each generated file must come from the same render input and report the same source hash.
+- Do not generate two divergent governance files. `agent.md` is an alias/profile projection, not a second source of truth.
+
+### Content requirements
+
+Every generated client artifact must:
+
+- Identify its contract version and owning generator.
+- State the active authority mode.
+- Include or reference the team roster, routing rules, active ceremony entrypoints, MCP broker guidance, and handoff/decision capture rules.
+- In PostgreSQL-authority mode, direct agents to the Squadboard MCP/API broker for durable state changes.
+- In filesystem-authority mode, direct agents to `.squad/` files as the live state and use MCP only as a broker for board operations.
+- Preserve user-owned content outside managed sentinel blocks if patching an existing file.
+- Be idempotent: regenerating from unchanged authoritative state produces no semantic diff.
+
+The artifact is authoritative only for the client session's instructions. It is not authoritative for roster, routing, ceremonies, decisions, or agent identity once those are represented in `.squad/` or `squad_storage`.
+
+### Missing/stale behavior
+
+- Missing generated artifact: Squadboard runtime remains valid, but CLI/Copilot continuation is not ready. Status is `warning` with repair action `generate-client-artifact`.
+- Stale generated artifact: status is `warning` or `critical` depending on whether routing/agent identity changed. Repair regenerates from authority.
+- Conflicting generated artifacts: status is `critical`; repair must either regenerate all enabled profile artifacts from the same input or ask the user which profile remains enabled.
+
+## `.squad` hydration and export contract
+
+The shared Squad state bundle includes:
+
+- `.squad/team.md`
+- `.squad/routing.md`
+- `.squad/decisions.md`
+- `.squad/decisions/inbox/`
+- `.squad/agents/*/charter.md`
+- `.squad/agents/*/history.md`
+- `.squad/identity/now.md`
+- `.squad/identity/wisdom.md`
+- `.squad/skills/*/SKILL.md`
+- `.squad/ceremonies.md`
+- `.squad/ceremonies/*.workflow.yaml` where present
+- casting, log, orchestration-log, and reports as derived or append-only state
+
+### CLI/Copilot-first to Squadboard
+
+When a project starts in CLI/Copilot and later joins Squadboard:
+
+1. Squadboard discovers the existing `.squad/` bundle and generated client artifacts.
+2. User chooses one of two authority outcomes:
+   - Stay in filesystem-authority mode.
+   - Import into PostgreSQL-authority mode.
+3. Staying in filesystem-authority mode means Squadboard writes future Squad-state edits back to `.squad/`, or blocks edits if it cannot.
+4. Importing into PostgreSQL-authority mode is explicit, idempotent, checksummed, and records source metadata.
+5. The generated client artifact is regenerated or validated after the authority choice.
+
+### Squadboard-first to CLI/Copilot
+
+When a project starts in Squadboard and later opens in CLI/Copilot:
+
+1. Squadboard creates authoritative Squad state in the selected mode.
+2. Before reporting CLI/Copilot readiness, Squadboard must export a readable `.squad` projection if the target client needs filesystem context.
+3. Squadboard must generate the selected client artifact path.
+4. Squadboard must generate or validate MCP config for PostgreSQL-authority continuation.
+5. If any projection cannot be written, status must say "not ready for CLI/Copilot" and list repair actions.
+
+## Ceremonies contract
+
+Ceremonies are first-class shared state, not optional UI decoration.
+
+- A ceremony bundle is ready only when at least one non-placeholder ceremony definition is present.
+- If canonical `.squad/ceremonies/*.workflow.yaml` files exist, preserve them as ceremony definitions and treat `.squad/ceremonies.md` as index/compatibility context.
+- If only `.squad/ceremonies.md` exists, import/export it without dropping content.
+- Squadboard-first bootstrap must seed working default ceremonies unless the user explicitly opts out.
+- CLI/Copilot-first import must preserve user ceremonies. If none exist, status reports `ceremonies_missing` and offers `seed-ceremony-defaults`; it must not overwrite local ceremony work without confirmation.
+- Generated client artifacts may summarize or point to ceremonies, but must not become the ceremony source of truth.
+
+## `engine_emit_final_output` contract
+
+`engine_emit_final_output(json)` remains the canonical per-run structured-output channel for engine sessions. It is not a state-sync channel. If an agent does not call it, the bridge falls back to parsing the structured-output protocol in the final assistant message and reports fallback usage in run status.
+
+## Status and drift reporting contract
+
+The status surface must be evidence-backed. Unknown is a valid state; guessed status is not.
+
+Status must report:
+
+- Contract versions for ownership and client artifact contracts.
+- Project authority mode and concrete backend.
+- Client profiles enabled and expected artifact paths.
+- Presence, source hash, generated hash, and last successful projection for each generated artifact.
+- `.squad` bundle presence and per-category health.
+- Ceremony bundle health.
+- MCP broker readiness for PostgreSQL-authority mode.
+- Drift direction: authority-to-projection stale, projection-only edit, missing projection, conflicting projection, or unknown.
+- Severity: `clean`, `warning`, `critical`, or `unknown`.
+- Safe repair actions and whether each action is automatic, user-confirmed, or blocked.
+
+Drift rules:
+
+- Missing required authority artifacts are `critical`.
+- Missing generated client artifacts are `warning` unless the user is attempting to continue in that client, then they are readiness blockers.
+- In filesystem-authority mode, filesystem wins over DB cache; DB divergence is stale cache.
+- In PostgreSQL-authority mode, `squad_storage` wins over filesystem projection; filesystem divergence is stale projection unless user requests import.
+- Simultaneous edits across both authorities are never auto-merged silently.
+
+## Ownership requests
+
+- Hockney: expose status/repair endpoints and persist mode, hashes, projection timestamps, and blocked reasons.
+- Keyser: show only evidence-backed status; do not render guessed sync health.
+- Verbal: fan out status/drift changes over WebSocket after Hockney provides events.
+- Kujan: cover both start orders, both authority modes, missing/stale artifacts, ceremonies preservation, and blocked write cases.
+- Redfoot: document "start anywhere, continue anywhere" without calling one-time import two-way sync.
+
+## What changes
+
+Squadboard and CLI/Copilot become peer clients over one active authority. The generated `.github/agents/squad.agent.md` or `agent.md` file is treated as an idempotent client projection with drift status, not as a second state store.
+
+## What stays the same
+
+The SDK stays unmodified and authority-agnostic. The bridge continues to use SDK session, storage, hook, event, cost, and OTel contracts as-is, with `engine_emit_final_output(json)` as the structured-output channel.
+
+# Decision: SDK sync ownership contract
+
+- **Date:** 2026-05-19T15:43:53.554-07:00
+- **Author:** Kobayashi
+- **Status:** Proposed
+
+## Context
+
+Cross-surface Squad behavior currently spans four surfaces: Squadboard DB/API/runtime, `.squad/` filesystem artifacts, `@bradygaster/squad-sdk` state/session contracts, and Copilot/CLI projection through `.github/agents/squad.agent.md`. The existing implementation has pieces in each place but no small contract object Hockney can expose or Kujan can test.
+
+## Decision
+
+Use `packages/server/src/sdk/sync-ownership.ts` as the SDK-facing contract boundary for sync/bootstrap ownership. The contract version is `squadboard.sdk-sync-ownership.v1`.
+
+- `@bradygaster/squad-sdk` owns session/runtime primitives: `SquadClient`, `SquadSession`, `StorageProvider`, `SquadState` collections, hooks, events, cost/usage event shapes, and OTel spans.
+- Squadboard owns product behavior: project scaffold, storage-mode selection, PostgreSQL provider adapter, agent DB sync, MCP/directive capture, workflow runs, board state, repair/status APIs, and any projection generation.
+- Filesystem mode means real `.squad/` files are live authority.
+- PostgreSQL mode means `squad_storage` is live authority after a one-time import from filesystem when the scoped DB state is empty. It is not a bidirectional mirror.
+- Copilot/CLI behavior is governed by `.github/agents/squad.agent.md` when that file exists. Squadboard may generate or patch that projection, but missing projection is a warning, not a Squadboard runtime failure.
+- `ceremonies.md` may be present with an empty default. Empty means no ceremony behavior is enabled; it is not an SDK bootstrap failure.
+
+## Implementation map
+
+| Surface | Current owner | Evidence / file |
+|---|---|---|
+| Project scaffold | Squadboard | `services/setup-lifecycle.ts` creates `.squad/`, agents, casting, routing, decisions, ceremonies, logs, skills. |
+| SDK state backend | Squadboard bridge over Squad SDK | `services/sdk-state.ts` chooses `PostgreSQLStorageProvider` by default or `FSStorageProvider` for filesystem mode. |
+| DB-backed `.squad` state | Squadboard bridge | `sdk/postgresql-storage-provider.ts` implements the SDK `StorageProvider` contract over `squad_storage`. |
+| Agent DB roster sync | Squadboard | `services/agent-sync.ts` unions SDK + filesystem discovery and updates `agents`. |
+| Runtime agent behavior | Squad SDK + Squadboard bridge | `sdk/squad-client.ts`, `sdk/bridge.ts`, `sdk/squad-stream.ts`, `sdk/consult-stream.ts`. |
+| Board/external capture | Squadboard MCP/API | `mcp/server.ts` and `services/directive-capture.ts`. |
+| Copilot/CLI coordinator behavior | Copilot/CLI projection | `.github/agents/squad.agent.md` / `.squad/templates/squad.agent.md.template`. |
+
+## Patch-level proposal
+
+1. **Hockney:** expose `getProjectSyncOwnershipStatus(projectId)` through a read-only endpoint such as `GET /api/projects/:id/sync/status`. No schema change required for v1.
+2. **Hockney:** optionally enrich v1 with `squad_storage` row count / last updated timestamp in PostgreSQL mode. Keep it read-only; do not imply filesystem mirroring.
+3. **Hockney/Kobayashi:** add a repair command later for `project-copilot-agent-file` that generates or patches `.github/agents/squad.agent.md` from the existing template.
+4. **Kujan:** test four invariants: PostgreSQL mode reports DB authority and no mirror; filesystem mode reports filesystem authority; missing Copilot projection is ready-with-warning; missing required `.squad` files is partial/missing.
+5. **Redfoot:** document mode-based authority and stop using “two-way sync” unless an explicit mirror service lands.
+
+## What changes
+
+Squadboard now has a typed, pure ownership/status builder and a project-level service seam to report current projection facts.
+
+## What stays the same
+
+No database schema, API route, package metadata, workflow, release, or SDK internals changed. Runtime ownership stays mode-authoritative, not bidirectional sync.
+
+# Kujan QA flag — pre-alpha release/docs validation
+
+- **Timestamp:** 2026-05-19T15:29:23.373-07:00
+- **Owner:** Kujan
+- **Scope:** Release-readiness and documentation terminology
+- **Status:** Flagged / release-docs blocker
+
+## Invariant
+
+Public release copy must label Squadboard as **pre-alpha** consistently. The user directive captured on 2026-05-19 asks the team to prepare GitHub/npm readiness and label the software as "pre-alpha".
+
+## Evidence
+
+Build/readiness checks pass in the current worktree:
+
+- `pnpm install --frozen-lockfile`
+- `pnpm --filter @sabbour/squadboard --filter @sabbour/squadboard-sdk --filter @sabbour/squadboard-cli build`
+- `pnpm docs:build`
+- npm pack dry-runs for `packages/server`, `packages/squadboard-sdk`, and `packages/cli`
+
+Terminology check found 15 public release/docs lines still using `Alpha` / `Current alpha limits` / `alpha software` without `pre-alpha`, including these files:
+
+- `README.md`
+- `packages/docs-site/docs/features/roadmap-gaps.md`
+- `packages/docs-site/docs/getting-started/index.mdx`
+- `packages/docs-site/docs/reference/faq.md`
+- `packages/docs-site/docs/reference/index.mdx`
+- `packages/docs-site/docs/user-guide/built-ins.mdx`
+- `packages/docs-site/docs/user-guide/copilot-squad-coexistence.md`
+- `packages/docs-site/docs/user-guide/security.md`
+
+## Required revision
+
+Redfoot should normalize the public status wording to **pre-alpha** before release sign-off. If the team intentionally wants "alpha" instead, the user directive must be updated explicitly.
+
+## Secondary pending output
+
+`.github/workflows/` currently has only Squad triage/heartbeat/label workflows. I do not see the expected docs-build or npm-package-build workflow yet, so release CI automation remains pending on Hockney's output.
+
+# Kujan validation decision — `pnpm start dev` regression
+
+- **Timestamp:** 2026-05-19T18:15:41.495-07:00
+- **Owner:** Kujan
+- **Decision:** Approve
+
+## Regression assertion
+
+Root startup must tolerate the compatibility form `pnpm start dev` without passing the trailing `dev` positional argument into any workspace `run dev` script. In particular, the docs workspace must not receive `node scripts/docusaurus.mjs start --host 0.0.0.0 --port 3002 dev`.
+
+## Evidence
+
+- Exact failure condition reproduced at the docs layer: `pnpm --filter @sabbour/squadboard-docs run dev dev` produced `ENOENT` for `packages/docs-site/dev`.
+- Hockney's root `start` now runs `node scripts/start-dev.mjs`.
+- `SQUADBOARD_START_PRINT_COMMAND=1 pnpm start dev` prints `pnpm --parallel --filter @sabbour/squadboard --filter @sabbour/squadboard-client --filter @sabbour/squadboard-docs run dev` with no trailing `dev`.
+- Automated checks passed: `pnpm --filter @sabbour/squadboard test -- --run src/__tests__/root-start-script.test.ts src/__tests__/startup-scripts.test.ts`.
+
+## Blockers
+
+None for this regression.
+
+# Decision: Cross-Surface Interchangeability — Authority and Sync Model
+
+- **Date:** 2026-05-19T18:35:26.660-07:00
+- **Author:** McManus
+- **Status:** Proposed
+- **Supersedes:** Partially revises the "one authority per project lifetime" clause in `docs/setup/cross-surface-squad-sync-contract.md`
+- **Triggered by:** User directive — "Those modes are interchangeable. A user can start with either client or carry on working on the other."
+
+---
+
+## Context
+
+The existing cross-surface sync contract (2026-05-19) defines **mode-based authority**: a project is either `fs`-authoritative or `postgresql`-authoritative, chosen at creation time and locked for the project's lifetime. This design prevents data-loss from silent sync, but it creates a first-class/second-class split between surfaces. The user directive rejects that split: both Squadboard and CLI/Copilot must be equally capable entry points and continuations, not import/export viewers of each other.
+
+---
+
+## Decision
+
+### 1. Single Canonical Store, Both Surfaces Write Through It
+
+Every project has ONE canonical store (the `storage_provider_mode` column). This does not change. What changes is that **both surfaces write to the canonical store**, not just the surface that created it.
+
+- **`postgresql` mode (default for all new projects):** Squadboard writes directly. CLI/Copilot writes via Squadboard API (or MCP broker when offline-then-sync is supported).
+- **`fs` mode (opt-in for air-gapped/local-only):** CLI/Copilot writes directly to `.squad/`. Squadboard reads on demand and can write back via Git commit or filesystem API.
+
+The "lock-in" is about where truth lives, not about who can modify it.
+
+### 2. Behavior Ownership by Start Path
+
+| Start path | What happens | Who owns actual behavior |
+|------------|-------------|--------------------------|
+| **Squadboard-first** | Project created in UI. `storage_provider_mode = 'postgresql'`. Squad state lives in DB. | DB is canonical. Squadboard writes directly. CLI/Copilot reads via projected `.squad/` or `.github/agents/squad.agent.md`, writes decisions/work via `captureDirective()` → Squadboard API. Both surfaces drive ceremonies, routing, and agent work equally. |
+| **CLI/Copilot-first** | User runs `copilot squad init` or creates `.squad/` manually. `storage_provider_mode = 'fs'` until Squadboard connects. | Filesystem is canonical. CLI/Copilot writes directly. When user adds Squadboard: (a) one-time import to DB + mode flip to `postgresql`, or (b) remain `fs` with Squadboard as read-only viewer. After import, both surfaces are full writers through the DB. |
+
+**Key point:** After a CLI-first project imports to Squadboard, it becomes `postgresql`-authoritative and both surfaces are interchangeable from that moment. The `fs` → `postgresql` transition is a one-time upgrade, not a demotion of CLI.
+
+### 3. What Keeps Both Surfaces In Sync
+
+| Mechanism | Direction | Trigger |
+|-----------|-----------|---------|
+| **Projected `.squad/` generation** | DB → filesystem | On explicit API call (`project-squad-to-fs`) or on Squadboard project settings "push to repo" |
+| **`.github/agents/squad.agent.md` generation** | DB → GitHub repo | On API call (`generate-github-agent`) or on team/routing change in Squadboard |
+| **`captureDirective()` write-through** | CLI → DB | Every CLI/Copilot decision, directive, or work result calls Squadboard API (or MCP `capture` tool) |
+| **Filesystem watcher (future)** | Filesystem → DB | Optional; only for `fs` mode projects where user explicitly enables it |
+| **Drift detection** | Bidirectional | `GET /api/projects/:id/squad-sync/status` reports staleness per surface |
+| **Repair actions** | User-initiated | UI "Team Sync" panel or CLI `squad sync repair` command |
+
+### 4. Invariants
+
+1. **No silent data loss.** If surfaces diverge, drift detection fires before any overwrite. User confirms resolution.
+2. **No empty ceremonies.** Both start paths seed defaults. Ceremonies are never absent or placeholder-only.
+3. **No second-class surface.** After project setup completes, both Squadboard and CLI/Copilot can: create/modify agents, trigger ceremonies, capture decisions, update routing, and view backlog. Neither surface is read-only (unless the user explicitly chose `fs` mode and declined import).
+4. **Write-through, not write-behind.** CLI/Copilot writes are synchronous to the canonical store (API call), not queued for later merge. Offline work is a deferred write that surfaces as a conflict on reconnect.
+5. **Projection is repeatable and idempotent.** Generating `.squad/` or `.github/agents/squad.agent.md` from DB is safe to run N times; it only writes if content differs.
+
+### 5. What This Does NOT Change
+
+- The SDK remains a passive library (storage backends only).
+- `captureDirective()` remains the single coordinator intake seam.
+- Bootstrap is still one-time import (idempotent).
+- Mode is still stored in `projects.storage_provider_mode`.
+- Air-gapped/local-only projects can remain `fs`-authoritative indefinitely.
+
+---
+
+## Ownership Matrix (Revised)
+
+| Component | Owner | Notes |
+|-----------|-------|-------|
+| `storage_provider_mode` column + migration | Hockney | Already exists; no schema change needed |
+| CLI write-through to Squadboard API | Kobayashi | New: CLI SDK must call Squadboard API for writes in `postgresql` mode |
+| `.github/agents/squad.agent.md` generation | Kobayashi | Template rendering from canonical state |
+| Projected `.squad/` filesystem refresh | Hockney | API endpoint `project-squad-to-fs` |
+| Drift detection endpoint | Hockney | `GET .../squad-sync/status` |
+| Team Sync UI panel | Keyser | Shows mode, drift, repair actions |
+| Offline-then-sync conflict resolution UX | Fenster + Keyser | Future: merge UI for diverged offline writes |
+| Bidirectional scenario test coverage | Kujan | Both start paths → full interop |
+| User-facing docs ("how sync works") | Redfoot | Setup guide + troubleshooting |
+
+---
+
+## Consequences
+
+1. CLI/Copilot agents in `postgresql` mode now require network access to Squadboard API for writes. Offline CLI work becomes a "deferred write" that must reconcile on reconnect.
+2. The "one authority per project lifetime" statement is softened: the authority mode is still singular, but the user experience is that both surfaces are equal writers to that authority.
+3. MCP broker becomes the offline bridge: CLI captures decisions locally, MCP `capture` tool replays them to Squadboard when connectivity resumes.
+4. No new storage mode is introduced. `fs` and `postgresql` remain the only two modes.
+
+---
+
+## Open Questions
+
+- **OQ-1:** Offline conflict resolution — when CLI writes decisions while disconnected and Squadboard has diverged, what merge strategy applies? (Fenster/Keyser to design UX; Hockney to implement backend.)
+- **OQ-2:** Should `fs`-mode projects get a periodic "would you like to upgrade to full interop?" prompt, or is this strictly user-initiated?
+
+# Decision: Cross-Surface Squad Sync Authority and Bootstrap Contract
+
+**Date:** 2026-05-19  
+**Decider:** McManus (Lead Architect)  
+**Status:** Approved for implementation  
+**Surfaces affected:** Squadboard, CLI/Copilot, filesystem, PostgreSQL
+
+---
+
+## Problem
+
+Users report three critical gaps when working across Squadboard and Copilot/CLI:
+
+1. **Squadboard-first:** Create project in web UI, switch to CLI → no `.github/agents/squad.agent.md` file → Copilot doesn't have Squad
+2. **CLI-first:** Build `.squad/` on disk with Copilot, add Squadboard later → unclear if filesystem remains truth or DB imports then owns
+3. **Empty ceremonies:** Both paths leave `ceremonies.md` empty or with minimal stubs → users must bootstrap from scratch
+
+Root cause: No explicit authority contract. Current behavior is implicit partial mirroring — filesystem `.squad/`, Squadboard DB, and client agent files can diverge without detection.
+
+---
+
+## Decision
+
+Implement **mode-based authority** for every project:
+
+1. **Storage mode** (set at project creation, immutable):
+   - `fs`: Filesystem `.squad/` is authoritative; Squadboard reads it
+   - `postgresql`: Squadboard DB is authoritative; filesystem is a projection
+
+2. **Bootstrap is one-time import**, not continuous sync:
+   - New projects in Squadboard get default ceremonies seeded
+   - Projects created in CLI can opt-in to import to DB later
+   - Import is idempotent; marked with metadata timestamp
+
+3. **Client artifacts are generated projections**:
+   - `.github/agents/squad.agent.md` is rendered from authoritative state
+   - Missing agent file triggers regeneration (explicit API call or auto-on-first-read)
+   - Ceremonies defaults are always pre-seeded
+
+4. **Sync is explicit, not implicit**:
+   - Specific API endpoints control flow of data between surfaces
+   - Drift detection reports divergence without silent picks
+   - Repair is user-initiated
+
+5. **SDK is agnostic**:
+   - `StorageProvider` abstraction stays simple
+   - Application layer (Squadboard) decides authority
+   - CLI always uses filesystem as default
+
+---
+
+## Ownership
+
+| Component | Owner | Mode |
+|-----------|-------|------|
+| `.squad/team.md`, `.squad/routing.md`, `.squad/decisions.md` | filesystem (if `fs` mode) OR Squadboard DB (if `postgresql` mode) | Authoritative per mode |
+| `.squad/ceremonies.md` | Same as above + seeded with defaults on bootstrap | Authoritative per mode |
+| `.squad/agents/*/charter.md`, `.squad/agents/*/history.md` | Same as above | Authoritative per mode |
+| `.github/agents/squad.agent.md` | Squadboard (generated from authoritative state) | Projection (read-only from CLI perspective) |
+| `squad_storage` table | Squadboard PostgreSQL | Cache (in `fs` mode) OR Authority (in `postgresql` mode) |
+
+---
+
+## Implementation Ownership
+
+| Specialist | Responsibility |
+|------------|-----------------|
+| **Hockney** | Schema: `projects.storage_provider_mode` column; `squad_storage` bootstrap metadata; API endpoints for sync/repair; default ceremonies in setup-lifecycle |
+| **Kobayashi** | Clean up stale "pglite mode" inbox entries; verify SDK is authority-agnostic; add bootstrap integration tests |
+| **Keyser** | Frontend: Project settings → Team Sync panel; storage mode UI; repair buttons |
+| **Kujan** | Regression tests: Squadboard-first path, CLI-first path, drift detection, ceremonies preservation |
+| **Redfoot** | User-facing docs: setup overview, start-anywhere flow, sync options |
+
+---
+
+## API Endpoints (Hockney)
+
+```
+GET /api/projects/:id/sync/status
+  → { project_id, storage_mode, bootstrap_status, drifts: [...] }
+
+POST /api/projects/:id/sync/project-squad-to-fs
+  → Read DB → write filesystem, return diff
+
+POST /api/projects/:id/sync/generate-github-agent
+  → Render agent file from authoritative state, push to repo
+
+POST /api/projects/:id/sync/repair
+  → { action: 'regenerate_github_agent' | 'sync_squad_to_fs' | 'reimport_fs_to_db', force: false }
+  → Apply repair, return new status
+```
+
+---
+
+## Consequences
+
+**Users benefit:**
+- Start in Squadboard or CLI, link surfaces later — sync available
+- Ceremonies are never empty; defaults ready to use immediately
+- Clear visibility into what each surface owns
+- Explicit repair if surfaces diverge
+
+**Implementation:**
+- Add schema column (small migration)
+- Implement 4 API endpoints (moderate effort)
+- Update CLI/Copilot agent file generation (Squadboard-side work)
+- No backward-incompatible changes to existing projects (default to `fs` mode)
+
+**Risk mitigation:**
+- Bootstrap import is idempotent (marked with metadata)
+- Drift detection prevents silent data loss
+- Filesystem stays safe default for CLI projects
+- Explicit repair API (no magic mirroring)
+
+---
+
+## Related Documents
+
+- **Architecture:** `docs/setup/cross-surface-squad-sync-contract.md`
+- **Feature scope:** `docs/features/feat-2026-05-19-define-cross-surface-squad-sync-ownership.md`
+- **Prior audit:** `.squad/reports/two-way-sync-status.md`
+
+---
+
+## Sign-Off Checklist
+
+- [x] McManus approved (architecture decision)
+- [ ] Hockney review (backend feasibility)
+- [ ] Kobayashi review (SDK impact)
+- [ ] Keyser review (frontend feasibility)
+- [ ] Kujan review (test coverage)
+- [ ] Redfoot review (doc completeness)
+
+---
+
+_Archived decisions: `.squad/decisions-archive.md`_
+
+# Release Readiness: Normalize `alpha` → `pre-alpha` in Public Docs
+
+**Author:** Redfoot (DevRel/Docs)  
+**Date:** 2026-05-19T15:45:00-07:00  
+**Session:** Pending docs work  
+**Visibility:** Team
+**Context:** Kujan rejected Hockney's release-readiness work; 13 remaining `alpha` references needed normalization to `pre-alpha`
+
+---
+
+## Change Summary
+
+Normalized 10 product maturity `alpha` references to `pre-alpha` in public-facing Docusaurus and root README:
+
+### Files Changed
+
+1. **packages/docs-site/docs/user-guide/built-ins.mdx:32**
+   - Before: "The built-in ceremony catalog is intentionally small in the **alpha**."
+   - After: "The built-in ceremony catalog is intentionally small in the **pre-alpha**."
+
+2. **packages/docs-site/docs/user-guide/security.md:32**
+   - Before: "Squadboard is **alpha software**."
+   - After: "Squadboard is **pre-alpha software**."
+
+3. **packages/docs-site/docs/user-guide/coordinator-loops.mdx:36**
+   - Before: "Ralph-style monitoring is opt-in **alpha automation**"
+   - After: "Ralph-style monitoring is opt-in **pre-alpha automation**"
+
+4. **packages/docs-site/docs/user-guide/copilot-squad-coexistence.md:46**
+   - Before: `## Current alpha limits`
+   - After: `## Current pre-alpha limits`
+
+5. **packages/docs-site/docs/reference/index.mdx:14**
+   - Before: "Short answers about ... and **alpha expectations**."
+   - After: "Short answers about ... and **pre-alpha expectations**."
+
+6. **packages/docs-site/docs/reference/faq.md:18**
+   - Before: "No. Squadboard is **alpha software**."
+   - After: "No. Squadboard is **pre-alpha software**."
+
+7. **packages/docs-site/docs/reference/faq.md:30**
+   - Before: "...still require YAML review in the **alpha**."
+   - After: "...still require YAML review in the **pre-alpha**."
+
+8. **packages/docs-site/docs/features/roadmap-gaps.md:2–8** (frontmatter + heading + intro)
+   - Before: `title: Current alpha limits` / `description: Current alpha constraints` / `# Current alpha limits` / `The current alpha focuses on...`
+   - After: `title: Current pre-alpha limits` / `description: Current pre-alpha constraints` / `# Current pre-alpha limits` / `The current pre-alpha focuses on...`
+
+9. **packages/docs-site/docs/getting-started/index.mdx:10**
+   - Before: "...evaluating the **alpha workflow** with the Spark project."
+   - After: "...evaluating the **pre-alpha workflow** with the Spark project."
+
+### Not Changed (Intentionally)
+
+- **README.md** — Already correct ("pre-alpha" in badge, pre-alpha software warning)
+- **Code identifiers** — No package names, env vars, or code symbols containing `alpha` were touched
+- **Historical/context uses** — No alphanumeric/alphabetical references affected
+
+### Validation
+
+✅ **Docusaurus build succeeded:**
+- `pnpm docs:build` ran cleanly
+- Generated static files in `build/` directory
+- `llms.txt` and `llms-full.txt` regenerated (41 pages)
+- No errors or warnings
+
+✅ **Comprehensive terminology scan post-change:**
+- No remaining product maturity `alpha` (without "pre-") references found in public docs
+- All 10 product maturity references now say `pre-alpha`
+- README.md already correctly labeled (not counted in the 13)
+
+---
+
+## Scope
+
+**This is Redfoot's independent copy fix:**
+- Kujan rejected Hockney's release-readiness work due to inconsistent pre-alpha labeling
+- Hockney is locked out this cycle (reviewer rejection lockout)
+- Redfoot owns the docs fix independently (no code changes, no workflow/package mechanics touched)
+
+---
+
+## Rationale
+
+Squadboard ships as pre-alpha software (SemVer 0.1.0-prealpha.0). All user-facing copy must consistently label it as such:
+
+> "Squadboard is **pre-alpha**, under active development, and not recommended for production or unattended operation."
+
+Not "alpha" (which implies maturity); not "beta" (which implies broader testing). **Pre-alpha** = actively hacking, breaking changes expected, experimental only.
+
+---
+
+## Team Decision
+
+- **Terminology locked:** Product maturity label is `pre-alpha` (not `alpha`) in all public user-facing copy
+- **Evidence:** Consistent with README.md already using "Pre-alpha software warning", monorepo package.json versioning (`0.1.0-prealpha.0`)
+- **Scope:** Applies to Docusaurus site, README.md, and any user-facing release notes
+
+---
+
+## Next: Hockney
+
+Once this copy fix is merged and validated, Hockney can resume release-readiness work without the "alpha" copy debt blocking.
+
+---
+
+## See Also
+
+- `.squad/decisions/inbox/redfoot-squad-apps-terminology.md` — Prior wave's terminology decision (Squad Apps vs Templates vs Bundles)
+- `packages/docs-site/docs/features/roadmap-gaps.md` — Updated roadmap page (now "pre-alpha limits")
+- `docs/concepts/squad-apps-and-templates.md` — Wave 18 implementation map (already uses consistent pre-alpha labeling)
+
+# Terminology: Squad Apps, Templates, and Bundles
+
+**Author:** Redfoot (DevRel/Docs)  
+**Date:** 2026-05-19T15:30:00-07:00  
+**Session:** Pending docs work  
+**Visibility:** Team
+
+---
+
+## Canonical Terminology Locked
+
+This session documented the authoritative distinction between **Squad Apps**, **Project Templates**, **Team Templates**, **Workflow Templates**, **Starter Projects**, and **Bundles**.
+
+### Key Definitions (now locked for team)
+
+| Term | Definition | When/Where Created | Where it lives | Versioned? |
+|------|-----------|-------------------|---|-----------|
+| **Squad App** | Portable, versioned, complete project definition ready for distribution/marketplace | By developers shipping a project config | `.squadapp/` directory or tarball or git URL; served from `bundles/` as built-in | ✅ SemVer + schemaVersion |
+| **Project Template** | Snapshot of an existing project, user-created, DB-backed | By end users via "Save as template" button | `templates` DB table; optionally mirrored to `.squad/squadboard/templates/project/{slug}.json` | ❌ No version |
+| **Team Template** | Snapshot of an agent roster from one project | By end users via "Save as template" on team page | `templates` DB table with `kind='team'` | ❌ No version |
+| **Workflow Template** | Snapshot of a ceremony/workflow from one project | By end users via "Save as template" on workflow | `templates` DB table with `kind='workflow'` | ❌ No version |
+| **Bundle** | Runtime representation of an applied Squad App or user template; internal data structure | Computed on Squad App install or template instantiation | `squad-bundle.json` in `.squad/` directory; schema in `packages/squadboard-sdk/bundle.ts` | ✅ (tied to Squad App) |
+| **Starter Projects** | Legacy Squad-IRL format; pre-bundled projects at build time (superseded by Squad Apps) | Build-time generation from Squad-IRL sources | `packages/server/src/data/starters/`; generated by `scripts/generate-starters.mjs` | ❌ (legacy) |
+
+### Comparison Grid (Published in Docs)
+
+See `docs/concepts/squad-apps-and-templates.md` § "Quick Reference" for the user-facing table. Highlights:
+
+- **Squad Apps** = Full project + versioned + marketplace-ready
+- **Project/Team/Workflow Templates** = Granular, user-created, DB-backed, non-versioned, for portability within Squadboard
+- **Bundles** = Runtime/internal representation
+- **Starters** = Legacy (maintain for backward compat; migrate to Squad Apps per W25 roadmap)
+
+### Open Questions Resolved
+
+1. **"Are Squad Apps just bundles?"** → No. Bundles are the internal structure *after* a Squad App is applied. Squad Apps are the portable, authored format; bundles are the computed runtime view.
+2. **"Can I save a project and call it a Squad App?"** → Not directly. Project templates are DB snapshots. To create a Squad App, manually author `.squadapp/` + `squadapp.json` (automation planned F5+).
+3. **"Should users see Squad Apps and Project Templates on the same screen?"** → Per the Templates page UI: yes, but in different tabs (Ceremonies / Teams / Projects). Built-in Squad Apps appear under the "Projects" tab as options to instantiate.
+
+### Implementation Evidence
+
+- **Canonical spec:** `docs/squadapp-spec.md` (1212 lines, complete schema and validation rules)
+- **Implementation map:** `docs/concepts/squad-apps-and-templates.md` (340 lines, published)
+- **Discovery:** `packages/server/src/services/builtin-bundles.ts` (lazy scanner for `bundles/`)
+- **API:** `packages/server/src/routes/templates.ts` (all template endpoints)
+- **Frontend:** `packages/client/src/pages/Templates.tsx` + `packages/client/src/api/templates.ts` (hooks)
+- **Types:** `packages/squadboard-sdk/bundle.ts` and `packages/client/src/api/templates.ts`
+
+### Next Phases
+
+- **F4 (Wave 24+):** Curate first-class built-in Squad Apps and add to `bundles/`
+- **F5 (Wave 25+):** Automated export → Squad App workflow; git URL-backed installation
+- **F6 (Wave 26+):** Squad App marketplace; upgrade path with conflict resolution
+- **Community:** Accept Squad App contributions to the registry
+
+### Notation for Team
+
+When discussing these terms:
+- Use **"Squad App"** (not "bundle," not "template") when referring to portable, versioned project definitions.
+- Use **"project template"** (or "team/workflow template") when referring to DB-backed snapshots.
+- Use **"bundle"** only when discussing the runtime data structure or JSON schema.
+- Use **"starter project"** only in legacy context or backward-compat discussion.
+
+---
+
+## See Also
+
+- `docs/concepts/squad-apps-and-templates.md` — Published user-facing reference
+- `docs/squadapp-spec.md` — Authoritative format specification
+- `.squad/decisions/` — Routing for feature specs `feat-2026-05-19-document-squad-apps-implementation-map` and `feat-2026-05-19-explain-squad-app-vs-project-template`
+
+
 ### 2026-05-19T14:47:51.758-07:00: Dogfood sync source-of-truth and capture seam
 **By:** McManus
 **What:** Treat `captureDirective()` / `POST /api/inbox/directive-captures` as the single dogfood intake and close-out seam. It must write `.squad/decisions/inbox`, create/dedupe a DB inbox row, best-effort call MCP `capture`/`done:`, and return stable status IDs for Scribe and the board.

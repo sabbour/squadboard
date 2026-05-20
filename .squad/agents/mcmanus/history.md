@@ -108,3 +108,19 @@ Authored the foundational architecture contract for cross-surface Squad manageme
 - Keyser: Team Sync settings panel
 - Kujan: Regression tests across both start paths
 - Redfoot: User-facing setup guide + linked docs
+
+---
+
+## 2026-05-20T01:35:26Z — Cross-Surface Interchangeability Directive
+
+**Status:** Decision capture and team coordination
+
+User directive (Ahmed): **Squadboard and CLI/Copilot modes are interchangeable. A user can start with either client and continue in the other.**
+
+Produced two related decisions:
+1. **mcmanus-cross-surface-authority.md** — Authority and sync model permitting both surfaces as equal entry points
+2. **mcmanus-cross-surface-sync-contract.md** — Sync authority and bootstrap contract (existing, now cited in context of interchangeability)
+
+Kobayashi simultaneously authored SDK/client artifact contract to support this directive.
+
+**Key insight:** Previous mode-authority rule remains, but interchangeability requires both clients to read and write through the same active authority for each project. No surface is first-class; both are co-equal.

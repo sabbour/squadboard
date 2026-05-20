@@ -198,3 +198,9 @@ Keyser delivered W24 UX feature set: Conjure↔Consult re-swap + collapsible lef
 ## Sync Status UI Proposal — 2026-05-19
 
 Keyser audited Settings, ProjectPicker, Agents, project/squad API hooks, and setup scaffolding for cross-surface sync status. Decision: no visible status panel until backend exposes evidence-backed `GET /api/projects/:projectId/squad-sync/status` and `POST /api/projects/:projectId/squad-sync/repair`. Added frontend-ready TypeScript contract in `packages/client/src/api/squad.ts` so the future Settings → Sync status panel can cover source of truth, storage mode/runtime, governance projections, ceremonies defaults, drift, and repair availability without guessing.
+
+---
+
+## Pre-alpha README Copy Fix — 2026-05-19
+
+After Kujan rejected final release sign-off for an unsafe public maturity label, Keyser independently revised the remaining README wording from `Alpha caution` to `Pre-alpha caution`. Focused scan confirmed README maturity references now use pre-alpha wording; no standalone public `alpha` warning remains in README.

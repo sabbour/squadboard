@@ -182,3 +182,22 @@ Completed fix for cast-agent retired issue and project folder structure reorgani
 - Mode rule preserved: filesystem mode treats `.squad/` files as live authority; PostgreSQL mode treats `squad_storage` as live authority after one-time filesystem import. No bidirectional mirror is implied.
 - Added `getProjectSyncOwnershipStatus(projectId)` in `sdk-state.ts` so Hockney can expose a read-only status endpoint without schema changes.
 - Regression: `packages/server/src/sdk/sync-ownership.test.ts` pins provider-mode normalization, required/recommended projection status, and surface ownership boundaries.
+
+---
+
+## 2026-05-20T01:35:26Z — Cross-Surface Interchangeability Directive + SDK/Client Contract
+
+**Status:** Contract definition for interchangeable surfaces
+
+User directive (Ahmed): **Squadboard and CLI/Copilot modes are interchangeable. A user can start with either client and continue in the other.**
+
+Authored **kobayashi-cross-surface-contract.md**:
+- A project has one Squad state authority at a time: filesystem `.squad/` or `squad_storage`
+- Both Squadboard and CLI/Copilot must target that same authority when they mutate Squad state
+- Generated client instruction files are projections, not independent state stores
+- `.squad` hydration and export are explicit operations with status, checksums, and drift reporting
+- Ceremonies are part of the shared Squad state bundle and must never be silently empty on either start path
+
+Additive to existing `squadboard.sdk-sync-ownership.v1` contract. Does not change SDK internals; Squadboard bridge adapts to SDK contracts.
+
+**Pattern:** Contract version is `squadboard.sdk-client-artifact.v1`

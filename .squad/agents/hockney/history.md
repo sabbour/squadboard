@@ -246,3 +246,19 @@ Hockney-close-w24 dispatched in parallel to run build + main FF + smoke tests be
 - `pnpm publish` must be invoked through workspace `--filter`; using `pnpm -C` / `--dir` with `publish` leaked extra argv into the delegated npm command and failed with `EUSAGE`.
 - Publish builds must clean `dist` before `tsc`; otherwise stale compiled test files can enter the npm tarball. Server build also copies built-in `.workflow.yaml` ceremony assets into `dist/ceremonies/built-in` so package runtime reads succeed after publish.
 - Validation run: frozen install metadata, npm package builds, npm publish dry-run, docs build, and workflow YAML parsing all passed.
+
+### 2026-05-19T15:43:53.554-07:00 — Sync rejection revision
+
+- Kujan rejected the cross-surface sync workstream for API namespace drift and ceremony invariant conflict. I did the independent Hockney revision; I did not touch release-copy wording.
+- Canonical sync API namespace is now `/api/projects/:projectId/squad-sync/...`. Rationale: project-scoped resource naming matches existing routes and avoids generic sync/GitHub sync ambiguity.
+- Ceremony sync invariant is now strict: `.squad/ceremonies.md` is required and must contain seeded, non-placeholder defaults. Missing, empty, or placeholder-only ceremonies produce a required `seed-ceremony-defaults` repair item.
+- `sync-ownership.ts` now models `ceremoniesDefaultsPresent`; `sdk-state.ts` marks the current placeholder text as not seeded defaults.
+- Validation passed: focused sync-ownership Vitest, server build/typecheck, and client typecheck.
+
+### 2026-05-19T18:15:41.495-07:00 — Root start argument normalization
+
+- `pnpm start dev` appends `dev` to the root `start` script, which made the recursive workspace command become `run dev dev`; pnpm then forwarded that positional argument into every workspace dev script.
+- Docusaurus treats a trailing positional after `start --host 0.0.0.0 --port 3002` as a content path, so the leaked `dev` became `packages/docs-site/dev` and failed with `ENOENT`.
+- Fix pattern: normalize at the root launcher boundary. `scripts/start-dev.mjs` ignores only the compatibility `dev` arg, rejects any other unsupported args, and spawns the deterministic backend+client+docs `pnpm --parallel ... run dev` command with docs still on port 3002.
+- Validation: focused Vitest coverage for the launcher plus `SQUADBOARD_START_PRINT_COMMAND=1 pnpm start dev` proving no trailing `dev` is forwarded.
+- Decision filed: `.squad/decisions/inbox/hockney-start-dev-arg-filter.md`.
