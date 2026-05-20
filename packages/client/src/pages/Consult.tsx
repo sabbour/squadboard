@@ -955,6 +955,19 @@ function SessionView({ sessionId, projectId }: { sessionId: string; projectId: s
           disabled={sendMut.isPending || (session.status !== 'active' && session.status !== 'idle')}
           onKeyDown={(e) => {
             if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+              // Insert a newline at the cursor position
+              e.preventDefault()
+              const el = e.target as HTMLTextAreaElement
+              const start = el.selectionStart ?? draft.length
+              const end = el.selectionEnd ?? draft.length
+              const next = draft.slice(0, start) + '\n' + draft.slice(end)
+              setDraft(next)
+              // Restore cursor after React re-render
+              requestAnimationFrame(() => {
+                el.selectionStart = start + 1
+                el.selectionEnd = start + 1
+              })
+            } else if (e.key === 'Enter' && !e.shiftKey) {
               e.preventDefault()
               void handleSend()
             }
@@ -962,7 +975,7 @@ function SessionView({ sessionId, projectId }: { sessionId: string; projectId: s
         />
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <Caption1 style={{ color: tokens.colorNeutralForeground3 }}>
-            ⌘/Ctrl+Enter to send
+            Enter to send · Ctrl+Enter for new line
           </Caption1>
           <Button
             appearance="primary"
