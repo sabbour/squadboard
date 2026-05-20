@@ -8,24 +8,42 @@
     "license": "MIT",
     "schemaVersion": 1
   },
-
   "project": {
     "name": "Ops / Incident Runbook",
     "description": "Incident tracking and postmortem management.",
-    "icon": "🚨"
+    "icon": "Alert20Regular"
   },
-
   "kanban": {
     "columns": [
-      { "slug": "alerts",     "label": "Alerts",     "order": 0 },
-      { "slug": "triaging",   "label": "Triaging",   "order": 1 },
-      { "slug": "mitigating", "label": "Mitigating", "order": 2, "wip_limit": 3 },
-      { "slug": "resolved",   "label": "Resolved",   "order": 3 },
-      { "slug": "postmortem", "label": "Postmortem",  "order": 4 }
+      {
+        "slug": "alerts",
+        "label": "Alerts",
+        "order": 0
+      },
+      {
+        "slug": "triaging",
+        "label": "Triaging",
+        "order": 1
+      },
+      {
+        "slug": "mitigating",
+        "label": "Mitigating",
+        "order": 2,
+        "wip_limit": 3
+      },
+      {
+        "slug": "resolved",
+        "label": "Resolved",
+        "order": 3
+      },
+      {
+        "slug": "postmortem",
+        "label": "Postmortem",
+        "order": 4
+      }
     ],
     "defaultColumn": "alerts"
   },
-
   "team": [
     {
       "name": "OnCall",
@@ -40,7 +58,6 @@
       "charter": "# Escalation\n\n## Role\nEscalation Lead — owns SEV1/SEV2 escalations, external communication, and postmortem facilitation.\n\n## Expertise\n- Severity escalation criteria\n- Executive and customer communication\n- Postmortem facilitation\n- Blameless retrospective culture\n\n## Style\nClear and accountable. Postmortems are about systems, not people.\n"
     }
   ],
-
   "ceremonies": [
     {
       "id": "bug-fix",
@@ -48,7 +65,9 @@
       "scope": "task",
       "trigger": {
         "kind": "on_issue_entry",
-        "config": { "column": "triaging" }
+        "config": {
+          "column": "triaging"
+        }
       },
       "workflowYaml": "name: Incident Open\nsteps:\n  - type: agent_run\n    label: OnCall declares and classifies incident\n    agent: OnCall\n    prompt: \"Classify this incident: severity (SEV1 total outage / SEV2 major degradation / SEV3 minor impact / SEV4 no user impact), impacted services, impacted users (estimate), and initial hypothesis. Open the incident channel and page if SEV1/SEV2.\"\n    timeout: 15m\n  - type: agent_run\n    label: OnCall applies runbook mitigations\n    agent: OnCall\n    prompt: \"Apply the relevant runbook steps for this incident type. Document each action taken and its outcome. If no runbook exists, improvise and document your actions for later runbook creation. Update status every 15 minutes.\"\n    timeout: 120m\n  - type: agent_run\n    label: OnCall writes resolution summary\n    agent: OnCall\n    prompt: \"Write the resolution summary: what was the root cause, what mitigated it, when was full recovery, and what is the customer impact statement. Notify stakeholders.\"\n    timeout: 20m\n"
     },
@@ -58,12 +77,13 @@
       "scope": "task",
       "trigger": {
         "kind": "on_issue_entry",
-        "config": { "column": "postmortem" }
+        "config": {
+          "column": "postmortem"
+        }
       },
       "workflowYaml": "name: Postmortem\nsteps:\n  - type: agent_run\n    label: Escalation builds blameless timeline\n    agent: Escalation\n    prompt: \"Build a blameless postmortem for this incident. Include: timeline (with timestamps), root cause (5 whys), contributing factors, detection gap (why did we not detect sooner?), response effectiveness, customer impact, and at least 3 action items with owners and due dates. Blameless means: identify system failures, not people failures.\"\n    timeout: 60m\n  - type: approve\n    label: Postmortem review\n    approvers: [OnCall]\n    timeout: 48h\n    timeoutAction: notify\n  - type: agent_run\n    label: File action items\n    agent: Escalation\n    prompt: \"Convert each postmortem action item into a separate issue in this project. Each issue must have: description, owner, due date, and label 'postmortem-action'. Summarise the postmortem in the parent issue.\"\n    timeout: 20m\n"
     }
   ],
-
   "skills": [
     {
       "key": "timeline-builder",
@@ -73,7 +93,6 @@
       "promptAddendum": "## Incident Timeline Format\n\nEvery incident timeline must follow this structure:\n\n```\n**Incident:** <title>\n**Severity:** SEV1 / SEV2 / SEV3 / SEV4\n**Duration:** <start time> → <end time> (<total duration>)\n**Customer impact:** <affected users/services and impact description>\n\n### Timeline\n| Time (UTC) | Event |\n|------------|-------|\n| HH:MM      | Alert fired: <alert name> |\n| HH:MM      | OnCall acknowledged |\n| HH:MM      | Incident declared SEV<N> |\n| HH:MM      | <mitigation action taken> |\n| HH:MM      | Partial recovery: <what recovered> |\n| HH:MM      | Full recovery confirmed |\n| HH:MM      | Incident closed |\n\n### Detection gap\n<How long between first symptom and alert? Why?>\n\n### Root cause\n<5-whys chain>\n\n### Action items\n| # | Action | Owner | Due |\n|---|--------|-------|-----|\n| 1 | ...    | ...   | ... |\n```\n\nRules:\n- All timestamps in UTC. Never use local time.\n- Detection gap analysis is mandatory — if we caught it fast, explain why.\n- Root cause must be a system failure, not a person mistake.\n"
     }
   ],
-
   "routing": [
     {
       "pattern": "sev1",

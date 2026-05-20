@@ -8,24 +8,42 @@
     "license": "MIT",
     "schemaVersion": 1
   },
-
   "project": {
     "name": "Default Software Project",
     "description": "A software project managed by Squadboard.",
-    "icon": "🚀"
+    "icon": "Rocket20Regular"
   },
-
   "kanban": {
     "columns": [
-      { "slug": "backlog",     "label": "Backlog",     "order": 0 },
-      { "slug": "ready",       "label": "Ready",       "order": 1 },
-      { "slug": "in-progress", "label": "In Progress", "order": 2, "wip_limit": 3 },
-      { "slug": "in-review",   "label": "In Review",   "order": 3 },
-      { "slug": "done",        "label": "Done",        "order": 4 }
+      {
+        "slug": "backlog",
+        "label": "Backlog",
+        "order": 0
+      },
+      {
+        "slug": "ready",
+        "label": "Ready",
+        "order": 1
+      },
+      {
+        "slug": "in-progress",
+        "label": "In Progress",
+        "order": 2,
+        "wip_limit": 3
+      },
+      {
+        "slug": "in-review",
+        "label": "In Review",
+        "order": 3
+      },
+      {
+        "slug": "done",
+        "label": "Done",
+        "order": 4
+      }
     ],
     "defaultColumn": "backlog"
   },
-
   "team": [
     {
       "name": "Lead",
@@ -52,7 +70,6 @@
       "charter": "# Tester\n\n## Role\nQA Engineer — owns test coverage, bug reproduction, and quality gates.\n\n## Expertise\n- Test planning\n- Bug reproduction\n- Regression suites\n- End-to-end testing\n\n## Style\nSceptical by design. Finds the edge cases before users do.\n"
     }
   ],
-
   "ceremonies": [
     {
       "id": "simple-review",
@@ -60,7 +77,9 @@
       "scope": "task",
       "trigger": {
         "kind": "on_issue_entry",
-        "config": { "column": "in-review" }
+        "config": {
+          "column": "in-review"
+        }
       },
       "workflowYaml": "name: Simple Review\nsteps:\n  - type: route\n    label: Route to reviewer\n    agent: \"{{ assignee }}\"\n  - type: agent_run\n    label: Agent reviews the work\n    agent: \"{{ assignee }}\"\n    prompt: \"Review the attached work. Check for correctness, style, and test coverage. Leave clear feedback.\"\n    timeout: 30m\n  - type: approve\n    label: Human approval gate\n    approvers: []\n    timeout: 2h\n    timeoutAction: notify\n"
     },
@@ -70,7 +89,9 @@
       "scope": "task",
       "trigger": {
         "kind": "on_issue_entry",
-        "config": { "label": "bug" }
+        "config": {
+          "label": "bug"
+        }
       },
       "workflowYaml": "name: Bug Fix\nsteps:\n  - type: route\n    label: Triage to Tester\n    agent: Tester\n  - type: agent_run\n    label: Reproduce the bug\n    agent: Tester\n    prompt: \"Reproduce the bug described in this issue. Document exact repro steps, environment, and observed vs expected behavior.\"\n    timeout: 30m\n  - type: route\n    label: Route to Backend or Frontend for fix\n    agent: Lead\n    prompt: \"Determine whether this bug is backend or frontend and route accordingly.\"\n  - type: agent_run\n    label: Implement the fix\n    agent: \"{{ assignee }}\"\n    prompt: \"Fix the bug. Write a regression test. Document what changed and why.\"\n    timeout: 60m\n  - type: agent_run\n    label: Verify the fix\n    agent: Tester\n    prompt: \"Verify the fix resolves the original repro. Confirm regression test passes.\"\n    timeout: 20m\n"
     },
@@ -80,7 +101,9 @@
       "scope": "project",
       "trigger": {
         "kind": "on_issue_entry",
-        "config": { "label": "rfc" }
+        "config": {
+          "label": "rfc"
+        }
       },
       "workflowYaml": "name: RFC\nsteps:\n  - type: agent_run\n    label: Draft RFC\n    agent: Lead\n    prompt: \"Draft a Request for Comments document for this proposal. Include: motivation, proposed solution, alternatives considered, and open questions.\"\n    timeout: 60m\n  - type: approve\n    label: Team review\n    approvers: [Backend, Frontend, Tester]\n    request_changes_policy: majority\n    timeout: 48h\n    timeoutAction: escalate\n    fallbackReviewer: Lead\n  - type: agent_run\n    label: Land the RFC\n    agent: Lead\n    prompt: \"Incorporate review feedback into the RFC. Mark it accepted and summarise the decision for the team.\"\n    timeout: 30m\n"
     },
@@ -90,7 +113,9 @@
       "scope": "project",
       "trigger": {
         "kind": "manual",
-        "config": { "cadence": "sprint" }
+        "config": {
+          "cadence": "sprint"
+        }
       },
       "workflowYaml": "name: Sprint Planning\ndescription: Review goals, select Ready work, identify risks, and publish a sprint plan.\nsteps:\n  - type: fan_out\n    label: Gather team recommendations\n    split_by: agents\n    agents: [Lead, Backend, Frontend, Tester]\n    merge_strategy: all\n    mode: parallel\n    steps:\n      - type: agent_run\n        label: Review sprint candidates\n        prompt: |\n          Review the project goal, current backlog, recent decisions, open risks,\n          and any work related to your specialty. Recommend what should be in the\n          next sprint, what should stay out, and what dependencies or risks need\n          the Lead's attention.\n        timeout: 45m\n  - type: agent_run\n    label: Synthesize sprint plan\n    agent: Lead\n    prompt: |\n      Synthesize the team recommendations into a sprint plan: objective, selected\n      cards, likely owners, risks, dependencies, and what should stay out of scope.\n    timeout: 45m\n  - type: approve\n    label: Commit the plan\n    approvers: [Lead]\n    request_changes_policy: first\n    timeout: 24h\n    timeoutAction: notify\n"
     },
@@ -100,14 +125,14 @@
       "scope": "project",
       "trigger": {
         "kind": "manual",
-        "config": { "cadence": "sprint" }
+        "config": {
+          "cadence": "sprint"
+        }
       },
       "workflowYaml": "name: Sprint Retro\ndescription: Summarize the sprint, surface patterns, and capture improvements.\nsteps:\n  - type: fan_out\n    label: Gather team observations\n    split_by: agents\n    agents: [Lead, Backend, Frontend, Tester]\n    merge_strategy: all\n    mode: parallel\n    steps:\n      - type: agent_run\n        label: Review sprint evidence\n        prompt: |\n          Review completed cards, run history, review notes, incidents, and unresolved\n          follow-ups from the sprint from your specialty's point of view. Capture\n          what went well, what slowed the team down, surprises, and concrete\n          improvement ideas for next sprint.\n        timeout: 45m\n  - type: agent_run\n    label: Synthesize retro themes\n    agent: Lead\n    prompt: |\n      Synthesize the team observations into themes: what went well, what slowed\n      the team down, and concrete experiments or process improvements for the\n      next sprint.\n    timeout: 45m\n  - type: approve\n    label: Accept follow-ups\n    approvers: [Lead]\n    request_changes_policy: first\n    timeout: 24h\n    timeoutAction: notify\n"
     }
   ],
-
   "workflows": [],
-
   "skills": [
     {
       "key": "git-workflow",
@@ -124,11 +149,8 @@
       "promptAddendum": "## TDD Loop\n\nFollow the red-green-refactor cycle:\n\n1. **Red**: Write a failing test that describes the behaviour you're about to implement. Do not write implementation code yet.\n2. **Green**: Write the minimal implementation to make the test pass. Resist the urge to over-engineer.\n3. **Refactor**: Clean up the code — extract duplication, improve names, simplify logic — while keeping the test green.\n4. **Repeat** for each new behaviour.\n\nRules:\n- Test files live alongside source files or in a `__tests__/` sibling folder.\n- Test names describe intent, not implementation: `'creates an issue in the backlog column'` not `'calls insertRow()'`.\n- Edge cases (empty input, null, concurrent access) get their own test.\n- Integration tests are separate from unit tests; don't conflate them.\n"
     }
   ],
-
   "tools": [],
-
   "mcpServers": [],
-
   "routing": [
     {
       "pattern": "bug",

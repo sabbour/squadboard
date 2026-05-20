@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState, useEffect } from 'react'
+import React, { useCallback, useMemo, useState, useEffect } from 'react'
 import { useNavigate } from 'react-router'
 import {
   Button,
@@ -21,7 +21,33 @@ import {
   Spinner,
   tokens,
 } from '@fluentui/react-components'
-import { Folder20Regular, DocumentCopy20Regular, ArrowSync20Regular, Beaker20Regular, Sparkle20Regular } from '@fluentui/react-icons'
+import {
+  Folder20Regular,
+  DocumentCopy20Regular,
+  ArrowSync20Regular,
+  Beaker20Regular,
+  Sparkle20Regular,
+  Bot20Regular,
+  Bug20Regular,
+  NoteEdit20Regular,
+  Rocket20Regular,
+  TaskListSquareLtr20Regular,
+  Library20Regular,
+  Globe20Regular,
+  Alert20Regular,
+} from '@fluentui/react-icons'
+
+const BUNDLE_ICON_MAP: Record<string, React.ReactElement> = {
+  Bot20Regular:               <Bot20Regular />,
+  Bug20Regular:               <Bug20Regular />,
+  NoteEdit20Regular:          <NoteEdit20Regular />,
+  Rocket20Regular:            <Rocket20Regular />,
+  TaskListSquareLtr20Regular: <TaskListSquareLtr20Regular />,
+  Library20Regular:           <Library20Regular />,
+  Globe20Regular:             <Globe20Regular />,
+  Alert20Regular:             <Alert20Regular />,
+  Beaker20Regular:            <Beaker20Regular />,
+}
 import { useDeleteProject, useProjects, useSuggestProjectSetup } from '../api/projects.ts'
 import type { Project, ProjectSuggestion } from '../api/projects.ts'
 import { useDiscoverSquad, useRegisterSquad, useInitSquad, useCreateSquad } from '../api/squad.ts'
@@ -369,7 +395,11 @@ function CreateFromTemplateModal({
                         cursor: 'pointer',
                       }}
                     >
-                      {tpl.icon && <span style={{ fontSize: '20px', lineHeight: 1 }}>{tpl.icon}</span>}
+                      {tpl.icon && (
+                        BUNDLE_ICON_MAP[tpl.icon]
+                          ? <span style={{ display: 'flex', color: tokens.colorBrandForeground1 }}>{BUNDLE_ICON_MAP[tpl.icon]}</span>
+                          : <span style={{ fontSize: '20px', lineHeight: 1 }}>{tpl.icon}</span>
+                      )}
                       <div style={{ flex: 1, minWidth: 0 }}>
                         <div style={{ fontWeight: 500 }}>{tpl.name}</div>
                         {tpl.description && (

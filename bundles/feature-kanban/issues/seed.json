@@ -6,7 +6,7 @@
       "customer-signal",
       "research"
     ],
-    "column": "discovery"
+    "column": "backlog"
   },
   {
     "title": "[FEATURE] Guided first-run checklist for new workspaces",
@@ -15,7 +15,7 @@
       "feature",
       "prd"
     ],
-    "column": "shaping"
+    "column": "in-progress"
   },
   {
     "title": "[PROTOTYPE] Compare two approaches for bulk item editing",
@@ -24,7 +24,7 @@
       "prototype",
       "feature"
     ],
-    "column": "prototyping"
+    "column": "in-progress"
   },
   {
     "title": "[DOCS] Draft release note for saved filters",
@@ -33,7 +33,7 @@
       "docs",
       "release-note"
     ],
-    "column": "launch-readiness"
+    "column": "review"
   },
   {
     "title": "[VALIDATION] Define launch metrics for notification preferences",
@@ -42,6 +42,6 @@
       "validation",
       "feature"
     ],
-    "column": "launch-readiness"
+    "column": "review"
   }
 ]

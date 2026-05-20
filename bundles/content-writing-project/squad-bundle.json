@@ -11,7 +11,7 @@
   "project": {
     "name": "Content Creation",
     "description": "A lightweight pipeline for articles, posts, scripts, newsletters, or announcements.",
-    "icon": "✍️"
+    "icon": "NoteEdit20Regular"
   },
   "kanban": {
     "columns": [

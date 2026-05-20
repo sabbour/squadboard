@@ -8,23 +8,37 @@
     "license": "MIT",
     "schemaVersion": 1
   },
-
   "project": {
     "name": "Bug Bash",
     "description": "A time-boxed bug bash to clear a backlog of defects.",
-    "icon": "🐛"
+    "icon": "Bug20Regular"
   },
-
   "kanban": {
     "columns": [
-      { "slug": "triage",          "label": "Triage",          "order": 0 },
-      { "slug": "verified",        "label": "Verified",        "order": 1 },
-      { "slug": "in-fix",          "label": "In Fix",          "order": 2, "wip_limit": 5 },
-      { "slug": "verified-fixed",  "label": "Verified Fixed",  "order": 3 }
+      {
+        "slug": "triage",
+        "label": "Triage",
+        "order": 0
+      },
+      {
+        "slug": "verified",
+        "label": "Verified",
+        "order": 1
+      },
+      {
+        "slug": "in-fix",
+        "label": "In Fix",
+        "order": 2,
+        "wip_limit": 5
+      },
+      {
+        "slug": "verified-fixed",
+        "label": "Verified Fixed",
+        "order": 3
+      }
     ],
     "defaultColumn": "triage"
   },
-
   "team": [
     {
       "name": "TriageLead",
@@ -51,7 +65,6 @@
       "charter": "# Fixer3\n\n## Role\nBug Fixer — implements fixes and writes regression tests.\n\n## Expertise\n- Root cause analysis\n- Minimal targeted fixes\n- Regression test authoring\n\n## Style\nSurgical. Fix the bug, not the neighbourhood. Document the root cause.\n"
     }
   ],
-
   "ceremonies": [
     {
       "id": "bug-fix",
@@ -59,7 +72,9 @@
       "scope": "task",
       "trigger": {
         "kind": "on_issue_entry",
-        "config": { "column": "verified" }
+        "config": {
+          "column": "verified"
+        }
       },
       "workflowYaml": "name: Bug Fix Loop\nsteps:\n  - type: agent_run\n    label: Triage lead assigns severity and fixer\n    agent: TriageLead\n    prompt: \"Classify this bug: severity (P0 crash / P1 major / P2 minor / P3 cosmetic), component, and assign to a fixer. Write repro steps if not already present.\"\n    timeout: 20m\n  - type: route\n    label: Route to assigned fixer\n    agent: \"{{ assignee }}\"\n  - type: agent_run\n    label: Fixer implements the fix\n    agent: \"{{ assignee }}\"\n    prompt: \"Implement a targeted fix for this bug. Write a regression test that would have caught it. Commit message format: fix(<component>): <what and why>.\"\n    timeout: 60m\n  - type: agent_run\n    label: Triage lead verifies the fix\n    agent: TriageLead\n    prompt: \"Verify the fix using the repro steps. Confirm the regression test passes. Mark as Verified Fixed or reopen with notes.\"\n    timeout: 20m\n"
     },
@@ -73,7 +88,6 @@
       "workflowYaml": "name: Batch Close\nsteps:\n  - type: agent_run\n    label: Summarise verified-fixed bugs\n    agent: TriageLead\n    prompt: \"Summarise all bugs in the Verified Fixed column: count by severity, list any patterns or root cause clusters, and recommend which ones to ship in the next release vs defer.\"\n    timeout: 30m\n  - type: approve\n    label: Ship approval\n    approvers: []\n    timeout: 2h\n    timeoutAction: notify\n"
     }
   ],
-
   "skills": [
     {
       "key": "repro-steps",
@@ -83,7 +97,6 @@
       "promptAddendum": "## Repro Step Authoring\n\nEvery bug report must include:\n\n```\n**Environment:** <OS, runtime version, package version>\n**Preconditions:** <state the system must be in before starting>\n**Steps to reproduce:**\n1. ...\n2. ...\n3. ...\n**Observed:** <what actually happens>\n**Expected:** <what should happen>\n**Severity:** P0 (crash/data-loss) | P1 (major, no workaround) | P2 (minor, has workaround) | P3 (cosmetic)\n```\n\nRules:\n- Steps must be atomic and ordered. Each step = one action.\n- \"Observed\" must be specific — include error messages verbatim.\n- If you can't reproduce it, say so and note what you tried.\n- Attach screenshots, logs, or stack traces as needed.\n"
     }
   ],
-
   "routing": [
     {
       "pattern": "p0",

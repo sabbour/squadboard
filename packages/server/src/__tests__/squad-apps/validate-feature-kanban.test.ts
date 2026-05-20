@@ -64,10 +64,8 @@ describe('feature-kanban project template', () => {
       const kanban = manifest.kanban as { columns: Array<{ slug: string }>; defaultColumn: string };
       expect(kanban.columns.map((c) => c.slug)).toEqual([
         'backlog',
-        'discovery',
-        'shaping',
-        'prototyping',
-        'launch-readiness',
+        'in-progress',
+        'review',
         'done',
       ]);
       expect(kanban.defaultColumn).toBe('backlog');

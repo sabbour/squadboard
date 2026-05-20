@@ -8,23 +8,37 @@
     "license": "MIT",
     "schemaVersion": 1
   },
-
   "project": {
     "name": "Research Spike",
     "description": "A time-boxed research spike to explore a question or technical area.",
-    "icon": "🔬"
+    "icon": "Beaker20Regular"
   },
-
   "kanban": {
     "columns": [
-      { "slug": "questions",     "label": "Questions",    "order": 0 },
-      { "slug": "investigating", "label": "Investigating","order": 1, "wip_limit": 3 },
-      { "slug": "findings",      "label": "Findings",     "order": 2 },
-      { "slug": "closed",        "label": "Closed",       "order": 3 }
+      {
+        "slug": "questions",
+        "label": "Questions",
+        "order": 0
+      },
+      {
+        "slug": "investigating",
+        "label": "Investigating",
+        "order": 1,
+        "wip_limit": 3
+      },
+      {
+        "slug": "findings",
+        "label": "Findings",
+        "order": 2
+      },
+      {
+        "slug": "closed",
+        "label": "Closed",
+        "order": 3
+      }
     ],
     "defaultColumn": "questions"
   },
-
   "team": [
     {
       "name": "Researcher",
@@ -39,7 +53,6 @@
       "charter": "# Reviewer\n\n## Role\nFindings Reviewer — stress-tests conclusions, identifies gaps, and approves spike close-outs.\n\n## Expertise\n- Critical reading\n- Identifying confirmation bias\n- Framing recommendations\n\n## Style\nSceptical but constructive. Every finding needs supporting evidence.\n"
     }
   ],
-
   "ceremonies": [
     {
       "id": "spike",
@@ -47,7 +60,9 @@
       "scope": "task",
       "trigger": {
         "kind": "on_issue_entry",
-        "config": { "column": "findings" }
+        "config": {
+          "column": "findings"
+        }
       },
       "workflowYaml": "name: Spike Close-out\nsteps:\n  - type: agent_run\n    label: Researcher writes finding summary\n    agent: Researcher\n    prompt: \"Write a structured finding summary for this research question. Include: context, what was investigated, key findings (with evidence), open questions, and a recommended next step (build / defer / reject / continue investigating).\"\n    timeout: 45m\n  - type: agent_run\n    label: Reviewer stress-tests findings\n    agent: Reviewer\n    prompt: \"Review the finding summary. Check: Are the conclusions supported by evidence? Are there alternative explanations? What assumptions are load-bearing? Identify any gaps and note whether the recommended next step is sound.\"\n    timeout: 30m\n  - type: approve\n    label: Spike close approval\n    approvers: []\n    timeout: 24h\n    timeoutAction: notify\n"
     },
@@ -61,7 +76,6 @@
       "workflowYaml": "name: Finding Summary\nsteps:\n  - type: agent_run\n    label: Synthesise all spike findings\n    agent: Researcher\n    prompt: \"Synthesise findings from all closed spikes in this project. Identify themes, conflicting results, and open questions that span multiple spikes. Write an executive summary suitable for a decision-maker who hasn't read the individual spikes.\"\n    timeout: 60m\n  - type: approve\n    label: Summary approval\n    approvers: [Reviewer]\n    timeout: 24h\n    timeoutAction: notify\n"
     }
   ],
-
   "skills": [
     {
       "key": "literature-review",
@@ -71,7 +85,6 @@
       "promptAddendum": "## Literature Review Discipline\n\nWhen researching a topic:\n\n1. **Source quality tiers**:\n   - Tier 1: primary sources (papers, specs, official docs, original benchmarks)\n   - Tier 2: secondary analysis (reputable engineering blogs, conference talks)\n   - Tier 3: community content (forum posts, Reddit, StackOverflow) — corroborate with Tier 1/2\n\n2. **Claim tagging**:\n   - ✅ Verified — supported by Tier 1/2 source (cite it)\n   - ⚠️ Probable — reasonable inference but not directly verified\n   - ❓ Assumed — taken as given, should be validated\n   - ❌ Contradicted — evidence points against this\n\n3. **Uncertainty quantification**: Be explicit about confidence. \"We are confident X is true\" vs \"X is plausible but we haven't tested it\".\n\n4. **Do not extrapolate**: A benchmark on dataset A does not generalise to dataset B without evidence.\n"
     }
   ],
-
   "routing": [
     {
       "pattern": "question",
