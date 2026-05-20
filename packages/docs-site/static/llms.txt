@@ -2,6 +2,25 @@
 
 Machine-readable entry point for the Squadboard documentation site.
 
+- [Agents](/squadboard/docs/app-reference/agents) - Team roster, routing configuration, and team portability
+- [Apps](/squadboard/docs/app-reference/apps) - Browse and install Squad Apps to Squadboard
+- [Board](/squadboard/docs/app-reference/board) - Kanban board with real-time collaboration and issue tracking
+- [Ceremonies](/squadboard/docs/app-reference/ceremonies) - Automation workflows, execution history, and audit trails
+- [Consult](/squadboard/docs/app-reference/consult) - Chat workspace for queries, brainstorming, and context exploration
+- [Costs](/squadboard/docs/app-reference/costs) - Month-to-date LLM spend dashboard
+- [Dashboard](/squadboard/docs/app-reference/dashboard) - Project health, metrics, and performance overview
+- [Diagnostics & Heartbeat](/squadboard/docs/app-reference/diagnostics-heartbeat) - System health checks and automation sweeper monitoring
+- [Flow](/squadboard/docs/app-reference/flow) - Agent lineage and issue swimlanes for project-wide visibility
+- [Inbox](/squadboard/docs/app-reference/inbox) - Review and manage captured items awaiting action
+- [App Reference](/squadboard/docs/app-reference/index) - Complete reference guide to every page and feature in the Squadboard UI
+- [Live Run Viewer](/squadboard/docs/app-reference/live-run-viewer) - Monitor real-time agent run execution
+- [MCP Servers](/squadboard/docs/app-reference/mcp-servers) - Configure Model Context Protocol servers for tool integrations
+- [Now](/squadboard/docs/app-reference/now) - Global live dashboard of all active sessions and workflows
+- [Project Picker](/squadboard/docs/app-reference/project-picker) - Create or connect Squad projects to Squadboard
+- [Settings](/squadboard/docs/app-reference/settings) - Project configuration hub with 10 sections
+- [Skills](/squadboard/docs/app-reference/skills) - Manage skills your agents can use
+- [Templates](/squadboard/docs/app-reference/templates) - Reusable ceremony, team, and project templates
+- [Tools](/squadboard/docs/app-reference/tools) - External tool registry for agent integrations
 - [Architecture](/squadboard/docs/developer-guide/architecture) - The main services, data flow, user sequences, and invariants behind Squadboard.
 - [Contributing docs](/squadboard/docs/developer-guide/contributing-docs) - How to edit and validate the Docusaurus docs site.
 - [Developer Guide](/squadboard/docs/developer-guide/index) - Architecture, contribution, and local development notes for Squadboard.
@@ -12,10 +31,10 @@ Machine-readable entry point for the Squadboard documentation site.
 - [Integrations](/squadboard/docs/features/integrations) - GitHub, MCP, SDK, CLI, and bundle integration surfaces.
 - [Feature overview](/squadboard/docs/features/overview) - Map of Squadboard's product capabilities and feature areas.
 - [Reliability and real-time UI](/squadboard/docs/features/reliability-and-ui) - Persistence, backup/restore, migration safety, live updates, and operational visibility.
-- [Current pre-alpha limits](/squadboard/docs/features/roadmap-gaps) - Current pre-alpha constraints and feature areas that remain intentionally future work.
 - [Workflow engine](/squadboard/docs/features/workflow-engine) - Durable workflow execution, recovery, retries, and step orchestration.
 - [Getting Started](/squadboard/docs/getting-started/index) - Install Squadboard, create your first project, and follow tutorials to master the workflow board.
 - [Installation](/squadboard/docs/getting-started/installation) - Install dependencies, start the local app, and build the docs site.
+- [Key Concepts](/squadboard/docs/getting-started/key-concepts) - The 10 terms you need to understand before Squadboard makes sense.
 - [Learning path](/squadboard/docs/getting-started/learning-path) - Choose the docs path that matches your role and goal.
 - [Quickstart](/squadboard/docs/getting-started/quickstart) - Ten minutes from install to your first workflow card that an agent picks up automatically — the same loop the tutorials expand on.
 - [2. Cast and review the team](/squadboard/docs/getting-started/tutorials/cast-the-team) - Give your project a small team with real names, roles, and charters, and use Consult when the right answer is still ambiguous.
@@ -23,7 +42,8 @@ Machine-readable entry point for the Squadboard documentation site.
 - [4. Connect external tools](/squadboard/docs/getting-started/tutorials/connect-tools) - Wire your project to Copilot CLI and upstream Squad via MCP, connect GitHub for the outer loop, and save your project as a reusable template.
 - [Tutorials](/squadboard/docs/getting-started/tutorials/index) - Four sequential tutorials that take your project from setup to running, observed, and connected to your other tools.
 - [3. Run a workflow](/squadboard/docs/getting-started/tutorials/run-the-launch-wave) - Capture work in the inbox, shape it into a card, move it to Ready, watch automatic pickup, inspect the run, and close the loop with a ceremony.
-- [Squadboard documentation](/squadboard/docs/) - Start here for installation, quick links, and a map of the Squadboard docs.
+- [What is Squadboard?](/squadboard/docs/getting-started/what-is-squadboard) - The 90-second explanation of what Squadboard is and how it fits with Squad CLI.
+- [Squadboard documentation](/squadboard/docs/) - Run multi-agent work without the chaos.
 - [FAQ](/squadboard/docs/reference/faq) - Frequently asked questions about Squadboard.
 - [Reference](/squadboard/docs/reference/index) - Focused reference pages for operating and troubleshooting Squadboard.
 - [Troubleshooting](/squadboard/docs/reference/troubleshooting) - Common runtime, coordinator, MCP, and automation issues.
@@ -35,6 +55,9 @@ Machine-readable entry point for the Squadboard documentation site.
 - [Coordinator loops](/squadboard/docs/user-guide/coordinator-loops) - How Squadboard deterministically picks up Ready work, starts runs, advances ceremonies, and keeps ambiguity bounded.
 - [Copilot CLI + Squad coexistence](/squadboard/docs/user-guide/copilot-squad-coexistence) - How Squadboard coexists with Copilot CLI and upstream Squad through deterministic orchestration.
 - [GitHub integration](/squadboard/docs/user-guide/github) - Configure GitHub sync, PR workflows, activity feed, and Ralph monitor signals.
+- [How to add Squadboard to a Squad project](/squadboard/docs/user-guide/how-to/add-squadboard-to-squad-project) - Bring Squadboard into an existing Squad CLI project and keep both tools working together.
+- [How to debug a failed run](/squadboard/docs/user-guide/how-to/find-why-run-failed) - Find out why an agent run failed and what to check first.
+- [How to trigger an agent run](/squadboard/docs/user-guide/how-to/move-card-to-ready) - Move a card to Ready and watch Squadboard pick it up automatically.
 - [Importing](/squadboard/docs/user-guide/importing) - Import templates, bundles, and Squad Apps into Squadboard projects.
 - [MCP integration](/squadboard/docs/user-guide/mcp) - Connect Squadboard to Copilot CLI, VS Code, or HTTP clients through MCP.
 - [Scribe and Ralph](/squadboard/docs/user-guide/scribe-ralph) - Automate Scribe close-out and keep opted-in projects moving with Ralph.

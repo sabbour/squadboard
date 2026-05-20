@@ -2,6 +2,2513 @@
 
 All docs pages concatenated for LLM ingestion.
 
+## Agents
+
+Source: /squadboard/docs/app-reference/agents
+
+# Agents
+
+**Route:** `/projects/:id/agents`
+
+Manage your team of agents. View the roster, configure routing, test routing logic, and manage team portability (export/import/save as template).
+
+## Overview
+
+Agents tab shows your team roster. Routing tab shows routing history, stats, and a test panel.
+
+## Agents Tab
+
+### Team Roster
+Grid view of all agents in your project team:
+- Agent name
+- Role/type
+- Skills (brief)
+- Status (active/inactive)
+- Last activity
+- Agent avatar or icon
+
+### Agent Detail Panel
+Click any agent to open detail view:
+- Full profile: name, description, backstory
+- Skills list (what it can do)
+- Tools it has access to
+- Model preference
+- Performance stats (runs, success rate)
+
+**Actions on agent:**
+- **Edit agent** — Modify name, description, or config
+- **Delete agent** — Remove from team (archived)
+
+### Add Agent to Team
+**Hire Agent button:**
+- Pre-built agent gallery (if available)
+- Agent name and role
+- Skills selection
+- Model preference
+- Custom backstory/system prompt
+
+**Actions:**
+- Search pre-built agents by name or skill
+- Add selected agent to team
+
+### Team Portability
+
+**Export team**
+- Click "Export team" button
+- Downloads team roster as `.json` file
+- Includes all agent configs (name, skills, backstory, etc.)
+- Portable: can import into another project
+
+**Import team**
+- Click "Import team" button
+- Upload previously exported `.json` file
+- Replaces current team roster with imported team
+- **Warning:** Existing team is overwritten; confirm before importing
+
+**Save team as template**
+- Click "Save as template" button
+- Team becomes a reusable template in [Templates](./templates.md)
+- Can apply this template to other projects later
+- Named for easy reference
+
+## Routing Tab
+
+### Casting (Testing)
+**Cast team or agent** — Test how an issue would be routed given a prompt:
+- Enter test prompt or issue title
+- Choose cast mode: full team routing vs. specific agent
+- See which agent(s) would handle this work
+
+**Dev-only test panel:**
+- Detailed routing diagnostics (debugging info, classifier scores)
+- Only visible in development mode; not in production
+
+### Routing Stats
+Aggregated routing metrics:
+- Total issues routed
+- Success rate by agent
+- Average routing latency
+- Routing tier breakdown
+
+Shows confidence distribution: high/medium/low confidence routing decisions.
+
+### Routing Log
+Chronological log of all routing decisions. Shows per decision:
+- Issue ID and title
+- Selected agent
+- Confidence score
+- Reasoning/context
+- Timestamp
+
+**Actions:**
+- Filter by agent or result
+- Click to see full routing context
+- Retry/re-evaluate specific routes (dev-only)
+
+### Refresh Keywords
+Update agent skill keywords and descriptions. Used by router to match issues to agents.
+
+**Actions:**
+- Click "Refresh keywords" to recompute routing model
+- Takes a few seconds; routing log updates afterward
+
+## Actions
+
+### Agent Management
+
+**Edit agent**
+- Click agent card
+- Modify name, description, backstory, skills, model
+- Save changes
+
+**Delete agent**
+- Click delete icon on agent card
+- Agent is archived (soft deleted); can be restored
+
+**Add agent**
+- Click "Hire Agent" button
+- Search and select from available agents
+- Add to team
+
+### Team Portability
+
+**Export**
+- Click "Export team" button to download `.json`
+
+**Import**
+- Click "Import team" button to upload `.json`
+- Replaces current team (confirm before proceeding)
+
+**Save template**
+- Click "Save team as template" button
+- Team becomes reusable template
+
+### Routing Testing
+
+**Cast team**
+- Enter prompt in test panel
+- Click "Cast team" to see routing decision
+- Shows selected agent and confidence
+
+**Cast agent**
+- Select specific agent from dropdown
+- Click "Cast agent" to test single-agent routing
+- Shows if agent would accept this work
+
+**Refresh keywords**
+- Click "Refresh keywords" button
+- Recomputes router skill-matching model
+
+## Related
+
+- [Skills](./skills.md) — Define skills agents can use
+- [Tools](./tools.md) — External tools agents can invoke
+- [Board](./board.md) — See agents in action routing cards
+- [Ceremonies](./ceremonies.md) — Configure workflow-specific routing
+- [Flow](./flow.md) — Visualize agent lineage and dependencies
+
+## Apps
+
+Source: /squadboard/docs/app-reference/apps
+
+# Apps
+
+**Route:** `/apps`
+
+Browse and install pre-built Squad Apps (complete project bundles) into your Squadboard instance. Apps are pre-configured projects you can fork and customize.
+
+## Overview
+
+Apps let you jump-start projects without starting from scratch. Each app is a template that includes:
+- Pre-configured agents and team
+- Pre-built ceremonies/workflows
+- Starter tools and MCP integrations
+- Optional sample data
+
+Apps can be installed from GitHub repositories or from local app folders.
+
+## GitHub Installer
+
+**Install from GitHub repository:**
+- Enter repository owner and name (e.g., `my-org/my-squad-app`)
+- Choose git ref (branch, tag, or commit SHA)
+- Specify the app folder path within the repo (if nested)
+- Choose a local project name
+- Choose where to clone it on your filesystem
+- Click "Install"
+
+Squadboard clones the repo, initializes the `.squad/` folder, and registers it as a project.
+
+## Available Local Apps
+
+Browse apps you've already cloned locally or are available as local directories. Each app card shows:
+- App name
+- Description
+- Preview of included agents and ceremonies
+
+**Actions:**
+- Click an app card to open the Install Dialog
+- Review what the app includes before confirming
+
+## Install Dialog
+
+**Configure before install:**
+- **Project name** — What this project will be called in Squadboard
+- **Absolute project folder path** — Where to store/clone the project files
+- Confirmation of what will be installed
+
+**Actions:**
+- **Install** — Create the project and add it to your project list
+- **Cancel** — Discard and return to app browser
+
+## Warnings
+
+**Trusted sources only** — Only install apps from sources you trust. Installed apps have full access to your Squadboard instance and can execute arbitrary code via agents and MCP integrations.
+
+**Sync ownership note** — If installing into an existing `.squad/` folder that's already connected to Squadboard, the app overwrites existing metadata. Review before proceeding.
+
+## Related
+
+- [Project Picker](./project-picker.md) — Manage projects after installation
+- [Templates](./templates.md) — Create and manage your own app templates
+- [Agents](./agents.md) — View and customize agents in installed apps
+
+## Board
+
+Source: /squadboard/docs/app-reference/board
+
+# Board
+
+**Route:** `/projects/:id/board`
+
+The central workspace. Kanban board with real-time collaboration, card detail drawer, bulk actions, and live Conjure integration. Move cards through 5 columns to trigger agents and automate work.
+
+## Overview
+
+Board is a visual workflow engine. Each card represents an issue or work item. Move cards between columns to trigger agents, run automation, and collaborate with your team in real time.
+
+Five columns represent issue lifecycle:
+1. **Backlog** — Not yet ready for work
+2. **Ready** — Prioritized and ready; moving here triggers agents
+3. **In Progress** — Actively being processed
+4. **In Review** — Complete; awaiting review or approval
+5. **Done** — Closed
+
+## Board Layout
+
+### Filter Bar
+At the top, search and filter options:
+- **Search box** — Find cards by title or description
+- **Label filter** — Show only cards with specific labels
+- **Column customization** — Show/hide columns, rename, set WIP limits
+
+### Kanban Columns
+Five columns with card count and WIP indicator. Drag cards between columns to move them.
+
+Each card shows:
+- Title
+- Assigned agent(s) or owner
+- Labels
+- Priority badge (if set)
+- Run status (if currently executing)
+- Updated time
+
+### Card Detail Drawer
+Click any card to open the right-side detail panel. Closes on Escape or backdrop click.
+
+#### Overview Tab
+Full card context:
+- Title and description
+- Assigned column
+- Labels and metadata
+- Created/updated times
+- Related cards or dependencies
+- Attached files or context
+
+**Actions:**
+- Edit title/description
+- Change labels
+- Update priority
+- Add comments
+
+#### Runs Tab
+Execution history for this card. Shows all agent runs triggered by moving to Ready.
+
+Shows per run:
+- Agent name
+- Start time and duration
+- Status (running, completed, failed)
+- Token usage and cost
+- Output summary
+
+**Actions:**
+- Click a run to open [Live Run Viewer](./live-run-viewer.md)
+- Retry failed run
+- View full logs
+
+#### Outputs Tab
+Artifacts generated by this card's runs. Shows files, structured output, and any deliverables.
+
+**Organization:**
+- Grouped by run
+- Grouped by artifact type
+
+**Actions:**
+- Download artifacts
+- Copy output to clipboard
+- Open artifact in new context
+
+#### Flow Tab
+How this card flows through your workflow. Shows:
+- Agents involved (lineage)
+- Dependencies and blocked cards
+- Related ceremonies or rules
+
+Visual representation of downstream impact.
+
+## Bulk Actions
+
+Select multiple cards using checkboxes:
+
+**Selected card bar** appears with:
+- Count of selected cards
+- **Move to column** — Batch move all selected cards
+- **Archive** — Remove multiple cards at once
+- **Clear selection** — Deselect all
+
+## Real-Time Collaboration
+
+**Presence indicators** show team members currently viewing the board. Active presence cursors indicate who's selecting cards or reading detail.
+
+**Live conflict handling** — If someone else moves a card while you're reading its detail, a toast notifies you and updates the view.
+
+**Realtime updates** — All changes sync across connected clients instantly via WebSocket.
+
+## Conjure Integration
+
+**Floating FAB** (bottom-right) opens Conjure directly from the board. Use to:
+- Ask questions about cards
+- Get suggestions on next steps
+- Brainstorm approaches
+- Open a card-in-context conversation
+
+Conjure pre-loads the current board state and selected card (if any).
+
+## Actions
+
+**Move card**
+- Drag card between columns, or
+- Click card, open detail drawer, change column dropdown
+
+**Create issue**
+- Click "+" in column header or "New card" button
+- Enter issue title and optional description
+- Card appears in Backlog by default
+
+**Customize columns**
+- Click column settings icon
+- Rename columns
+- Set WIP limits
+- Hide/show columns
+- Reorder columns
+
+**Search and filter**
+- Type in search box to find cards
+- Click label badges to filter by label
+- Search updates instantly
+
+**Bulk select**
+- Check checkbox on card to select
+- Check column header checkbox to select all in column
+- Check board header checkbox to select all visible
+
+**Open card detail**
+- Click card to open drawer
+- Switch between tabs: Overview / Runs / Outputs / Flow
+
+**Archive cards**
+- Select one or more cards
+- Click Archive in bulk action bar
+- Cards move to archive (soft delete)
+
+## Configuration
+
+**Deep linking:**
+- Open board to a specific card: `?openIssue=CARD_ID`
+- Open specific tab in detail drawer: `?openIssue=CARD_ID&tab=OVERVIEW|RUNS|OUTPUTS|FLOW`
+
+**Display preferences:**
+- Column order persisted in user preferences
+- WIP limits stored per project
+- Filter and search not persisted (reset on reload)
+
+## Related
+
+- [Card Detail Drawer](#card-detail-drawer) — View and edit issue details (4 tabs)
+- [Live Run Viewer](./live-run-viewer.md) — Monitor running agent executions
+- [Flow](./flow.md) — See agent lineage and issue swimlanes
+- [Consult](./consult.md) — Chat about cards and get suggestions
+- [Agents](./agents.md) — View and customize agent routing
+
+## Ceremonies
+
+Source: /squadboard/docs/app-reference/ceremonies
+
+# Ceremonies
+
+**Route:** `/projects/:id/ceremonies` (and related sub-routes)
+
+Automation workflows for your project. Create, run, review, and audit ceremonies (workflow definitions and executions).
+
+## Overview
+
+Ceremonies are how you automate multi-agent work. A ceremony is a sequence of steps (agent runs, tool invocations, reviews) triggered by events or schedules.
+
+Ceremonies include:
+- **Workflow definitions** — The steps and routing (create/edit)
+- **Executions/runs** — History of workflow runs with logs
+- **Reviews** — Approve draft ceremonies before publishing
+- **Audit** — Diagnostics and orphan detection
+
+Related note: The `/projects/:id/workflows` route is deprecated; use ceremonies instead.
+
+## Ceremony List
+
+**Route:** `/projects/:id/ceremonies`
+
+Central list of all ceremonies in the project.
+
+### List View
+
+DataGrid showing all ceremonies:
+- Ceremony name
+- Trigger type (manual, schedule, GitHub webhook, etc.)
+- Kind (automation, review, etc.)
+- Origin (built-in, YAML, Conjure, user-created)
+- Status (active, draft, archived)
+- Last modified date
+- Run count
+
+### Badges
+Each ceremony shows:
+- **Trigger badge** — What triggers it (Manual, Cron, Webhook, etc.)
+- **Kind badge** — Type of ceremony
+- **Scope badge** — System or project scope
+- **Origin badge** — Where it came from
+
+### Actions
+
+**Create ceremony**
+- Click "New ceremony" button
+- Opens [CeremonyEditor](#ceremony-editor) for creating from scratch
+
+**Review drafts**
+- Click "Review drafts" CTA at top (if drafts pending)
+- Opens [CeremoniesReview](#ceremonies-review)
+
+**View audit trail**
+- Click "Audit" link to open [CeremonyAudit](#ceremony-audit)
+
+**Open ceremony**
+- Click ceremony row to open editor
+- Edit ceremony definition and save changes
+
+**View runs**
+- Click "Runs" link on ceremony row to open [CeremonyRuns](#ceremony-runs)
+
+## Ceremony Editor
+
+**Route:** `/projects/:id/ceremonies/new` or `/projects/:id/ceremonies/:id`
+
+Create or edit ceremony workflow definitions.
+
+### Create Mode Hero
+
+When creating new:
+- Prominent "Describe your ceremony" input
+- Paste a narrative workflow description (plain English)
+- AI formulates the ceremony definition (optional)
+- Or switch to manual form to build step-by-step
+
+### Ceremony Configuration
+
+**Basic details:**
+- **Name** — Ceremony title
+- **Description** — What it does
+- **Ceremony type** — Automation, review, etc.
+
+**Trigger configuration:**
+- **Trigger kind** — When it runs (manual, schedule, webhook, event-based)
+- **Trigger config** — Specific trigger details (cron expression, webhook path, etc.)
+
+Cron preview shows human-readable schedule (e.g., "Every Monday at 9 AM").
+
+### Ceremony Steps
+
+Visual or code editor for defining workflow steps:
+
+**Step types:**
+- **Agent run** — Invoke an agent with a prompt
+- **Tool run** — Call a specific tool
+- **Approval** — Require human review
+- **Conditional** — Branch based on output
+
+**Per step:**
+- Order/sequence
+- Input (prompt, params)
+- Output variable name (for use in later steps)
+- Error handling (retry, skip, fail)
+
+### Editor Tabs
+
+**Code tab** — YAML representation of the ceremony definition. Edit directly if you prefer.
+
+**Visual tab** — Drag-and-drop builder for ceremony steps. Easier for complex workflows.
+
+Both tabs sync; edit in either one.
+
+### Save & Template
+
+**Save ceremony**
+- Click "Save" to commit ceremony definition
+- Drafts are saved but not yet active
+
+**Save as template**
+- Click "Save as template" to make this ceremony reusable
+- Appears in [Templates](./templates.md) for applying to other projects
+
+**Validate ceremony**
+- Click "Validate" to check syntax and logic
+- Shows errors/warnings before running
+
+**Export YAML**
+- Click "Export YAML" to download ceremony definition as `.yaml` file
+- Portable; can commit to version control or share
+
+**Run now**
+- Click "Run now" button to execute ceremony immediately
+- Useful for testing before scheduling
+
+## Ceremony Runs
+
+**Route:** `/projects/:id/ceremonies/:id/runs`
+
+Execution history and logs for a specific ceremony.
+
+### Run List
+
+Table showing all executions of this ceremony:
+- Run ID
+- Start time and duration
+- Trigger source (who/what triggered it)
+- Status (running, completed, failed)
+- Output summary (if available)
+
+### Run Detail
+
+Click any run row to expand and see:
+- Full run timeline
+- Step-by-step execution logs
+- Errors or warnings
+- Output artifacts
+
+**Actions per run:**
+- **Back to ceremony** — Return to ceremony editor
+- **Refresh** — Reload run status (useful while running)
+- **Open live log** — If run is currently executing, watch live in [Live Run Viewer](./live-run-viewer.md)
+- **View ceremony** — Return to [CeremonyList](#ceremony-list)
+
+### Step Logs
+
+Each step in the ceremony run has a log entry showing:
+- Step name
+- Duration
+- Status (ok, warning, error)
+- Input (what was passed in)
+- Output (what it produced)
+- Linked agent event logs (if applicable)
+
+## Ceremonies Review
+
+**Route:** `/projects/:id/ceremonies/review`
+
+Review queue for translated ceremony drafts before publishing.
+
+### Draft List (Left Sidebar)
+
+Ceremonies pending review, sorted by newest first:
+- Ceremony name
+- Translation status (translated, pending, error)
+- Creator name
+- Created timestamp
+
+Click any draft to review it.
+
+### Review Pane (Right)
+
+Side-by-side comparison of:
+- **Left:** Original narrative (English description) or prose input
+- **Right:** Generated YAML ceremony definition
+
+### Actions
+
+**Activate draft**
+- Click "Activate" to publish the ceremony
+- Ceremony becomes active and can be triggered
+
+**Edit ceremony**
+- Click "Edit" to open ceremony in [CeremonyEditor](#ceremony-editor)
+- Make adjustments, then save
+
+**Discard draft**
+- Click "Discard" to reject this draft
+- Draft is archived; you can create a new translation
+
+**Retry translate**
+- If translation error occurred, click "Retry" to re-generate YAML from narrative
+- Useful if AI translation was incomplete
+
+## Ceremony Audit
+
+**Route:** `/projects/:id/ceremonies/audit`
+
+Diagnostics and observability for ceremonies. See orphaned workflow runs, dead ceremony references, and origin analysis.
+
+### Summary Stats
+
+Overview cards showing:
+- Total ceremonies
+- Total runs
+- Success rate
+- Average duration
+
+### Breakdown Tables
+
+**By origin:**
+- Built-in ceremonies
+- YAML-defined ceremonies
+- Conjure-generated ceremonies
+- User-created ceremonies
+- Count and success rate per origin
+
+**By trigger:**
+- Manual triggers
+- Scheduled (cron) triggers
+- Webhook triggers
+- Event-based triggers
+- Count per trigger type
+
+**By status:**
+- Active ceremonies
+- Draft ceremonies
+- Archived ceremonies
+
+### Orphan Detection
+
+**Orphaned runs** — Runs from ceremonies that no longer exist. Listed with:
+- Run ID
+- Original ceremony name
+- Run time and result
+- Option to archive
+
+**Dead references** — Ceremonies referencing agents/tools that no longer exist. Listed with:
+- Ceremony name
+- Missing resource
+- Impact (runs will fail if triggered)
+
+### Filters
+
+Optional UI filters:
+- **Origin filter** — Show all, built-in only, YAML, Conjure, user
+- **Status filter** — Active, draft, archived
+- **Date range** — Narrow to recent ceremonies
+
+### Actions
+
+**Back to ceremonies**
+- Return to [CeremonyList](#ceremony-list)
+
+**Retry load**
+- Reload diagnostics (if data seems stale)
+
+**Fix orphan**
+- Click an orphaned run to archive it
+- Helps clean up stale run records
+
+## Templates (Ceremonies Tab)
+
+**Route:** `/projects/:id/ceremonies/templates`
+
+Also see [Templates](./templates.md) page for full documentation.
+
+Under Ceremonies tab, you can:
+- Browse pre-built ceremony templates
+- Apply a template to create a ceremony in this project
+- Save current ceremonies as templates for reuse
+
+## Related
+
+- [Board](./board.md) — See issues that ceremonies route/process
+- [Agents](./agents.md) — Configure agents that ceremonies invoke
+- [Tools](./tools.md) — Tools that ceremonies can call
+- [Templates](./templates.md) — Save and reuse ceremony definitions
+- [Flow](./flow.md) — Visualize ceremony execution (swimlane view)
+
+## Consult
+
+Source: /squadboard/docs/app-reference/consult
+
+# Consult
+
+**Routes:** `/consult/new`, `/consult/:sessionId` (global) or `/projects/:id/consult/new`, `/projects/:id/consult/:sessionId` (project-scoped)
+
+Open-ended conversation workspace. Chat with agents or models to explore context, brainstorm, refine problems, or answer questions—without creating a formal workflow or card on the board.
+
+## Overview
+
+Consult is where you think out loud. Start a new conversation, chat with an agent or model, and the full conversation history is saved. You can pick up where you left off anytime.
+
+Each session has a project scope (global or specific project), agent/model selection, and full message history with streaming output.
+
+## New Session
+
+**Create a new conversation:**
+- Click "New Conversation"
+- Optionally start with prefilled context:
+  - From an issue on the board (`?prefill=issue:ISSUE_ID`)
+  - From a ceremony/workflow (`?prefill=ceremony:CEREMONY_ID`)
+  - From raw text (`?prefill=text:YOUR TEXT`)
+- Optional session name (defaults to first message preview)
+
+**Choose execution mode:**
+- **Agent mode** — Delegate to a project agent; picks an available model
+- **Model mode** — Direct chat with a model; choose model from dropdown
+
+**Agent routing:**
+If in agent mode, optional agent dropdown narrows to that agent only. Otherwise, Squadboard routes to best-fit agent based on query.
+
+**Optional overrides:**
+- Override model selection (pick a different model than agent default)
+- Set explicit system prompt context
+
+## Session View
+
+### Messages
+Chat interface with alternating user/assistant bubbles. Streaming responses show live as they're generated.
+
+User messages show send time. Assistant messages show model name, token count, and cost.
+
+### Context Panel
+Right sidebar (optional) shows current execution context:
+- Selected agent
+- Selected model
+- Project scope
+- Token budget remaining
+
+### Actions
+
+**Send message**
+- Type query in message input
+- Press Enter or click Send
+- Streaming response appears immediately
+
+**Retry**
+- If a message fails, click Retry on that message to resend
+
+**Edit message**
+- Click edit icon on your message to revise and resend
+
+**End session**
+- Click "End conversation" to mark session as complete
+- Session is archived; you can still read history
+
+**Rename session**
+- Click on session name to rename (for easier reference)
+
+**Delete session**
+- Click delete icon to remove session permanently
+
+## Session List (Left Sidebar)
+
+Previous sessions are listed on the left. Click any session to resume where you left off.
+
+Sessions are organized by:
+- Most recent first
+- Grouped by project (global vs. specific project)
+
+## Proposal Workflow
+
+Agents can suggest concrete actions (e.g., "Move this card to Ready"). When a proposal appears in chat:
+
+**Actions:**
+- **Accept proposal** — Execute the suggested action
+- **Discard proposal** — Decline and continue chatting
+
+Accepted proposals trigger the action (e.g., card moves, workflow runs).
+
+## Scoping
+
+**Global Consult** (Route: `/consult/new`)
+- Not tied to any project
+- Access all global agents or any available model
+- Useful for cross-project exploration or general queries
+
+**Project Consult** (Route: `/projects/:id/consult/new`)
+- Tied to specific project
+- Access project agents and project-scoped context
+- Prefilled with project context when appropriate
+
+## Related
+
+- [Board](./board.md) — Formal work and card management
+- [Agents](./agents.md) — View available agents and routing
+- [Inbox](./inbox.md) — Capture items from Consult conversations
+
+## Costs
+
+Source: /squadboard/docs/app-reference/costs
+
+# Costs
+
+**Route:** `/projects/:id/costs`
+
+Track your LLM spending for this project. Month-to-date aggregation of all costs from agent runs.
+
+## Overview
+
+Costs shows a consolidated view of what you're spending on LLM inference via agents. Each card or metric represents cost for a time period, agent, or run.
+
+## Dashboard
+
+**Cost breakdown by:**
+- **Total MTD** — Month-to-date spend across all runs
+- **By agent** — Which agents cost the most
+- **By run type** — Issues vs. workflows vs. ceremonies
+- **Trending** — Daily or weekly spend trend
+
+**Metrics per run:**
+- Input tokens
+- Output tokens
+- Model used
+- Cost in USD (configurable currency per project)
+- Effective rate ($/1k tokens)
+
+## Sections
+
+The dashboard aggregates cost data from the Run history and Ceremony execution logs. Each section is read-only; costs can't be edited directly.
+
+### Summary Card
+Large prominent number: total MTD spend.
+
+### By Agent
+Bar chart or table showing top-spending agents. Click any agent to see detailed runs.
+
+### By Time
+Line chart showing cumulative cost through the month. See if spending is accelerating or steady.
+
+### By Run Type
+Breakdown: What portion of budget went to issue runs vs. workflow runs vs. interactive sessions?
+
+## Actions
+
+**View run detail**
+- Click any cost breakdown item
+- Opens [Live Run Viewer](./live-run-viewer.md) for detailed token/cost analysis
+
+**Export cost report**
+- Click "Export" button (if available)
+- Downloads CSV of all runs this month with costs
+
+**Set budget limit**
+- Navigate to [Settings](./settings.md) → Budget section
+- Set spending cap per month
+
+**Adjust currency**
+- Navigate to [Settings](./settings.md) → General section
+- Change currency display (USD default)
+
+## Configuration
+
+Costs are read-only on this page. To configure:
+
+**Budget limits** — Set in [Settings](./settings.md) under "Budget"
+
+**Currency display** — Set in [Settings](./settings.md) under "General"
+
+**Model pricing** — Configured per agent in [Agents](./agents.md) based on model selection
+
+## Related
+
+- [Dashboard](./dashboard.md) — Project overview including cost summary
+- [Agents](./agents.md) — View per-agent cost and model selection
+- [Live Run Viewer](./live-run-viewer.md) — See token counts and cost for specific runs
+- [Settings](./settings.md) — Configure budget limits and currency
+
+## Dashboard
+
+Source: /squadboard/docs/app-reference/dashboard
+
+# Dashboard
+
+**Route:** `/projects/:id/dashboard`
+
+Project health snapshot at a glance. Throughput, agent performance, workflow execution stats, and cost tracking—see how your team and automation are performing.
+
+## Overview
+
+Dashboard gives you a bird's-eye view of one project. Unlike the Board (which is task-focused), Dashboard is metric-focused. It answers questions like:
+- How many cards did we move this week?
+- Which agents are most active?
+- Are workflows executing reliably?
+- How much are we spending?
+
+## Sections
+
+### Now View
+Current activity: sessions in progress, active runs, active workflows. Jump to any of these from here.
+
+Link to full [Now](./now.md) dashboard for your entire workspace.
+
+### Overview
+Project summary:
+- Project name
+- Storage provider and sync status
+- Squad integration status
+- Created date
+
+### Throughput (30 Days)
+Graph showing cards moved to Done each day over the last month. Highlights trends and productivity patterns.
+
+### Agent Leaderboard
+Top performing agents by:
+- Runs completed
+- Success rate
+- Average execution time
+
+Click any agent to view detailed agent profile or routing statistics.
+
+### Workflow Health
+Ceremony/workflow execution stats:
+- Total runs
+- Success rate
+- Average duration
+- Last execution time
+
+Grouped by workflow type.
+
+## Actions
+
+**Jump to Board**
+- Click "Go to Board" button to open the kanban board
+
+**View Project Flow**
+- Click "View Flow" to see agent lineage and swimlane view
+
+**Navigate to Costs**
+- Click cost summary to view full cost breakdown
+
+**Update Squad Sync status**
+- Click status badge to refresh or manage Squad integration
+- Status shows: Ready, Manual bridge, Needs repair
+
+## Configuration
+
+No user-editable options on Dashboard. Metrics are read-only, sourced from:
+- Issue event stream
+- Agent execution logs
+- Ceremony run history
+- Cost aggregation
+
+Budget and alerts are configured in [Settings](./settings.md).
+
+## Related
+
+- [Board](./board.md) — Active work and card management
+- [Flow](./flow.md) — Agent lineage and swimlanes
+- [Costs](./costs.md) — Detailed cost breakdown
+- [Agents](./agents.md) — Agent details and routing stats
+- [Ceremonies](./ceremonies.md) — Workflow execution history
+
+## Diagnostics & Heartbeat
+
+Source: /squadboard/docs/app-reference/diagnostics-heartbeat
+
+# Diagnostics & Heartbeat
+
+**Routes:** 
+- `/diagnostics` (global) and `/projects/:id/diagnostics` (project-scoped)
+- `/heartbeat` (global) and `/projects/:id/heartbeat` (project-scoped)
+
+Two pages for monitoring system health and automation.
+
+## Diagnostics
+
+Health check dashboard. See system status at a glance and diagnose issues.
+
+**Routes:** `/diagnostics` (global) or `/projects/:id/diagnostics` (project-scoped)
+
+### Overview
+
+Diagnostics runs a suite of health checks and reports results. Each check has a status badge:
+- **✅ OK** — System is functioning normally
+- **⚠️ WARN** — Non-critical issue; system still works but degraded
+- **❌ ERROR** — Critical issue; feature may not work
+
+### Scope Tabs
+
+If viewing project-scoped diagnostics, tabs allow switching scope:
+- **This project** — Checks specific to this project
+- **Global · all projects** — System-wide checks affecting all projects
+
+Select a tab to narrow the view.
+
+### Check Categories
+
+Common health checks include:
+
+**Project checks:**
+- Board state consistency
+- Run history integrity
+- Ceremony definition validation
+- Agent routing model status
+- Squad Sync status
+- MCP server connectivity
+
+**System checks:**
+- Database connectivity
+- Storage provider status
+- LLM model availability
+- WebSocket gateway health
+- Cache health
+- Backup status
+
+Each check shows:
+- Check name
+- Current status (OK, WARN, ERROR)
+- Last run timestamp
+- Error message (if failed)
+- Remediation hint (e.g., "Restart service" or "Check connectivity")
+
+### Actions
+
+**Re-run all checks:**
+- Click "Re-run all" button
+- Manually trigger diagnostics (useful if you think issue is fixed)
+- Auto-refresh occurs every 30 seconds by default
+
+**Expand check detail:**
+- Click any check card for more information
+- Shows:
+  - When it last ran
+  - Full error text (if any)
+  - Suggested fixes
+
+## Heartbeat
+
+Monitor automation sweepers and scheduling.
+
+**Routes:** `/heartbeat` (global) or `/projects/:id/heartbeat` (project-scoped)
+
+Heartbeat tracks "sweepers" — automated tasks that run on a schedule to keep your workspace healthy.
+
+### Overview Sections
+
+**Scheduler state:**
+- Global scheduler active/idle status
+- Sweeps enabled or paused
+- Active sweeper count
+
+**Sweep definitions:**
+Each sweep shows:
+- **ID** — Internal identifier
+- **Label** — Human-readable name (e.g., "Clean up orphaned runs")
+- **Description** — What the sweep does
+- **Scope** — System-wide or project-specific
+- **Interval** — How often it runs (milliseconds; e.g., 3600000 = 1 hour)
+- **Enabled** — Toggle to enable/disable
+
+**Sweep activity:**
+Recent sweeps and their results. Shows per sweep:
+- Start time and duration
+- Result: Success, warning, or error
+- Output or error message
+
+**Last error:**
+Most recent error (if any sweep has failed). Shows:
+- Error message
+- Time occurred
+- Stack trace or diagnostic info
+
+**Sweep Activity Timeline** (Wave 10 B3)
+Time-series graph showing sweep executions over time. See:
+- When sweeps run
+- How long they take
+- Error rate over time
+
+### Scope
+
+**Global Heartbeat** (Route: `/heartbeat`)
+- System-wide sweepers affecting all projects
+- Example: "Compact old run logs" or "Prune deleted projects"
+
+**Project Heartbeat** (Route: `/projects/:id/heartbeat`)
+- Project-specific sweepers
+- Example: "Archive stale cards" or "Refresh agent keywords"
+
+Each project can have its own sweeper schedule.
+
+### Configuration
+
+On Heartbeat page, most options are read-only (observation only). To configure sweepers:
+- Go to [Settings](./settings.md) (if project-specific)
+- Or system configuration files (if system-wide)
+
+What you can typically control:
+- **Enabled toggle** — Turn individual sweeps on/off
+- **Interval** — Adjust run frequency (if editable)
+- **Scope** — System vs. project (if configurable)
+
+### Polling & Updates
+
+Heartbeat updates in real-time:
+- Scheduler status polled every 5 seconds
+- Sweep events streamed every 2 seconds
+- WebSocket pushes updates as they occur
+
+Manual refresh available if you think data is stale.
+
+### Troubleshooting
+
+If a sweep is failing repeatedly:
+1. Open Heartbeat to see last error
+2. Check [Diagnostics](#diagnostics) for related system health issues
+3. If issue persists, check logs (if available)
+4. Disable sweep temporarily and re-enable after fix
+
+## Common Issues
+
+### Diagnostics
+
+**"Check failed to run"** — Usually temporary; click "Re-run all" to retry. If persists, check system logs.
+
+**"Status changed to WARN"** — Feature still works but degraded. Check remediation hint for guidance.
+
+**"Status changed to ERROR"** — Feature may not work. Follow remediation steps or escalate to admin.
+
+### Heartbeat
+
+**"Sweep not running"** — Check if sweep is enabled. If enabled, check Diagnostics for system issues.
+
+**"Sweep running very slowly"** — May indicate resource contention. Check other active sweeps or increase interval.
+
+**"Last error occurred X hours ago"** — Stale error; sweep likely recovered. Monitor to confirm all is well.
+
+## Related
+
+- [Settings](./settings.md) — Configure system health checks and sweep parameters
+- [Dashboard](./dashboard.md) — Project health overview
+- [Now](./now.md) — Real-time activity dashboard (includes sweep timeline)
+
+## Flow
+
+Source: /squadboard/docs/app-reference/flow
+
+# Flow
+
+**Route:** `/projects/:id/flow`
+
+Project-wide flow visualization. See agent lineage, how issues move through your workflow, and end-to-end orchestration in one view.
+
+## Overview
+
+Flow provides two complementary views of your project:
+
+1. **Agents tab** — Agent dependency graph. Shows how agents invoke each other.
+2. **Issues tab** — Swimlane view. Shows how issues flow through the agent network.
+
+Switch tabs to get different perspectives on the same project.
+
+## Agents Tab
+
+Directed graph showing agent relationships. Nodes are agents; edges show who calls whom.
+
+**Layout:**
+- Visual node for each agent in your project team
+- Color-coded by agent role or type
+- Edge thickness indicates call frequency or criticality
+- Zoom and pan to explore large graphs
+
+**Node details** (on hover):
+- Agent name
+- Success rate
+- Average execution time
+- Recent run count
+
+**Actions:**
+- Click node to view agent detail (name, skills, configuration)
+- Hover to highlight incoming/outgoing edges
+- Use browser zoom or scroll-wheel to zoom in/out
+
+## Issues Tab
+
+Swimlane view showing how cards move through your workflow. Each swimlane represents an agent or column.
+
+**Layout:**
+- Horizontal swimlanes for each agent
+- Vertical swimlanes for each column
+- Cards displayed as boxes positioned by (agent, column, time)
+- Card thickness/color indicates duration or status
+
+**Card details** (on click):
+- Issue title
+- Agent assignment
+- Duration in stage
+- Run status
+- Link to board
+
+**Actions:**
+- Click any card to open [Live Run Viewer](./live-run-viewer.md) or navigate to Board
+- Filter by column or agent using left sidebar
+- Scroll to explore time range
+- Click project name chip to jump to project dashboard
+
+## Switching Tabs
+
+**Agents** — Default tab on first load. Shows agent dependency lineage.
+
+**Issues** — Click Issues tab to switch to swimlane view. Useful when exploring how specific cards moved through your workflow.
+
+Note: Issues tab is preserved for backwards compatibility; most users primarily use Agents.
+
+## Related
+
+- [Board](./board.md) — Manage cards and see per-card detail
+- [Agents](./agents.md) — View agent roster and routing configuration
+- [Costs](./costs.md) — See execution costs per agent or per run
+- [Ceremonies](./ceremonies.md) — Set up workflows that define agent routing
+
+## Inbox
+
+Source: /squadboard/docs/app-reference/inbox
+
+# Inbox
+
+**Routes:** `/inbox` (global) or `/projects/:id/inbox` (project-scoped)
+
+Review all items captured for action. Items flow through statuses: Captured → Formulated → Published → Discarded. Use Inbox to batch-review and route work.
+
+## Overview
+
+Inbox collects items waiting for action. Unlike the Board (which is push-driven from the Ready column), Inbox is pull-driven—you review captured items and decide where they belong.
+
+Items are grouped by status so you can see what's at each stage of the workflow.
+
+## Status Sections
+
+### Captured
+Items that have been captured but not yet formulated (prepared for the board). Shows only basic context.
+
+**Metadata shown:**
+- Item title
+- Suggested project (if available)
+- Suggested column (if available)
+- Confidence score (for AI-suggested routing)
+- Time captured
+
+### Formulated
+Items that have been prepared (context extracted, ready to move to the board). Shows more detail than Captured.
+
+### Published
+Items that have been moved to the board. Informational; you can view them here, but active work happens on the Board.
+
+### Discarded
+Items that have been explicitly discarded. Kept for audit trail.
+
+## Actions
+
+**Open in Conjure**
+- Click the "Open in Conjure" button on any item
+- Opens the Consult chat interface with the item's context pre-loaded
+- Use this to brainstorm, refine, or discuss the item before moving it to the board
+
+**View published item**
+- Click "View on board" for published items
+- Navigates to the Board with that card open in the detail drawer
+
+**Discard item**
+- Click the discard icon on any Captured or Formulated item
+- Moves it to the Discarded section
+- Non-destructive; you can review discarded items later
+
+**Back to Projects**
+- Click the breadcrumb or back button to return to Project Picker
+
+## Scoping
+
+**Global Inbox** (Route: `/inbox`)
+- Shows items captured across all projects
+- Useful for batch review across the organization
+
+**Project Inbox** (Route: `/projects/:id/inbox`)
+- Shows items captured within this specific project only
+- Narrower scope for focused review within one project context
+
+## Related
+
+- [Consult](./consult.md) — Chat interface for item context and brainstorming
+- [Board](./board.md) — View published items and active work
+- [Ceremonies](./ceremonies.md) — Automate capture and formulation with workflows
+
+## App Reference
+
+Source: /squadboard/docs/app-reference/index
+
+# App Reference
+
+Every page in Squadboard, every tab, every action. This section covers the entire user interface so you can find what you're looking for.
+
+## Navigation Model
+
+Squadboard has two main layers:
+
+**Global pages** (top-left navigation)
+- **Project Picker** — Your entry point. Create projects, connect to existing `.squad/` folders, or browse templates.
+- **Now** — Global live dashboard. All active sessions, runs, and workflows across every project you have.
+- **Inbox** — Review all captured items waiting for action, regardless of project.
+- **Apps** — Browse and install Squadboard Apps (pre-built Squad workspaces).
+- **Consult** — Workspace for conversations at the global level.
+- **Diagnostics** — System health checks.
+- **Heartbeat** — View automation sweepers and scheduling across all projects.
+
+**Per-project pages** (accessed from a project board)
+- **Dashboard** — Project health snapshot. Throughput, agent stats, workflow performance.
+- **Board** — Kanban board with 5 columns (Backlog → Ready → In Progress → In Review → Done). Real-time collaboration.
+- **Flow** — Project-wide agent lineage and issue swimlanes.
+- **Inbox** — Project-scoped items awaiting action.
+- **Agents** — Team roster, routing log, team portability.
+- **Skills** — Project skill registry. Browse, create, edit.
+- **Tools** — External tool catalog. MCP-backed, editable.
+- **MCP Servers** — Registry of connected MCP transports.
+- **Consult** — Project-scoped conversation workspace.
+- **Costs** — Month-to-date LLM spend.
+- **Ceremonies** — Automation workflows. Create, run, review, audit.
+- **Templates** — Import/export ceremony, team, and project templates.
+- **Settings** — Configuration hub. 10 sections covering everything from display prefs to GitHub integration.
+- **Diagnostics** — Project health checks.
+- **Heartbeat** — Project-scoped automation sweepers.
+
+## Pages by Category
+
+### Getting Started
+- [Project Picker](./project-picker.md) — Create or connect projects
+- [Apps](./apps.md) — Browse and install Squad Apps
+
+### Global Dashboards
+- [Now](./now.md) — Live activity across all projects
+- [Inbox](./inbox.md) — Captured items awaiting action
+
+### Conversation & Automation
+- [Consult](./consult.md) — Chat workspace for queries and brainstorming
+- [Ceremonies](./ceremonies.md) — Workflows, automation rules, run history
+
+### Project Workspace
+- [Dashboard](./dashboard.md) — Project health and metrics
+- [Board](./board.md) — Kanban board and card detail drawer
+- [Flow](./flow.md) — Agent lineage and issue swimlanes
+
+### Team & Configuration
+- [Agents](./agents.md) — Team roster and routing
+- [Skills](./skills.md) — Skill registry
+- [Tools](./tools.md) — Tool catalog
+- [MCP Servers](./mcp-servers.md) — MCP server registry
+- [Templates](./templates.md) — Import/export templates
+- [Settings](./settings.md) — Project configuration
+
+### Observability
+- [Costs](./costs.md) — LLM spend tracking
+- [Diagnostics & Heartbeat](./diagnostics-heartbeat.md) — Health checks and automation sweepers
+
+### Deep Dives
+- [Live Run Viewer](./live-run-viewer.md) — Real-time run monitoring
+
+## URL Reference
+
+All routes shown below are accessible after login.
+
+### Global routes
+- `/` — Project Picker
+- `/now` — Now dashboard
+- `/inbox` — Global Inbox
+- `/apps` — Apps browser
+- `/consult/new` — New global conversation
+- `/consult/:sessionId` — Continue conversation
+- `/diagnostics` — Global diagnostics
+- `/heartbeat` — Global heartbeat
+
+### Per-project routes (`/projects/:id/...`)
+- `dashboard` — Dashboard
+- `board` — Board
+- `flow` — Flow (Agents / Issues tabs)
+- `inbox` — Project Inbox
+- `agents` — Agents (Agents / Routing tabs)
+- `skills` — Skills
+- `tools` — Tools
+- `mcp-servers` — MCP Servers
+- `consult/new` — New project conversation
+- `consult/:sessionId` — Continue conversation
+- `costs` — Costs
+- `ceremonies` — Ceremony list
+- `ceremonies/new` — Create ceremony
+- `ceremonies/:id` — Edit ceremony
+- `ceremonies/:id/runs` — Ceremony run history
+- `ceremonies/review` — Review drafts
+- `ceremonies/audit` — Audit trail
+- `ceremonies/templates` — Templates (3 tabs)
+- `settings` — Settings (10 sections)
+- `diagnostics` — Project diagnostics
+- `heartbeat` — Project heartbeat
+- `issues/:issueId/runs/:runId/live` — Live run viewer
+
+## Tips for Navigation
+
+**Deep linking**: Many pages accept URL parameters to pre-load content:
+- Board: `?openIssue=ISSUE_ID&tab=OVERVIEW|RUNS|OUTPUTS|FLOW`
+- Settings: `?section=SECTION_NAME`
+- Templates: `?tab=ceremonies|teams|projects`
+- CeremonyEditor: `?template=TEMPLATE_ID`
+
+**Realtime features**: Board, Now, and Consult update live as activity happens. Changes from other team members appear immediately.
+
+**Filtering**: Most list pages (Board, Agents, Skills, etc.) support search and category/label filters. Check each page for available filter options.
+
+**Keyboard shortcuts**: Card detail drawer closes with Escape. Most dialogs respond to keyboard navigation with arrow keys and Enter.
+
+## Live Run Viewer
+
+Source: /squadboard/docs/app-reference/live-run-viewer
+
+# Live Run Viewer
+
+**Route:** `/projects/:projectId/issues/:issueId/runs/:runId/live`
+
+Watch agent runs execute in real time. See the exact moment an agent thinks, calls tools, and produces output.
+
+## Overview
+
+Live Run Viewer shows a live stream of events as an agent processes a card. Use it to:
+- Debug agent behavior
+- See tool invocations in real time
+- Monitor token usage and cost
+- Troubleshoot failures
+- Understand agent reasoning
+
+## How to Get Here
+
+From any of these pages, click a run to open Live Run Viewer:
+- **Board → Card Detail → Runs tab** — Click a run
+- **Now dashboard → Issue Runs** — Click a run
+- **Ceremonies → Run history** — Click a run
+- **Dashboard → Recent runs** — Click a run
+
+Or navigate directly with the URL above.
+
+## Page Sections
+
+### Header
+
+Shows run context:
+- **Issue title** — The card/work item being processed
+- **Agent name** — Which agent is running
+- **Status badge** — Running, completed, failed, etc.
+- **Timestamp** — When run started
+- **Close button** — Exit Live Run Viewer
+
+### Metrics Row
+
+Real-time counters (update as run progresses):
+- **Elapsed time** — How long run has been executing
+- **Input tokens** — Tokens sent to model
+- **Output tokens** — Tokens received from model
+- **Total tokens** — Input + output
+- **Cost** — USD spent on this run so far
+- **Turns** — Number of back-and-forth interactions with model
+
+### Connection Status
+
+If run is live:
+- Green indicator: "Connected"
+- Shows real-time events streaming
+
+If connection lost:
+- Yellow indicator: "Reconnecting…"
+- Waiting to resume event stream
+- Auto-retries every few seconds
+
+If run completed or failed:
+- Gray indicator: "Finished"
+- Event stream is complete
+
+### Event Stream
+
+Chronological log of everything that happened during the run:
+
+**Event types you'll see:**
+
+1. **Agent started** — Run initialized
+2. **Prompt sent** — Full system prompt + user message sent to model
+3. **Model response** — Model's reply (streamed, shows as it arrives)
+4. **Tool invocation** — Agent called a tool (name, input params shown)
+5. **Tool result** — Tool output returned to agent
+6. **Agent thinking** — Optional reasoning/thought process
+7. **Run completed** — Success with final output
+8. **Run failed** — Error occurred; reason shown
+
+Each event shows:
+- Timestamp
+- Event type (icon)
+- Short description
+- Full details (expandable)
+
+### Error Recovery Panel
+
+If run failed:
+- **Error type** — What went wrong (e.g., "Tool not found", "Model error", "Permission denied")
+- **Error message** — Human-readable explanation
+- **Remediation** — Suggested fixes (e.g., "Check tool config" or "Re-check authentication")
+
+**Actions:**
+- **Retrigger run** — Click to run the same card again with current agent config
+- **Retry stream** — Re-attempt to read event log (if connection issue)
+
+### Steer Bar (While Live)
+
+If run is still executing, bottom bar shows:
+
+**Send steering message:**
+- Text input field
+- Send button
+- Used to guide agent (e.g., "Try a different approach" or "Check the error log")
+
+Available only while run is actively executing. After completion, steer bar disappears.
+
+## Actions
+
+**Retrigger run**
+- Click "Retrigger" button to run the same card again
+- New run will be created; you'll be redirected to new Live Run Viewer
+
+**Retry stream**
+- If events stop arriving but run is still processing
+- Click "Retry stream" to reconnect to event feed
+
+**Open work item**
+- Click "Open work item" breadcrumb
+- Jumps to [Board](./board.md) with card detail open
+
+**View run history**
+- Click "Runs" link
+- Opens [Ceremony Runs](./ceremonies.md#ceremony-runs) or Board card runs history
+
+**Navigate to board**
+- Click "Back to board" or project badge
+- Returns to [Board](./board.md) view
+
+**Navigate to project**
+- Click project name
+- Opens [Dashboard](./dashboard.md)
+
+## Tips
+
+**Watch for slow steps** — If any step takes much longer than expected, that's where to investigate. Click to expand and see full context.
+
+**Monitor token usage** — Real-time token counter shows efficiency. High tokens = high cost.
+
+**Tool invocation details** — Expand tool events to see exactly what parameters were passed and what was returned. Useful for debugging.
+
+**Error context** — If run fails, the error panel provides remediation hints. Most common issues are tool configuration or authentication.
+
+**Streaming responses** — Model output streams as it's generated; you see it in real time as LLM produces tokens.
+
+## Troubleshooting
+
+**"Reconnecting…" banner is stuck**
+- Run may have timed out or server connection dropped
+- Click "Retry stream" to attempt reconnection
+- If still stuck, close and refresh the page
+
+**Events seem incomplete**
+- WebSocket may have dropped mid-run
+- Scroll to end of event log to see latest events
+- Close and reopen to refresh
+
+**Metrics not updating**
+- Stale data; refresh the page
+- If run is complete, metrics show final totals
+
+**Retrigger button disabled**
+- Only enabled after run completes or fails
+- While run is executing, retrigger is not available
+
+## Related
+
+- [Board](./board.md) — Manage cards and open runs
+- [Costs](./costs.md) — See aggregated costs across runs
+- [Agents](./agents.md) — View/configure agent that's running
+- [Ceremonies](./ceremonies.md) — View ceremony/workflow runs
+- [Dashboard](./dashboard.md) — See run metrics aggregated
+
+## MCP Servers
+
+Source: /squadboard/docs/app-reference/mcp-servers
+
+# MCP Servers
+
+**Route:** `/projects/:id/mcp-servers`
+
+Project-scoped registry of MCP (Model Context Protocol) servers. MCP servers provide tools agents can invoke.
+
+## Overview
+
+MCP servers are external transports that expose capabilities to agents. Each server is defined by:
+- **Transport** — how to connect (`http` or `stdio`)
+- **Endpoint** — URL or command to invoke
+- **Headers** — authentication or configuration (write-only)
+- **Status** — enabled or disabled
+
+An MCP server exposes a set of tools. Agents route to tools, which are backed by MCP servers.
+
+## Server List
+
+Grid or list view of all MCP servers configured:
+- Server name
+- Transport type (HTTP / stdio)
+- Endpoint (URL or command name)
+- Status (enabled/disabled)
+- Provenance badge (built-in, custom, etc.)
+
+Click any server to view or test.
+
+## Sections
+
+### Available MCP Servers
+Shows all servers registered in this project. Each card summarizes transport and endpoint.
+
+### Empty State
+If no servers configured, shows explainer and "Create MCP Server" button.
+
+## Actions
+
+### Create MCP Server
+
+**New server:**
+- Click "Create MCP server" button
+- Enter server name (unique in project)
+- Choose transport:
+  - **HTTP** — RESTful endpoint; provide URL
+  - **Stdio** — Command-line tool; provide command and arguments
+- Enter endpoint (URL for HTTP, command for stdio)
+- Add optional headers (auth tokens, API keys, etc.)
+- Test connection
+- Save
+
+**Headers are write-only:**
+- Secrets entered here are stored securely
+- Never echoed back in GET requests
+- Only visible when editing
+
+### Edit MCP Server
+
+Click existing server:
+- Modify name, transport, endpoint
+- Update headers (full replace; can't read previous values)
+- Test connection
+- Save or delete
+
+**Warning banner appears when updating headers** — reminds you that editing overwrites the full header array.
+
+### Delete MCP Server
+
+Click delete icon to remove server permanently. **Warning:** Tools that depend on this server will fail; ensure no tools reference it first.
+
+### Test MCP Server
+
+Click "Test" button to verify server is reachable and responsive:
+- For HTTP: sends a test request to the endpoint
+- For stdio: attempts to spawn the command
+- Shows success/failure status
+- Displays error message if connection fails
+
+## MCP Server Detail
+
+When viewing a server:
+- **Name** — Server title
+- **Transport** — HTTP or stdio
+- **Endpoint** — URL or command
+- **Status** — Enabled/disabled toggle
+- **Tools** — List of tools provided by this server
+- **Last tested** — When the connection was last verified
+- **Test result** — Success or error from last test
+
+**Actions:**
+- Test connection
+- Enable/disable server
+- Edit configuration
+- View tools powered by this server
+
+## Configuration
+
+**Name validation:**
+- Must be unique within project
+- Max 128 characters
+
+**Transport options:**
+
+**HTTP:**
+- Full URL to MCP server endpoint
+- Supports HTTP/HTTPS
+- Port and path included in URL
+- Example: `https://mcp.example.com/api/tools`
+
+**Stdio:**
+- Command name or full path to executable
+- Arguments passed as separate fields
+- Environment variables supported
+- Example: `node /path/to/mcp-server.js --env production`
+
+**Headers:**
+- Key-value pairs (e.g., `Authorization: Bearer TOKEN`)
+- Useful for API keys, authentication, custom config
+- **Write-only** — values not returned in GET responses
+- Can set multiple headers
+
+## Import MCP Servers
+
+**From JSON file:**
+- Click "Import MCP servers" button
+- Upload `.json` file with server definitions
+- Format: array of server objects with name, transport, endpoint, headers
+- Existing servers not replaced (merged)
+
+## Related
+
+- [Tools](./tools.md) — Tools provided by MCP servers
+- [Agents](./agents.md) — Agents invoke tools (which use MCP servers)
+- [Settings](./settings.md) — Global MCP configuration
+
+## Now
+
+Source: /squadboard/docs/app-reference/now
+
+# Now
+
+**Route:** `/now`
+
+The global "Uber Dashboard" — a real-time view of every active session, run, and workflow happening across all your projects. Jump into any project or drill down into specific runs.
+
+## Overview
+
+Now aggregates activity from all projects into one live feed. You see sessions being created, issues moving through the board, ceremony workflows running, and team activity happening in real time.
+
+Sections update as activity occurs, powered by WebSocket real-time events.
+
+## Sections
+
+### Statistics (all projects)
+- **Active projects** — Count of projects with current activity
+- **Active sessions** — Conversations in progress across all projects
+- **Active runs** — Issues/cards currently being processed
+- **Active workflows** — Ceremonies/workflows running
+- **Cost MTD** — Month-to-date spend across all projects (summarized)
+
+Done-today stat is currently stubbed (`—`).
+
+### Scope Filter
+Switch between viewing **All projects** or a specific project. If you have more than 4 active projects, a dropdown appears. Otherwise, clickable tabs show each active project.
+
+This filter narrows all sections below to only that project's activity.
+
+### Live Sessions
+Real-time list of Consult conversations in progress. Shows session name, project, participants, and creation time.
+
+**Actions:**
+- Click a row to open that Consult session
+
+### Issue Runs
+Real-time list of card/issue runs currently processing. Shows issue title, assigned agent, status, elapsed time.
+
+**Actions:**
+- Click a row to open the Live Run Viewer for that run
+- Status badge indicates stage: processing, completed, failed
+
+### Workflow Runs
+Real-time list of ceremony/workflow executions. Shows workflow name, trigger type, progress, estimated time remaining.
+
+**Actions:**
+- Click a row to open workflow detail
+- Shows step-by-step progress as workflow executes
+
+### Recent Activity Feed
+Reverse-chronological stream of events: issues moved, agents hired, ceremonies triggered, drafts reviewed.
+
+### Per-Project Mini-Rollups
+If filtered to "All projects", small cards show top metrics for each active project:
+- Active runs
+- Throughput (cards moved to Done today)
+- Cost MTD
+- Squad Sync status
+
+Click a project card to view that project's full dashboard.
+
+### Sweep Activity Timeline
+"Wave 25" timeline view showing automation sweeper executions and their results across all projects. Shows sweep type, start time, duration, result (success/error).
+
+## Actions
+
+**Scope filter**
+- Click a project tab or use dropdown to narrow activity to that project
+
+**Navigate to live session**
+- Click any row in Live Sessions to open Consult
+
+**Navigate to live run**
+- Click any row in Issue Runs to open Live Run Viewer
+
+**Navigate to project dashboard**
+- Click project name or mini-card to open full project dashboard
+
+## Configuration
+
+**Scope default** — Starts at "All projects". Preference is stored in browser local storage.
+
+**Cost currency** — Displays in USD (configurable per project in Settings)
+
+## Related
+
+- [Inbox](./inbox.md) — Captured items awaiting action
+- [Consult](./consult.md) — Join any active session
+- [Live Run Viewer](./live-run-viewer.md) — Deep dive into a specific run
+- [Dashboard](./dashboard.md) — Project-specific view
+
+## Project Picker
+
+Source: /squadboard/docs/app-reference/project-picker
+
+# Project Picker
+
+**Route:** `/`
+
+Your entry point to Squadboard. Create new projects, connect to existing `.squad/` folders, browse project templates, or delete projects you no longer need.
+
+## Overview
+
+The Project Picker lists all projects available to you in this Squadboard instance. Each project is shown as a card with its name, location, and key metadata. You can filter, sort, and search projects to find what you're looking for.
+
+Storage model: Projects map to `.squad/` folders on your filesystem or in a Squad workspace. Squadboard doesn't create `.squad/` folders—it connects to existing ones or lets you create new projects from templates.
+
+## Project List
+
+**Card layout** shows for each project:
+- Project name
+- Filesystem path to `.squad/` folder
+- Creation date
+- Test project badge (if applicable)
+
+**Search and filter** at the top:
+- **Search box** — Find projects by name or path
+- **Filter dropdown** — Show all projects, test projects only, or production projects only
+- **Sort dropdown** — Sort by name, path, or creation date (newest first)
+
+Click any project card to open its dashboard.
+
+## Actions
+
+**Create project from template**
+- Click "Create from project template" button
+- Select a built-in or user template
+- Enter a project name
+- Choose the parent folder
+- Squadboard creates a new `.squad/` folder and initializes your project
+
+**Connect new project**
+- Click "Connect new project"
+- Choose an existing `.squad/` folder on your filesystem
+- Squadboard registers it and adds it to your project list
+
+**Select multiple projects**
+- Click checkboxes on project cards to select them
+- Use "Select all on this page" to bulk-select visible projects
+
+**Remove selected projects**
+- Select one or more projects
+- Click "Remove selected"
+- **Important:** Removal only deletes Squadboard metadata (your project from this instance). Your `.squad/` folder and all files remain intact on your filesystem.
+
+## Configuration
+
+**User preferences** (stored in browser local storage):
+- **Default sort** — Remember your sort preference across sessions
+- **Default filter** — Remember test/production filter preference
+- **Search query** — Not persisted
+
+## Related
+
+- [Apps](./apps.md) — Install pre-built Squadboard Apps
+- [Templates](./templates.md) — Create and manage project templates
+- [Settings](./settings.md) — Project configuration after you've opened a project
+
+## Settings
+
+Source: /squadboard/docs/app-reference/settings
+
+# Settings
+
+**Route:** `/projects/:id/settings?section=SECTION_NAME`
+
+Comprehensive project configuration. 10 sections covering everything from display prefs to GitHub integration, team management, and destructive operations.
+
+## Navigation
+
+Left sidebar shows all 10 sections. Click any section to jump to it. Or use URL parameter `?section=GENERAL`, etc.
+
+## 1. General
+
+**Project identity and defaults:**
+- **Project name** — Display name for the project
+- **Description** — What this project is for (optional)
+- **Default model** — LLM model all agents use by default (unless overridden per agent)
+- **Created date** — Read-only timestamp
+- **Project ID** — Unique identifier (read-only; used in URLs and API)
+
+**Actions:**
+- Update name, description, or default model
+- Save changes
+- Changes apply immediately
+
+## 2. Display
+
+**Browser-local UI preferences:**
+- **Route progress bar** — Show/hide progress bar on page navigation
+- **Dark mode** — Enable dark theme (if available)
+- **Font size** — Adjust UI text size
+
+Preferences are stored in your browser's local storage. Different users can have different preferences for the same project.
+
+## 3. MCP Config
+
+**MCP transport configuration for this project:**
+- **SQUADBOARD_SQUAD_STORAGE_PROVIDER** — Where `.squad/` folder syncs (filesystem vs. PostgreSQL)
+- **Environment variables** — Set project-specific env vars for MCP servers
+
+Shows current values and allows editing.
+
+**Impact:** Affects how agents route and how the board persists state.
+
+## 4. Squad Sync
+
+**Integration with Squad storage provider:**
+- **Storage provider** — Current backend (PGlite, PostgreSQL, filesystem)
+- **Sync status** — Ready, Manual bridge, or Needs repair
+- **Last sync** — When state was last synchronized
+- **Sync conflicts** — Any known conflicts shown here
+
+**Actions:**
+- **Manually sync** — Force a sync to the provider
+- **Repair sync** — If status shows "Needs repair", click to attempt repair
+- View sync logs (if available)
+
+Shows status badge and hint about what to do next.
+
+## 5. Budget
+
+**Spending limits and cost controls:**
+- **Monthly budget cap** — Max USD spend per month (e.g., $500)
+- **Alerts** — Notify when spending reaches 50%, 80%, 100% of budget
+- **Current MTD** — How much you've spent this month (read-only)
+- **Forecast** — Projected end-of-month spend if current rate continues
+
+**Actions:**
+- Set or update budget cap
+- Enable/disable budget alerts
+- View spending trends
+
+When budget is exceeded, agents can be configured to fail safely or ask for approval.
+
+## 6. Review Policy
+
+**Approval gates and review requirements:**
+- **Require review for cards in "In Review"** — Cards must be approved before moving to Done
+- **Review timeout** — How long reviewers have to approve (hours)
+- **Reviewers** — Who can approve (team members dropdown)
+- **Auto-approve after timeout** — Automatically move to Done if not reviewed (optional)
+
+**Actions:**
+- Add/remove reviewers
+- Update timeout and auto-approve settings
+- Save changes
+
+Policies are enforced when cards reach the In Review column.
+
+## 7. Portability
+
+**Export and import project configurations:**
+
+**Export project:**
+- Click "Export project" to download project bundle
+- Includes: team, ceremonies, tools, skills, settings
+- Format: `.zip` file
+- Use to backup or share with other projects
+
+**Import project:**
+- Click "Import project" to upload previously exported `.zip`
+- Replaces current project config
+- **Warning:** Backup before importing
+- Shows preview of what will be imported
+
+**Save project as template:**
+- Click "Save as template" to make this project reusable
+- Appears in [Templates](./templates.md) for other projects
+- Useful for standardizing across teams
+
+## 8. Backup & Restore
+
+**Backup and restore mechanisms:**
+- **Automatic backups** — Show backup history if enabled
+- **Manual backup** — Click to trigger immediate backup
+- **Restore from backup** — Select a previous backup to restore
+- **Backup location** — Where backups are stored (read-only)
+
+Shows:
+- Backup frequency (if automatic)
+- List of available backups with timestamps
+- Size of each backup
+
+**Actions:**
+- Create backup now
+- Restore to a previous backup (with confirmation)
+
+## 9. GitHub
+
+**GitHub integration configuration:**
+- **GitHub repository** — Link to your Squad repo (if any)
+- **Webhook URL** — Endpoint for GitHub events
+- **Webhook events** — Which GitHub events trigger Squadboard actions (issues, PRs, etc.)
+- **Token status** — Whether GitHub auth is active (if configured)
+
+**Actions:**
+- Configure GitHub webhook
+- View recent webhook deliveries (if any)
+- Test webhook
+- Enable/disable GitHub integration
+- Link/unlink GitHub account
+
+Shows recent activity from GitHub: issues created, PRs opened, etc.
+
+## 10. Danger Zone
+
+**Destructive operations. Requires confirmation.**
+
+### Delete Project
+Permanently remove this project from Squadboard.
+
+**What happens:**
+- Project is deleted from this Squadboard instance
+- `.squad/` folder remains intact on your filesystem
+- Historical runs and logs are archived
+- Cannot be undone; backup first
+
+**Confirmation:**
+- Checkbox: "I understand this cannot be undone"
+- Type project name to confirm
+- Click "Delete project"
+
+**Optional:**
+- **Delete project folder** — Also delete the local `.squad/` folder
+- **Uncheck** if you want to keep the folder and re-connect later
+
+### Reset Data
+Clear all project data (cards, runs, ceremonies) while keeping team and config.
+
+**What happens:**
+- Board is cleared (cards archived)
+- Run history deleted
+- Ceremony records cleared
+- Agent roster, skills, tools, settings preserved
+
+**Confirmation:**
+- Checkbox required
+- Click "Reset data"
+
+Useful if you want a fresh start within the same project.
+
+## Related
+
+- [Agents](./agents.md) — Manage team members
+- [Skills](./skills.md) — Configure project skills
+- [Tools](./tools.md) — Configure project tools
+- [Costs](./costs.md) — View cost history against budget
+- [Templates](./templates.md) — Save project as template
+
+## Skills
+
+Source: /squadboard/docs/app-reference/skills
+
+# Skills
+
+**Route:** `/projects/:id/skills`
+
+Project-scoped registry of skills. Skills are custom capabilities agents can leverage. Browse, create, edit, and import skills.
+
+## Overview
+
+Skills are how you extend agent capabilities. Each skill is a snippet of logic, context, or instructions injected into agent prompts. Skills are project-scoped; each project has its own skill registry.
+
+Skills are grouped by category for easy browsing.
+
+## Skill List
+
+Grid or list view of all skills in your project:
+- Skill name
+- Category badge
+- Brief description
+- Creation date
+- Usage count (how many agents use it)
+
+Click any skill to view or edit.
+
+## Categories
+
+Skills are organized by category (e.g., "Analysis", "Integration", "Formatting"). Filter the list by category using the left sidebar.
+
+You can create custom categories; category is a free-form field.
+
+## Actions
+
+### Create Skill
+
+**New skill:**
+- Click "Create skill" or "+" button
+- Enter skill name (required)
+- Choose category (optional; defaults to Uncategorized)
+- Write skill content (markdown)
+- Save
+
+Skill content is injected into agent system prompts, so write it as instructions, examples, or context.
+
+### Edit Skill
+
+Click existing skill to open edit dialog:
+- Modify name, category, or content
+- Save changes
+- Changes apply to all agents using this skill
+
+**Delete skill:**
+- Click delete icon to remove skill permanently
+- **Warning:** Agents still referencing this skill will fail; ensure no agents use it first
+
+### Import Skill
+
+**From markdown file:**
+- Click "Import skills" button
+- Upload `.md` file containing skill definitions
+- File should have `key: value` YAML header plus markdown content
+- Multiple skills per file OK
+
+**From curated library:**
+- Click "Browse curated skills" button
+- Browse pre-built skills from the Squadboard library
+- Click a skill to preview
+- Click "Add" to clone it into your project
+
+### Formulate Skill
+
+Use inline AI to create skills from prose:
+- Click "Formulate" button
+- Describe what you want the skill to do (plain English)
+- AI generates a skill draft
+- Review, edit, and save
+
+## Skill Detail View
+
+When viewing a skill:
+- **Name** — Skill title
+- **Category** — Grouping/classification
+- **Content** — Markdown that gets injected into prompts
+- **Used by agents** — List of agents leveraging this skill
+- **Created/updated** — Timestamps
+
+**Metadata:**
+- Key name (for API reference; kebab-case or snake_case)
+- Version (if tracked)
+
+## Configuration
+
+**Key validation:**
+- Keys must be kebab-case or snake_case
+- Spaces and special characters not allowed
+- Length limit: 128 characters
+
+**Content:**
+- Markdown format supported
+- Can include code blocks, lists, tables
+- No HTML or unsafe markup allowed
+
+## Import Status
+
+After importing skills, a success/error banner shows:
+- Count of skills imported
+- Any skipped (duplicates, validation errors)
+- Errors (if import failed)
+
+## Related
+
+- [Agents](./agents.md) — Assign skills to agents
+- [Tools](./tools.md) — External tools (complementary to skills)
+- [Ceremonies](./ceremonies.md) — Embed skills in workflow steps
+
+## Templates
+
+Source: /squadboard/docs/app-reference/templates
+
+# Templates
+
+**Route:** `/projects/:id/ceremonies/templates`
+
+Template catalog for ceremonies, teams, and projects. Import pre-built templates or create your own from existing configurations.
+
+## Overview
+
+Templates let you package and reuse common configurations:
+- **Ceremony templates** — Workflow definitions for automation
+- **Team templates** — Agent rosters and skills
+- **Project templates** — Entire project configurations (team + ceremonies + tools)
+
+Browse, apply, and manage templates through a tabbed interface.
+
+## Navigation
+
+**Three tabs:**
+1. **Ceremony Templates** — Pre-built workflow templates
+2. **Teams** — Agent roster templates
+3. **Projects** — Full project templates
+
+Switch tabs to see different template types.
+
+## Ceremony Templates Tab
+
+### Browse Pre-Built Templates
+
+Grid of ceremony templates, each showing:
+- Template name
+- Category (automation, review, triage, etc.)
+- Description
+- Preview of included steps
+- Apply button
+
+### Create from Existing
+
+To save a ceremony as a template:
+1. Create or edit ceremony in [Ceremony Editor](./ceremonies.md#ceremony-editor)
+2. Click "Save as template" button
+3. Template appears in this tab and is available for other projects
+
+### Apply Template
+
+Click "Apply" on any ceremony template:
+- Creates a ceremony in your project based on the template
+- Template is cloned (changes to template don't affect your ceremony)
+- You can customize it before saving
+
+### Delete Template
+
+Click delete icon to remove a template from your catalog. Only deletes the template, not ceremonies created from it.
+
+## Teams Tab
+
+### Browse & Apply Team Templates
+
+Grid of agent roster templates:
+- Team name (e.g., "Triage Squad", "Full Stack Team")
+- Member count
+- Skills summary
+- Apply button
+
+### Apply Team Template
+
+Click "Apply":
+- Imports all agents from template into your project
+- **Warning:** Replaces your current team if you confirm
+- Review members before confirming
+
+### Create Team Template
+
+To save your current team as a template:
+1. Go to [Agents](./agents.md) page
+2. Click "Save team as template"
+3. Template appears in Teams tab
+
+### Import Team from JSON
+
+Click "Import team" button:
+- Upload `.json` file with team roster
+- File format: exported team from [Agents](./agents.md)
+- Imported team appears as a new template
+
+## Projects Tab
+
+### Browse Project Templates
+
+Grid of full project templates:
+- Project name
+- Contents summary (team size, ceremony count, tools count)
+- Region/scope badge (if applicable)
+- Deploy/apply button
+
+### Apply Project Template
+
+Click "Apply":
+- Creates a new project based on template
+- Clones all team, ceremonies, tools, and settings
+- Opens new project dashboard
+
+### Create Project Template
+
+To save current project as template:
+1. Go to [Settings](./settings.md)
+2. Under "Portability", click "Save project as template"
+3. Name the template
+4. Template appears in Projects tab
+
+## Drag-Import Zone
+
+At the bottom of the Templates page is a **drag-drop zone** for importing templates:
+
+**Supported formats:**
+- `.yaml` or `.yml` — Ceremony definition
+- `.json` — Team roster or project bundle
+- `.zip` — Packaged project (contains multiple files)
+
+**Drag file(s) into the zone:**
+- System validates file format
+- Shows confirmation of what will be imported
+- Confirms before importing
+
+**After import:**
+- Success banner shows
+- Template appears in appropriate tab (Ceremonies/Teams/Projects)
+
+## Scope Filter
+
+Some template libraries allow filtering:
+- **All templates** — Browse entire library (if shared across organization)
+- **My templates** — Show only templates you created
+- **Organization templates** — Show templates shared by your org
+
+Default is "All templates".
+
+## Template Preview
+
+Click any template card to see more detail:
+- Full description
+- Detailed contents list
+- Creator/source
+- Version or last modified date
+- Actions: Apply, Delete, Export
+
+## Export Template
+
+Click "Export" to download a template:
+- Downloads as `.yaml` (ceremonies), `.json` (teams), or `.zip` (projects)
+- Can commit to version control
+- Share with other teams or projects
+
+## Related
+
+- [Ceremonies](./ceremonies.md) — Create ceremonies to save as templates
+- [Agents](./agents.md) — Create teams to save as templates
+- [Settings](./settings.md) — Portability section for project templates
+- [Apps](./apps.md) — Install complete apps (similar to project templates)
+
+## Tools
+
+Source: /squadboard/docs/app-reference/tools
+
+# Tools
+
+**Route:** `/projects/:id/tools`
+
+Project-scoped catalog of external tools and integrations. Tools are MCP-backed capabilities agents can invoke.
+
+## Overview
+
+Tools are how agents interact with external systems. Each tool maps to a command, API, or integration. Tools are project-scoped; define tools your agents need for this project.
+
+Tools are grouped by category.
+
+## Tool List
+
+Grid or list view of all tools in your project:
+- Tool name
+- Category
+- Brief description
+- MCP server backing it (if available)
+- Enabled/disabled status
+
+Click any tool to view or edit.
+
+## Sections
+
+### Available Tools
+Shows all tools registered in this project. Grouped by category for easy browsing.
+
+### Empty State
+If no tools yet, shows explainer and action buttons.
+
+## Actions
+
+### Create Tool
+
+**New tool:**
+- Click "Create tool" or "+" button
+- Enter tool name
+- Choose category
+- Select or create MCP server backend
+- Write tool description
+- Save
+
+Tool name must be unique within the project. Names use snake_case or kebab-case.
+
+### Edit Tool
+
+Click existing tool:
+- Modify name, category, description
+- Update MCP server backing
+- Save or delete
+
+**Delete tool:**
+- Click delete icon to remove tool permanently
+- Agents can no longer invoke this tool
+
+### Import Tools
+
+**From JSON file:**
+- Click "Import tools" button
+- Upload `.json` file with tool definitions
+- File format: array of tool objects with name, category, description, mcpServer, etc.
+- Tools are merged (existing tools not replaced)
+
+### Formulate Tool
+
+Use inline AI to create tools from prose:
+- Click "Formulate" button
+- Describe what the tool should do
+- AI generates a tool definition draft
+- Review, customize (name, category, MCP server), and save
+
+## Tool Detail
+
+When viewing a tool:
+- **Name** — Tool title
+- **Category** — Classification
+- **Description** — What it does
+- **MCP Server** — Which MCP server provides this tool
+- **Status** — Enabled/disabled
+
+**Actions on detail:**
+- Edit tool settings
+- Test tool (if MCP server reachable)
+- Delete tool
+- View usage (which agents use it)
+
+## Configuration
+
+**Name validation:**
+- snake_case or kebab-case required
+- No spaces or special characters
+- Unique within project
+- Max 128 characters
+
+**Category:**
+- Freeform text
+- Suggested categories: API, Database, Filesystem, Communication, etc.
+
+**MCP Server:**
+- Select from available MCP servers in [MCP Servers](./mcp-servers.md)
+- Tool description should explain what the MCP server endpoint provides
+
+## Import Status
+
+After importing tools:
+- Success/error banner shows
+- Count of tools imported
+- Any skipped (duplicates, validation errors)
+- Error messages if import failed
+
+## Related
+
+- [MCP Servers](./mcp-servers.md) — Configure MCP backends for tools
+- [Agents](./agents.md) — Assign tools to agent capability set
+- [Skills](./skills.md) — Skills vs. Tools (complementary approaches)
+
 ## Architecture
 
 Source: /squadboard/docs/developer-guide/architecture
@@ -420,29 +2927,6 @@ The Heartbeat page shows the background sweeps that keep a project moving:
 
 Project Heartbeat pages show project context while preserving system-level sweeps that are not tied to a single project, such as stale browser presence cleanup.
 
-## Current pre-alpha limits
-
-Source: /squadboard/docs/features/roadmap-gaps
-
-# Current pre-alpha limits
-
-The current pre-alpha focuses on Copilot CLI + Squad coexistence, durable orchestration, and local-first operation. Some capabilities are intentionally constrained until the product has more dogfood evidence and clearer policy controls.
-
-## Current limits
-
-- Ralph can recommend and log follow-up actions for GitHub issues and PRs that were not created by Ready-column pickup. It does not automatically merge PRs or apply fixes yet; those actions still require explicit human approval.
-- When two agents look similarly qualified, Squadboard records the selected agent and rationale in routing history so reviewers can audit why the assignment happened.
-- Visual workflow editing covers common linear and fan-out authoring, while advanced branching still falls back to YAML.
-
-## Future areas
-
-- Advanced fan-out patterns and dynamic child counts.
-- External webhook listener for `wait_event` callbacks.
-- Cost-tracking dashboards and burndown charts.
-- Agent leaderboard and performance views.
-- Cloud backup targets and audit log export.
-- Multi-tenant RBAC.
-
 ## Workflow engine
 
 Source: /squadboard/docs/features/workflow-engine
@@ -484,7 +2968,12 @@ Source: /squadboard/docs/getting-started/index
 
 ## Choose Your Path
 
-**New to Squadboard?** Pick one:
+**New to Squadboard?** Start with these two pages to understand what you're working with:
+
+1. **[What is Squadboard?](/getting-started/what-is-squadboard)** — High-level overview and why it exists
+2. **[Key Concepts](/getting-started/key-concepts)** — Core terms you'll see everywhere
+
+Then, pick one of these to get started:
 
 <IconGrid>
   <IconCard icon={FolderRegular} title="Set Up Locally" to="/getting-started/installation">
@@ -591,11 +3080,78 @@ Set `SQUADBOARD_DEFAULT_PROJECT_ID` if you want project-scoped tools to work wit
 
 To create the Copilot CLI config from the CLI, run `squadboard init --write-mcp-config` in the repository. It writes `.copilot/mcp-config.json` with the default PostgreSQL provider; add `--squad-storage fs` if you want filesystem fallback.
 
+## Next steps
+
+- **[Quickstart](./quickstart.mdx)** — Create your first project and run a workflow in 10 minutes
+- **[What is Squadboard?](./what-is-squadboard.md)** — Understand the core concepts
+- **[Tutorials](./tutorials/index.mdx)** — Walk through complete end-to-end workflows
+
+## Key Concepts
+
+Source: /squadboard/docs/getting-started/key-concepts
+
+# Key Concepts
+
+These are the core concepts you'll encounter. No jargon, just the vocabulary.
+
+## Board
+
+The kanban board you see on the home page. It has five columns: **Backlog** (ideas), **Ready** (waiting for an agent), **In Progress** (agent is working), **In Review** (needs approval), and **Done** (complete). The board is the visible surface of Squadboard.
+
+## Card (or Issue)
+
+A unit of work on the board. You create a card with a title (the outcome you want) and a body (the context). Cards live in one column at a time and move as work progresses. Every card can have an agent run attached to it.
+
+## Ready Column — The Magic Trigger
+
+The moment you drag a card into **Ready**, Squadboard wakes up. It runs deterministic routing rules, picks the best agent from your team, and starts an agent run. **This is the only step that triggers execution.** There is no separate play button.
+
+## Agent Run
+
+The execution of an agent on a specific card. An agent run has a prompt (with context about the card, your team, and the work), a model output, and any tool calls the agent made. You can inspect the run to see exactly what happened and approve it before it reaches GitHub.
+
+## Ceremony
+
+A workflow that closes out work and records decisions. The most common ceremony is **launch-review**, which summarizes the agent runs you just produced and records the handoff. Ceremonies are how Squadboard captures decision memory into `.squad/decisions/inbox/`.
+
+## Workflow
+
+A sequence of steps that runs deterministically: route → agent_run → approve → close. Workflows are designed to be auditable and repeatable. You design workflows to match your team's process.
+
+## Squad (Upstream)
+
+The Squad CLI tool that Squadboard coexists with. Squad is the orchestrator in your terminal; Squadboard is the board view. They share the same `.squad/` folder and work together.
+
+## MCP (Model Context Protocol)
+
+A protocol that lets you connect Squadboard to other tools like Copilot CLI, VS Code, or custom clients. MCP lets those tools read and write to your board and runs in real time. It's optional — Squadboard works fine without it.
+
+## Storage Provider
+
+Where Squadboard stores data. Two options: **PGlite** (local, zero-config), or **PostgreSQL** (cloud-ready). The storage provider controls both how the board persists and how agents access routing rules. You choose based on your scale and preference.
+
+## Scribe
+
+The part of Squadboard that captures directives (decisions, discussions, approvals) into `.squad/decisions/inbox/`. When a ceremony closes out work, the scribe records what happened so your team has a durable log.
+
+## Next steps
+
+- [What is Squadboard?](./what-is-squadboard.md) — Broader context
+- [Quickstart](./quickstart.mdx) — See these concepts in action
+- [Board and Runs](../user-guide/board-and-runs.mdx) — Deep dive on board lifecycle
+
 ## Learning path
 
 Source: /squadboard/docs/getting-started/learning-path
 
 # Learning path
+
+New to Squadboard? Start here:
+
+1. [What is Squadboard?](./what-is-squadboard.md) — High-level overview and why it exists
+2. [Key Concepts](./key-concepts.md) — Core terms you'll see everywhere
+
+Then choose the path that matches your goal:
 
 ## I want to run Squadboard locally
 
@@ -631,6 +3187,8 @@ Source: /squadboard/docs/getting-started/learning-path
 Source: /squadboard/docs/getting-started/quickstart
 
 # Quickstart
+
+**New here?** Start with [What is Squadboard?](./what-is-squadboard.md) and [Key Concepts](./key-concepts.md) first.
 
 The shortest path through Squadboard. In about ten minutes you will:
 
@@ -1034,68 +3592,95 @@ Open **Costs** after a few runs and ceremonies have executed. Cost belongs next 
 
 Continue with [4. Connect external tools →](./connect-tools.mdx) to make the same flow accessible from Copilot CLI, Squad, and other tools via MCP.
 
+## What is Squadboard?
+
+Source: /squadboard/docs/getting-started/what-is-squadboard
+
+# What is Squadboard?
+
+Squadboard is a local-first workflow board for running multi-agent work.
+
+## The one-line version
+
+You bring a team, capture work as cards, move cards to **Ready**, and watch agents pick them up automatically — all before the work reaches GitHub.
+
+## How it fits with Squad CLI
+
+**Squad CLI** is the brain in your terminal — it orchestrates agents, runs tools, captures decisions. **Squadboard** is the board that shows what the brain is doing. They coexist peacefully:
+
+- Squad CLI runs agents via the command line or as scheduled daemons
+- Squadboard is a UI that watches those runs, shows you the board, and lets you move cards
+- Both read and write to the same `.squad/` folder
+- You can use Squadboard without Squad CLI; you can use Squad CLI without Squadboard. Both are stronger together.
+
+## What you can do with it
+
+- **Capture work** — Turn ideas into cards. Add context, labels, and links.
+- **Delegate automatically** — Move a card to Ready, and the right agent picks it up without you clicking a button.
+- **Inspect runs** — See which agent took the work, what prompt it got, and what it produced.
+- **Approve risky steps** — Some runs need human review before they touch GitHub. Squadboard shows you which ones.
+- **Close loops** — Run ceremonies to summarize work, record decisions, and prepare the handoff to the team.
+
+## What it is NOT
+
+- **Not a replacement for Squad CLI.** Squad CLI is still the engine. Squadboard is the dashboard.
+- **Not a cloud service.** Everything runs locally. Your data stays on your machine.
+- **Not an AI itself.** Squadboard doesn't make decisions. It runs the agents you configure and shows you what they do.
+
+## The data model in 30 seconds
+
+**Cards** live on the board in columns: Backlog → Ready → In Progress → In Review → Done. When you move a card to Ready, Squadboard runs deterministic gates, picks the best **Agent** from your team, and starts an **Agent Run**. The run produces output, which you inspect and approve. Then you close the loop in a **Ceremony**.
+
+## Next steps
+
+- [Quickstart](./quickstart.mdx) — Get running in 10 minutes
+- [Key Concepts](./key-concepts.md) — Learn the vocabulary
+- [Learning Path](./learning-path.md) — Pick a path through the docs
+
 ## Squadboard documentation
 
 Source: /squadboard/docs/
 
-# Squadboard documentation
+# Run multi-agent work without the chaos.
 
-Squadboard is a local-first workflow board for running multi-agent work with deterministic orchestration. It gives a [Squad](https://github.com/bradygaster/squad)-style team a durable board, auditable routing, real-time run visibility, and coexistence surfaces for Copilot CLI workflows.
+Squadboard is a local-first workflow board for Squad-style AI teams. Capture work, delegate to agents, watch runs happen, approve the risky ones — before anything touches GitHub.
 
-The product shape is simple: bring in a team, delegate Ready work, approve risky steps, and watch the inner loop happen before the work needs to reach GitHub.
+[**Quickstart →**](./getting-started/quickstart.mdx) · [**What is Squadboard?**](./getting-started/what-is-squadboard.md)
 
-## Install
+## 🚀 Get Started
 
-```bash
-git clone https://github.com/sabbour/squadboard.git
-cd squadboard
-pnpm install
-pnpm run dev
-```
+- [Installation](./getting-started/installation.md) — Set up locally in five minutes
+- [Quickstart](./getting-started/quickstart.mdx) — Your first workflow card that an agent picks up automatically
+- [Learning Path](./getting-started/learning-path.md) — Choose your role and pick a path through the docs
 
-Open `http://localhost:5173` for the app. The backend runs on `http://localhost:3000`.
+## 🧠 User Guide
 
-## What is Squadboard?
+- [What is Squadboard?](./getting-started/what-is-squadboard.md) — The 90-second explainer
+- [Key Concepts](./getting-started/key-concepts.md) — Terms you need to understand
+- [Board and Runs](./user-guide/board-and-runs.mdx) — How pickup and run lifecycles work
+- [Ceremonies and Workflows](./user-guide/ceremonies-workflows.md) — Close out work and capture decisions
+- [Configuration](./user-guide/configuration.mdx) — Set up projects and runtime
+- [MCP Integration](./user-guide/mcp.mdx) — Connect Copilot CLI and other clients
 
-Squadboard is not just a kanban board and not just an agent runner. It is the system of record for multi-agent work:
+## 🔌 Integrations
 
-- Cards, labels, parent links, and run history live in a local database.
-- Ready-column pickup lets agents start work before a GitHub issue or PR exists.
-- Deterministic prefilters own concrete routing decisions before an LLM is asked for semantic judgment.
-- Agents run with a rich spawn prompt: charter, team root, requester, workspace, skills, MCP context, and validation expectations.
-- Scribe close-out, directive capture, ceremonies, worktree cleanup, and Ralph-style monitoring are auditable server actions.
+- [Copilot CLI + Squad](./user-guide/copilot-squad-coexistence.md) — How Squadboard and Copilot CLI coexist
+- [Squad Integration](./user-guide/squad-integration.mdx) — Upstream Squad workflows and apps
+- [GitHub Integration](./user-guide/github.md) — Sync runs and issues with GitHub
+- [Built-in Tools](./user-guide/built-ins.mdx) — Tools available in every agent spawn
 
-## Quick links
+## 📖 Reference
 
-| Topic | Where to start |
-| --- | --- |
-| Install locally | [Installation](./getting-started/installation.md) |
-| Run the first loop | [Quickstart](./getting-started/quickstart.mdx) |
-| Pick a path through the docs | [Learning Path](./getting-started/learning-path.md) |
-| Browse product capabilities | [Features](./features/overview.mdx) |
-| Configure projects and runtime | [Configuration](./user-guide/configuration.mdx) |
-| Use with Copilot CLI + Squad | [Copilot CLI + Squad coexistence](./user-guide/copilot-squad-coexistence.md) |
-| Understand upstream Squad | [Squad Integration](./user-guide/squad-integration.mdx) |
-| Understand PostgreSQL StorageProvider | [Storage Provider Alignment](./user-guide/storage-provider.mdx) |
-| Map tools and hooks | [Squad Tools and Hooks](./user-guide/squad-tools-hooks.mdx) |
-| Import Squad Apps and templates | [Squad Apps](./user-guide/squad-apps.mdx) |
-| Use ceremonies and workflows | [Ceremonies and Workflows](./user-guide/ceremonies-workflows.md) |
-| Connect MCP clients | [MCP Integration](./user-guide/mcp.mdx) |
-| Sync with GitHub | [GitHub Integration](./user-guide/github.md) |
-| See the architecture | [Architecture](./developer-guide/architecture.md) |
-| Troubleshoot | [Troubleshooting](./reference/troubleshooting.md) |
+- [Troubleshooting](./reference/troubleshooting.md) — Common issues and fixes
+- [FAQ](./reference/faq.md) — Questions we hear a lot
+- [Security](./user-guide/security.md) — How Squadboard keeps your work safe
 
-## Feature areas
+## 🏗️ Developer Guide
 
-The [Features](./features/overview.mdx) section has subsections for core orchestration, automation, integrations, and operations:
+- [Architecture](./developer-guide/architecture.md) — How Squadboard is built
+- [Contributing Docs](./developer-guide/contributing-docs.md) — Help improve these docs
 
-- **Durable workflow engine** - lease and heartbeat liveness, deterministic stepper, retries, fan-out, branches, waits, approvals, and output validation.
-- **Copilot CLI + Squad coexistence** - shared coordinator input, deterministic preflight rules, circuit-breaker visibility, confidence post-processing, and LLM fallback only for ambiguity.
-- **Agent workspace isolation** - scratch, directory, or git worktree strategies keep parallel work from colliding.
-- **Scribe and directive memory** - capture directives into `.squad/decisions/inbox/` and run close-out through daemon/coordinator lifecycle automation.
-- **Opt-in Ralph monitor** - prioritize untriaged issues, member-label pickup, assigned work, CI/review states, approved PRs, and drafts.
-- **MCP surface** - expose board, run, capture, routing, and project operations to Copilot CLI, VS Code, and HTTP clients.
-- **Squad Apps and imports** - package teams, ceremonies, skills, MCP config, routing, and seed issues into portable project artifacts.
+---
 
 ## For LLMs and coding agents
 
@@ -1672,6 +4257,191 @@ Ralph can prioritize:
 - draft PRs needing attention
 
 For GitHub work that did not start from Ready-column pickup, Ralph can recommend and log the next action. It does not automatically merge PRs or apply fixes yet; those actions still require explicit human approval.
+
+## How to add Squadboard to a Squad project
+
+Source: /squadboard/docs/user-guide/how-to/add-squadboard-to-squad-project
+
+# How to add Squadboard to an existing Squad project
+
+You have a Squad CLI project with `.squad/` already. Here's how to add Squadboard without breaking anything.
+
+## Before you start
+
+Squadboard is additive. Your `.squad/` folder stays the source of truth. Squadboard reads it, writes to a shared database, and can coexist peacefully with Squad CLI.
+
+## Step 1: Install and start Squadboard
+
+Follow [Installation](../../getting-started/installation.md):
+
+```bash
+git clone https://github.com/sabbour/squadboard.git
+cd squadboard
+pnpm install
+pnpm run dev
+```
+
+Open `http://localhost:5173`. Squadboard is now running.
+
+## Step 2: Create a project in Squadboard
+
+Click **Projects** → **New Project**. Point it at your Squad repository folder. When you click **Create**, Squadboard will:
+
+1. Read your existing `.squad/` folder
+2. Import your team, agents, and workflows
+3. Create a durable board state (either PGlite locally or PostgreSQL)
+
+Your `.squad/` folder is unchanged.
+
+## Step 3: Confirm your team
+
+Go to **Agents**. You should see your Squad team roster. If the roles look right, you're ready. If a role is missing or unclear, click **Cast Team** and accept the proposal.
+
+Squadboard uses these roles to route work automatically. Garbage in, garbage out — five minutes fixing roles here saves bad assignments later.
+
+## Step 4: Connect MCP (optional but recommended)
+
+If you use Copilot CLI or VS Code, connect Squadboard's MCP server so those tools can read/write the board:
+
+In your Copilot CLI or IDE config, add the Squadboard MCP server and pass:
+```
+SQUADBOARD_DEFAULT_PROJECT_ID=<your-project-id>
+```
+
+You can find the project ID in Squadboard under **Configuration** → **Copy Project ID**.
+
+See [MCP Integration](../../user-guide/mcp.mdx) for full details.
+
+## Step 5: Create a card and move it to Ready
+
+Go to **Board**. Create a test card:
+
+```
+Title: Test Squadboard pickup
+
+Body:
+This is a test card to confirm the board can route to agents.
+Link any successful output when done.
+```
+
+Drag it to **Ready**. Squadboard will pick an agent and run. You now have a durable board that coexists with Squad CLI.
+
+## What happens next
+
+- **Your `.squad/` folder keeps working** — Squad CLI reads and writes it; so does Squadboard. No conflicts.
+- **Runs get recorded** — Every agent run on the board is stored durably, not lost when the chat session ends.
+- **You can close loops** — Use Ceremonies to summarize work and record decisions in `.squad/decisions/inbox/`.
+
+## Next steps
+
+- [Squad Integration](../../user-guide/squad-integration.mdx) — Deep dive on how Squadboard and Squad coexist
+- [Quickstart](../../getting-started/quickstart.mdx) — Full workflow walkthrough
+- [Key Concepts](../../getting-started/key-concepts.md) — Understand board, cards, and runs
+
+## How to debug a failed run
+
+Source: /squadboard/docs/user-guide/how-to/find-why-run-failed
+
+# How to debug a failed run
+
+An agent run failed. Here's what to check, in order.
+
+## Step 1: Open the run details
+
+Click the card in **In Progress** or **In Review**. The right panel shows the agent run. Look at the **Status** badge:
+
+- **Failed** → Run crashed or hit an error
+- **Completed but blocked** → Run finished but needs approval
+- **Completed** → Run succeeded (you can still review it)
+
+If the status is **Failed**, continue to step 2.
+
+## Step 2: Check the error message
+
+Scroll down in the run panel. Look for:
+
+- **Model output** — What the model generated (may contain error messages)
+- **Tool calls** — Any tools the agent tried to run (check if any failed)
+- **Logs** — Execution logs showing where things went wrong
+
+Common causes:
+- **Tool not found** — The agent tried to call a tool that isn't available. Check [Built-in Tools](../../user-guide/built-ins.mdx).
+- **Model error** — The model hit a rate limit or timeout. Wait a few minutes and try again.
+- **Permission denied** — The agent doesn't have access to the resource. Check [Security](../../user-guide/security.md).
+- **Malformed output** — The agent's output didn't match the validation schema. Check the prompt in step 3.
+
+## Step 3: Check the prompt context
+
+In the run panel, find **Prompt received by agent**. This shows:
+
+- **Charter** — The agent's role and instructions
+- **Team root** — The repository path
+- **Card context** — The card title and body
+- **Available tools** — What tools the agent could call
+
+If the prompt is wrong (missing context, wrong team root, outdated charter), fix the issue in **Agents** or **Configuration** and create a new card to retry.
+
+## Step 4: Retry or escalate
+
+- **Retry the work** — Create a new card with the same body and move it to Ready. The system will improve its assignment logic.
+- **Fix the agent** — Update the agent's charter or skills in **Agents**, then retry.
+- **Manual fallback** — If repeated failures suggest the agent isn't right for the work, do the work manually and mark the card **Done**. Then post in [GitHub Discussions](https://github.com/sabbour/squadboard/discussions) so the team can improve the routing.
+
+## Next steps
+
+- [Key Concepts](../../getting-started/key-concepts.md) — Understand agent runs and ceremonies
+- [Board and Runs](../../user-guide/board-and-runs.mdx) — Full lifecycle of runs
+- [Troubleshooting](../../reference/troubleshooting.md) — General troubleshooting
+
+## How to trigger an agent run
+
+Source: /squadboard/docs/user-guide/how-to/move-card-to-ready
+
+# How to trigger an agent run in 3 steps
+
+The most common action in Squadboard: create a card, move it to Ready, and let an agent take it.
+
+## Step 1: Create a card on the Board
+
+Open your project and go to **Board**. Click **Create issue** and fill in:
+
+- **Title:** The concrete outcome you want. Example: "Write an onboarding guide for new users"
+- **Body:** Context about why this matters and what evidence to link when done. Example:
+  ```
+  New users don't understand how Squadboard relates to Squad CLI.
+  Write a short guide explaining both and link it in the docs when done.
+  ```
+
+Click **Save**. The card lands in **Backlog**.
+
+## Step 2: Move the card to Ready
+
+Drag the card from **Backlog** into **Ready**. This is the trigger.
+
+When the card enters Ready:
+1. Squadboard runs deterministic routing gates
+2. Picks the best agent from your team roster
+3. Starts an agent run
+4. The card moves into **In Progress** (you don't drag it; the system does)
+
+No separate play button. The column move is the execution trigger.
+
+## Step 3: Inspect the run
+
+Click the card. The right panel shows the agent run:
+
+- Which agent picked it up
+- The prompt it received
+- The model's output
+- Any tool calls it made
+
+If the wrong agent was assigned, don't override it by hand. Instead, fix the role or charter in **Agents** (the assignment logic will improve next time).
+
+## Next steps
+
+- [Key Concepts](../../getting-started/key-concepts.md) — Understand Ready column and agent runs
+- [Quickstart](../../getting-started/quickstart.mdx) — Full workflow walkthrough
+- [Board and Runs](../../user-guide/board-and-runs.mdx) — Deep dive on pickup and run lifecycle
 
 ## Importing
 
