@@ -124,3 +124,28 @@ Produced two related decisions:
 Kobayashi simultaneously authored SDK/client artifact contract to support this directive.
 
 **Key insight:** Previous mode-authority rule remains, but interchangeability requires both clients to read and write through the same active authority for each project. No surface is first-class; both are co-equal.
+
+### 2026-05-20 — Deep Architecture & Dead Code Review
+
+Full codebase audit (467 TS files, 250 production source files) across all 8 packages.
+
+**Key Findings:**
+- 17 dead-code items identified (11 high-confidence server files, 4 client, 2 low-priority)
+- 8 architecture issues (Electron broken main/renderer, layering violations, shutdown races)
+- 11 security gaps — top 2 critical: WebSocket auth bypass and non-atomic workflow advancement
+- 6 documentation gaps — 3 published packages missing README entirely
+
+**Top 5 Recommendations:**
+1. Fix WS auth bypass (unauthenticated realtime access)
+2. Add DB transactions to workflow runner + sweeper (race conditions corrupt state)
+3. Delete ~1500 lines dead code (dispatcher, hook-pipeline, irl-gallery, user-paths, etc.)
+4. Fix Electron main entry + renderer stub (ships broken)
+5. Add input validation + path containment (Zod on routes, realpath checks)
+
+**Patterns learned:**
+- Dead code clusters around superseded subsystems (Phase 3 dispatcher, IRL gallery, hook pipeline). Each had a replacement but the old code was never cleaned up.
+- Security gaps cluster at boundary crossings: HTTP↔WS, service↔filesystem, and where the single-token auth model meets multi-surface (CLI/Electron/web) access.
+- Race conditions are concentrated in the engine layer where multi-step DB operations lack transactions.
+- The Electron package is architecturally incomplete — README claims client embedding but the renderer is a health-check stub.
+
+**Deliverable:** `.squad/decisions/inbox/mcmanus-deep-review-architecture.md`

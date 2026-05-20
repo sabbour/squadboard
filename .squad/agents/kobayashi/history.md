@@ -1,3 +1,23 @@
+# Kobayashi — Session History
+
+**Last Updated:** 2026-05-20T13:09:21Z
+
+## Executive Summary
+
+SDK and orchestration specialist. Core focus: charter system prompt injection, SDK client lifecycle, agent timeout handling, output validation. Bridges the orchestrator→agent boundary and prevents charter content from breaking system prompt structure. Recent major work includes charter prompt injection hardening, sendAndWait timeout introduction, and dead code (HookPipeline) cleanup. P0 wave (May 20) closed three critical gaps: raw charter interpolation vulnerability, unbounded SDK blocking, unused validation pipeline.
+
+**Key domains:**
+- SDK client lifecycle and connection management
+- Charter content handling and prompt boundary protection
+- Agent timeout and liveness detection
+- Output validation and structured result parsing
+- System prompt composition (charter + coordinator layers)
+- Dead code audit and removal
+
+**Current status:** All P0 fixes deployed with regression test. Charter is now properly escaped. SDK calls time out after 120s.
+
+---
+
 # Kobayashi — History
 
 
@@ -252,3 +272,20 @@ Additive to existing `squadboard.sdk-sync-ownership.v1` contract. Does not chang
 - **Charter invariant:** raw charter text must never be spliced straight into `systemMessage`; the bridge now wraps charter payload in `<charter>` boundaries, XML-escapes angle brackets, and truncates oversized content at 8k chars with a warning.
 - **Liveness invariant:** `sendAndWait` now has a 120s hard timeout so hung providers fail closed and release the SDK client in `finally`.
 - **HookPipeline decision:** deleted `hook-pipeline.ts` instead of wiring it, because Invariant 4 already executes in `recordRunCompletion()` and the orphaned singleton had zero consumers. A second validation path would create split-brain completion semantics.
+
+---
+
+## 2026-05-20: P0 Fix Wave Deployment
+
+Landed 3 critical SDK fixes:
+
+1. **Charter prompt injection hardening** (commit b0efdd65c): Replaced raw charter interpolation with stable wrapper. Injected charter inside `<charter>...</charter>` boundaries. XML-escaped charter payload to prevent boundary breaks. Capped charter input at 8k characters with truncation warning.
+
+2. **sendAndWait timeout** (commit b0efdd65c): Added 120-second hard timeout around `client.sendAndWait()` in squad-client.ts. Failure mode is explicit: `sendAndWait timeout after 120s`. `client.disconnect()` runs in finally so hung runs don't hold bridge open indefinitely.
+
+3. **Dead code removal** (commit b0efdd65c): Deleted `packages/server/src/sdk/hook-pipeline.ts`. `globalPipeline`/`registerOutputValidationHook()` had zero callers. Output-schema enforcement already happens exclusively through `recordRunCompletion()` in output-validator.ts.
+
+**Result:** Build ✅ Regression test added and passing. All P0 fixes deployed.
+
+**Follow-up:** CI gates now enforce pre-existing red suites. Kobayashi has no new regressions.
+

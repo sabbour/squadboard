@@ -10929,3 +10929,163 @@ Additionally, the client doesn't include `projectId` in the payload, which `pres
 
 The WebSocket layer is architecturally sound — the EventEmitter fan-out pattern, room-based routing, and dual-write to DB+WS are clean. However, the layer has **zero authentication**, two **completely broken** presence features (B-1, B-2), **no reconnect cursor** for regular project events (R-6), and several dead event types that suggest the client and server drifted apart over time. The security issues (S-1, S-2, S-7) must be fixed before any multi-tenant or public deployment.
 
+
+---
+
+# Hockney P0/P1 backend fixes — 2026-05-20
+
+**Date:** 2026-05-20T11:50:00-07:00
+**Agent:** Hockney
+**Status:** Implemented
+
+## What changed
+- Replaced the sweeper's raw UUID array splice with Drizzle `inArray()` so expired-step retries are parameterized instead of string-built.
+- Wrapped workflow advancement write sequences in Drizzle transactions so step completion, review-run creation, fan-out state changes, handoffs, and cursor advancement commit atomically.
+- Added a hard timeout path for `runWorker` agent runs, propagated timeout control into the Squad SDK bridge, and introduced terminal `timed_out` handling across engine/runtime surfaces.
+
+## Why
+- `sql.raw()` with interpolated row ids was a direct SQL injection vector.
+- Multi-statement workflow advancement allowed concurrent workers to observe and write partial state, corrupting parent/child progression.
+- Hung Squad SDK calls could renew heartbeats forever; explicit timeout + heartbeat teardown restores lease-based liveness and gives operators a visible terminal state instead of an immortal run.
+
+---
+
+# Verbal P0 WebSocket fixes
+
+**Date:** 2026-05-20T12:56:00-07:00
+**Agent:** Verbal
+**Status:** Implemented
+
+## What changed
+
+### 1) WebSocket upgrade auth
+- Moved `/api/ws` authentication to the HTTP `upgrade` path.
+- Accepts JWTs from either `Authorization: Bearer <token>` or `?token=<token>`.
+- Verifies the token with the same auth helper now used by REST middleware.
+- Requires authenticated WS clients to present an HS256 JWT signed with `SQUADBOARD_AUTH_TOKEN` and containing a `projectId` claim.
+- Copies verified auth onto the connection request, derives `userId` from token claims when present, and rejects cross-project subscribe/resubscribe attempts.
+- Added `maxPayload: 64 * 1024` to the `WebSocketServer`.
+- Client WS bootstrap now appends `?token=` when `VITE_SQUADBOARD_AUTH_TOKEN` or `localStorage['squadboard:authToken']` is present.
+
+### 2) Presence protocol repair
+- Canonicalized the client→server cursor message to `presence.cursor`.
+- Canonicalized the server→client fan-out event to `presence.updated`.
+- Updated the presence event bus type from `presence.moved` to `presence.updated`.
+- Added `projectId` to `presence.joined`, `presence.left`, and `presence.updated` payloads so client filters match the actual room.
+- Presence cursor updates now require an active subscription and exclude the sender during fan-out.
+
+## Canonical WS protocol
+
+### Client → Server
+- `subscribe` `{ projectId }`
+- `unsubscribe` `{ projectId }`
+- `presence.cursor` `{ projectId, issueId: string | null }`
+- `resubscribe` `{ projectId, lastSeq }`
+
+### Server → Client (presence subset)
+- `presence.joined` `{ projectId, userId, issueId: null }`
+- `presence.left` `{ projectId, userId }`
+- `presence.updated` `{ projectId, userId, issueId }`
+
+## Notes
+- Sender exclusion applies to `presence.updated` broadcasts.
+- Reconnect/since-id behavior for `resubscribe` is preserved.
+
+---
+
+# Kobayashi P0/P1 SDK fixes
+
+**Date:** 2026-05-20T12:51:52-07:00
+**Agent:** Kobayashi
+**Status:** Implemented
+
+## What changed
+
+1. Hardened `packages/server/src/sdk/squad-client.ts` so charter content loaded from disk is no longer injected raw into the system prompt.
+   - Added a stable wrapper prompt.
+   - Injected charter text inside `<charter>...</charter>` boundaries.
+   - XML-escaped charter payload so embedded tags cannot terminate the boundary or masquerade as higher-priority instructions.
+   - Capped charter prompt input at 8,000 characters and emit a warning when truncation occurs.
+2. Added a 120-second hard timeout around `client.sendAndWait(...)` in `squad-client.ts`.
+   - Failure mode is explicit (`sendAndWait timeout after 120s`).
+   - `client.disconnect()` still runs in `finally`, so hung runs do not hold the bridge open indefinitely.
+3. Deleted `packages/server/src/sdk/hook-pipeline.ts`.
+   - `globalPipeline`/`registerOutputValidationHook()` had no callers.
+   - Output-schema enforcement already happens in `packages/server/src/services/output-validator.ts` via `recordRunCompletion()` before run finalization.
+
+## Decision rationale
+
+### Charter prompt injection
+
+Invariant: **host-owned system prompt composition must preserve the boundary between coordinator instructions and developer-authored charter content.**
+
+Raw charter interpolation let a malicious or malformed charter inject literal XML/HTML-like delimiters into the top-level system prompt. Wrapping plus escaping keeps the charter readable to the model while preventing boundary breaks such as `</charter><system>...`.
+
+The 8k cap is defense in depth: oversized charters should not silently dominate token budget or create unpredictable truncation downstream.
+
+### HookPipeline
+
+Invariant: **there must be one authoritative completion-validation path.**
+
+`HookPipeline` never ran. Wiring it in now would duplicate `recordRunCompletion()` or introduce a second place that could disagree on pass/fail semantics. Since the singleton had zero consumers and no startup registration path, deletion is safer than speculative activation.
+
+### sendAndWait timeout
+
+Invariant: **a single provider stall must not pin an issue run forever.**
+
+The 120-second timeout is long enough for normal agent turns but finite enough to fail closed when the provider or SDK hangs.
+
+---
+
+# Kujan CI fix — run Vitest on every PR
+
+**Date:** 2026-05-20T12:51:52-07:00
+**Agent:** Kujan
+**Status:** Implemented
+
+## What changed
+
+Updated `.github/workflows/ci.yml` so the `npm-packages` job now does the following in order:
+
+1. `pnpm install --frozen-lockfile`
+2. `pnpm run npm:build`
+3. **Type check workspace packages**
+   - `pnpm --filter @sabbour/squadboard-client typecheck`
+   - `pnpm --filter @sabbour/squadboard-sdk typecheck`
+   - `pnpm --filter @sabbour/squadboard exec tsc --noEmit`
+   - `pnpm --filter @sabbour/squadboard-cli exec tsc --noEmit`
+4. **Run Vitest suites**
+   - `pnpm --filter @sabbour/squadboard-sdk test`
+   - `pnpm --filter @sabbour/squadboard-client test`
+   - `pnpm --filter @sabbour/squadboard test -- --run`
+5. `pnpm run npm:publish:dry-run`
+
+Both new CI gates use `timeout-minutes: 10`.
+
+## Baseline state before the CI edit
+
+- Root `pnpm test` is not a valid gate because the monorepo root has **no** `test` script.
+- `pnpm -r test` immediately exposed existing failures:
+  - `packages/client`: `RunButton.test.tsx` fails and throws `TypeError: Cannot read properties of undefined (reading 'toLowerCase')` in `src/components/agents/agent-origin.ts`.
+  - `packages/server`: Vitest is red in `src/__tests__/ceremonies-list-route.test.ts` and `src/__tests__/pglite-issue-run-events-catalog-repair.test.ts`.
+- Type baseline:
+  - `packages/client` typecheck: pass
+  - `packages/squadboard-sdk` typecheck: pass
+  - `packages/server` `tsc --noEmit`: fail in `src/engine/workflow-runner.ts`
+  - `packages/cli` `tsc --noEmit`: pass
+
+## Post-change validation
+
+Reran the exact commands wired into CI. Results are unchanged from baseline, which is the point of the fix: CI now detects the existing red state instead of ignoring it.
+
+- `@sabbour/squadboard-sdk` tests: pass
+- `@sabbour/squadboard-client` tests: fail reproducibly
+- `@sabbour/squadboard` tests: fail reproducibly
+- Client + SDK typecheck: pass
+- Server `tsc --noEmit`: fail reproducibly
+- CLI `tsc --noEmit`: pass
+
+## QA conclusion
+
+This workflow now enforces the invariant the audit called out: broken Vitest suites and broken TypeScript types are PR blockers. The remaining work is product-side: fix the already-red client/server tests and the server type errors.
+

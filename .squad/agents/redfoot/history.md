@@ -1,3 +1,23 @@
+# Redfoot — Session History
+
+**Last Updated:** 2026-05-20T13:09:21Z
+
+## Executive Summary
+
+Documentation specialist. Core focus: technical writing, documentation completeness, terminology consistency, user-facing content quality. Conducts prose audits and identifies gaps in API reference, developer guides, and user workflows. Recent major work includes comprehensive WebSocket documentation audit (protocol gaps, dead code detection) and docs simplification/terminology cleanup. Maintains audit trails and produces detailed findings reports.
+
+**Key domains:**
+- API reference documentation
+- WebSocket protocol documentation
+- User guide and workflow documentation
+- Terminology standardization and consistency
+- Docs audit and gap analysis
+- Technical prose quality and clarity
+
+**Current status:** WebSocket docs audit complete with 5 priority fixes identified. Terminology cleanup wave concluded.
+
+---
+
 ## Wave 20 — Docs Simplification & Terminology Cleanup (2026-05-20T23:59:00-07:00)
 
 **Scope:** Remove project-specific language ("Spark") from docs, ensure consistent Squad Apps terminology, verify no screenshots, and validate docs build.
@@ -388,3 +408,28 @@ Run: w17
 
 - **verbal**: Stream G phase 2A (G2.3 comment + G2.5 merge PR with CI gate + G2.6 card badges)
 - **keyser**: Settings batch (Backup/Restore UI + GitHub Integration Settings)
+
+## Learnings — Documentation Gaps Audit (2026-05-20)
+
+### What I found
+- Root README is strong (612 lines, badges, install, first run, MCP, GitHub sync, cross-surface sync) but lacks ToC, npm/CI badges, and Contributing section.
+- CHANGELOG.md is thorough and follows Keep a Changelog format.
+- **4 of 6 major packages have no README** — critically, all 3 published npm packages (cli, server, squadboard-sdk) are missing READMEs.
+- Docs-site has 41 pages with good structure (Getting Started, User Guide, Features, Developer Guide, Reference).
+- 129 REST route handlers across 41 files — **no OpenAPI spec, no consolidated endpoint reference**.
+- MCP tools are the best-documented API surface (README + docs-site page).
+- WebSocket protocol documented only in source code header comment, not in any user-facing doc.
+- Ceremony YAML reference is strong in `docs/ceremonies/` but not surfaced in docs-site.
+- SDK has ~1.4 JSDoc per export (good); server services at 64% coverage; routes are sparsely documented.
+- No env var reference page, no CLI reference page in docs-site.
+
+### Top 5 priorities (by user impact)
+1. Package READMEs for published npm packages (cli, server, sdk)
+2. REST API endpoint reference (129 handlers undocumented)
+3. Environment variable reference page
+4. WebSocket protocol documentation
+5. CI/npm badges + Contributing guide
+
+### Process learning
+- The `docs/ceremonies/` directory has great content that should be canonical and linked from docs-site rather than duplicated.
+- The split between `docs/` (internal reference) and `packages/docs-site/docs/` (public docs) is well-structured but creates risk of content existing in one place but not the other.

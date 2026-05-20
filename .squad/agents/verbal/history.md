@@ -1,3 +1,23 @@
+# Verbal — Session History
+
+**Last Updated:** 2026-05-20T13:09:21Z
+
+## Executive Summary
+
+Real-time networking specialist. Core focus: WebSocket architecture, presence protocol, event fan-out, authentication. Owns the event streaming layer connecting clients to server state updates. Recent major work includes authentication audit, presence protocol repair, payload limits, and project-scoped subscription validation. P0 wave (May 20) closed two critical gaps: zero-auth vulnerability on WS upgrade and completely broken presence message types.
+
+**Key domains:**
+- WebSocket server setup and upgrade path
+- JWT authentication on WS connections
+- Event fan-out and room-scoped subscription
+- Presence protocol (cursor tracking, joined/left/updated events)
+- Heartbeat/ping-pong and reconnect logic
+- Payload limits and backpressure handling
+
+**Current status:** All P0 fixes deployed. Presence is now functional. Auth is enforced on upgrade.
+
+---
+
 ## W29 — Coordinator Caching + Strategy + Reviews
 
 **Date:** 2026-05-16  
@@ -280,3 +300,18 @@ Key learnings from the audit:
 2. **JWT scope must become room scope.** Once the token yields a `projectId`, every client message that names a room/project must be checked against that single allowed project. The WS fast path cannot invent broader access than the token grants.
 3. **Canonical event names must be shared, not inferred.** Presence only came back once both directions agreed on one pair: client message `presence.cursor`, server broadcast `presence.updated`. The payload also needed `projectId` on every emitted event or the client silently filtered everything out.
 4. **Exclude-sender fan-out needs explicit bookkeeping.** Because presence updates travel through the in-process event bus, the sender socket has to be tracked and removed at broadcast time; comments alone do not create exclusion semantics.
+
+---
+
+## 2026-05-20: P0 Fix Wave Deployment
+
+Landed 2 critical WebSocket fixes:
+
+1. **WebSocket upgrade auth** (commit ccca60cee): Moved `/api/ws` authentication to HTTP upgrade path. Accepts JWT from `Authorization: Bearer <token>` or `?token=<token>`. Validates with same auth helper used by REST middleware. Added `maxPayload: 64 * 1024` to prevent DoS. Client now bootstraps with `?token=` when authToken is present.
+
+2. **Presence protocol canonicalization** (commit 65dedda8f): Fixed broken presence feature. Client→server: `presence.cursor`. Server→client: `presence.updated`. Added `projectId` to all presence events. Implemented sender exclusion on fan-out. Presence now requires active subscription.
+
+**Result:** Build ✅ Presence protocol now works end-to-end. WS is now auth-gated and payload-limited.
+
+**Follow-up:** CI gates from Kujan have exposed no new regressions from these fixes.
+

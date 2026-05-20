@@ -264,3 +264,20 @@ Learning: browser-local UI preferences belong in `packages/client/src/utils/user
 - When a canonical document format has `apiVersion/kind` discriminators, canonical detection should be based on those alone — not on nested fields that could be null.
 - A guard like `isRecord(spec)` seems safe but creates a hidden fallthrough: canonical YAML with a null/missing `spec` silently becomes legacy YAML, and BOTH top-level fields fail because neither `name` nor `steps` exist at the legacy flat level.
 - Always add an edge-case test for `spec: null` (empty mapping block) when any nested field is part of a conditional canonical-detection path.
+
+---
+
+## Deep Frontend Code Review — 2026-05-20
+
+Full audit of `packages/client/src/` (130+ files). Findings written to `.squad/decisions/inbox/keyser-deep-review-frontend.md`.
+
+### Learnings
+
+- **Zero code splitting.** All 26 page routes are synchronously imported in `App.tsx`. No `React.lazy` usage anywhere. This is the single biggest perf debt — every user downloads every page.
+- **Zero `React.memo`.** Not a single component is memoized. High-frequency list items (`IssueCard`, `KanbanColumn`, `ChatBubble`) re-render on every parent state change.
+- **Timer cleanup pattern is inconsistent.** ~15 `setTimeout` calls across pages/components lack ref-based cleanup. Most are cosmetic (flash resets), but `usePresence` debounce timer is a real leak that fires after unmount.
+- **`null as unknown as T` in `apiFetch`.** Returns null cast as the expected type for 204/empty responses. Every caller that doesn't guard for null will crash at runtime. This is a systemic typing lie.
+- **Unvalidated external `href` props.** 6+ locations render API-sourced URLs directly in `<a href>` / `<Link href>` without `https://` protocol validation. XSS vector if API data is ever poisoned.
+- **Dead pages exist.** `LiveSession.tsx` and `StarterDetail.tsx` are defined but never imported or routed. They inflate the bundle and confuse contributors.
+- **Index-based keys widespread.** 15+ list renders use `key={i}` or `key={index}`. Most are in stable-order lists (low risk), but `KanbanBoard` column keys and `CeremonyEditor` step keys can cause state bleed on reorder.
+- **`as unknown` casts on WS/SSE payloads.** Realtime event handlers cast raw server data directly to typed interfaces without runtime validation. A malformed server message will silently corrupt React state.

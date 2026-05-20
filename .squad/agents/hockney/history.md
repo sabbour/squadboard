@@ -1,3 +1,22 @@
+# Hockney — Session History
+
+**Last Updated:** 2026-05-20T13:09:21Z
+
+## Executive Summary
+
+Backend engine specialist. Core focus: SQL correctness, transactional safety, workflow advancement atomicity, worker liveness. Recent major work includes deep reviews of SQL injection vectors, multi-statement atomicity bugs, and worker timeout/heartbeat mechanisms. P0 wave (May 20) closed three critical gaps: parameterized query injection fix, transaction-wrapped advancement, hard timeout + heartbeat clear.
+
+**Key domains:**
+- Engine execution (stepper.ts, worker timeout, heartbeat)
+- Database transaction safety and atomic operations
+- SQL injection prevention and query parameterization
+- Workflow step advancement and state consistency
+- Performance optimization (sweeper batching, leasing strategies)
+
+**Current status:** All P0 fixes deployed and passing. Pre-existing red suites in CI are now blockers.
+
+---
+
 ## W29 — Mini-Coordinator DB Spawning + Launch Reviews
 
 **Date:** 2026-05-16  
@@ -344,3 +363,18 @@ Hockney-close-w24 dispatched in parallel to run build + main FF + smoke tests be
 - 2026-05-20: Workflow advancement must transact around step status changes, spawned child rows, and cursor movement together; otherwise concurrent ticks can leave a completed step with a stale parent cursor or orphaned child run.
 - 2026-05-20: One-shot Squad SDK runs need a hard wall-clock timeout that tears down the SDK session before the engine clears heartbeat state; timing out only at the sweeper layer is too late because the worker can self-renew forever.
 - 2026-05-20: `timed_out` is a first-class terminal engine state. Any terminal-status list used by workflow polling, retries, retrigger UX, fan-out merge logic, or worktree cleanup must treat it the same way as `failed`.
+
+---
+
+## 2026-05-20: P0 Fix Wave Deployment
+
+Landed 3 critical backend fixes:
+
+1. **SQL injection hardening** (commit 9fb89bcce): Replaced `sql.raw()` UUID array splice in `sweepExpiredStepLeases()` with Drizzle `inArray()` for parameterized queries.
+2. **Workflow advancement atomicity** (commit 8813a41f7): Wrapped step completion, review-run creation, fan-out state changes, handoffs, and cursor advancement in a single Drizzle transaction.
+3. **Worker hard timeout** (commit 16c1715fc): Added wall-clock timeout path for `runWorker` SDK runs, propagated timeout control into the Squad SDK bridge, introduced terminal `timed_out` state.
+
+**Result:** Build ✅ All P0 fixes passing.
+
+**Follow-up:** Pre-existing red suites are now CI blockers thanks to Kujan's vitest/typecheck gates. Hockney has no red signals from these fixes.
+

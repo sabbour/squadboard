@@ -1,3 +1,23 @@
+# Kujan — Session History
+
+**Last Updated:** 2026-05-20T13:09:21Z
+
+## Executive Summary
+
+Quality and CI specialist. Core focus: test coverage, type safety, CI/CD enforcement. Conducts deep audits of test suites and type checking. Recent major work includes comprehensive test baseline audit (ceremonies, auth, idempotency, integration) and CI workflow hardening. P0 wave (May 20) introduced vitest + typecheck gates on every PR, surfacing pre-existing red suites: RunButton test, server ceremonies tests, workflow-runner typecheck.
+
+**Key domains:**
+- Test suite coverage and baseline assessment
+- TypeScript type checking and strictness
+- CI/CD workflow design and enforcement
+- Vitest suite execution and failure diagnosis
+- Test data and fixture setup
+- Integration test architecture
+
+**Current status:** CI gates now enforce test+type blockers on PRs. Pre-existing red suites are now visible. Product team must fix failures before CI goes green.
+
+---
+
 # Kujan — History
 
 ## Core Context
@@ -259,6 +279,23 @@ Added focused client regressions for the sync status bug in `SquadSyncStatusPane
 
 All 3 tests in the file pass (including the pre-existing stored-file test).
 
+### 2026-05-20T10:58:25-07:00 — Deep test coverage audit
+
+**Scope:** Full test pyramid audit — unit, integration, durability, contract, E2E, CI.
+
+**Key findings:**
+1. **Engine core is essentially untested.** 7 of 9 engine source files (dispatcher, sweeper, fan-out, peer-reviewer, router, workflow-runner, workspace) have zero direct test coverage. Stepper only has review-promotion path tested.
+2. **All 8 durability scenarios are uncovered:** kill-mid-run, lease-expiry-reap, two-worker-race, fan-out-atomicity, budget-exceeded, retry-exhaustion, crash-during-fan-out, concurrent-workflow-advancement.
+3. **6 of 8 sweeps have zero tests.** Only `pickup-ready` has partial coverage.
+4. **CI does NOT run vitest or E2E.** Tests are local-only safety nets. PRs can merge with broken tests.
+5. **Output validator** (`validateAgentOutput`) has no direct tests — only indirect integration via stepper.
+6. **Idempotency race conditions untested.** Happy-path key dedup is covered but concurrent duplicate inserts are not.
+7. **Auth is bearer-string equality, not JWT.** No signature/claims validation exists in the codebase — this is an architectural gap, not just a test gap.
+8. **WS server-side reconnect with `lastSeq` cursor** has no test. Client-side reconnect is covered.
+
+**Risk assessment:** The coordinator and ceremonies layers are well-tested (~80% function coverage). The engine execution layer is the primary risk surface — it handles all liveness, leasing, fan-out, and crash recovery contracts and has near-zero test coverage.
+
+**Report written to:** `.squad/decisions/inbox/kujan-deep-review-tests.md`
 
 ### 2026-05-20T12:51:52.451-07:00 — CI vitest/typecheck gate for PRs
 
@@ -272,3 +309,30 @@ All 3 tests in the file pass (including the pre-existing stored-file test).
 3. `packages/server` — `tsc --noEmit` is red in `src/engine/workflow-runner.ts` (insert typing + transaction type mismatch).
 
 **Validation:** Workflow edited; local command equivalents rerun. `@sabbour/squadboard-sdk` tests pass. Client Vitest fails reproducibly (1 failed test, 1 unhandled error). Server Vitest fails reproducibly (2 failed tests). Client/sdk typecheck pass; server `tsc --noEmit` fails reproducibly; cli `tsc --noEmit` passes.
+
+---
+
+## 2026-05-20: P0 Fix Wave Deployment
+
+Landed CI hardening: vitest + typecheck gates now run on every PR.
+
+**What changed** (commit b85520577): Updated `.github/workflows/ci.yml` so the `npm-packages` job now enforces:
+- `pnpm --filter @sabbour/squadboard-client typecheck`
+- `pnpm --filter @sabbour/squadboard-sdk typecheck`
+- `pnpm --filter @sabbour/squadboard exec tsc --noEmit`
+- `pnpm --filter @sabbour/squadboard-cli exec tsc --noEmit`
+- `pnpm --filter @sabbour/squadboard-sdk test`
+- `pnpm --filter @sabbour/squadboard-client test`
+- `pnpm --filter @sabbour/squadboard test -- --run`
+
+Both new gates use `timeout-minutes: 10`.
+
+**Pre-existing red signals now surfaced:**
+1. `@sabbour/squadboard-client` — RunButton.test.tsx fails (pickDefaultConsultAgent dereferences undefined role)
+2. `@sabbour/squadboard` (server) — ceremonies-list-route.test.ts + pglite-issue-run-events-catalog-repair.test.ts fail
+3. `@sabbour/squadboard` (server) — workflow-runner.ts typecheck fails
+
+**Result:** CI gates are working as intended. Existing red suites are now PR blockers. Product team must fix pre-existing failures before CI gates go green.
+
+**Validation:** All commands pass locally outside the red suites. No new regressions introduced by this workflow change.
+
