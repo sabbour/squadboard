@@ -151,7 +151,7 @@ describe('LiveRunViewer', () => {
     })
 
     it('renders status badge', () => {
-      mockUseRunStream.mockReturnValue(makeStream({ status: 'live' }))
+      mockUseRunStream.mockReturnValue(makeStream({ status: 'live', events: EVENTS }))
       renderViewer()
       expect(screen.getByText('Running')).toBeInTheDocument()
     })
@@ -217,7 +217,7 @@ describe('LiveRunViewer', () => {
 
       renderViewer()
 
-      expect(screen.getByText('Recovery: [recovered: server restarted]')).toBeInTheDocument()
+      expect(screen.getByText(/Recovery: Recovered after restart/)).toBeInTheDocument()
     })
   })
 
@@ -225,8 +225,8 @@ describe('LiveRunViewer', () => {
     it('shows empty-state message when no events', () => {
       mockUseRunStream.mockReturnValue(makeStream({ events: [], status: 'live' }))
       renderViewer()
-      expect(screen.getByText('No events yet')).toBeInTheDocument()
-      expect(screen.getByText('The run has not emitted any events.')).toBeInTheDocument()
+      expect(screen.getByText('Waiting for first event…')).toBeInTheDocument()
+      expect(screen.getByText('Pending')).toBeInTheDocument()
     })
   })
 
@@ -290,7 +290,7 @@ describe('LiveRunViewer', () => {
 
       renderViewer()
 
-      expect(screen.getByText('Finished')).toBeInTheDocument()
+      expect(screen.getByText('Completed')).toBeInTheDocument()
       expect(screen.getByText(/Final answer: live run viewer regression suite passed/)).toBeInTheDocument()
     })
   })
@@ -305,26 +305,27 @@ describe('LiveRunViewer', () => {
 
   describe('steer bar', () => {
     it('renders Input and Send button', () => {
+      mockUseRunStream.mockReturnValue(makeStream({ status: 'live', events: EVENTS }))
       renderViewer()
       expect(screen.getByRole('textbox', { name: /steering message/i })).toBeInTheDocument()
       expect(screen.getByRole('button', { name: /send/i })).toBeInTheDocument()
     })
 
-    it('Send button is disabled when status is not live', () => {
+    it('hides Send button when status is not live', () => {
       mockUseRunStream.mockReturnValue(makeStream({ status: 'finished' }))
       renderViewer()
-      expect(screen.getByRole('button', { name: /send/i })).toBeDisabled()
+      expect(screen.queryByRole('button', { name: /send/i })).not.toBeInTheDocument()
     })
 
-    it('Input is disabled when status is not live', () => {
+    it('hides Input when status is not live', () => {
       mockUseRunStream.mockReturnValue(makeStream({ status: 'error' }))
       renderViewer()
-      expect(screen.getByRole('textbox', { name: /steering message/i })).toBeDisabled()
+      expect(screen.queryByRole('textbox', { name: /steering message/i })).not.toBeInTheDocument()
     })
 
     it('calls steer() on form submit', async () => {
       const user = userEvent.setup()
-      mockUseRunStream.mockReturnValue(makeStream({ status: 'live' }))
+      mockUseRunStream.mockReturnValue(makeStream({ status: 'live', events: EVENTS }))
       renderViewer()
 
       const input = screen.getByRole('textbox', { name: /steering message/i })
@@ -336,7 +337,7 @@ describe('LiveRunViewer', () => {
 
     it('shows Sent at caption after successful steer', async () => {
       const user = userEvent.setup()
-      mockUseRunStream.mockReturnValue(makeStream({ status: 'live' }))
+      mockUseRunStream.mockReturnValue(makeStream({ status: 'live', events: EVENTS }))
       renderViewer()
 
       const input = screen.getByRole('textbox', { name: /steering message/i })
@@ -349,7 +350,7 @@ describe('LiveRunViewer', () => {
     it('shows error caption when steer fails', async () => {
       const user = userEvent.setup()
       mockSteer.mockRejectedValueOnce(new Error('Run is not active'))
-      mockUseRunStream.mockReturnValue(makeStream({ status: 'live' }))
+      mockUseRunStream.mockReturnValue(makeStream({ status: 'live', events: EVENTS }))
       renderViewer()
 
       const input = screen.getByRole('textbox', { name: /steering message/i })

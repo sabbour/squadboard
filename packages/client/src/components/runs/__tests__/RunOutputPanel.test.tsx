@@ -1,5 +1,5 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { render, screen, within } from '@testing-library/react'
+import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
+import { render, screen } from '@testing-library/react'
 import RunOutputPanel from '../RunOutputPanel'
 import type { IssueRun } from '../../../api/runs'
 import type { Agent } from '../../../api/agents'
@@ -75,12 +75,20 @@ function makeStream(overrides: Record<string, unknown> = {}) {
 }
 
 describe('RunOutputPanel live viewer', () => {
+  beforeAll(() => {
+    window.ResizeObserver = class ResizeObserver {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    }
+  })
+
   beforeEach(() => {
     vi.clearAllMocks()
     mockUseRunStream.mockReturnValue(makeStream())
   })
 
-  it('surfaces live status, active step, workspace, timeline, and recovery markers', () => {
+  it('surfaces live status, active step, timeline, and recovery markers', () => {
     mockUseRunStream.mockReturnValue(makeStream({
       events: [
         {
@@ -114,10 +122,13 @@ describe('RunOutputPanel live viewer', () => {
 
     expect(screen.getByText('Active step')).toBeInTheDocument()
     expect(screen.getAllByText(/Checking tests and updating layout/).length).toBeGreaterThan(0)
-    expect(screen.getAllByText('/tmp/squadboard-run-run-1').length).toBeGreaterThan(0)
+    expect(screen.queryByText('/tmp/squadboard-run-run-1')).not.toBeInTheDocument()
+    expect(screen.getAllByText('Running')).toHaveLength(1)
     expect(screen.getByText('Streamed event/log timeline')).toBeInTheDocument()
-    expect(screen.getByText('Recovery markers')).toBeInTheDocument()
-    expect(screen.getAllByText('[recovered: server restarted]').length).toBeGreaterThan(0)
+    expect(screen.getByText('Auto-started by scheduler')).toBeInTheDocument()
+    expect(screen.getByText(/Recovered after restart/)).toBeInTheDocument()
+    expect(screen.queryByText(/pickup-ready sweep/)).not.toBeInTheDocument()
+    expect(screen.getByRole('textbox', { name: /steer running agent/i })).toBeInTheDocument()
 
     const log = screen.getByRole('log', { name: /run log timeline/i })
     expect(log).toHaveAttribute('aria-live', 'polite')
@@ -137,9 +148,8 @@ describe('RunOutputPanel live viewer', () => {
       />,
     )
 
-    const alert = screen.getByRole('alert')
-    expect(within(alert).getByText('Error')).toBeInTheDocument()
-    expect(within(alert).getByText('Agent process exited with code 1')).toBeInTheDocument()
+    expect(screen.getByText('Error')).toBeInTheDocument()
+    expect(screen.getAllByText('Agent process exited with code 1').length).toBeGreaterThan(0)
     expect(screen.getAllByText('Failed').length).toBeGreaterThan(0)
     expect(screen.getByRole('log', { name: /run log timeline/i })).toHaveAttribute('aria-live', 'off')
   })
@@ -178,6 +188,7 @@ describe('RunOutputPanel live viewer', () => {
 
     expect(screen.getByText(/Waiting for the agent to start/)).toBeInTheDocument()
     expect(screen.getByText('Queued for execution')).toBeInTheDocument()
-    expect(screen.getByText('No events or log lines have arrived yet.')).toBeInTheDocument()
+    expect(screen.getByText('Waiting for first event…')).toBeInTheDocument()
+    expect(screen.queryByRole('textbox', { name: /steer running agent/i })).not.toBeInTheDocument()
   })
 })

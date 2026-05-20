@@ -66,8 +66,8 @@ function statusLabel(status: RunStatus): string {
     case 'loading':      return 'Loading'
     case 'live':         return 'Running'
     case 'reconnecting': return 'Reconnecting'
-    case 'finished':     return 'Finished'
-    case 'error':        return 'Error'
+    case 'finished':     return 'Completed'
+    case 'error':        return 'Failed'
   }
 }
 
@@ -98,11 +98,20 @@ function snippet(value: string, max = 120): string {
   return oneLine.length > max ? `${oneLine.slice(0, max - 1)}…` : oneLine
 }
 
+function plainRunText(value: string): string {
+  const trimmed = value.trim()
+  if (/auto-dispatched|pickup-ready sweep/i.test(trimmed)) return 'Auto-started by scheduler'
+  if (/recovered?.*server restarted|server restarted/i.test(trimmed)) {
+    return 'Recovered after restart — the run continued automatically'
+  }
+  return trimmed.replace(/^\[(.*)\]$/, '$1')
+}
+
 function recoveryMessage(payload: Record<string, unknown>): string | null {
   const kind = payloadString(payload, ['kind', 'marker', 'type'])
   const message = payloadString(payload, ['message', 'line', 'summary'])
   if (kind === 'recovery' || message?.toLowerCase().includes('recovered')) {
-    return message ? snippet(message) : 'server recovered'
+    return message ? snippet(plainRunText(message)) : 'Recovered after restart — the run continued automatically'
   }
   return null
 }
@@ -126,7 +135,7 @@ function eventSummary(event: IssueRunEventRow): string {
       return `Run started${p.agentName ? ` — ${String(p.agentName)}` : ''}`
     case 'issue.run.turn': {
       const content = payloadString(p, ['content', 'message', 'text', 'delta'])
-      return `Turn ${event.seq + 1}${p.role ? ` (${String(p.role)})` : ''}${content ? ` — ${snippet(content)}` : ''}`
+      return `Turn ${event.seq + 1}${p.role ? ` (${String(p.role)})` : ''}${content ? ` — ${snippet(plainRunText(content))}` : ''}`
     }
     case 'issue.run.token':
       return `Tokens — in: ${p.inputTokens ?? 0}, out: ${p.outputTokens ?? 0}`
@@ -136,7 +145,7 @@ function eventSummary(event: IssueRunEventRow): string {
     }
     case 'issue.run.tool_result': {
       const content = payloadString(p, ['output', 'stdout', 'stderr', 'result', 'content', 'message'])
-      return `Result from ${String(p.toolName ?? p.name ?? 'tool')}${content ? ` — ${snippet(content)}` : ''}`
+      return `Result from ${String(p.toolName ?? p.name ?? 'tool')}${content ? ` — ${snippet(plainRunText(content))}` : ''}`
     }
     case 'issue.run.metric': {
       const recovery = recoveryMessage(p)
@@ -150,7 +159,7 @@ function eventSummary(event: IssueRunEventRow): string {
     case 'issue.run.error':
       return `Error: ${errorMessage(p)}`
     case 'issue.run.steered':
-      return `Steered by ${String(p.actor ?? 'user')}: "${String(p.message ?? '').slice(0, 60)}"`
+      return `Steered by ${String(p.actor ?? 'user')}: "${plainRunText(String(p.message ?? '')).slice(0, 60)}"`
     default:
       return event.eventType
   }
@@ -173,6 +182,9 @@ function elapsedLabel(startedAt: number | null): string {
 
 function EventRow({ event }: { event: IssueRunEventRow }) {
   const [expanded, setExpanded] = useState(false)
+  const recovery = recoveryMessage(event.payload)
+  const warning = event.eventType === 'issue.run.steered' || recovery
+  const summary = recovery ? `Recovery: ${recovery}` : eventSummary(event)
 
   return (
     <div
@@ -181,31 +193,50 @@ function EventRow({ event }: { event: IssueRunEventRow }) {
         padding: `${tokens.spacingVerticalXS} ${tokens.spacingHorizontalM}`,
       }}
     >
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: tokens.spacingHorizontalS,
-          cursor: 'pointer',
-          minHeight: 32,
-        }}
-        onClick={() => setExpanded((p) => !p)}
-        role="button"
-        aria-expanded={expanded}
-        tabIndex={0}
-        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') setExpanded((p) => !p) }}
-      >
-        <span style={{ color: tokens.colorNeutralForeground3, display: 'flex', alignItems: 'center' }}>
-          {eventIcon(event.eventType)}
-        </span>
-        <Caption1 style={{ color: tokens.colorNeutralForeground3, minWidth: 72, fontFamily: 'monospace' }}>
-          {formatHHMMSS(event.createdAt)}
-        </Caption1>
-        <Body1 style={{ flex: 1 }}>{eventSummary(event)}</Body1>
-        <span style={{ color: tokens.colorNeutralForeground4, display: 'flex', alignItems: 'center' }}>
-          {expanded ? <ChevronDown20Regular /> : <ChevronRight20Regular />}
-        </span>
-      </div>
+      {warning ? (
+        <MessageBar
+          intent="warning"
+          onClick={() => setExpanded((p) => !p)}
+          onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') setExpanded((p) => !p) }}
+          role="button"
+          tabIndex={0}
+          aria-expanded={expanded}
+          style={{ cursor: 'pointer' }}
+        >
+          <MessageBarBody>
+            <Caption1 style={{ color: tokens.colorNeutralForeground3, minWidth: 72, fontFamily: 'monospace', marginRight: 8 }}>
+              {formatHHMMSS(event.createdAt)}
+            </Caption1>
+            {summary}
+          </MessageBarBody>
+        </MessageBar>
+      ) : (
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: tokens.spacingHorizontalS,
+            cursor: 'pointer',
+            minHeight: 32,
+          }}
+          onClick={() => setExpanded((p) => !p)}
+          role="button"
+          aria-expanded={expanded}
+          tabIndex={0}
+          onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') setExpanded((p) => !p) }}
+        >
+          <span style={{ color: tokens.colorNeutralForeground3, display: 'flex', alignItems: 'center' }}>
+            {eventIcon(event.eventType)}
+          </span>
+          <Caption1 style={{ color: tokens.colorNeutralForeground3, minWidth: 72, fontFamily: 'monospace' }}>
+            {formatHHMMSS(event.createdAt)}
+          </Caption1>
+          <Body1 style={{ flex: 1 }}>{summary}</Body1>
+          <span style={{ color: tokens.colorNeutralForeground4, display: 'flex', alignItems: 'center' }}>
+            {expanded ? <ChevronDown20Regular /> : <ChevronRight20Regular />}
+          </span>
+        </div>
+      )}
       {expanded && (
         <pre
           style={{
@@ -404,6 +435,7 @@ export default function LiveRunViewer() {
   // Tick elapsed time
   useEffect(() => {
     if (status !== 'live') return
+    setElapsed(elapsedLabel(metrics.startedAt))
     const id = setInterval(() => setElapsed(elapsedLabel(metrics.startedAt)), 1000)
     return () => clearInterval(id)
   }, [status, metrics.startedAt])
@@ -461,20 +493,21 @@ export default function LiveRunViewer() {
             )}
           </div>
           <Caption1 style={{ color: tokens.colorNeutralForeground3 }}>
-            Run {runId.slice(0, 8)}
+            Run {runId.length <= 8 ? runId : runId.slice(-8)}
           </Caption1>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: tokens.spacingHorizontalS }}>
           <Badge
             appearance="filled"
             color={
-              status === 'live' ? 'success'
+              status === 'live' && events.length === 0 ? 'warning'
+              : status === 'live' ? 'success'
               : status === 'finished' ? 'subtle'
               : status === 'error' ? 'danger'
               : 'warning'
             }
           >
-            {statusLabel(status)}
+            {events.length === 0 && status === 'live' ? 'Pending' : statusLabel(status)}
           </Badge>
           <Caption1 style={{ color: statusColor(status) }}>
             {elapsed}
@@ -490,7 +523,8 @@ export default function LiveRunViewer() {
           padding: `${tokens.spacingVerticalS} ${tokens.spacingHorizontalL}`,
           borderBottom: `1px solid ${tokens.colorNeutralStroke2}`,
           background: tokens.colorNeutralBackground2,
-          flexWrap: 'wrap',
+          flexWrap: 'nowrap',
+          overflowX: 'auto',
         }}
       >
         <MetricCell label="Input tokens"  value={String(metrics.inputTokens)} />
@@ -533,15 +567,14 @@ export default function LiveRunViewer() {
           }}
         >
           <DismissCircle20Regular />
-          <Body1>No events yet</Body1>
-          <Caption1>The run has not emitted any events.</Caption1>
+          <Body1>Waiting for first event…</Body1>
         </div>
       ) : (
         <EventStream events={events} />
       )}
 
       {/* Steer bar — sticky bottom */}
-      <SteerBar status={status} onSteer={steer} />
+      {status === 'live' && events.length > 0 && <SteerBar status={status} onSteer={steer} />}
     </div>
   )
 }

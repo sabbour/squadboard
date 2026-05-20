@@ -7,6 +7,7 @@ import { RoutingTierBadge } from '../routing/RoutingTierBadge.tsx'
 import GitActions from './GitActions.tsx'
 import { wsClient } from '../../realtime/ws-client.ts'
 import { useRunStream as useStructuredRunStream, type IssueRunEventRow } from '../../hooks/useRunStream.ts'
+import { MessageBar, MessageBarBody, Spinner } from '@fluentui/react-components'
 import {
   ArrowClockwise20Regular,
   Bot20Regular,
@@ -68,6 +69,7 @@ interface TimelineItem {
   meta?: string
   tone: TimelineTone
   icon: ReactNode
+  messageBar?: boolean
 }
 
 const RECOVERY_PATTERN = /\b(recovered?|restart(?:ed|ing)?|reconnect(?:ed|ing)?|resum(?:e|ed|ing)?|heartbeat|lease)\b/i
@@ -94,6 +96,16 @@ function outputLinesFromText(text: string): string[] {
     .split(/\r?\n/)
     .map((line) => line.trimEnd())
     .filter((line) => line.trim().length > 0)
+    .map(plainLogLine)
+}
+
+function plainLogLine(line: string): string {
+  const trimmed = line.trim()
+  if (/auto-dispatched|pickup-ready sweep/i.test(trimmed)) return 'Auto-started by scheduler'
+  if (/recovered?.*server restarted|server restarted/i.test(trimmed)) {
+    return 'Recovered after restart — the run continued automatically'
+  }
+  return trimmed.replace(/^\[(.*)\]$/, '$1')
 }
 
 function formatElapsed(startedAt: string | undefined, completedAt: string | undefined, now: number): string {
@@ -114,7 +126,7 @@ function formatTime(value?: string): string {
   if (!value) return '—'
   const date = new Date(value)
   if (Number.isNaN(date.getTime())) return '—'
-  return date.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', second: '2-digit' })
+  return date.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false })
 }
 
 function previewText(value: unknown, fallback = 'No detail available'): string {
@@ -122,6 +134,23 @@ function previewText(value: unknown, fallback = 'No detail available'): string {
   const compact = value.replace(/\s+/g, ' ').trim()
   if (!compact) return fallback
   return compact.length > 140 ? `${compact.slice(0, 137)}…` : compact
+}
+
+function payloadText(payload: Record<string, unknown>, keys: string[]): string | undefined {
+  for (const key of keys) {
+    const value = payload[key]
+    if (typeof value === 'string' && value.trim()) return plainLogLine(value)
+  }
+  return undefined
+}
+
+function recoveryDetail(event: IssueRunEventRow): string | undefined {
+  const kind = payloadText(event.payload, ['kind', 'marker', 'type'])
+  const message = payloadText(event.payload, ['message', 'line', 'summary'])
+  if (kind === 'recovery' || (message && isRecoveryLine(message))) {
+    return message ?? 'Recovered after restart — the run continued automatically'
+  }
+  return undefined
 }
 
 function eventTitle(event: IssueRunEventRow): string {
@@ -137,13 +166,14 @@ function eventTitle(event: IssueRunEventRow): string {
       return `Tool result${typeof p.toolName === 'string' ? `: ${p.toolName}` : ''}`
     case 'issue.run.metric':
     case 'issue.run.token':
+      if (recoveryDetail(event)) return 'Recovery marker'
       return 'Usage updated'
     case 'issue.run.finish':
       return 'Run completed'
     case 'issue.run.error':
       return 'Run error'
     case 'issue.run.steered':
-      return 'Steering message'
+      return 'Steering message sent'
     default:
       return event.eventType
   }
@@ -161,6 +191,8 @@ function eventDetail(event: IssueRunEventRow): string | undefined {
       return previewText(p.input ?? p.output ?? p.content, '')
     case 'issue.run.metric':
     case 'issue.run.token': {
+      const recovery = recoveryDetail(event)
+      if (recovery) return recovery
       const input = typeof p.inputTokens === 'number' ? p.inputTokens : undefined
       const output = typeof p.outputTokens === 'number' ? p.outputTokens : undefined
       const total = typeof p.tokenCounts === 'object' && p.tokenCounts !== null && 'total' in p.tokenCounts
@@ -175,7 +207,7 @@ function eventDetail(event: IssueRunEventRow): string | undefined {
     case 'issue.run.error':
       return previewText(p.message, '')
     case 'issue.run.steered':
-      return previewText(p.message, '')
+      return payloadText(p, ['message', 'note']) ?? ''
     default:
       return undefined
   }
@@ -241,7 +273,6 @@ function buildTimeline(
     items.push({
       id: 'started',
       title: 'Run started',
-      detail: run.workspacePath,
       meta: formatTime(run.startedAt),
       tone: 'info',
       icon: <Play20Regular />,
@@ -254,8 +285,9 @@ function buildTimeline(
       title: eventTitle(event),
       detail: eventDetail(event),
       meta: formatTime(event.createdAt),
-      tone: eventTone(event.eventType),
+      tone: recoveryDetail(event) ? 'warning' : eventTone(event.eventType),
       icon: eventIcon(event.eventType),
+      messageBar: event.eventType === 'issue.run.steered' || Boolean(recoveryDetail(event)),
     })
   }
 
@@ -268,6 +300,7 @@ function buildTimeline(
       meta: `log ${String(index + 1).padStart(2, '0')}`,
       tone: recovery ? 'warning' : 'log',
       icon: recovery ? <ArrowClockwise20Regular /> : <Bot20Regular />,
+      messageBar: recovery,
     })
   })
 
@@ -281,6 +314,7 @@ function buildTimeline(
         meta: 'recovery',
         tone: 'warning',
         icon: <ArrowClockwise20Regular />,
+        messageBar: true,
       })
     })
 
@@ -309,7 +343,7 @@ function buildTimeline(
     items.push({
       id: 'waiting',
       title: run.status === 'pending' ? 'Queued for execution' : 'Waiting for output',
-      detail: 'No events or log lines have arrived yet.',
+      detail: 'Waiting for first event…',
       tone: 'muted',
       icon: <Play20Regular />,
     })
@@ -344,6 +378,37 @@ function normalizeStreamStatus(status?: string): IssueRun['status'] | null {
   return null
 }
 
+function runSuffix(runId: string): string {
+  return runId.length <= 8 ? runId : runId.slice(-8)
+}
+
+function metricTotals(events: IssueRunEventRow[], streamRun?: { inputTokens?: number; outputTokens?: number; costTokens?: number } | null) {
+  let inputTokens = streamRun?.inputTokens ?? 0
+  let outputTokens = streamRun?.outputTokens ?? 0
+  let turns = events.filter((event) => event.eventType === 'issue.run.turn').length
+
+  if (inputTokens === 0 && outputTokens === 0) {
+    for (const event of events) {
+      const p = event.payload
+      if (event.eventType === 'issue.run.metric' || event.eventType === 'issue.run.token') {
+        inputTokens += typeof p.inputTokens === 'number' ? p.inputTokens : 0
+        outputTokens += typeof p.outputTokens === 'number' ? p.outputTokens : 0
+      }
+    }
+  }
+
+  if (turns === 0 && events.length > 0) {
+    turns = events.filter((event) => event.eventType !== 'issue.run.metric' && event.eventType !== 'issue.run.token').length
+  }
+
+  return {
+    turns,
+    inputTokens,
+    outputTokens,
+    totalTokens: streamRun?.costTokens ?? inputTokens + outputTokens,
+  }
+}
+
 interface RunOutputPanelProps {
   projectId: string
   run: IssueRun
@@ -352,7 +417,7 @@ interface RunOutputPanelProps {
 
 export default function RunOutputPanel({ projectId, run, agent }: RunOutputPanelProps) {
   const bottomRef = useRef<HTMLDivElement>(null)
-  const { events, run: streamRun } = useStructuredRunStream(run.id, projectId, run.issueId, { disconnectOnUnmount: false })
+  const { events, run: streamRun, status: streamStatus, steer } = useStructuredRunStream(run.id, projectId, run.issueId, { disconnectOnUnmount: false })
   const effectiveStatus = normalizeStreamStatus(streamRun?.status) ?? run.status
   const effectiveRun: IssueRun = {
     ...run,
@@ -367,6 +432,7 @@ export default function RunOutputPanel({ projectId, run, agent }: RunOutputPanel
     errorMessage: run.errorMessage ?? streamRun?.errorMessage ?? undefined,
   }
   const isActive = effectiveRun.status === 'running' || effectiveRun.status === 'pending'
+  const canSteer = streamStatus === 'live' && effectiveRun.status === 'running'
   const chunks = useRunOutputChunks(projectId, run.id, isActive)
   const cancelRun = useCancelRun(projectId)
   const [now, setNow] = useState(() => Date.now())
@@ -387,6 +453,7 @@ export default function RunOutputPanel({ projectId, run, agent }: RunOutputPanel
     return Array.from(new Set(lines))
   }, [displayLines, streamRun?.recovery?.message, streamRun?.staleReason])
   const timeline = useMemo(() => buildTimeline(effectiveRun, events, displayLines, recoveryLines), [effectiveRun, events, displayLines, recoveryLines])
+  const totals = metricTotals(events, streamRun)
   const activeStep = deriveActiveStep(effectiveRun, events, displayLines)
   const elapsed = formatElapsed(effectiveRun.startedAt, effectiveRun.completedAt, now)
   const outputLabel = streamRun?.output?.available
@@ -441,22 +508,20 @@ export default function RunOutputPanel({ projectId, run, agent }: RunOutputPanel
             </span>
             <RunStatusBadge status={effectiveRun.status} size="md" />
             {effectiveRun.routingTier && <RoutingTierBadge tier={effectiveRun.routingTier} />}
+            <span style={{ color: '#8b949e', fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace', fontSize: '11px' }}>
+              Run {runSuffix(effectiveRun.id)}
+            </span>
           </div>
           <div style={{ color: '#c9d1d9', fontSize: '13px', lineHeight: 1.45 }}>
             <span style={{ color: '#8b949e', fontWeight: 600, marginRight: '6px' }}>Active step</span>
             {activeStep}
           </div>
-          {effectiveRun.workspacePath && (
-            <div style={{ marginTop: '6px', color: '#8b949e', fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace', wordBreak: 'break-all' }}>
-              {effectiveRun.workspacePath}
-            </div>
-          )}
         </div>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(84px, auto))', gap: '8px' }}>
-          <MetricTile label="Elapsed" value={elapsed} />
-          <MetricTile label="Cost" value={<CostDisplay costUsd={effectiveRun.costUsd} costTokens={effectiveRun.costTokens} />} />
-          <MetricTile label="Workspace" value={effectiveRun.workspaceStrategy} />
-          <MetricTile label="Flow" value={effectiveRun.routingTier ?? kindLabel(effectiveRun.kind)} />
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+          <span style={{ color: '#c9d1d9', fontVariantNumeric: 'tabular-nums', fontWeight: 700 }}>
+            {elapsed}
+          </span>
+          <CostDisplay costUsd={effectiveRun.costUsd} costTokens={effectiveRun.costTokens} />
           {isActive && (
             <button
               onClick={handleCancel}
@@ -469,7 +534,6 @@ export default function RunOutputPanel({ projectId, run, agent }: RunOutputPanel
                 padding: '4px 8px',
                 fontSize: '11px',
                 cursor: 'pointer',
-                gridColumn: '1 / -1',
               }}
             >
               Cancel
@@ -480,64 +544,30 @@ export default function RunOutputPanel({ projectId, run, agent }: RunOutputPanel
 
       <div
         style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))',
-          gap: '8px',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '18px',
           padding: '12px 16px',
           borderBottom: '1px solid #21262d',
           background: '#0d1117',
+          overflowX: 'auto',
+          whiteSpace: 'nowrap',
         }}
       >
-        <ContextCell label="Run" value={effectiveRun.id.slice(0, 8)} mono />
-        <ContextCell label="Started" value={formatTime(effectiveRun.startedAt)} />
-        <ContextCell label="Heartbeat" value={formatTime(effectiveRun.heartbeatAt)} />
-        <ContextCell label="Lease" value={formatTime(effectiveRun.leaseExpiresAt)} />
-        <ContextCell label="Output" value={outputLabel} />
+        <MetricStripItem label="Turns" value={String(totals.turns)} />
+        <MetricStripItem label="Input tokens" value={String(totals.inputTokens)} />
+        <MetricStripItem label="Output tokens" value={String(totals.outputTokens)} />
+        <MetricStripItem label="Total tokens" value={String(totals.totalTokens)} />
+        <MetricStripItem label="Workspace" value={effectiveRun.workspaceStrategy} />
+        <MetricStripItem label="Output" value={outputLabel} />
+        <MetricStripItem label="Started" value={formatTime(effectiveRun.startedAt)} />
+        <MetricStripItem label="Flow" value={effectiveRun.routingTier ?? kindLabel(effectiveRun.kind)} />
+        {!isActive && (
+          <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <GitActions projectId={projectId} run={effectiveRun} />
+          </div>
+        )}
       </div>
-
-      {recoveryLines.length > 0 && (
-        <div
-          style={{
-            margin: '12px 16px 0',
-            padding: '10px 12px',
-            borderRadius: '8px',
-            border: '1px solid rgba(210,153,34,0.35)',
-            background: 'rgba(210,153,34,0.10)',
-            color: '#f0d98c',
-          }}
-        >
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 700, marginBottom: '4px' }}>
-            <ArrowClockwise20Regular />
-            Recovery markers
-          </div>
-          {recoveryLines.slice(-3).map((line, index) => (
-            <div key={`${line}-${index}`} style={{ fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace', lineHeight: 1.45 }}>
-              {line}
-            </div>
-          ))}
-        </div>
-      )}
-
-      {effectiveRun.errorMessage && (
-        <div
-          role="alert"
-          style={{
-            margin: '12px 16px 0',
-            padding: '10px 12px',
-            borderRadius: '8px',
-            border: '1px solid rgba(248,81,73,0.4)',
-            background: 'rgba(248,81,73,0.10)',
-            color: '#ffb3ad',
-            whiteSpace: 'pre-wrap',
-          }}
-        >
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 700, marginBottom: '4px' }}>
-            <ErrorCircle20Regular />
-            Error
-          </div>
-          {effectiveRun.errorMessage}
-        </div>
-      )}
 
       {/* Timeline */}
       <div
@@ -556,88 +586,174 @@ export default function RunOutputPanel({ projectId, run, agent }: RunOutputPanel
         <div style={{ color: '#8b949e', fontFamily: 'inherit', fontSize: '11px', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: '10px' }}>
           Streamed event/log timeline
         </div>
-        {timeline.map((item) => (
-          <TimelineRow key={item.id} item={item} />
-        ))}
+        {streamStatus === 'loading' && events.length === 0 && displayLines.length === 0 ? (
+          <div style={{ minHeight: '160px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', color: '#8b949e' }}>
+            <Spinner size="small" />
+            <span>Loading run events…</span>
+          </div>
+        ) : (
+          timeline.map((item) => (
+            <TimelineRow key={item.id} item={item} />
+          ))
+        )}
         <div ref={bottomRef} />
       </div>
 
-      {/* Footer */}
-      {!isActive && (
-        <div
+      <PanelSteerBar visible={canSteer} onSteer={steer} />
+    </div>
+  )
+}
+
+function MetricStripItem({ label, value }: { label: string; value: ReactNode }) {
+  return (
+    <div style={{ display: 'inline-flex', alignItems: 'baseline', gap: '6px' }}>
+      <span style={{ color: '#8b949e', fontSize: '10px', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+        {label}
+      </span>
+      <span style={{ color: '#e6edf3', fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>
+        {value}
+      </span>
+    </div>
+  )
+}
+
+function PanelSteerBar({ visible, onSteer }: { visible: boolean; onSteer: (message: string) => Promise<void> }) {
+  const [draft, setDraft] = useState('')
+  const [sending, setSending] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  if (!visible) return null
+
+  async function send() {
+    const message = draft.trim()
+    if (!message || sending) return
+    setSending(true)
+    setError(null)
+    try {
+      await onSteer(message)
+      setDraft('')
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to steer run')
+    } finally {
+      setSending(false)
+    }
+  }
+
+  return (
+    <div
+      style={{
+        borderTop: '1px solid #21262d',
+        background: '#161b22',
+        padding: '10px 12px',
+      }}
+    >
+      <div style={{ display: 'flex', gap: '8px', alignItems: 'flex-end' }}>
+        <textarea
+          aria-label="Steer running agent"
+          placeholder="Send a message to the agent..."
+          value={draft}
+          onChange={(event) => setDraft(event.currentTarget.value)}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter' && !event.shiftKey) {
+              event.preventDefault()
+              void send()
+            }
+          }}
+          rows={1}
+          disabled={sending}
           style={{
-            padding: '6px 12px',
-            borderTop: '1px solid #21262d',
-            background: '#161b22',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            gap: '8px',
-            flexWrap: 'wrap',
+            flex: 1,
+            minHeight: '30px',
+            resize: 'vertical',
+            borderRadius: '6px',
+            border: '1px solid #30363d',
+            background: '#0d1117',
+            color: '#e6edf3',
+            padding: '7px 9px',
+            fontFamily: 'inherit',
+            fontSize: '12px',
+          }}
+        />
+        <button
+          type="button"
+          onClick={() => void send()}
+          disabled={sending || !draft.trim()}
+          style={{
+            background: 'rgba(88,166,255,0.16)',
+            border: '1px solid rgba(88,166,255,0.45)',
+            color: '#58a6ff',
+            borderRadius: '6px',
+            padding: '7px 12px',
+            fontSize: '12px',
+            fontWeight: 700,
+            cursor: sending || !draft.trim() ? 'not-allowed' : 'pointer',
+            opacity: sending || !draft.trim() ? 0.6 : 1,
           }}
         >
-          <span style={{ fontSize: '12px', color: effectiveRun.status === 'completed' ? '#3fb950' : '#f85149' }}>
-            {effectiveRun.status === 'completed'
-              ? <><Checkmark20Regular style={{ verticalAlign: 'middle', marginRight: '4px' }} />Completed</>
-              : effectiveRun.status === 'cancelled'
-              ? 'Cancelled'
-              : <><Dismiss20Regular style={{ verticalAlign: 'middle', marginRight: '4px' }} />Failed</>}
-          </span>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <GitActions projectId={projectId} run={effectiveRun} />
-            <CostDisplay costUsd={effectiveRun.costUsd} costTokens={effectiveRun.costTokens} />
-          </div>
+          Send
+        </button>
+      </div>
+      {error && (
+        <div
+          role="alert"
+          style={{
+            color: '#ffb3ad',
+            fontSize: '12px',
+            marginTop: '6px',
+          }}
+        >
+          {error}
         </div>
       )}
     </div>
   )
 }
 
-function MetricTile({ label, value }: { label: string; value: ReactNode }) {
-  return (
-    <div
-      style={{
-        border: '1px solid #30363d',
-        borderRadius: '8px',
-        padding: '7px 9px',
-        background: '#0d1117',
-        minWidth: '84px',
-      }}
-    >
-      <div style={{ color: '#8b949e', fontSize: '10px', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '2px' }}>
-        {label}
-      </div>
-      <div style={{ color: '#e6edf3', fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>
-        {value}
-      </div>
-    </div>
-  )
-}
-
-function ContextCell({ label, value, mono = false }: { label: string; value: ReactNode; mono?: boolean }) {
-  return (
-    <div>
-      <div style={{ color: '#8b949e', fontSize: '10px', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '2px' }}>
-        {label}
-      </div>
-      <div
-        style={{
-          color: '#c9d1d9',
-          fontSize: '12px',
-          fontFamily: mono ? 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace' : undefined,
-          overflow: 'hidden',
-          textOverflow: 'ellipsis',
-          whiteSpace: 'nowrap',
-        }}
-      >
-        {value}
-      </div>
-    </div>
-  )
-}
-
 function TimelineRow({ item }: { item: TimelineItem }) {
   const color = toneColor(item.tone)
+
+  if (item.messageBar) {
+    return (
+      <MessageBar intent="warning" style={{ margin: '8px 0' }}>
+        <MessageBarBody>
+          <span
+            style={{
+              color: '#8b949e',
+              fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
+              fontSize: '11px',
+              marginRight: '10px',
+            }}
+          >
+            {item.meta ?? 'event'}
+          </span>
+          <strong>{item.title}</strong>
+          {item.detail ? ` — ${item.detail}` : null}
+        </MessageBarBody>
+      </MessageBar>
+    )
+  }
+
+  if (item.tone === 'danger') {
+    return (
+      <MessageBar intent="error" style={{ margin: '8px 0' }}>
+        <MessageBarBody>
+          <span
+            style={{
+              color: '#8b949e',
+              fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
+              fontSize: '11px',
+              marginRight: '10px',
+            }}
+          >
+            {item.meta ?? 'event'}
+          </span>
+          <strong>{item.title}</strong>
+          {item.detail ? ` — ${item.detail}` : null}
+        </MessageBarBody>
+      </MessageBar>
+    )
+  }
+
   return (
     <div
       style={{
@@ -651,7 +767,14 @@ function TimelineRow({ item }: { item: TimelineItem }) {
       <span style={{ color, display: 'inline-flex', alignItems: 'flex-start', paddingTop: '1px' }}>
         {item.icon}
       </span>
-      <span style={{ color: '#8b949e', fontSize: '11px', whiteSpace: 'nowrap' }}>
+      <span
+        style={{
+          color: '#8b949e',
+          fontSize: '11px',
+          fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
+          whiteSpace: 'nowrap',
+        }}
+      >
         {item.meta ?? 'event'}
       </span>
       <div style={{ minWidth: 0 }}>

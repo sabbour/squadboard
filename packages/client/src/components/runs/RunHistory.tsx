@@ -129,27 +129,11 @@ export default function RunHistory({ projectId, issueId }: RunHistoryProps) {
                   <span style={{ fontSize: '14px', fontWeight: 700, color: 'var(--text)' }}>
                     {agent?.name ?? run.agentId}
                   </span>
-                  <RunStatusBadge status={run.status} />
+                  {!isExpanded && <RunStatusBadge status={run.status} />}
                 </div>
                 <div style={{ fontSize: '12px', color: 'var(--text-muted)', lineHeight: 1.4 }}>
                   {runSummary(run.status)}
                 </div>
-                {run.workspacePath && (
-                  <div
-                    style={{
-                      marginTop: '5px',
-                      fontSize: '11px',
-                      color: 'var(--text-muted)',
-                      fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
-                      overflow: 'hidden',
-                      textOverflow: 'ellipsis',
-                      whiteSpace: 'nowrap',
-                    }}
-                    title={run.workspacePath}
-                  >
-                    {run.workspacePath}
-                  </div>
-                )}
               </div>
 
               <div

@@ -8,7 +8,7 @@ interface RunStatusBadgeProps {
 const STATUS_CONFIG: Record<RunStatus, { label: string; color: string; bg: string; pulse: boolean }> = {
   pending:   { label: 'Queued',    color: '#8b949e', bg: 'rgba(139,148,158,0.12)', pulse: false },
   running:   { label: 'Running',   color: '#58a6ff', bg: 'rgba(88,166,255,0.12)',  pulse: true  },
-  completed: { label: 'Done',      color: '#3fb950', bg: 'rgba(63,185,80,0.12)',   pulse: false },
+  completed: { label: 'Completed', color: '#3fb950', bg: 'rgba(63,185,80,0.12)',   pulse: false },
   failed:    { label: 'Failed',    color: '#f85149', bg: 'rgba(248,81,73,0.12)',   pulse: false },
   cancelled: { label: 'Cancelled', color: '#8b949e', bg: 'rgba(139,148,158,0.12)', pulse: false },
 }
