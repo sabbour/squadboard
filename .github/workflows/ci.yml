@@ -41,6 +41,21 @@ jobs:
       - name: Build publishable packages
         run: pnpm run npm:build
 
+      - name: Type check workspace packages
+        timeout-minutes: 10
+        run: |
+          pnpm --filter @sabbour/squadboard-client typecheck
+          pnpm --filter @sabbour/squadboard-sdk typecheck
+          pnpm --filter @sabbour/squadboard exec tsc --noEmit
+          pnpm --filter @sabbour/squadboard-cli exec tsc --noEmit
+
+      - name: Run Vitest suites
+        timeout-minutes: 10
+        run: |
+          pnpm --filter @sabbour/squadboard-sdk test
+          pnpm --filter @sabbour/squadboard-client test
+          pnpm --filter @sabbour/squadboard test -- --run
+
       - name: Validate npm publish payloads
         run: pnpm run npm:publish:dry-run
 

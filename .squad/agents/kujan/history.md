@@ -258,3 +258,17 @@ Added focused client regressions for the sync status bug in `SquadSyncStatusPane
 2. `regression: parseWorkflowYaml correctly resolves canonical metadata from client-emitted YAML` — confirms full parse path also works on client-emitted shape
 
 All 3 tests in the file pass (including the pre-existing stored-file test).
+
+
+### 2026-05-20T12:51:52.451-07:00 — CI vitest/typecheck gate for PRs
+
+**What changed:** `.github/workflows/ci.yml` now inserts two blocking steps in the `npm-packages` job after the build and before the publish dry-run: (1) workspace type checks for client/sdk plus `tsc --noEmit` for server/cli, and (2) Vitest runs for sdk, client, and server. Each new gate has `timeout-minutes: 10` so hung test runs fail loudly instead of burning the whole job.
+
+**Why this matters:** The root workspace has no `test` script, so previous CI never exercised the Vitest suites at all. The first recursive baseline immediately proved the audit point: current client/server tests are already red locally, and server `tsc --noEmit` is also red. After this workflow change, those regressions will fail PR CI instead of merging silently.
+
+**Current red signals now surfaced by CI:**
+1. `packages/client` — `RunButton.test.tsx` fails because `pickDefaultConsultAgent` dereferences `a.role.toLowerCase()` when `role` is undefined.
+2. `packages/server` — Vitest is red in `ceremonies-list-route.test.ts` and `pglite-issue-run-events-catalog-repair.test.ts`.
+3. `packages/server` — `tsc --noEmit` is red in `src/engine/workflow-runner.ts` (insert typing + transaction type mismatch).
+
+**Validation:** Workflow edited; local command equivalents rerun. `@sabbour/squadboard-sdk` tests pass. Client Vitest fails reproducibly (1 failed test, 1 unhandled error). Server Vitest fails reproducibly (2 failed tests). Client/sdk typecheck pass; server `tsc --noEmit` fails reproducibly; cli `tsc --noEmit` passes.
