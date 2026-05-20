@@ -6,6 +6,7 @@ import { eq, and } from 'drizzle-orm';
 import { getDb, schema } from '../db/index.js';
 import { parseCharter, writeCharter, computeCharterHash } from '../services/charter-compiler.js';
 import { syncAgentsFromDisk } from '../services/agent-sync.js';
+import { syncAgentToFs } from '../services/squad-writeback.js';
 import { formulateAgentDraft, formulateTeamDraft } from '../services/hire-formulator.js';
 import { castTeam, buildPersonaSection, type CastedMember } from '../services/casting-engine.js';
 import { generateCharter } from '../services/curated-roles.js';
@@ -540,6 +541,9 @@ router.patch('/:id', async (req: Request, res: Response) => {
     .set(updates)
     .where(eq(schema.agents.id, id))
     .returning();
+
+  // Writeback: keep .squad/ filesystem in sync with DB (best-effort, fire-and-forget).
+  syncAgentToFs(updated).catch(() => { /* already logged inside */ });
 
   res.json({ ok: true, data: withAgentOrigin(updated) });
 });

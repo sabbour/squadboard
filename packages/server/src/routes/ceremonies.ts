@@ -62,6 +62,11 @@ import {
   type CeremonyLifecycleMetadata,
   type LifecycleRunLike,
 } from '../services/worktree-lifecycle.js';
+import {
+  syncCeremonyToFs,
+  removeCeremonyFromFs,
+  syncCeremoniesFromDisk,
+} from '../services/squad-writeback.js';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -79,6 +84,16 @@ function handleError(res: Response, err: unknown): void {
   console.error('[ceremonies] error:', err);
   const msg = err instanceof Error ? err.message : 'Internal server error';
   res.status(500).json({ error: msg });
+}
+
+async function resolveProjectSquadPath(projectId: string): Promise<string | null> {
+  const db = getDb();
+  const [project] = await db
+    .select({ path: schema.projects.path })
+    .from(schema.projects)
+    .where(eq(schema.projects.id, projectId))
+    .limit(1);
+  return project?.path ?? null;
 }
 
 function manualRunContext(body: unknown): Record<string, unknown> | undefined {
@@ -312,6 +327,12 @@ ceremoniesRouter.get('/', async (req: Request, res: Response) => {
     const { kind, triggerKind } = req.query as Record<string, string | undefined>;
     const db = getDb();
 
+    // Disk → DB: import any new ceremony YAML files from .squad/ceremonies/
+    const squadPath = await resolveProjectSquadPath(projectId);
+    if (squadPath) {
+      syncCeremoniesFromDisk(projectId, squadPath).catch(() => { /* best-effort */ });
+    }
+
     const conditions = [eq(schema.workflows.projectId, projectId)];
     if (kind) conditions.push(eq(schema.workflows.kind, kind));
     if (triggerKind) conditions.push(eq(schema.workflows.triggerKind, triggerKind));
@@ -405,6 +426,12 @@ ceremoniesRouter.post('/', async (req: Request, res: Response) => {
         .returning();
 
       res.status(201).json({ ceremony: narrative, version });
+
+      // DB → Disk: rebuild ceremonies.md to include the new narrative (best-effort).
+      const squadPathNarrative = await resolveProjectSquadPath(projectId).catch(() => null);
+      if (squadPathNarrative) {
+        syncCeremonyToFs(narrative.id, projectId, squadPathNarrative).catch(() => { /* already logged */ });
+      }
       return;
     }
 
@@ -443,6 +470,12 @@ ceremoniesRouter.post('/', async (req: Request, res: Response) => {
       .returning();
 
     res.status(201).json({ ceremony: workflow, version });
+
+    // DB → Disk: write ceremony YAML + rebuild ceremonies.md (best-effort).
+    const squadPathCreate = await resolveProjectSquadPath(projectId).catch(() => null);
+    if (squadPathCreate) {
+      syncCeremonyToFs(workflow.id, projectId, squadPathCreate).catch(() => { /* already logged */ });
+    }
   } catch (err) {
     handleError(res, err);
   }
@@ -834,6 +867,12 @@ ceremoniesRouter.patch('/:id', async (req: Request, res: Response) => {
       .returning();
 
     res.json({ ceremony: updated, version: newVersion });
+
+    // DB → Disk: write ceremony YAML + rebuild ceremonies.md (best-effort).
+    const squadPathPatch = await resolveProjectSquadPath(projectId).catch(() => null);
+    if (squadPathPatch) {
+      syncCeremonyToFs(id, projectId, squadPathPatch).catch(() => { /* already logged */ });
+    }
   } catch (err) {
     handleError(res, err);
   }
@@ -872,10 +911,14 @@ ceremoniesRouter.delete('/:id', async (req: Request, res: Response) => {
     // we hard-delete the row + its versions. For active rows we soft-archive
     // so the audit trail is preserved unless ?force=true is passed.
     if (workflow.status === 'draft' || force) {
-      // Detach any other rows that reference this one as their narrative
-      // source (parent_narrative_id ON DELETE SET NULL is enforced by the FK).
       await db.delete(schema.workflows).where(eq(schema.workflows.id, id));
       res.json({ message: 'Ceremony deleted', ceremonyId: id });
+
+      // DB → Disk: remove YAML file + rebuild ceremonies.md (best-effort).
+      const squadPathDel = await resolveProjectSquadPath(projectId).catch(() => null);
+      if (squadPathDel) {
+        removeCeremonyFromFs(workflow.slug, projectId, squadPathDel).catch(() => { /* already logged */ });
+      }
       return;
     }
 
@@ -890,6 +933,12 @@ ceremoniesRouter.delete('/:id', async (req: Request, res: Response) => {
       .where(eq(schema.workflows.id, id));
 
     res.json({ message: 'Ceremony archived', ceremonyId: id });
+
+    // DB → Disk: remove YAML file + rebuild ceremonies.md (best-effort).
+    const squadPathArchive = await resolveProjectSquadPath(projectId).catch(() => null);
+    if (squadPathArchive) {
+      removeCeremonyFromFs(workflow.slug, projectId, squadPathArchive).catch(() => { /* already logged */ });
+    }
   } catch (err) {
     handleError(res, err);
   }
