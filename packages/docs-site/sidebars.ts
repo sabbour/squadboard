@@ -9,7 +9,9 @@ const sidebars: SidebarsConfig = {
       link: {type: 'doc', id: 'getting-started/index'},
       items: [
         'getting-started/installation',
+        'getting-started/what-is-squadboard',
         'getting-started/quickstart',
+        'getting-started/key-concepts',
         'getting-started/learning-path',
         {
           type: 'category',
@@ -62,6 +64,15 @@ const sidebars: SidebarsConfig = {
             'user-guide/github',
             'user-guide/scribe-ralph',
             'user-guide/security',
+          ],
+        },
+        {
+          type: 'category',
+          label: 'How-to Guides',
+          items: [
+            'user-guide/how-to/move-card-to-ready',
+            'user-guide/how-to/find-why-run-failed',
+            'user-guide/how-to/add-squadboard-to-squad-project',
           ],
         },
         {
