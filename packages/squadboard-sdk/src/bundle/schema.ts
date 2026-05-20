@@ -28,6 +28,7 @@
 // Workflow step types (mirrors workflow-parser WorkflowStep union)
 // ---------------------------------------------------------------------------
 
+/** Routes a workflow to a named agent for processing. */
 export interface BundleWorkflowRouteStep {
   type: 'route';
   label?: string;
@@ -36,6 +37,7 @@ export interface BundleWorkflowRouteStep {
   timeout?: string;
 }
 
+/** Invokes an agent and waits for it to complete before continuing. */
 export interface BundleWorkflowAgentRunStep {
   type: 'agent_run';
   label?: string;
@@ -44,6 +46,7 @@ export interface BundleWorkflowAgentRunStep {
   timeout?: string;
 }
 
+/** Pauses a workflow and waits for human approval before continuing. */
 export interface BundleWorkflowApproveStep {
   type: 'approve';
   label?: string;
@@ -58,6 +61,7 @@ export interface BundleWorkflowApproveStep {
   exclude_author?: boolean;
 }
 
+/** Splits a workflow into parallel (or serial) sub-branches, then merges results. */
 export interface BundleWorkflowFanOutStep {
   type: 'fan_out';
   label?: string;
@@ -70,6 +74,7 @@ export interface BundleWorkflowFanOutStep {
   steps: BundleWorkflowStep[];
 }
 
+/** Transfers control to another agent without waiting for a response. */
 export interface BundleWorkflowHandoffStep {
   type: 'handoff';
   label?: string;
@@ -77,6 +82,10 @@ export interface BundleWorkflowHandoffStep {
   prompt?: string;
 }
 
+/**
+ * Discriminated union of all workflow step types.
+ * Use the `type` field to narrow to the concrete step interface.
+ */
 export type BundleWorkflowStep =
   | BundleWorkflowRouteStep
   | BundleWorkflowAgentRunStep
@@ -88,6 +97,10 @@ export type BundleWorkflowStep =
 // Ceremony trigger types (mirrors triggerKind / triggerConfig)
 // ---------------------------------------------------------------------------
 
+/**
+ * Allowed trigger kinds for ceremonies and workflows.
+ * Use `'github'` for GitHub webhook-driven triggers (Stream G Phase 2B).
+ */
 export type BundleCeremonyTriggerKind =
   | 'on_issue_entry'
   | 'on_schedule'
@@ -95,6 +108,7 @@ export type BundleCeremonyTriggerKind =
   | 'manual'
   | 'github';         // Stream G Phase 2B: GitHub webhook event trigger
 
+/** Generic trigger descriptor stored in a bundle ceremony or workflow. */
 export interface BundleCeremonyTrigger {
   kind: BundleCeremonyTriggerKind;
   /** Matches the shape of triggerConfig for the given kind. */
@@ -103,6 +117,7 @@ export interface BundleCeremonyTrigger {
 
 /**
  * GitHub webhook trigger — fires a ceremony when a matching GitHub event arrives.
+ * Set `kind: 'github'` to use this trigger type.
  *
  * @example
  * ```yaml
@@ -137,6 +152,7 @@ export interface BundleCeremonyGithubTrigger {
 // Top-level section types
 // ---------------------------------------------------------------------------
 
+/** Bundle-level metadata: identity, versioning, and schema compatibility. */
 export interface BundleManifest {
   /** Unique machine-readable identifier, e.g. "default-software-project". */
   bundleId: string;
@@ -154,6 +170,7 @@ export interface BundleManifest {
   schemaVersion: 1;
 }
 
+/** Top-level project settings: display name, description, and custom config. */
 export interface BundleProject {
   name: string;
   description?: string;
@@ -161,6 +178,7 @@ export interface BundleProject {
   settings?: Record<string, unknown>;
 }
 
+/** A single column in the project's Kanban board. */
 export interface BundleKanbanColumn {
   slug: string;
   label: string;
@@ -168,12 +186,14 @@ export interface BundleKanbanColumn {
   wip_limit?: number;
 }
 
+/** Kanban board configuration: column definitions and the default intake column. */
 export interface BundleKanban {
   columns: BundleKanbanColumn[];
   /** slug of the column where new issues are placed. */
   defaultColumn: string;
 }
 
+/** An agent team member with an optional inline or external charter. */
 export interface BundleTeamMember {
   /** Cast name (e.g. "Lead", "Backend"). Re-cast by Init Mode on apply. */
   name: string;
@@ -191,6 +211,7 @@ export interface BundleTeamMember {
   charterPath?: string;
 }
 
+/** A ceremony definition: trigger, workflow steps, and optional inline YAML. */
 export interface BundleCeremony {
   id: string;
   name: string;
@@ -208,6 +229,7 @@ export interface BundleCeremony {
   bodyPath?: string;
 }
 
+/** A standalone workflow definition, independent of a ceremony. */
 export interface BundleWorkflow {
   id: string;
   name: string;
@@ -220,6 +242,7 @@ export interface BundleWorkflow {
   bodyPath?: string;
 }
 
+/** A skill (prompt addendum) that can be applied to an agent's capabilities. */
 export interface BundleSkill {
   key: string;
   name: string;
@@ -231,6 +254,7 @@ export interface BundleSkill {
   bodyPath?: string;
 }
 
+/** A tool integration record, including its input/output schema. */
 export interface BundleTool {
   key: string;
   name: string;
@@ -240,6 +264,7 @@ export interface BundleTool {
   outputSchema?: unknown;
 }
 
+/** An MCP server that agents in this project can connect to. */
 export interface BundleMcpServer {
   name: string;
   command: string;
@@ -250,6 +275,7 @@ export interface BundleMcpServer {
   url?: string;
 }
 
+/** A routing rule that maps an issue pattern to a named agent. */
 export interface BundleRoutingRule {
   pattern: string;
   matchType: 'label' | 'keyword' | 'assignee' | 'catchall';
@@ -258,6 +284,7 @@ export interface BundleRoutingRule {
   rawRule?: string;
 }
 
+/** An agent definition with an optional inline or external charter. */
 export interface BundleAgent {
   name: string;
   role: string;
@@ -295,6 +322,7 @@ export interface SquadboardBundle {
 // Loader result type (shared between server loader and CLI output)
 // ---------------------------------------------------------------------------
 
+/** Result returned by the Squadboard bundle loader after applying a bundle. */
 export interface ApplyResult {
   applied: string[];
   skipped: string[];

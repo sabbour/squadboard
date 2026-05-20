@@ -25,6 +25,7 @@ import { join } from 'node:path';
 // Types
 // ---------------------------------------------------------------------------
 
+/** Backlog counts at a point in time (before or after a wave). */
 export interface BacklogSnapshot {
   total: number;
   done: number;
@@ -33,17 +34,20 @@ export interface BacklogSnapshot {
   pending: number;
 }
 
+/** Maps a single spawn/agent to the todo IDs it closed during the wave. */
 export interface SpawnLineageEntry {
   spawnName: string;
   todosClosed: string[];
 }
 
+/** Plain-language summary for one agent/spawn that ran during the wave. */
 export interface SpawnSummary {
   name: string;
   plainLanguageSummary: string;
   commitSha?: string;
 }
 
+/** A todo that carries over to the next wave (status is in_progress or blocked). */
 export interface NextWaveTodo {
   id: string;
   title: string;
@@ -51,6 +55,13 @@ export interface NextWaveTodo {
   blockedReason?: string;
 }
 
+/**
+ * Options for {@link writeHealthReport}.
+ *
+ * Mirrors the data sections defined in squad.agent.md Scribe task #8:
+ * wave summary, backlog delta, spawn lineage, defects, summaries, and
+ * next-wave carry-overs.
+ */
 export interface HealthReportOptions {
   /** Wave number (e.g. 20). Use 0 if unknown. */
   waveNumber: number;
@@ -74,6 +85,7 @@ export interface HealthReportOptions {
   dateOverride?: string;
 }
 
+/** Return value from {@link writeHealthReport}. */
 export interface HealthReportResult {
   /** Absolute path to the written artifact. */
   path: string;

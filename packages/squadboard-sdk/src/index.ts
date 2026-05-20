@@ -13,6 +13,15 @@
 
 import * as scribe from './scribe/index.js';
 
+/**
+ * Top-level namespace that groups all Squadboard SDK sub-modules.
+ *
+ * @example
+ * ```typescript
+ * import { squadboard } from '@sabbour/squadboard-sdk';
+ * const result = await squadboard.scribe.closeOut({ spawnManifest, push: true });
+ * ```
+ */
 export const squadboard = { scribe };
 
 // Re-export types for library consumers.
