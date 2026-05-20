@@ -10,7 +10,7 @@
   "agentCount": 4,
   "routingRuleCount": 5,
   "ceremonyCount": 2,
-  "defaultModel": null,
+  "defaultModel": "claude-sonnet-4.6",
   "teamName": "Bug Triage Squad",
   "warnings": [],
   "source": {

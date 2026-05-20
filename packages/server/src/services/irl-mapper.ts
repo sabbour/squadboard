@@ -479,6 +479,7 @@ function pickModelString(v: unknown): string | null {
   if (typeof v === 'string') return v;
   if (v && typeof v === 'object') {
     const obj = v as Record<string, unknown>;
+    if (typeof obj.preferred === 'string') return obj.preferred;
     if (typeof obj.id === 'string') return obj.id;
     if (typeof obj.name === 'string') return obj.name;
     if (typeof obj.model === 'string') return obj.model;

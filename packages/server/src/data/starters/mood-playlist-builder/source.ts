@@ -118,7 +118,7 @@ const routing = defineRouting({
 
 const defaults = defineDefaults({
   model: {
-    preferred: 'claude-sonnet-4.5',
+    preferred: 'claude-sonnet-4.6',
     rationale: 'Strong structured-output quality for staged mood planning',
     fallback: 'claude-haiku-4.5',
   },
@@ -151,7 +151,7 @@ export const moodPipeline = [
 export const REQUIRED_MOOD_AGENT_NAMES = moodPipeline.map((stage) => stage.agent.replace(/^@/, ''));
 
 export default defineSquad({
-  version: '0.8.0',
+  version: '0.9.0',
   team,
   agents: [moodInterpreter, songCurator, moodLogicGuardian],
   routing,

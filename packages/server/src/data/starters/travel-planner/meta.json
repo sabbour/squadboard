@@ -10,7 +10,7 @@
   "agentCount": 5,
   "routingRuleCount": 6,
   "ceremonyCount": 1,
-  "defaultModel": null,
+  "defaultModel": "claude-sonnet-4.6",
   "teamName": "Travel Planning Squad",
   "warnings": [],
   "source": {

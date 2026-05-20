@@ -9,7 +9,7 @@
   "agentCount": 3,
   "routingRuleCount": 4,
   "ceremonyCount": 0,
-  "defaultModel": null,
+  "defaultModel": "claude-sonnet-4.6",
   "teamName": "Mood Playlist Squad",
   "warnings": [],
   "source": {

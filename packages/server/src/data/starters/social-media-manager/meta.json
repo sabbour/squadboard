@@ -10,7 +10,7 @@
   "agentCount": 4,
   "routingRuleCount": 5,
   "ceremonyCount": 1,
-  "defaultModel": null,
+  "defaultModel": "claude-sonnet-4.6",
   "teamName": "Social Media Content Manager Squad",
   "warnings": [],
   "source": {

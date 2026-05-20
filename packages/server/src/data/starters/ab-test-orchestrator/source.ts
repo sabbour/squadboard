@@ -251,7 +251,7 @@ const routing = defineRouting({
 // ============================================================================
 
 const defaults = defineDefaults({
-  model: { preferred: 'claude-sonnet-4.5', rationale: 'Strong reasoning for statistical analysis and experiment design', fallback: 'claude-haiku-4.5' }
+  model: { preferred: 'claude-sonnet-4.6', rationale: 'Strong reasoning for statistical analysis and experiment design', fallback: 'claude-haiku-4.5' }
 });
 
 // ============================================================================
@@ -272,7 +272,7 @@ const ceremonies = [
 // ============================================================================
 
 export default defineSquad({
-  version: '0.8.0',
+  version: '0.9.0',
   team,
   agents: [experimentDesigner, trafficStrategist, metricsAnalyst, resultsInterpreter],
   routing,

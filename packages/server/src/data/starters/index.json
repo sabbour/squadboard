@@ -1,14 +1,14 @@
 {
-  "generatedAt": "2026-05-15T07:48:10.117Z",
+  "generatedAt": "2026-05-20T16:05:49.014Z",
   "source": {
-    "origin": "github",
-    "repo": "bradygaster/Squad-IRL",
-    "ref": "main"
+    "origin": "local",
+    "repo": "sabbour/squadboard",
+    "ref": "dev"
   },
   "starters": [
     {
       "slug": "receipt-scanner",
-      "title": "🧾 Receipt Scanner & Expense Analyzer",
+      "title": "\ud83e\uddfe Receipt Scanner & Expense Analyzer",
       "blurb": "A Squad-powered sample that reads receipt files from a folder and processes them",
       "tags": [
         "ceremonies",
@@ -21,7 +21,7 @@
     },
     {
       "slug": "ab-test-orchestrator",
-      "title": "A/B Test Orchestrator — Squad Edition",
+      "title": "A/B Test Orchestrator \u2014 Squad Edition",
       "blurb": "A Squad sample that turns an experiment hypothesis into a complete A/B test plan. Provide a hypothesis at the terminal or point it at an experiment brief file, and four AI specialists collaborate to design your test.",
       "tags": [
         "ceremonies",
@@ -35,7 +35,7 @@
     {
       "slug": "appointment-scheduler",
       "title": "Appointment Scheduler",
-      "blurb": "A Squad sample that turns plain-text scheduling requests into optimized meeting proposals across timezones. Describe who needs to meet, when, and what to avoid — four AI specialists handle the rest.",
+      "blurb": "A Squad sample that turns plain-text scheduling requests into optimized meeting proposals across timezones. Describe who needs to meet, when, and what to avoid \u2014 four AI specialists handle the rest.",
       "tags": [
         "ceremonies",
         "routing",
@@ -47,8 +47,8 @@
     },
     {
       "slug": "bug-triage",
-      "title": "Bug Triage — GitHub Issues Edition",
-      "blurb": "A Squad-powered GitHub issue triage system — fetches real open issues from any repo using the gh CLI and triages them with a team of AI specialists.",
+      "title": "Bug Triage \u2014 GitHub Issues Edition",
+      "blurb": "A Squad-powered GitHub issue triage system \u2014 fetches real open issues from any repo using the gh CLI and triages them with a team of AI specialists.",
       "tags": [
         "ceremonies",
         "routing",
@@ -60,8 +60,8 @@
     },
     {
       "slug": "compliance-checker",
-      "title": "Compliance Checker — Codebase Compliance Scanner",
-      "blurb": "A Squad-powered compliance checker that scans a real project folder and evaluates compliance across security, licensing, documentation, and data privacy — with a team of four AI specialists.",
+      "title": "Compliance Checker \u2014 Codebase Compliance Scanner",
+      "blurb": "A Squad-powered compliance checker that scans a real project folder and evaluates compliance across security, licensing, documentation, and data privacy \u2014 with a team of four AI specialists.",
       "tags": [
         "ceremonies",
         "routing",
@@ -73,8 +73,8 @@
     },
     {
       "slug": "content-creation",
-      "title": "Content Creation Workflow — Squad Edition",
-      "blurb": "A Squad sample that takes a blog topic and produces a polished, SEO-optimized article through a four-agent content pipeline: research → outline → write → edit.",
+      "title": "Content Creation Workflow \u2014 Squad Edition",
+      "blurb": "A Squad sample that takes a blog topic and produces a polished, SEO-optimized article through a four-agent content pipeline: research \u2192 outline \u2192 write \u2192 edit.",
       "tags": [
         "ceremonies",
         "routing",
@@ -86,8 +86,8 @@
     },
     {
       "slug": "contract-reviewer",
-      "title": "Contract Reviewer — Squad Edition",
-      "blurb": "A real Squad-powered contract review tool. Point it at a contract file and a team of four AI legal specialists will extract clauses, score risk, suggest negotiation alternatives, and deliver an executive summary — all with 🔴🟡🟢 traffic-li",
+      "title": "Contract Reviewer \u2014 Squad Edition",
+      "blurb": "A real Squad-powered contract review tool. Point it at a contract file and a team of four AI legal specialists will extract clauses, score risk, suggest negotiation alternatives, and deliver an executive summary \u2014 all with \ud83d\udd34\ud83d\udfe1\ud83d\udfe2 traffic-light risk flags. Sign, negotiate, or walk away \u2014 the squad tells you which.",
       "tags": [
         "ceremonies",
         "routing",
@@ -99,7 +99,7 @@
     },
     {
       "slug": "gmail",
-      "title": "Email Inbox Triage — Gmail Edition",
+      "title": "Email Inbox Triage \u2014 Gmail Edition",
       "blurb": "A Squad sample that opens your real Gmail inbox in a browser, scrapes the visible emails using Playwright, and feeds them to a four-agent AI triage squad for actionable advice.",
       "tags": [
         "ceremonies",
@@ -126,7 +126,7 @@
     {
       "slug": "job-application-tracker",
       "title": "Job Application Tracker",
-      "blurb": "A Squad sample that opens a real browser, scrapes job listings from any job board, and analyzes them with a team of four AI specialists — matching opportunities to your profile, researching companies, preparing application strategies, and c",
+      "blurb": "A Squad sample that opens a real browser, scrapes job listings from any job board, and analyzes them with a team of four AI specialists \u2014 matching opportunities to your profile, researching companies, preparing application strategies, and creating a prioritized action plan so you apply smarter, not harder.",
       "tags": [
         "ceremonies",
         "routing",
@@ -139,7 +139,7 @@
     {
       "slug": "linkedin-monitor",
       "title": "LinkedIn Monitor & Engagement Tracker",
-      "blurb": "A Squad sample that opens your real LinkedIn in a browser, scrapes your notifications and messages using Playwright, and feeds them to a four-agent AI squad that tells you what needs your attention — with direct links to take action.",
+      "blurb": "A Squad sample that opens your real LinkedIn in a browser, scrapes your notifications and messages using Playwright, and feeds them to a four-agent AI squad that tells you what needs your attention \u2014 with direct links to take action.",
       "tags": [
         "ceremonies",
         "routing",
@@ -152,7 +152,7 @@
     {
       "slug": "meeting-recap",
       "title": "Meeting Recap & Action Item Generator",
-      "blurb": "A Squad sample that turns meeting transcripts into structured recaps with action items, decisions, and follow-ups. Paste your notes directly or point to a transcript file — four AI specialists do the rest.",
+      "blurb": "A Squad sample that turns meeting transcripts into structured recaps with action items, decisions, and follow-ups. Paste your notes directly or point to a transcript file \u2014 four AI specialists do the rest.",
       "tags": [
         "ceremonies",
         "routing",
@@ -190,7 +190,7 @@
     {
       "slug": "options-trader",
       "title": "Options Day Trader",
-      "blurb": "A Squad sample that opens TradingView in a real browser, reads live chart signals (VWAP, EMA 9/21, RSI, VIX), and feeds them to a four-agent analysis squad that produces trade recommendations for 0DTE debit spreads. Uses SPX as the default ",
+      "blurb": "A Squad sample that opens TradingView in a real browser, reads live chart signals (VWAP, EMA 9/21, RSI, VIX), and feeds them to a four-agent analysis squad that produces trade recommendations for 0DTE debit spreads. Uses SPX as the default instrument but can be adapted to any options-tradable symbol. Paper trade only \u2014 no real orders placed.",
       "tags": [
         "ceremonies",
         "routing",
@@ -242,7 +242,7 @@
     {
       "slug": "social-media-manager",
       "title": "Social Media Content Manager",
-      "blurb": "A Squad sample that takes a content theme or product description and generates platform-optimized social media posts for Twitter, LinkedIn, and Instagram — complete with timing recommendations and engagement monitoring strategies.",
+      "blurb": "A Squad sample that takes a content theme or product description and generates platform-optimized social media posts for Twitter, LinkedIn, and Instagram \u2014 complete with timing recommendations and engagement monitoring strategies.",
       "tags": [
         "ceremonies",
         "routing",
@@ -255,7 +255,7 @@
     {
       "slug": "support-ticket-router",
       "title": "Support Ticket Router",
-      "blurb": "A Squad sample that reads real support ticket files from a folder and triages them with a four-agent AI squad — classifying priority, matching known issues, drafting responses, and producing a prioritized action queue.",
+      "blurb": "A Squad sample that reads real support ticket files from a folder and triages them with a four-agent AI squad \u2014 classifying priority, matching known issues, drafting responses, and producing a prioritized action queue.",
       "tags": [
         "ceremonies",
         "routing",
@@ -267,8 +267,8 @@
     },
     {
       "slug": "travel-planner",
-      "title": "Travel Planner — A Squad of Travel Experts",
-      "blurb": "Trip planning sucks. You're bouncing between Google Maps, TripAdvisor, Booking.com, Reddit threads, and your friend's cousin's blog. Visa requirements, flight connections, neighborhood vibes, whether that $200 hotel is worth it — it's fragm",
+      "title": "Travel Planner \u2014 A Squad of Travel Experts",
+      "blurb": "Trip planning sucks \u2014 you are bouncing between a dozen tabs, never sure you are making the right calls. This sample assembles a real team of five travel specialists (research, flights, lodging, activities, budget) that actually coordinate with each other to deliver a complete, personalized itinerary in one shot.",
       "tags": [
         "ceremonies",
         "routing",

@@ -286,7 +286,7 @@ const routing = defineRouting({
 // ============================================================================
 
 const defaults = defineDefaults({
-  model: { preferred: 'claude-sonnet-4.5', rationale: 'Creative content generation with strategic reasoning', fallback: 'claude-haiku-4.5' }
+  model: { preferred: 'claude-sonnet-4.6', rationale: 'Creative content generation with strategic reasoning', fallback: 'claude-haiku-4.5' }
 });
 
 // ============================================================================
@@ -307,7 +307,7 @@ const ceremonies = [
 // ============================================================================
 
 export default defineSquad({
-  version: '0.8.0',
+  version: '0.9.0',
   team,
   agents: [contentCreator, platformOptimizer, timingStrategist, engagementMonitor],
   routing,

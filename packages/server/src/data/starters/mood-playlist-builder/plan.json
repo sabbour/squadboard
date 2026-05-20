@@ -1,5 +1,5 @@
 {
-  "defaultModel": null,
+  "defaultModel": "claude-sonnet-4.6",
   "teamName": "Mood Playlist Squad",
   "teamMembers": [
     "mood-interpreter",
@@ -10,21 +10,21 @@
     {
       "name": "mood-interpreter",
       "role": "Mood Interpreter",
-      "model": null,
+      "model": "claude-sonnet-4.6",
       "charterPath": "agents/mood-interpreter/charter.md",
       "charterContents": "# mood-interpreter\n\n## Role\n\nMood Interpreter\n\n## Expertise\n\n- Summarizes raw mood text into a clear 1-3 word phrase with adjacent options.\n\n## Style\n\nYou convert free-form mood check-ins into a concise, reusable mood signal.\n\nReturn strict JSON only:\n{\n  \"moodPhrase\": \"1-3 word title-cased phrase\",\n  \"adjacentMoods\": [\"string\", \"string\"]\n}\n\nRules:\n- moodPhrase must be non-empty and 1-3 words\n- adjacentMoods is an array with 0-4 strings\n- no markdown, no extra keys\n"
     },
     {
       "name": "song-curator",
       "role": "Song Curator",
-      "model": null,
+      "model": "claude-sonnet-4.6",
       "charterPath": "agents/song-curator/charter.md",
       "charterContents": "# song-curator\n\n## Role\n\nSong Curator\n\n## Expertise\n\n- Builds a mood-aligned list of songs with genre, artist, and title.\n\n## Style\n\nYou curate songs that match the interpreted mood.\n\nReturn strict JSON only:\n{\n  \"songs\": [\n    { \"genre\": \"string\", \"artist\": \"string\", \"song\": \"string\" }\n  ]\n}\n\nRules:\n- include 1-8 songs\n- each item needs non-empty genre, artist, and song\n- no markdown, no extra keys\n"
     },
     {
       "name": "mood-logic-guardian",
       "role": "Mood Logic Guardian",
-      "model": null,
+      "model": "claude-sonnet-4.6",
       "charterPath": "agents/mood-logic-guardian/charter.md",
       "charterContents": "# mood-logic-guardian\n\n## Role\n\nMood Logic Guardian\n\n## Expertise\n\n- Applies history-aware mood logic and fallback policy guardrails.\n\n## Style\n\nYou are the policy and reliability checkpoint for mood planning output.\n\nReturn strict JSON only:\n{\n  \"moodPhrase\": \"1-3 word title-cased mood phrase\",\n  \"adjacentMoods\": [\"string\", \"string\"],\n  \"songs\": [\n    { \"genre\": \"string\", \"artist\": \"string\", \"song\": \"string\" }\n  ]\n}\n\nRules:\n- preserve the interpreted mood intent\n- keep adjacent moods history-aware when context suggests it\n- songs must contain 1-8 valid items\n- no markdown, no extra keys\n"
     }
@@ -63,7 +63,7 @@
   "files": [
     {
       "filePath": "team.md",
-      "contents": "# Mood Playlist Squad\n\nA role-based mood pipeline that interprets mood, curates songs, and enforces mood logic.\n\n## Members\n\n- @mood-interpreter — Mood Interpreter\n- @song-curator — Song Curator\n- @mood-logic-guardian — Mood Logic Guardian\n"
+      "contents": "# Mood Playlist Squad\n\nA role-based mood pipeline that interprets mood, curates songs, and enforces mood logic.\n\n## Members\n\n- @mood-interpreter \u2014 Mood Interpreter\n- @song-curator \u2014 Song Curator\n- @mood-logic-guardian \u2014 Mood Logic Guardian\n"
     },
     {
       "filePath": "routing.md",
