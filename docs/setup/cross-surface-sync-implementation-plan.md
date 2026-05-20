@@ -6,6 +6,14 @@
 
 ---
 
+## Namespace and Invariant Decisions
+
+- Canonical API namespace: `/api/projects/:projectId/squad-sync/...`.
+- Backend route convention: mount `packages/server/src/routes/squad-sync.ts` at `/api/projects/:projectId/squad-sync`; route handlers use local paths such as `/status`, `/repair`, `/project-squad-to-fs`, and `/generate-github-agent`.
+- Ceremony invariant: `.squad/ceremonies.md` is required and must contain seeded, non-placeholder defaults. Missing, empty, or placeholder-only ceremonies are drift/health warnings and require the `seed-ceremony-defaults` repair path.
+
+---
+
 ## Overview
 
 This plan breaks down the architectural contract into concrete, sequenced work items for each specialist. Work may proceed in parallel where independent; some items have dependencies noted.
@@ -67,17 +75,17 @@ This plan breaks down the architectural contract into concrete, sequenced work i
 
 ---
 
-### H3: API Endpoint — GET /api/projects/:id/sync/status
+### H3: API Endpoint — GET /api/projects/:projectId/squad-sync/status
 
 **Scope:** Drift detection report  
 **Effort:** Medium (6–8 hours)  
 **Dependencies:** H1, H2  
 
 **Tasks:**
-- [ ] Create endpoint in `packages/server/src/routes/sync.ts` (new file)
+- [ ] Create endpoint in `packages/server/src/routes/squad-sync.ts` (new file), mounted at `/api/projects/:projectId/squad-sync`
   ```typescript
-  router.get('/projects/:id/sync/status', async (req, res) => {
-    const project = await projects.get(req.params.id);
+  router.get('/status', async (req, res) => {
+    const project = await projects.get(req.params.projectId);
     const drifts = [];
     
     // Check 1: GitHub agent file exists?
@@ -104,26 +112,26 @@ This plan breaks down the architectural contract into concrete, sequenced work i
     });
   });
   ```
-- [ ] Add test: `packages/server/src/__tests__/sync-status.test.ts`
+- [ ] Add test: `packages/server/src/__tests__/squad-sync-status.test.ts`
   - Test: `fs` mode project reports drift if ceremonies missing
   - Test: `postgresql` mode project reports no drift if synced
   - Test: Report includes guidance/advice for each drift type
 
-**Output:** Users can query sync health via `/api/projects/:id/sync/status`.
+**Output:** Users can query sync health via `/api/projects/:projectId/squad-sync/status`.
 
 ---
 
-### H4: API Endpoint — POST /api/projects/:id/sync/project-squad-to-fs
+### H4: API Endpoint — POST /api/projects/:projectId/squad-sync/project-squad-to-fs
 
 **Scope:** Write DB state to filesystem  
 **Effort:** Medium (8–10 hours)  
 **Dependencies:** H1, H2, H3  
 
 **Tasks:**
-- [ ] Create endpoint in `packages/server/src/routes/sync.ts`
+- [ ] Create endpoint in `packages/server/src/routes/squad-sync.ts`
   ```typescript
-  router.post('/projects/:id/sync/project-squad-to-fs', async (req, res) => {
-    const project = await projects.get(req.params.id);
+  router.post('/project-squad-to-fs', async (req, res) => {
+    const project = await projects.get(req.params.projectId);
     if (project.storage_provider_mode !== 'postgresql') {
       return res.status(400).json({ error: 'Not in postgresql mode' });
     }
@@ -154,17 +162,17 @@ This plan breaks down the architectural contract into concrete, sequenced work i
 
 ---
 
-### H5: API Endpoint — POST /api/projects/:id/sync/generate-github-agent
+### H5: API Endpoint — POST /api/projects/:projectId/squad-sync/generate-github-agent
 
 **Scope:** Render and push `.github/agents/squad.agent.md`  
 **Effort:** Medium (8–10 hours)  
 **Dependencies:** H1, H3  
 
 **Tasks:**
-- [ ] Create endpoint in `packages/server/src/routes/sync.ts`
+- [ ] Create endpoint in `packages/server/src/routes/squad-sync.ts`
   ```typescript
-  router.post('/projects/:id/sync/generate-github-agent', async (req, res) => {
-    const project = await projects.get(req.params.id);
+  router.post('/generate-github-agent', async (req, res) => {
+    const project = await projects.get(req.params.projectId);
     
     // Read authoritative state
     const team = await getTeam(project);
@@ -190,7 +198,7 @@ This plan breaks down the architectural contract into concrete, sequenced work i
   });
   ```
 - [ ] Verify agent template exists: `packages/server/src/templates/squad.agent.md.hbs` or similar
-- [ ] Add test: `packages/server/src/__tests__/sync-generate-github-agent.test.ts`
+- [ ] Add test: `packages/server/src/__tests__/squad-sync-generate-github-agent.test.ts`
   - Test: Renders agent file with correct SDK version
   - Test: Includes team roster, routing rules, ceremony triggers
   - Test: Handles missing GitHub auth gracefully
@@ -199,29 +207,29 @@ This plan breaks down the architectural contract into concrete, sequenced work i
 
 ---
 
-### H6: API Endpoint — POST /api/projects/:id/sync/repair
+### H6: API Endpoint — POST /api/projects/:projectId/squad-sync/repair
 
 **Scope:** User-initiated repair actions  
 **Effort:** Medium (6–8 hours)  
 **Dependencies:** H4, H5, H3  
 
 **Tasks:**
-- [ ] Create endpoint in `packages/server/src/routes/sync.ts`
+- [ ] Create endpoint in `packages/server/src/routes/squad-sync.ts`
   ```typescript
-  router.post('/projects/:id/sync/repair', async (req, res) => {
+  router.post('/repair', async (req, res) => {
     const { action, force } = req.body; // 'regenerate_github_agent' | 'sync_squad_to_fs' | 'reimport_fs_to_db'
-    const project = await projects.get(req.params.id);
+    const project = await projects.get(req.params.projectId);
     
     let result;
     switch (action) {
       case 'regenerate_github_agent':
-        result = await callEndpoint(`/projects/${project.id}/sync/generate-github-agent`);
+        result = await callEndpoint(`/projects/${project.id}/squad-sync/generate-github-agent`);
         break;
       case 'sync_squad_to_fs':
         if (project.storage_provider_mode !== 'postgresql') {
           throw new Error('Only valid in postgresql mode');
         }
-        result = await callEndpoint(`/projects/${project.id}/sync/project-squad-to-fs`);
+        result = await callEndpoint(`/projects/${project.id}/squad-sync/project-squad-to-fs`);
         break;
       case 'reimport_fs_to_db':
         if (project.storage_provider_mode !== 'postgresql' || !force) {
@@ -232,11 +240,11 @@ This plan breaks down the architectural contract into concrete, sequenced work i
     }
     
     // Return new sync status
-    const status = await callEndpoint(`/projects/${project.id}/sync/status`);
+    const status = await callEndpoint(`/projects/${project.id}/squad-sync/status`);
     res.json({ action, result, updated_status: status });
   });
   ```
-- [ ] Add test: `packages/server/src/__tests__/sync-repair.test.ts`
+- [ ] Add test: `packages/server/src/__tests__/squad-sync-repair.test.ts`
   - Test: Each repair action calls the right endpoint
   - Test: Force flag required for reimport
   - Test: Returns updated status after repair
@@ -416,10 +424,10 @@ This plan breaks down the architectural contract into concrete, sequenced work i
   - Display current storage mode (badge)
   - Display bootstrap status + timestamp
   - List drift items with descriptions
-  - "Repair" button per drift type (calls `POST /api/projects/:id/sync/repair`)
+  - "Repair" button per drift type (calls `POST /api/projects/:projectId/squad-sync/repair`)
   - Loading state during repair
   - Success/error toast on repair completion
-- [ ] Use `useQuery` hook to fetch `GET /api/projects/:id/sync/status`
+- [ ] Use `useQuery` hook to fetch `GET /api/projects/:projectId/squad-sync/status`
 - [ ] Add to Project Settings layout under **Team** section
 - [ ] Add test: `packages/client/src/__tests__/TeamSyncPanel.test.tsx`
   - Test: Displays storage mode
@@ -463,7 +471,7 @@ This plan breaks down the architectural contract into concrete, sequenced work i
   - Step 2 (new): Detect existing `.squad/`
     - If found: Offer "Stay in filesystem mode (read-only)" vs. "Import to database (full sync)"
     - If not found: Proceed with new project creation
-  - Step 3: If importing, call `POST /api/projects/:id/sync/repair` with `reimport_fs_to_db`
+  - Step 3: If importing, call `POST /api/projects/:projectId/squad-sync/repair` with `reimport_fs_to_db`
 - [ ] Add test: Existing project with `.squad/` can be imported and upgraded
 
 **Output:** CLI-first users can link and upgrade their projects.
@@ -493,7 +501,7 @@ This plan breaks down the architectural contract into concrete, sequenced work i
     expect(ceremonies).not.toBeEmpty();
     
     // 3. Generate GitHub agent file
-    await api.post(`/api/projects/${project.id}/sync/generate-github-agent`);
+    await api.post(`/api/projects/${project.id}/squad-sync/generate-github-agent`);
     
     // 4. Verify file exists
     const agentFile = await github.getFile('.github/agents/squad.agent.md');
@@ -534,7 +542,7 @@ This plan breaks down the architectural contract into concrete, sequenced work i
     });
     
     // 3. Offer upgrade to DB mode
-    await api.post(`/api/projects/${project.id}/sync/repair`, {
+    await api.post(`/api/projects/${project.id}/squad-sync/repair`, {
       action: 'reimport_fs_to_db',
       force: true
     });
@@ -556,7 +564,7 @@ This plan breaks down the architectural contract into concrete, sequenced work i
 
 ### KQA3: Drift Detection Test
 
-**Scope:** `GET /api/projects/:id/sync/status` correctly identifies drifts  
+**Scope:** `GET /api/projects/:projectId/squad-sync/status` correctly identifies drifts
 **Effort:** Small (4–5 hours)  
 **Dependencies:** H3  
 
@@ -565,17 +573,17 @@ This plan breaks down the architectural contract into concrete, sequenced work i
   ```typescript
   it('drift detection: missing github agent file', async () => {
     // Create project, don't generate agent file
-    const status = await api.get(`/api/projects/${project.id}/sync/status`);
+    const status = await api.get(`/api/projects/${project.id}/squad-sync/status`);
     expect(status.drifts).toContainEqual({
       surface: 'github_agent_file',
       status: 'missing',
-      advice: 'Call POST /api/projects/:id/sync/generate-github-agent'
+      advice: 'Call POST /api/projects/:projectId/squad-sync/generate-github-agent'
     });
   });
   
   it('drift detection: empty ceremonies', async () => {
     // Create project, clear ceremonies.md
-    const status = await api.get(`/api/projects/${project.id}/sync/status`);
+    const status = await api.get(`/api/projects/${project.id}/squad-sync/status`);
     expect(status.drifts).toContainEqual({
       surface: 'ceremonies',
       status: 'empty'

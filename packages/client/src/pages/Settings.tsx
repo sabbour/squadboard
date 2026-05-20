@@ -11,6 +11,7 @@ import {
   readFileAsJson,
 } from '../api/templates.ts'
 import { McpConfigPanel } from '../components/settings/McpConfigPanel.tsx'
+import { SquadSyncStatusPanel } from '../components/settings/SquadSyncStatusPanel.tsx'
 import { ReviewPolicySection } from '../components/settings/ReviewPolicySection.tsx'
 import { SystemBackupSection } from '../components/settings/SystemBackupSection.tsx'
 import { SystemGitHubSection } from '../components/settings/SystemGitHubSection.tsx'
@@ -52,15 +53,17 @@ import {
   Branch20Regular,
   Eye20Regular,
   Checkmark20Regular,
+  ArrowSync20Regular,
 } from '@fluentui/react-icons'
 import { PageLoading, SectionLoading } from '../components/loading/index.tsx'
 
-type Section = 'general' | 'mcp' | 'budget' | 'reviews' | 'portability' | 'backup' | 'github' | 'display'
+type Section = 'general' | 'display' | 'mcp' | 'sync' | 'budget' | 'reviews' | 'portability' | 'backup' | 'github'
 
 const SECTIONS: { id: Section; label: string; icon: React.ReactNode }[] = [
   { id: 'general', label: 'General', icon: <TextDescription20Regular /> },
   { id: 'display', label: 'Display', icon: <Eye20Regular /> },
   { id: 'mcp', label: 'MCP Config', icon: <PlugConnected20Regular /> },
+  { id: 'sync', label: 'Team Sync', icon: <ArrowSync20Regular /> },
   { id: 'budget', label: 'Budget', icon: <Money20Regular /> },
   { id: 'reviews', label: 'Review policy', icon: <Shield20Regular /> },
   { id: 'portability', label: 'Portability', icon: <FolderArrowRight20Regular /> },
@@ -651,7 +654,7 @@ export default function Settings() {
         eyebrow={project.name}
         icon={<Settings20Regular />}
         title="Settings"
-        description="Project configuration · MCP servers · budget · review policy."
+        description="Project configuration · sync status · MCP servers · budget · review policy."
       />
 
       {/* Body: sidebar + content */}
@@ -725,6 +728,16 @@ export default function Settings() {
                 sub="Connect VS Code (GitHub Copilot) to your board via MCP."
               />
               <McpConfigPanel projectId={projectId} />
+            </>
+          )}
+
+          {activeSection === 'sync' && (
+            <>
+              <SectionHeader
+                title="Team Sync"
+                sub="Verify whether Squadboard and CLI/Copilot can start or continue work interchangeably."
+              />
+              <SquadSyncStatusPanel projectId={projectId} />
             </>
           )}
 

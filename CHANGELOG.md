@@ -10,6 +10,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - **PostgreSQL-backed Squad StorageProvider adapter (default):** Squadboard now stores Squad state (agents, decisions, skills, ceremonies) in the same PostgreSQL database as product state by default, using local PGlite unless `DATABASE_URL` points to standalone PostgreSQL. Existing `.squad/` files import once into an empty DB-backed project; use `pnpm run dev:fs`, `squadboard init --squad-storage fs`, or `SQUADBOARD_SQUAD_STORAGE_PROVIDER=fs` for filesystem fallback. `squadboard init --write-mcp-config` writes a Copilot CLI MCP config so Copilot plus `squad.agent.md` use Squadboard as the shared-state broker. External Squad CLI direct database access still requires compatible upstream StorageProvider configuration; otherwise use the MCP bridge.
+- **Cross-surface Squad sync architecture & SDK contract (foundation):** Squadboard and CLI/Copilot are now designed as interchangeable peer clients over one authoritative Squad state source. New SDK contract (`packages/server/src/sdk/sync-ownership.ts`) defines storage modes (`postgresql` | `filesystem`), bootstrap semantics, artifact projection specs, and repair actions. Client API contract ready (`packages/client/src/api/squad.ts`) with TypeScript types and React hooks for sync status polling and repair invocation. Architecture decision locked in `docs/setup/cross-surface-squad-sync-contract.md` with complete bootstrap/projection semantics. Backend API endpoints (`/api/projects/:projectId/squad-sync/*`) and UI panels are pending; SDK & contract are complete and ready for Hockney's backend implementation. Users can now start projects in either Squadboard or CLI/Copilot and continue in the other without data loss (backend route implementation coming Wave 20).
+- **Ceremony defaults as required invariant:** `.squad/ceremonies.md` must exist and contain seeded defaults (Simple Review, Bug Fix, RFC, Spike, Pair Programming). Empty or missing ceremonies are now health warnings and repair-required items, not valid steady states.
 - **Coordinator parity foundation:** Coordinator input plumbing, deterministic routing prefilters, visible circuit-breaker decisions, spawn-prompt context, directive capture, automated Scribe close-out, Ralph monitor, and ceremony/worktree lifecycle metadata are now wired with focused coverage.
 - **Close-out automation:** Removed the manual close-out button/API path; Scribe close-out now runs through daemon/coordinator lifecycle automation instead of an explicit user action.
 - **Docs features IA:** Added a Docusaurus Features section with subsections for core orchestration, automation, integrations, operations, and current gaps.
@@ -28,6 +30,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- `pnpm start dev` now normalizes the compatibility `dev` argument instead of forwarding it into workspace dev scripts, preventing Docusaurus from treating `dev` as a docs path while keeping the docs dev server on port 3002.
 - Server TypeScript build now passes after bringing stale tests/services up to the current agent schema and DB accessor patterns.
 
 ## Wave 10 — 2026-05-15

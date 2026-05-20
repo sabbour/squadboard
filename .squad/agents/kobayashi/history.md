@@ -201,3 +201,12 @@ Authored **kobayashi-cross-surface-contract.md**:
 Additive to existing `squadboard.sdk-sync-ownership.v1` contract. Does not change SDK internals; Squadboard bridge adapts to SDK contracts.
 
 **Pattern:** Contract version is `squadboard.sdk-client-artifact.v1`
+
+---
+
+## 2026-05-19T21:58:16.699-07:00 — Interchangeable-client SDK projection contract
+
+- Expanded `packages/server/src/sdk/sync-ownership.ts` so the pure contract reports authority mode, write targets, projection artifact buckets, missing required/recommended artifacts, surface readiness, and API-friendly DTO mapping without owning routes or repairs.
+- Added `packages/server/src/sdk/copilot-agent-projection.ts` as a pure `.github/agents/squad.agent.md` projection descriptor/renderer. It declares generated artifacts as client instructions only, not Squad state authority.
+- Regression coverage now pins both start orders: Squadboard-first with missing Copilot projection, and CLI/Copilot-first filesystem authority connected to Squadboard.
+- Validation: `pnpm --filter @sabbour/squadboard test -- sync-ownership --run` and `pnpm --filter @sabbour/squadboard run build` both pass.

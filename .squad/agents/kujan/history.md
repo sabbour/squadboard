@@ -158,6 +158,17 @@ Running final verification pass on two-way sync audit artifacts and Kobayashi SD
 
 **Key Learning:** In-memory PGlite test instances must bootstrap real schema + migrations; test catalog repairs against genuine constraint triggers, not mocks.
 
+### 2026-05-19T21:58:16.699-07:00 — Cross-surface Squad sync regression gate
+
+Added targeted invariant tests for interchangeable Squadboard and CLI/Copilot clients:
+- `packages/server/src/__tests__/squad-sync-authority.test.ts` covers live filesystem authority for CLI/Copilot-first projects, Squadboard-first missing Copilot projection repairability, and empty/default ceremony repair.
+- `packages/server/src/__tests__/squad-sync-status-route.test.ts` is the failing route contract for `GET /api/projects/:projectId/squad-sync/status`; it expects stable status JSON plus `agent_files` and `ceremony_defaults` repair guidance.
+- `packages/server/src/sdk/sync-ownership.test.ts` already carries the pure SDK contract coverage for storage authority, client readiness, API projection, and Copilot agent projection rendering.
+
+Validation:
+- `pnpm --filter @sabbour/squadboard test -- --run src/sdk/sync-ownership.test.ts src/__tests__/squad-sync-authority.test.ts` currently has 10/11 passing. The remaining failure is Hockney-owned: `services/sdk-state.ts` treats the placeholder `Project ceremonies will be listed here.` as seeded ceremonies, so `ceremoniesDefaultsPresent` stays true.
+- `pnpm --filter @sabbour/squadboard test -- --run src/__tests__/squad-sync-status-route.test.ts` fails clearly because `packages/server/src/routes/squad-sync.ts` is not present yet. Hockney owns the status endpoint.
+
 ### 2026-05-19T15:29:23.373-07:00 — Pre-alpha release/docs validation gate
 
 Validated the current shared worktree after Hockney/Redfoot release-readiness and docs changes appeared. Safe targeted checks passed: `pnpm install --frozen-lockfile`, publishable package builds for `@sabbour/squadboard`, `@sabbour/squadboard-sdk`, and `@sabbour/squadboard-cli`, `pnpm docs:build`, and npm pack dry-runs for the three publishable packages. Docusaurus built 41 pages and generated `llms.txt` / `llms-full.txt`.

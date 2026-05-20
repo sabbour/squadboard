@@ -28,6 +28,16 @@ Users face three critical gaps when starting projects:
 
 ---
 
+## API Namespace Decision
+
+Use the project-scoped namespace **`/api/projects/:projectId/squad-sync/...`** for this workstream.
+
+**Why:** Existing backend conventions expose project resources under `/api/projects/:projectId/{resource}` (`ceremonies`, `routing`, `mcp-servers`, `review-policies`, `ralph-monitor`). `squad-sync` is explicit about the Squad/Squadboard state surface and avoids overloading generic sync semantics already associated with GitHub sync operations.
+
+Retired names such as generic sync or client-artifact-only resources must not appear in new API contracts.
+
+---
+
 ## Source-of-Truth Modes
 
 Every project has a **canonical storage mode** set at creation time and persisted in `projects.storage_provider_mode` (DB column).
@@ -100,7 +110,7 @@ Every project has a **canonical storage mode** set at creation time and persiste
 
 **If missing (e.g., started in Squadboard, not yet pushed to Copilot):**
 - Copilot/CLI enters "init mode" and proposes a fresh team
-- User can later sync via API: `POST /api/projects/:id/sync-client-artifacts` → regenerates and pushes `.github/agents/squad.agent.md`
+- User can later sync via API: `POST /api/projects/:projectId/squad-sync/generate-github-agent` → regenerates and pushes `.github/agents/squad.agent.md`
 
 ---
 
@@ -110,6 +120,8 @@ Every project has a **canonical storage mode** set at creation time and persiste
 **When seeded:**
 - On project create (from `docs/templates/ceremonies-defaults.md`)
 - On explicit "seed defaults" action
+
+**Invariant:** `ceremonies.md` must not be absent, empty, or a placeholder-only default. A missing file, empty file, or default-missing content is a sync health warning and a required repair item (`seed-ceremony-defaults`), not a valid steady state.
 
 **Contents (predefined templates):**
 - Simple Review
@@ -150,7 +162,7 @@ Every project has a **canonical storage mode** set at creation time and persiste
 
 ### Projection from DB to Filesystem (PostgreSQL mode only)
 
-**API:** `POST /api/projects/:id/sync/project-squad-to-fs`  
+**API:** `POST /api/projects/:projectId/squad-sync/project-squad-to-fs`
 **When called:**
 1. Read all `squad_storage` rows for this project
 2. Write to `.squad/`, overwriting existing files
@@ -162,7 +174,7 @@ Every project has a **canonical storage mode** set at creation time and persiste
 
 ### Generate Client Agent File
 
-**API:** `POST /api/projects/:id/sync/generate-github-agent`  
+**API:** `POST /api/projects/:projectId/squad-sync/generate-github-agent`
 **When called:**
 1. Read team, routing, ceremonies from authoritative mode (DB or filesystem)
 2. Render `.github/agents/squad.agent.md` from template
@@ -177,7 +189,7 @@ Every project has a **canonical storage mode** set at creation time and persiste
 
 ### Health Report Endpoint
 
-**Endpoint:** `GET /api/projects/:id/sync/status`  
+**Endpoint:** `GET /api/projects/:projectId/squad-sync/status`
 **Returns:**
 ```json
 {
@@ -192,13 +204,13 @@ Every project has a **canonical storage mode** set at creation time and persiste
       "surface": "github_agent_file",
       "status": "missing",
       "path": ".github/agents/squad.agent.md",
-      "advice": "Call POST /api/projects/:id/sync/generate-github-agent to regenerate"
+      "advice": "Call POST /api/projects/:projectId/squad-sync/generate-github-agent to regenerate"
     },
     {
       "surface": "filesystem_squad",
       "status": "diverged",
       "files": {".squad/ceremonies.md": "10 days stale"},
-      "advice": "Call POST /api/projects/:id/sync/project-squad-to-fs to refresh"
+      "advice": "Call POST /api/projects/:projectId/squad-sync/project-squad-to-fs to refresh"
     }
   ],
   "last_sync_timestamp": "2026-05-19T13:00:00Z"
@@ -209,7 +221,7 @@ Every project has a **canonical storage mode** set at creation time and persiste
 
 **UI:** Project settings → **Team Sync** panel lists each surface and "Repair" button per drift type.
 
-**API:** `POST /api/projects/:id/sync/repair`  
+**API:** `POST /api/projects/:projectId/squad-sync/repair`
 ```json
 {
   "action": "regenerate_github_agent" | "sync_squad_to_fs" | "reimport_fs_to_db",
@@ -352,7 +364,7 @@ const ceremoniesYaml = await provider.readContent(cwd + '/.squad', 'ceremonies.m
    - Next Copilot CLI run sees updated agent file
 7. Ahmed continues working:
    - Copilot CLI: Reads `.squad/` → if `fs` mode, reads real files; if `postgresql`, reads projected `.squad/` (refreshed via periodic sync API call)
-   - Squadboard: Writes decisions/ceremonies/routing → syncs to `.squad/` via `POST /api/projects/:id/sync/project-squad-to-fs`
+   - Squadboard: Writes decisions/ceremonies/routing → syncs to `.squad/` via `POST /api/projects/:projectId/squad-sync/project-squad-to-fs`
 
 ### Scenario 3: Both Start Together
 
@@ -371,10 +383,10 @@ const ceremoniesYaml = await provider.readContent(cwd + '/.squad', 'ceremonies.m
 
 - [ ] Add `storage_provider_mode` column to `projects` table (enum: `fs`, `postgresql`)
 - [ ] Add bootstrap metadata to `squad_storage` table (key: `__bootstrap_source_fs`, `__bootstrap_timestamp`)
-- [ ] Implement `POST /api/projects/:id/sync/project-squad-to-fs` (read DB → write filesystem)
-- [ ] Implement `POST /api/projects/:id/sync/generate-github-agent` (render + push agent file)
-- [ ] Implement `GET /api/projects/:id/sync/status` (drift detection report)
-- [ ] Implement `POST /api/projects/:id/sync/repair` (explicit repair actions)
+- [ ] Implement `POST /api/projects/:projectId/squad-sync/project-squad-to-fs` (read DB → write filesystem)
+- [ ] Implement `POST /api/projects/:projectId/squad-sync/generate-github-agent` (render + push agent file)
+- [ ] Implement `GET /api/projects/:projectId/squad-sync/status` (drift detection report)
+- [ ] Implement `POST /api/projects/:projectId/squad-sync/repair` (explicit repair actions)
 - [ ] Update `setup-lifecycle.ts` to write default ceremonies to `squad_storage`
 - [ ] Update `project-squad.ts` to respect storage mode when reading team context
 
@@ -392,7 +404,7 @@ const ceremoniesYaml = await provider.readContent(cwd + '/.squad', 'ceremonies.m
   - Display current storage mode
   - Display bootstrap status + timestamp
   - List drift items (missing agent file, stale ceremonies, etc.)
-  - "Repair" button per drift type → calls `POST /api/projects/:id/sync/repair`
+  - "Repair" button per drift type → calls `POST /api/projects/:projectId/squad-sync/repair`
 - [ ] On project create: Offer storage mode choice (or default to `postgresql`)
 - [ ] On project import: Offer import wizard (stay `fs` or move to `postgresql`)
 

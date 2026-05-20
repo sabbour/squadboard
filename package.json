@@ -16,7 +16,7 @@
     "docs:build": "pnpm --filter @sabbour/squadboard-docs build",
     "docs:dev": "pnpm --filter @sabbour/squadboard-docs dev",
     "docs:serve": "pnpm --filter @sabbour/squadboard-docs serve",
-    "start": "pnpm --parallel --filter @sabbour/squadboard --filter @sabbour/squadboard-client --filter @sabbour/squadboard-docs run dev",
+    "start": "node scripts/start-dev.mjs",
     "cli:start": "pnpm --filter @sabbour/squadboard-cli start",
     "test:e2e": "pnpm --filter @sabbour/squadboard-e2e test",
     "electron:dev": "pnpm --filter @sabbour/squadboard-electron dev",

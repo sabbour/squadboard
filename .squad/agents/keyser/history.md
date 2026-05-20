@@ -204,3 +204,9 @@ Keyser audited Settings, ProjectPicker, Agents, project/squad API hooks, and set
 ## Pre-alpha README Copy Fix — 2026-05-19
 
 After Kujan rejected final release sign-off for an unsafe public maturity label, Keyser independently revised the remaining README wording from `Alpha caution` to `Pre-alpha caution`. Focused scan confirmed README maturity references now use pre-alpha wording; no standalone public `alpha` warning remains in README.
+
+---
+
+## Cross-surface sync status UI — 2026-05-19T21:58:16.699-07:00
+
+Implemented Settings → Team Sync as the project-level status surface for Squadboard ↔ CLI/Copilot interchangeability. Lesson: Hockney's route returns both a product API envelope (`authority`, `drift`, `repair.actions`) and legacy/SDK contract concepts, so the frontend panel should normalize evidence before rendering rather than bind copy directly to one backend shape.

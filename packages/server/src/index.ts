@@ -21,6 +21,7 @@ import { ceremoniesRouter, ceremoniesTopRouter } from './routes/ceremonies.js';
 import costsRouter from './routes/costs.js';
 import analyticsRouter from './routes/analytics.js';
 import githubSyncRouter from './routes/github-sync.js';
+import squadSyncRouter from './routes/squad-sync.js';
 import { modelsRouter } from './routes/models.js';
 import { projectSessionsRouter } from './routes/sessions.js';
 import { startersRouter } from './routes/starters.js';
@@ -292,6 +293,7 @@ async function main(): Promise<void> {
   app.use('/api/projects/:id/analytics', analyticsRouter);
   // Demo 15: GitHub sync endpoints
   app.use('/api/projects/:id/github', githubSyncRouter);
+  app.use('/api/projects/:projectId/squad-sync', squadSyncRouter);
   // Wave 20 — G4.1 + G4.3: @copilot assign + auto-assign label rules
   app.use('/api/projects', copilotRouter);
   // Phase 3 Doctor: diagnostics

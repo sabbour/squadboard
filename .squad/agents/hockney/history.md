@@ -262,3 +262,10 @@ Hockney-close-w24 dispatched in parallel to run build + main FF + smoke tests be
 - Fix pattern: normalize at the root launcher boundary. `scripts/start-dev.mjs` ignores only the compatibility `dev` arg, rejects any other unsupported args, and spawns the deterministic backend+client+docs `pnpm --parallel ... run dev` command with docs still on port 3002.
 - Validation: focused Vitest coverage for the launcher plus `SQUADBOARD_START_PRINT_COMMAND=1 pnpm start dev` proving no trailing `dev` is forwarded.
 - Decision filed: `.squad/decisions/inbox/hockney-start-dev-arg-filter.md`.
+
+### 2026-05-19T21:58:16.699-07:00 — Cross-surface squad-sync backend
+
+- Added the project-scoped `/api/projects/:projectId/squad-sync` backend surface with status, repair, `project-squad-to-fs`, and `generate-github-agent` routes.
+- Kept authority honest: PostgreSQL mode reports `squad_storage` plus explicit projection repairs only; filesystem mode reports live filesystem authority and skips DB-to-FS projection.
+- Safe repair pattern: create missing files/directories, replace only empty/default ceremony placeholders, and skip divergent or unsafe targets with typed reasons instead of overwriting.
+- Validation: focused squad-sync Vitest coverage and server build passed.

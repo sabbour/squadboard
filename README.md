@@ -296,6 +296,84 @@ Squadboard now has the server-side pieces needed to mirror the current Copilot C
 
 Current GitHub automation limit: Ralph can record and recommend next actions for GitHub work that was not started from Ready-column pickup, such as CI failures or review feedback. It does not merge PRs or apply fixes automatically without an explicit human approval policy.
 
+### Cross-Surface Squad Sync — Squadboard and CLI/Copilot are Interchangeable
+
+**Core promise:** You can start a Squad project in Squadboard's web UI, then continue work in Copilot CLI/VS Code without losing state. Or start in CLI/Copilot and later add Squadboard to the same project. Both surfaces are peer clients reading/writing the same authoritative Squad state.
+
+#### Storage Modes and Authority
+
+Every project uses one of two storage modes, set at creation:
+
+- **PostgreSQL mode (default):** Squad state lives in Squadboard's database. Both Squadboard and CLI/Copilot access it via Squadboard's MCP broker or API. Filesystem `.squad/` files are regenerated projections. This is the recommended mode for teams and multi-surface use.
+- **Filesystem mode (opt-in):** Squad state lives in repository `.squad/` files. Squadboard reads them for advisory display. CLI/Copilot work directly with files. This is the recommended mode for solo developers and full Git control.
+
+Configure at startup:
+```bash
+pnpm run dev:postgresql  # PostgreSQL mode (default)
+pnpm run dev:fs          # Filesystem mode (opt-in)
+
+# Or per-project
+squadboard start --squad-storage postgresql
+squadboard start --squad-storage fs
+```
+
+#### Path 1: Squadboard-First
+
+1. **Create in Squadboard UI** — Click "New Project" → project is created in PostgreSQL mode.
+2. **Squadboard bootstraps** — Seeds team roster, ceremonies defaults (Simple Review, Bug Fix, RFC, Spike, Pair Programming), routing rules, and agent files.
+3. **Open in Copilot CLI** — Configure MCP (see "MCP Integration" above). Copilot CLI connects to Squadboard's MCP broker and shares the same Squad state.
+4. **Write code, run ceremonies** — Teams use both surfaces interchangeably. All changes sync through the central database.
+
+#### Path 2: CLI-First
+
+1. **Start with CLI/Copilot** — Use `squad.agent.md` and the Squad CLI as normal. `.squad/` files are created locally on your machine.
+2. **Add Squadboard later** — Clone the repo into Squadboard. The web UI detects the existing `.squad/` directory and offers to import it into PostgreSQL mode.
+3. **Choose your mode** — Keep in filesystem mode (read-only Squadboard mirror), or upgrade to PostgreSQL mode (full sync, shared state).
+4. **Open in Copilot CLI** — Configure MCP to use Squadboard's broker. Now both surfaces use the same authoritative state.
+
+#### Checking Sync Health and Repairing
+
+When Squadboard and CLI/Copilot are out of sync (e.g., missing ceremony defaults, stale agent files, or diverged state), you can check and repair:
+
+**Check Status:**
+```bash
+curl http://localhost:3000/api/projects/{projectId}/squad-sync/status
+```
+
+Returns a detailed report:
+- Current storage mode and authority
+- Bootstrap status (completed, partial, missing)
+- Drift detection across surfaces
+- Repair actions available
+
+**Repair Missing Artifacts:**
+```bash
+curl -X POST http://localhost:3000/api/projects/{projectId}/squad-sync/repair \
+  -H "Content-Type: application/json" \
+  -d '{"action": "regenerate_github_agent"}'
+```
+
+Repair actions include:
+- `regenerate_github_agent` — Recreate `.github/agents/squad.agent.md` from authoritative state
+- `sync_squad_to_fs` — Refresh `.squad/` files from database
+- `seed_ceremony_defaults` — Ensure ceremony index is present and populated
+
+**UI Sync Panel (coming in Wave 20):**
+Project Settings → **Team Sync** will show:
+- Active storage mode and authority
+- Bootstrap health and drift status
+- One-click repair buttons per issue
+- Last sync timestamp
+
+#### Why This Matters
+
+Before cross-surface sync, teams faced a choice:
+- Use Squadboard, lose CLI/Copilot (no `.github/agents/squad.agent.md`)
+- Use CLI/Copilot, lose Squadboard (unclear if filesystem owned state or database)
+- Juggle both but risk data loss on mode switch
+
+Now: **choose your starting point, both surfaces stay in sync, no data loss.**
+
 ### Build for Production
 
 ```bash
@@ -474,7 +552,7 @@ Squadboard is built around bounded AI assistance, not unchecked automation.
 - **Least privilege:** GitHub tokens, MCP tools, worktree cleanup, and external integrations should be scoped narrowly. Prefer GitHub Apps over broad PATs when possible.
 - **Transparency:** Agent prompts, decisions, generated artifacts, and run events should be inspectable so teams can understand why work moved.
 - **Local-first privacy:** Squadboard stores project data locally by default. External model, GitHub, and MCP calls are opt-in integration boundaries that should be configured intentionally.
-- **Alpha caution:** Do not use Squadboard for regulated, safety-critical, confidential, or unattended production workflows without your own review, security assessment, and operational controls.
+- **Pre-alpha caution:** Do not use Squadboard for regulated, safety-critical, confidential, or unattended production workflows without your own review, security assessment, and operational controls.
 
 ---
 

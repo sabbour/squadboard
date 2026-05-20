@@ -41,18 +41,29 @@ export interface RegisterSquadResult {
   squadPath: string
 }
 
-// Frontend contract for the cross-surface sync status panel. The backend route
-// is intentionally not consumed by visible UI until Hockney lands it.
+// Frontend contract for the cross-surface sync status panel.
+export const SQUAD_SYNC_API_NAMESPACE = 'squad-sync' as const
 export type SquadSyncAuthority = 'filesystem' | 'squad_storage' | 'mcp_broker' | 'unknown'
 export type SquadSyncStorageMode = 'filesystem' | 'postgresql' | 'unknown'
 export type SquadSyncDatabaseRuntime = 'pglite' | 'postgresql' | 'none' | 'unknown'
 export type SquadSyncCheckStatus = 'ok' | 'missing' | 'partial' | 'drifted' | 'unknown'
 export type SquadSyncDriftStatus = 'none' | 'detected' | 'unknown'
+export type SquadSyncArtifactStatus = 'present' | 'missing' | 'unknown'
+export type SquadSyncArtifactRequirement = 'required' | 'recommended' | 'optional'
+export type SquadSyncSurface = 'squad-sdk' | 'squadboard' | 'filesystem' | 'copilot-cli' | 'mcp' | string
 export type SquadSyncRepairAction =
   | 'project_governance'
   | 'ceremony_defaults'
   | 'agent_files'
   | 'rescan_drift'
+  | 'repair-scaffold-squad'
+  | 'project-copilot-agent-file'
+  | 'generate-github-agent'
+  | 'generate-client-artifact'
+  | 'seed-ceremony-defaults'
+  | 'project-squad-to-fs'
+  | 'rescan-drift'
+  | 'expose-sync-status-api'
 
 export interface SquadSyncFileCheck {
   path: string
@@ -60,44 +71,168 @@ export interface SquadSyncFileCheck {
   status: SquadSyncCheckStatus
   present: boolean | null
   required: boolean
+  requirement?: SquadSyncArtifactRequirement
   repairAction?: SquadSyncRepairAction
   message?: string
 }
 
+export interface SquadSyncStorageContract {
+  rawProvider?: string | null
+  mode?: Exclude<SquadSyncStorageMode, 'unknown'>
+  authority?: Exclude<SquadSyncAuthority, 'unknown' | 'mcp_broker'>
+  importBehavior?: string
+  mirrorBehavior?: string
+  sharedExternalAccess?: string
+  squadStorage?: SquadSyncStorageMetadata | null
+}
+
+export interface SquadSyncRuntimeStatus {
+  kind: 'filesystem' | 'local-pglite' | 'hosted-postgresql' | string
+  note: string
+}
+
+export interface SquadSyncAuthorityStatus {
+  storageMode: Exclude<SquadSyncStorageMode, 'unknown'>
+  sourceOfTruth: Exclude<SquadSyncAuthority, 'unknown'>
+  rawProvider?: string | null
+  importBehavior?: string
+  mirrorBehavior?: string
+  sharedExternalAccess?: string
+  continuousSync?: boolean
+  runtime?: SquadSyncRuntimeStatus
+}
+
+export interface SquadSyncStorageMetadata {
+  available: boolean
+  rowCount: number | null
+  lastUpdatedAt: string | null
+  error?: {
+    code: string
+    message: string
+  }
+}
+
+export interface SquadSyncProjectionArtifact {
+  id: string
+  path: string
+  status: SquadSyncArtifactStatus
+  requirement: SquadSyncArtifactRequirement
+  owner: SquadSyncSurface
+  purpose?: string
+}
+
+export interface SquadSyncSurfaceContract {
+  surface: SquadSyncSurface
+  owns: string[]
+  doesNotOwn: string[]
+}
+
+export interface SquadSyncOwnershipRepairAction {
+  id: SquadSyncRepairAction
+  owner?: string
+  reason: string
+  severity?: 'critical' | 'warning' | 'info' | string
+  mode?: 'automatic' | 'user-confirmed' | 'manual' | string
+  artifactIds?: string[]
+  surfaces?: string[]
+  legacyIds?: string[]
+}
+
+export interface SquadSyncAvailableRepairAction {
+  id: SquadSyncRepairAction
+  aliases?: SquadSyncRepairAction[]
+  owner?: string
+  reason: string
+  available?: boolean
+  required?: boolean
+  destructive?: boolean
+  endpoint?: string
+}
+
+export type SquadSyncRepairActionDescriptor =
+  | SquadSyncRepairAction
+  | SquadSyncAvailableRepairAction
+
+export interface SquadSyncDriftIssue {
+  code: string
+  severity: 'info' | 'warning' | 'error' | string
+  artifactId?: string
+  message: string
+}
+
 export interface SquadSyncStatus {
-  projectId: string
-  squadPath: string
-  checkedAt: string
-  sourceOfTruth: SquadSyncAuthority
-  storageMode: SquadSyncStorageMode
-  databaseRuntime: SquadSyncDatabaseRuntime
-  summary: {
+  projectId?: string
+  squadPath?: string | null
+  checkedAt?: string
+  sourceOfTruth?: SquadSyncAuthority
+  storageMode?: SquadSyncStorageMode
+  databaseRuntime?: SquadSyncDatabaseRuntime
+  summary?: {
     status: SquadSyncCheckStatus
     message: string
   }
-  governance: {
+  governance?: {
     status: SquadSyncCheckStatus
     files: SquadSyncFileCheck[]
     projectionRoot?: string | null
   }
-  ceremonies: {
+  ceremonies?: {
     status: SquadSyncCheckStatus
     defaultsPresent: boolean | null
     defaultsMissing: string[]
     count: number | null
     filePath?: string | null
   }
-  drift: {
-    status: SquadSyncDriftStatus
-    surfaces: string[]
+  drift?: {
+    status?: SquadSyncDriftStatus
+    surfaces?: string[]
     message?: string
+    detected?: boolean
+    level?: 'ready' | 'warning' | 'error' | string
+    summary?: string
+    issues?: SquadSyncDriftIssue[]
+    continuousSync?: boolean
   }
-  repair: {
-    available: boolean
-    actions: SquadSyncRepairAction[]
+  repair?: {
+    available?: boolean
+    dryRunSupported?: boolean
+    actions: SquadSyncRepairActionDescriptor[]
     endpoint?: string | null
     disabledReason?: string | null
   }
+  contractVersion?: string
+  clientArtifactContractVersion?: string
+  authority?: SquadSyncAuthorityStatus
+  storage?: SquadSyncStorageContract
+  bootstrap?: {
+    status: 'ready' | 'partial' | 'missing' | 'unknown'
+    missingRequired: string[]
+    missingRecommended: string[]
+  }
+  projection?: {
+    projectRoot: string | null
+    squadPath: string | null
+    artifacts: SquadSyncProjectionArtifact[]
+    requiredArtifacts?: string[]
+    recommendedArtifacts?: string[]
+    optionalArtifacts?: string[]
+    missing?: {
+      required?: string[]
+      recommended?: string[]
+      optional?: string[]
+    }
+  }
+  clients?: Record<string, {
+    client: string
+    status: 'ready' | 'degraded' | 'blocked' | string
+    authority: SquadSyncAuthority
+    writeTarget: string
+    blockers: string[]
+    warnings: string[]
+    message: string
+  }>
+  surfaces?: SquadSyncSurfaceContract[]
+  repairActions?: SquadSyncOwnershipRepairAction[]
 }
 
 export interface RepairSquadSyncInput {
@@ -106,19 +241,37 @@ export interface RepairSquadSyncInput {
 }
 
 export interface RepairSquadSyncResult {
-  status: SquadSyncStatus
-  repaired: SquadSyncRepairAction[]
-  skipped: Array<{ action: SquadSyncRepairAction; reason: string }>
+  projectId?: string
+  dryRun?: boolean
+  results?: Array<{
+    action: SquadSyncRepairAction
+    status: 'applied' | 'dry-run' | 'skipped' | 'failed' | string
+    reason: string
+    changes?: Array<{
+      path: string
+      operation: string
+      status: string
+      reason?: string
+      message?: string
+    }>
+  }>
+  status?: SquadSyncStatus
+  statusAfter?: SquadSyncStatus
+  repaired?: SquadSyncRepairAction[]
+  skipped?: Array<{ action: SquadSyncRepairAction; reason: string }>
 }
 
 interface ApiEnvelope<T> {
   ok: boolean
   data: T
-  error?: string
+  error?: string | { message?: string }
 }
 
 function unwrapEnvelope<T>(response: ApiEnvelope<T>): T {
-  if (!response.ok) throw new Error(response.error ?? 'Server returned ok: false')
+  if (!response.ok) {
+    const message = typeof response.error === 'string' ? response.error : response.error?.message
+    throw new Error(message ?? 'Server returned ok: false')
+  }
   return response.data
 }
 
@@ -183,9 +336,9 @@ export function useCreateSquad() {
 
 export function useSquadSyncStatus(projectId: string) {
   return useQuery<SquadSyncStatus>({
-    queryKey: ['projects', projectId, 'squad-sync', 'status'],
+    queryKey: ['projects', projectId, SQUAD_SYNC_API_NAMESPACE, 'status'],
     queryFn: () =>
-      apiFetch<ApiEnvelope<SquadSyncStatus>>(`/api/projects/${projectId}/squad-sync/status`)
+      apiFetch<ApiEnvelope<SquadSyncStatus>>(`/api/projects/${projectId}/${SQUAD_SYNC_API_NAMESPACE}/status`)
         .then(unwrapEnvelope),
     enabled: Boolean(projectId),
     retry: (failureCount, error) => {
@@ -199,12 +352,12 @@ export function useRepairSquadSync(projectId: string) {
   const queryClient = useQueryClient()
   return useMutation<RepairSquadSyncResult, Error, RepairSquadSyncInput>({
     mutationFn: (input) =>
-      apiFetch<ApiEnvelope<RepairSquadSyncResult>>(`/api/projects/${projectId}/squad-sync/repair`, {
+      apiFetch<ApiEnvelope<RepairSquadSyncResult>>(`/api/projects/${projectId}/${SQUAD_SYNC_API_NAMESPACE}/repair`, {
         method: 'POST',
         body: JSON.stringify(input),
       }).then(unwrapEnvelope),
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ['projects', projectId, 'squad-sync', 'status'] })
+      void queryClient.invalidateQueries({ queryKey: ['projects', projectId, SQUAD_SYNC_API_NAMESPACE, 'status'] })
     },
   })
 }

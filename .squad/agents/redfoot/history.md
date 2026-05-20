@@ -1,3 +1,130 @@
+## Wave 19 — Cross-Surface Squad Sync: SDK Contract & Client API (2026-05-20T22:00:00-07:00)
+
+**Scope:** Define and document cross-surface Squad state authority, storage modes, bootstrap semantics, artifact projection, and repair contract. No user-facing API endpoints yet (pending Hockney backend implementation).
+
+### Deliverables Shipped
+
+1. **SDK Sync Ownership Contract** — `packages/server/src/sdk/sync-ownership.ts` (~250 lines)
+   - Pure, schema-free contract for authority analysis
+   - Defines `SquadSyncStorageContract` (postgresql | filesystem modes)
+   - Exports `SquadSyncOwnershipStatus` with bootstrap, projection, surfaces, and repair actions
+   - Ceremony defaults marked as **required**, not recommended
+   - Ready for backend API consumption; tests pass
+
+2. **Client API Contract** — `packages/client/src/api/squad.ts` (~200 lines updates)
+   - TypeScript types for `SquadSyncStatus`, `SquadSyncFileCheck`, drift detection
+   - React hooks: `useSquadSyncStatus()` (polling), `useRepairSquadSync()` (mutations)
+   - Namespaced under `/api/projects/:projectId/squad-sync`
+   - Comment: "intentionally not consumed by visible UI until Hockney lands it"
+   - Envelope pattern with `ok: boolean` and structured error handling
+
+3. **Architectural Contract Doc** — `docs/setup/cross-surface-squad-sync-contract.md` (complete)
+   - Source-of-truth modes: `fs` (filesystem authority) and `postgresql` (database authority)
+   - Bootstrap semantics: one-time import from filesystem on first DB write
+   - Projection semantics: `.squad/`, `.github/agents/squad.agent.md`, ceremony defaults generated from authority
+   - Drift detection: how to identify when surfaces diverge
+   - Startup flows: Squadboard-first vs. CLI-first with examples
+   - API namespace decision locked: `/api/projects/:projectId/squad-sync/...`
+
+4. **Implementation Plan Updated** — `docs/setup/cross-surface-sync-implementation-plan.md` (finalized)
+   - All API routes defined with pseudo-code and test specs
+   - Hockney tasks (H1–H6): schema migration, status endpoint, projection, agent generation, repair
+   - Keyser + Fenster tasks (K1–K4): UI components, import workflow, settings panel
+   - Kujan tasks (Q1–Q3): end-to-end tests, scenario coverage
+   - Ceremony invariant locked: `.squad/ceremonies.md` required; empty ceremonies are health warnings
+
+5. **Feature Docs Updated**
+   - `feat-2026-05-19-define-cross-surface-squad-sync-ownership.md` → Status: "In Progress" with implementation status section
+   - `feat-2026-05-20-cross-surface-squad-state-authority-and-sync.md` → Status: "In Progress" with split-wave notes
+
+6. **README Section Added** — New "Cross-Surface Squad Sync" section
+   - User-facing promise: Squadboard and CLI/Copilot are interchangeable peer clients
+   - Storage modes explained (PostgreSQL default, filesystem opt-in)
+   - Path 1 (Squadboard-first) and Path 2 (CLI-first) workflows with setup steps
+   - Sync status API and repair commands (with note that UI comes in Wave 20)
+   - Why this matters: eliminates data loss on mode switch
+   - No false claims of continuous mirroring; emphasis on "projection/repair on demand"
+
+7. **CHANGELOG Entry** — Honest entry about foundation work
+   - SDK contract + client API complete and ready
+   - Backend routes pending Hockney implementation (Wave 20)
+   - Clarifies that user-facing behavior is still incoming
+   - Flags ceremony defaults as now-required invariant
+
+### Key Principles Locked
+
+1. **Mode-based authority, not continuous sync:** Each project locks to one source-of-truth at creation. We mirror *when asked*, not continuously.
+2. **Explicit vs. implicit:** Bootstrap is one-time import; projection is repeatable generation from authoritative state.
+3. **No false claims:** SDK & client contracts are complete, but backend routes are pending. Documentation does not call this "working" until Hockney's routes land.
+4. **Ceremony invariant:** `.squad/ceremonies.md` must exist and be non-empty. Missing ceremonies are health warnings requiring repair, not valid steady states.
+5. **Precision over marketing:** Use "mode-based authority" and "projection/repair on demand" instead of "two-way sync" until end-to-end tests prove both directions work.
+
+### Design Decisions Captured
+
+**Terminology:**
+- Authority → source of truth (DB or filesystem)
+- Storage mode → postgresql (default) or filesystem (opt-in)
+- Bootstrap → one-time import from filesystem when DB is empty
+- Projection → generated artifacts (`.squad/`, `.github/agents/squad.agent.md`)
+- Drift → when surfaces diverge (missing files, stale content, conflicting state)
+- Repair → user-initiated sync or regeneration actions
+
+**API Namespace Decision:**
+- Canonical: `/api/projects/:projectId/squad-sync/...`
+- Matches existing project-resource conventions
+- Avoids overloading generic "sync" or GitHub sync terminology
+- Locked in implementation plan and feature docs
+
+**Ceremony Defaults:**
+- Seeded from template: `docs/templates/ceremonies-defaults.md`
+- 5 built-in ceremonies: Simple Review, Bug Fix, RFC, Spike, Pair Programming
+- Required (not recommended) in SDK contract
+- Empty ceremonies = drift warning = repair action required
+
+### Doc Debt Resolved
+
+- ✅ "How do I switch from Squadboard to CLI/Copilot without losing my team?" → README section + architecture doc
+- ✅ "What's the source of truth?" → Locked in feature specs and contract doc
+- ✅ "What happens if I have no ceremonies?" → Now a health warning (SDK defined); repair action available
+- ✅ "Is this two-way sync?" → No. It's mode-based authority + projection on demand. Docs use precise language.
+- ✅ "What does Hockney need to do?" → Implementation plan has exact routes, schemas, tests
+
+### What's NOT Shipped (Pending Hockney Wave 20)
+
+- Backend API routes (queue, status, repair, agent generation)
+- Schema migration (`projects.storage_provider_mode` column)
+- Import/detect workflows in project setup
+- UI sync status panel
+- End-to-end tests for both start paths
+
+### Success Criteria Met
+
+- ✅ SDK contract pure and schema-free (testable, versioned)
+- ✅ Client API ready (types + hooks); no UI consumption yet
+- ✅ Architectural semantics fully documented with examples
+- ✅ API namespace locked; implementation plan ready
+- ✅ README explains user-facing promise without false claims
+- ✅ CHANGELOG honest: what's here (contract), what's pending (backend)
+- ✅ Feature docs reflect progress (In Progress, not Backlog)
+- ✅ No code modifications outside SDK/client/docs (preserve dirty tree)
+
+### Key Insights Locked
+
+1. **Ceremony defaults are non-negotiable:** The SDK now enforces that `.squad/ceremonies.md` exists and has content. This prevents the "empty ceremonies" state from being a valid configuration.
+2. **Projection vs. Authority:** Filesystem `.squad/` in PostgreSQL mode is a *projection*, not the source of truth. This distinction is critical for avoiding data loss on direction switches.
+3. **Bootstrap once, not repeatedly:** Marked by `__bootstrap_metadata` key. Re-import requires explicit `force: true` API call. Prevents accidental overwrites.
+4. **Precise language matters:** "Two-way sync" implies continuous mirroring, which doesn't exist. Using "mode-based authority" and "on-demand projection/repair" is more accurate and sets correct user expectations.
+5. **Both start paths must work:** We cannot call this feature complete until both Squadboard-first → CLI continuation AND CLI-first → Squadboard continuation are tested end-to-end.
+
+### Open Items (Handed to Hockney)
+
+- H1: Schema migration — `projects.storage_provider_mode` column
+- H2: Bootstrap metadata in `squad_storage`
+- H3–H6: Five API endpoints + route mounting
+- Hockney's route implementation is a prerequisite for Keyser's UI and Kujan's tests
+
+---
+
 ## Wave 13 Learnings — Q4 coordinator framework shipped
 
 **Added by:** Scribe (Wave 13 close-out)  

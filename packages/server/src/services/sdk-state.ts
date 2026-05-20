@@ -270,9 +270,24 @@ export async function getProjectSyncOwnershipStatus(
       routingMd: existsSync(path.join(squadPath, 'routing.md')),
       decisionsMd: existsSync(path.join(squadPath, 'decisions.md')),
       ceremoniesMd: existsSync(path.join(squadPath, 'ceremonies.md')),
+      ceremoniesDefaultsPresent: await hasSeededCeremonyDefaults(path.join(squadPath, 'ceremonies.md')),
       copilotAgentMd: existsSync(path.join(projectRoot, '.github', 'agents', 'squad.agent.md')),
     },
   });
+}
+
+async function hasSeededCeremonyDefaults(ceremoniesPath: string): Promise<boolean> {
+  if (!existsSync(ceremoniesPath)) {
+    return false;
+  }
+
+  const content = await readFile(ceremoniesPath, 'utf-8');
+  const trimmed = content.trim();
+  if (trimmed.length === 0) {
+    return false;
+  }
+
+  return !/Project ceremonies will be listed here\./i.test(trimmed);
 }
 
 // ---------------------------------------------------------------------------
