@@ -14,11 +14,27 @@ spec:
       agent: "@lead"
       prompt: "Review completed cards, run history, review notes, incidents, and unresolved follow-ups from the sprint. Highlight what actually happened."
       timeout: 45m
+    - id: specialist-retrospective
+      kind: fan_out
+      label: Specialist retrospective
+      split_by: agents
+      agents:
+        - "@backend"
+        - "@frontend"
+        - "@tester"
+      mode: parallel
+      merge_strategy: all
+      steps:
+        - id: specialist-retro-input
+          kind: agent-task
+          label: Retro input
+          prompt: "Based on the sprint evidence, share what went well in your area, what slowed you down, and one concrete experiment or process improvement to try next sprint."
+          timeout: 30m
     - id: identify-retro-themes
       kind: agent-task
       label: Identify retro themes
       agent: "@lead"
-      prompt: "Group the evidence into what went well, what slowed the team down, and concrete experiments or process improvements for the next sprint."
+      prompt: "Synthesize the specialist retro inputs and sprint evidence into cross-cutting themes: what went well, what slowed the team down, and concrete experiments or process improvements for the next sprint."
       timeout: 45m
     - id: accept-follow-ups
       kind: approve

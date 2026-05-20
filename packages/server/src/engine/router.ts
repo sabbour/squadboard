@@ -521,7 +521,7 @@ interface RoutingDecision {
   specifierRunId: string | null;
 }
 
-async function logRoutingDecision(decision: RoutingDecision): Promise<void> {
+export async function logRoutingDecision(decision: RoutingDecision): Promise<void> {
   const db = getDb();
   await db.insert(schema.routingLog).values({
     projectId: decision.projectId,
@@ -572,7 +572,7 @@ export async function resolveRouteFull(
       matchedRule: tier1.rule.rawRule,
       specifierRunId: null,
     };
-    await logRoutingDecision({
+    if (issueId) await logRoutingDecision({
       projectId,
       issueId,
       tier: 1,
@@ -597,7 +597,7 @@ export async function resolveRouteFull(
       matchedRule: 'keyword-score',
       specifierRunId: null,
     };
-    await logRoutingDecision({
+    if (issueId) await logRoutingDecision({
       projectId,
       issueId,
       tier: 2,
@@ -622,7 +622,7 @@ export async function resolveRouteFull(
       matchedRule: 'llm-specifier',
       specifierRunId: tier3.specifierRunId || null,
     };
-    await logRoutingDecision({
+    if (issueId) await logRoutingDecision({
       projectId,
       issueId,
       tier: 3,
@@ -636,7 +636,7 @@ export async function resolveRouteFull(
   }
 
   // --- All tiers missed: human triage ---
-  await logRoutingDecision({
+  if (issueId) await logRoutingDecision({
     projectId,
     issueId,
     tier: null,

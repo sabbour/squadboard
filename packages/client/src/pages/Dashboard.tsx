@@ -10,6 +10,7 @@ import {
 } from '../api/analytics.ts'
 import { useBudget } from '../api/costs.ts'
 import { useProjectFlow } from '../api/flow.ts'
+import { useSquadSyncStatus, type SquadSyncStatus } from '../api/squad.ts'
 import AgentLeaderboard from '../components/dashboard/AgentLeaderboard.tsx'
 import WorkflowHealth from '../components/dashboard/WorkflowHealth.tsx'
 import PageHeader from '../components/layout/PageHeader.tsx'
@@ -25,20 +26,13 @@ interface StatCardProps {
   sub?: string
   subColor?: string
   accent?: boolean
+  onClick?: () => void
+  ariaLabel?: string
 }
 
-function StatCard({ label, value, sub, subColor, accent }: StatCardProps) {
-  return (
-    <div
-      style={{
-        flex: '1 1 180px',
-        minWidth: 0,
-        background: 'var(--surface)',
-        border: `1px solid ${accent ? 'var(--accent)' : 'var(--border)'}`,
-        borderRadius: '10px',
-        padding: '18px 20px',
-      }}
-    >
+function StatCard({ label, value, sub, subColor, accent, onClick, ariaLabel }: StatCardProps) {
+  const content = (
+    <>
       <Caption1
         style={{
           display: 'block',
@@ -60,7 +54,38 @@ function StatCard({ label, value, sub, subColor, accent }: StatCardProps) {
           {sub}
         </Caption1>
       )}
-    </div>
+    </>
+  )
+  const style: React.CSSProperties = {
+    flex: '1 1 180px',
+    minWidth: 0,
+    background: 'var(--surface)',
+    border: `1px solid ${accent ? 'var(--accent)' : 'var(--border)'}`,
+    borderRadius: '10px',
+    padding: '18px 20px',
+  }
+
+  if (onClick) {
+    return (
+      <button
+        type="button"
+        aria-label={ariaLabel ?? label}
+        onClick={onClick}
+        style={{
+          ...style,
+          cursor: 'pointer',
+          color: 'inherit',
+          font: 'inherit',
+          textAlign: 'left',
+        }}
+      >
+        {content}
+      </button>
+    )
+  }
+
+  return (
+    <div style={style}>{content}</div>
   )
 }
 
@@ -238,6 +263,40 @@ function Section({ title, children }: { title: string; children: React.ReactNode
   )
 }
 
+function squadSyncSummary(status: SquadSyncStatus | undefined): { value: string; sub?: string; subColor?: string; accent?: boolean } {
+  if (!status) return { value: 'Unknown', sub: 'Status endpoint has not reported yet.' }
+
+  const requiredArtifacts = status.projection?.artifacts?.filter((artifact) => artifact.requirement === 'required') ?? []
+  const missingRequired = requiredArtifacts.filter((artifact) => artifact.status !== 'present').length
+  const storageMode = status.authority?.storageMode ?? status.storage?.mode ?? status.storageMode
+  const manualBridge = storageMode === 'postgresql' && status.authority?.continuousSync === false
+  const drifted = status.drift?.detected === true || status.drift?.status === 'detected' || status.summary?.status === 'drifted'
+
+  if (missingRequired > 0 || drifted) {
+    return {
+      value: 'Needs repair',
+      sub: `${missingRequired} required projection gap${missingRequired === 1 ? '' : 's'} reported.`,
+      subColor: '#f85149',
+      accent: true,
+    }
+  }
+
+  if (manualBridge) {
+    return {
+      value: 'Manual bridge',
+      sub: 'Use MCP/API broker for CLI/Copilot; Preview Export only when files need refresh.',
+      subColor: '#d29922',
+      accent: true,
+    }
+  }
+
+  return {
+    value: 'Ready',
+    sub: 'Required projection artifacts are present.',
+    subColor: '#3fb950',
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Dashboard page
 // ---------------------------------------------------------------------------
@@ -252,6 +311,7 @@ export default function Dashboard() {
   const { data: workflowStats, isLoading: workflowsLoading } = useWorkflowStats(projectId)
   const { data: budget } = useBudget(projectId)
   const { data: flow } = useProjectFlow(projectId)
+  const { data: squadSyncStatus } = useSquadSyncStatus(projectId)
   const navigate = useNavigate()
 
   // WoW change formatting
@@ -265,6 +325,7 @@ export default function Dashboard() {
   const budgetSub = budget?.monthlyBudgetUsd
     ? `${budget.percentUsed.toFixed(1)}% of $${budget.monthlyBudgetUsd} budget`
     : undefined
+  const squadSync = squadSyncSummary(squadSyncStatus)
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
@@ -358,6 +419,15 @@ export default function Dashboard() {
                 value={costStr}
                 sub={budgetSub}
                 accent={Boolean(budget?.monthlyBudgetUsd && (budget?.percentUsed ?? 0) > 80)}
+              />
+              <StatCard
+                label="Squad Sync"
+                value={squadSync.value}
+                sub={squadSync.sub}
+                subColor={squadSync.subColor}
+                accent={squadSync.accent}
+                onClick={() => navigate(`/projects/${projectId}/settings?section=sync`)}
+                ariaLabel="Open Squad Sync settings"
               />
             </div>
           )}

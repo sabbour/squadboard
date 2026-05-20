@@ -7,7 +7,7 @@
  * frequently enough that its record is refreshed; truly stale entries are
  * phantom slots from crashed or silent-closed connections.
  *
- * Runs every 30 s.
+ * Runs every 60 s by default.
  */
 import type { Sweep, SweepResult } from '../heartbeat.js';
 import { sweepStalePresence } from '../../realtime/presence.js';
@@ -19,7 +19,7 @@ export const stalePresenceSweep: Sweep = {
   label: 'Presence',
   description: 'Evicts stale browser presence records left behind by disconnected clients.',
   scope: 'mixed',
-  intervalMs: 30_000,
+  intervalMs: 60_000,
   enabled: true,
 
   async run(): Promise<SweepResult> {

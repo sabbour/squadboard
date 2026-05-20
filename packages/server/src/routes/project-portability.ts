@@ -89,7 +89,8 @@ router.post('/import', async (req: Request, res: Response) => {
     });
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
-    res.status(500).json({ ok: false, error: msg });
+    const status = (err as Error & { status?: number }).status ?? 500;
+    res.status(status).json({ ok: false, error: msg });
   }
 });
 
@@ -120,7 +121,8 @@ router.post('/instantiate-template/:templateId', async (req: Request, res: Respo
     });
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
-    const status = err instanceof Error && err.message.includes('not found') ? 404 : 500;
+    const status = (err as Error & { status?: number }).status
+      ?? (err instanceof Error && err.message.includes('not found') ? 404 : 500);
     res.status(status).json({ ok: false, error: msg });
   }
 });

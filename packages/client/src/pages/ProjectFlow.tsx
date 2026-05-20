@@ -125,9 +125,13 @@ export default function ProjectFlow() {
                   <SwimLane
                     key={col.slug}
                     column={col}
-                    onOpen={(issueId) =>
-                      navigate(`/projects/${projectId}/board?openIssue=${issueId}&tab=flow`)
-                    }
+                    onOpen={(issue) => {
+                      if (issue.activeRunSummary?.runId) {
+                        navigate(`/projects/${projectId}/issues/${issue.id}/runs/${issue.activeRunSummary.runId}/live`)
+                        return
+                      }
+                      navigate(`/projects/${projectId}/board?openIssue=${issue.id}&tab=flow`)
+                    }}
                   />
                 ))}
               </div>
@@ -167,7 +171,7 @@ function Chip({ label, value, color }: { label: string; value: number; color: st
 
 interface SwimLaneProps {
   column: ProjectFlowColumn
-  onOpen: (issueId: string) => void
+  onOpen: (issue: ProjectFlowIssue) => void
 }
 
 function SwimLane({ column, onOpen }: SwimLaneProps) {
@@ -252,7 +256,7 @@ function IssueCard({
 }: {
   issue: ProjectFlowIssue
   columnColor: string
-  onOpen: (id: string) => void
+  onOpen: (issue: ProjectFlowIssue) => void
 }) {
   const subtitle = issue.activeRunSummary
     ? `${formatRunKind(issue.activeRunSummary.kind)} · ${issue.activeRunSummary.status}`
@@ -273,7 +277,7 @@ function IssueCard({
   return (
     <button
       type="button"
-      onClick={() => onOpen(issue.id)}
+      onClick={() => onOpen(issue)}
       style={{
         flex: '0 0 240px',
         textAlign: 'left',

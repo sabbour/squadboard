@@ -23,7 +23,7 @@
 
 import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router'
-import { useQueries } from '@tanstack/react-query'
+import { useQueries, useQuery } from '@tanstack/react-query'
 import {
   Badge,
   Body1,
@@ -814,6 +814,30 @@ function WorkflowRunsSection({ runs }: { runs: NowWorkflowRun[] }) {
 
 const ALL_PROJECTS = '__all__'
 
+interface HeartbeatSweepStatus {
+  id: string
+  label: string
+  description: string
+  scope: 'system' | 'project' | 'mixed'
+}
+
+interface HeartbeatSweepEvent {
+  seq: number
+  ts: string
+  sweepId: string
+  outcome: 'completed' | 'error'
+  durationMs: number
+  result?: { acted: number; errors: number; details?: string; projectIds?: string[] }
+  error?: string
+}
+
+interface HeartbeatSnapshot {
+  sweeps: HeartbeatSweepStatus[]
+  recent: {
+    sweeps: HeartbeatSweepEvent[]
+  }
+}
+
 export default function Now() {
   const styles = useStyles()
   const { data, isLoading, error } = useNowFeed()
@@ -823,6 +847,17 @@ export default function Now() {
   // page stays the cross-project Uber Dashboard. Users can drill into a
   // single project without leaving Now.
   const [scopeProjectId, setScopeProjectId] = useState<string>(ALL_PROJECTS)
+  const heartbeatProjectId = scopeProjectId === ALL_PROJECTS ? undefined : scopeProjectId
+  const heartbeatQuery = useQuery<HeartbeatSnapshot>({
+    queryKey: ['heartbeat', 'status', heartbeatProjectId ?? '__global__'],
+    queryFn: () => {
+      const query = heartbeatProjectId ? `?projectId=${encodeURIComponent(heartbeatProjectId)}` : ''
+      return apiFetch<HeartbeatSnapshot>(`/api/heartbeat/status${query}`)
+    },
+    refetchInterval: 5_000,
+    staleTime: 2_000,
+    retry: false,
+  })
 
   const liveSessions  = data?.liveSessions  ?? []
   const issueRuns     = data?.issueRuns     ?? []
@@ -1037,7 +1072,14 @@ export default function Now() {
             <Caption1 className={styles.muted}>last 60s</Caption1>
           </div>
           <div style={{ padding: `${tokens.spacingVerticalS} ${tokens.spacingHorizontalL}` }}>
-            <SweepTimeline windowSizeMs={60_000} compact={true} />
+            <SweepTimeline
+              key={heartbeatProjectId ?? '__global__'}
+              windowSizeMs={60_000}
+              compact={true}
+              projectId={heartbeatProjectId}
+              sweeps={heartbeatQuery.data?.sweeps}
+              initialEvents={heartbeatQuery.data?.recent.sweeps ?? []}
+            />
           </div>
         </section>
       </div>

@@ -76,6 +76,21 @@ export function useCancelRun(projectId: string) {
   })
 }
 
+export function useRetriggerRun(projectId: string) {
+  const queryClient = useQueryClient()
+  return useMutation<IssueRun & { retriggeredFromRunId?: string }, Error, { runId: string; issueId: string }>({
+    mutationFn: ({ runId, issueId }) =>
+      apiFetch<IssueRun & { retriggeredFromRunId?: string }>(
+        `/api/projects/${projectId}/issues/${issueId}/runs/${runId}/retrigger`,
+        { method: 'POST' },
+      ),
+    onSuccess: (run, { issueId }) => {
+      void queryClient.invalidateQueries({ queryKey: ['runs', projectId, issueId] })
+      void queryClient.invalidateQueries({ queryKey: ['runs', projectId, 'detail', run.id] })
+    },
+  })
+}
+
 export function useRunStream(projectId: string, runId: string, enabled: boolean) {
   const [lines, setLines] = useState<string[]>([])
 

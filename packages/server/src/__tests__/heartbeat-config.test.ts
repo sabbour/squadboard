@@ -83,11 +83,31 @@ describe('applyHeartbeatConfig', () => {
 
   it('overrides intervalMs with the exact value when provided', () => {
     mockedReadFileSync.mockReturnValue(JSON.stringify({
-      sweeps: { 'stuck-issue-runs': { intervalMs: 99999 } },
+      sweeps: { 'ready-workflow-steps': { intervalMs: 99999 } },
+    }));
+    const sweep = makeSweep('ready-workflow-steps', 15000, true);
+    applyHeartbeatConfig([sweep]);
+    expect(sweep.intervalMs).toBe(99999);
+    expect(sweep.enabled).toBe(true);
+  });
+
+  it('caps stuck-issue-runs interval at 45s to preserve lease recovery', () => {
+    mockedReadFileSync.mockReturnValue(JSON.stringify({
+      sweeps: { 'stuck-issue-runs': { intervalMs: 120000 } },
     }));
     const sweep = makeSweep('stuck-issue-runs', 30000, true);
     applyHeartbeatConfig([sweep]);
-    expect(sweep.intervalMs).toBe(99999);
+    expect(sweep.intervalMs).toBe(45000);
+    expect(sweep.enabled).toBe(true);
+  });
+
+  it('keeps stuck-issue-runs enabled even when config tries to disable it', () => {
+    mockedReadFileSync.mockReturnValue(JSON.stringify({
+      sweeps: { 'stuck-issue-runs': { enabled: false } },
+    }));
+    const sweep = makeSweep('stuck-issue-runs', 30000, true);
+    applyHeartbeatConfig([sweep]);
+    expect(sweep.intervalMs).toBe(30000);
     expect(sweep.enabled).toBe(true);
   });
 

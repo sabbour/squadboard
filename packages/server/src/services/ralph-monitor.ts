@@ -750,7 +750,7 @@ export const ralphMonitorSweep: Sweep = {
   label: 'Ralph monitor',
   description: 'Checks opted-in projects for the next Ready, assigned, CI, review, or PR follow-up action.',
   scope: 'project',
-  intervalMs: 30_000,
+  intervalMs: 60_000,
   enabled: true,
 
   async run(): Promise<SweepResult> {

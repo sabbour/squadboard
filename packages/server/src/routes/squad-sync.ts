@@ -378,8 +378,8 @@ function buildDrift(
     detected: issues.length > 0,
     level,
     summary: issues.length === 0
-      ? 'No missing required or recommended projection artifacts detected. No continuous filesystem mirror is running.'
-      : `${issues.length} sync health issue(s) detected. Repairs are explicit and no continuous filesystem mirror is running.`,
+      ? 'No missing required or recommended projection artifacts detected. No continuous filesystem mirror is running; use the MCP/API broker for CLI/Copilot changes and preview manual export before projecting database state to files.'
+      : `${issues.length} sync health issue(s) detected. Repairs are preview-first and explicit; no continuous filesystem mirror is running.`,
     issues,
     continuousSync: false,
   };

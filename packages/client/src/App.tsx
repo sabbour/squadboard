@@ -10,6 +10,7 @@ import Workflows from './pages/Workflows.tsx'
 import WorkflowEditor from './pages/WorkflowEditor.tsx'
 import CeremonyList from './pages/CeremonyList.tsx'
 import CeremonyEditor from './pages/CeremonyEditor.tsx'
+import CeremonyRuns from './pages/CeremonyRuns.tsx'
 import CeremoniesReview from './pages/CeremoniesReview.tsx'
 import CeremonyAudit from './pages/CeremonyAudit.tsx'
 import Settings from './pages/Settings.tsx'
@@ -68,6 +69,7 @@ export default function App() {
         <Route path="projects/:id/ceremonies/audit" element={<CeremonyAudit />} />
         <Route path="projects/:id/ceremonies/templates" element={<Templates />} />
         <Route path="projects/:id/ceremonies/new" element={<CeremonyEditor />} />
+        <Route path="projects/:id/ceremonies/:ceremonyId/runs" element={<CeremonyRuns />} />
         <Route path="projects/:id/ceremonies/:ceremonyId" element={<CeremonyEditor />} />
         <Route path="projects/:id/workflows" element={<Workflows />} />
         <Route path="projects/:id/workflows/new" element={<WorkflowEditor />} />

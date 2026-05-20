@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useCallback, useMemo, useState, useEffect } from 'react'
 import { useNavigate } from 'react-router'
 import {
   Button,
@@ -7,8 +7,10 @@ import {
   Body1,
   Caption1,
   Badge,
+  Checkbox,
   Field,
   Input,
+  Select,
   Textarea,
   Dialog,
   DialogSurface,
@@ -20,8 +22,8 @@ import {
   tokens,
 } from '@fluentui/react-components'
 import { Folder20Regular, DocumentCopy20Regular, ArrowSync20Regular, Beaker20Regular, Sparkle20Regular } from '@fluentui/react-icons'
-import { useProjects, useSuggestProjectSetup } from '../api/projects.ts'
-import type { ProjectSuggestion } from '../api/projects.ts'
+import { useDeleteProject, useProjects, useSuggestProjectSetup } from '../api/projects.ts'
+import type { Project, ProjectSuggestion } from '../api/projects.ts'
 import { useDiscoverSquad, useRegisterSquad, useInitSquad, useCreateSquad } from '../api/squad.ts'
 import type { SquadDirectory } from '../api/squad.ts'
 import {
@@ -31,14 +33,100 @@ import {
   useApplyBuiltinProjectTemplate,
 } from '../api/templates.ts'
 import ProjectCard from '../components/ProjectCard.tsx'
+import { useUserPrefs, type ProjectIndexFilter, type ProjectIndexSort } from '../utils/userPrefs.ts'
+
+function isTestProject(project: Project): boolean {
+  return project.squadPath.includes('/.e2e-workspaces/')
+    || project.squadPath.includes('\\.e2e-workspaces\\')
+    || /\be2e\b/i.test(project.name)
+}
+
+function projectFolder(project: Project): string {
+  return project.squadPath.replace(/[\\/]?\.squad[\\/]?$/, '')
+}
+
+function sortProjects(projects: Project[], sortBy: ProjectIndexSort): Project[] {
+  return [...projects].sort((a, b) => {
+    if (sortBy === 'name') return a.name.localeCompare(b.name)
+    if (sortBy === 'path') return projectFolder(a).localeCompare(projectFolder(b))
+    return Date.parse(b.createdAt) - Date.parse(a.createdAt)
+  })
+}
 
 export default function ProjectPicker() {
   const navigate = useNavigate()
   const { data: projects, isLoading, isError } = useProjects()
+  const deleteProject = useDeleteProject()
+  const { prefs, setPref } = useUserPrefs()
   const [showModal, setShowModal] = useState(false)
   const [showFromTemplate, setShowFromTemplate] = useState(false)
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set())
+  const { query, filter, sortBy } = prefs.projectIndex
+
+  const updateProjectIndexPrefs = useCallback((patch: Partial<typeof prefs.projectIndex>) => {
+    setPref('projectIndex', { ...prefs.projectIndex, ...patch })
+  }, [prefs.projectIndex, setPref])
+
+  const visibleProjects = useMemo(() => {
+    const normalizedQuery = query.trim().toLowerCase()
+    const rows = (projects ?? []).filter((project) => {
+      const matchesFilter = filter === 'all'
+        || (filter === 'test' ? isTestProject(project) : !isTestProject(project))
+      if (!matchesFilter) return false
+      if (!normalizedQuery) return true
+      return project.name.toLowerCase().includes(normalizedQuery)
+        || project.squadPath.toLowerCase().includes(normalizedQuery)
+    })
+    return sortProjects(rows, sortBy)
+  }, [filter, projects, query, sortBy])
+
+  useEffect(() => {
+    if (!projects) return
+    const knownIds = new Set(projects.map((project) => project.id))
+    setSelectedIds((current) => {
+      const next = new Set([...current].filter((id) => knownIds.has(id)))
+      return next.size === current.size ? current : next
+    })
+  }, [projects])
 
   const hasProjects = projects && projects.length > 0
+  const selectedCount = selectedIds.size
+  const visibleSelectedCount = visibleProjects.filter((project) => selectedIds.has(project.id)).length
+  const allVisibleSelected = visibleProjects.length > 0 && visibleSelectedCount === visibleProjects.length
+
+  function setProjectSelected(id: string, selected: boolean) {
+    setSelectedIds((current) => {
+      const next = new Set(current)
+      if (selected) next.add(id)
+      else next.delete(id)
+      return next
+    })
+  }
+
+  function toggleVisibleSelection(selected: boolean) {
+    setSelectedIds((current) => {
+      const next = new Set(current)
+      for (const project of visibleProjects) {
+        if (selected) next.add(project.id)
+        else next.delete(project.id)
+      }
+      return next
+    })
+  }
+
+  async function handleRemoveSelected() {
+    if (selectedIds.size === 0) return
+    const count = selectedIds.size
+    const message = `Remove ${count} project${count === 1 ? '' : 's'} from Squadboard?\n\nOnly Squadboard metadata will be removed. Project folders and .squad files will not be deleted.`
+    if (!window.confirm(message)) return
+
+    try {
+      await Promise.all([...selectedIds].map((id) => deleteProject.mutateAsync({ id, deleteFolder: false })))
+      setSelectedIds(new Set())
+    } catch (err) {
+      window.alert(err instanceof Error ? err.message : 'Could not remove selected projects from Squadboard.')
+    }
+  }
 
   return (
     <div style={{ padding: '32px' }}>
@@ -55,7 +143,7 @@ export default function ProjectPicker() {
             icon={<DocumentCopy20Regular />}
             onClick={() => setShowFromTemplate(true)}
           >
-            Create from template
+            Create from project template
           </Button>
           <Button
             appearance="primary"
@@ -81,21 +169,85 @@ export default function ProjectPicker() {
       )}
 
       {hasProjects && (
-        <div
-          style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))',
-            gap: '16px',
-          }}
-        >
-          {projects.map((project) => (
-            <ProjectCard
-              key={project.id}
-              project={project}
-              onClick={() => void navigate(`/projects/${project.id}/board`)}
+        <>
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: 'minmax(240px, 1fr) 160px 160px auto',
+              gap: '12px',
+              alignItems: 'end',
+              marginBottom: '16px',
+            }}
+          >
+            <Field label="Find project">
+              <Input
+                value={query}
+                placeholder="Search name or path"
+                onChange={(_, data) => updateProjectIndexPrefs({ query: data.value })}
+              />
+            </Field>
+            <Field label="Filter">
+              <Select value={filter} onChange={(event) => updateProjectIndexPrefs({ filter: event.target.value as ProjectIndexFilter })}>
+                <option value="all">All projects</option>
+                <option value="regular">Hide test workspaces</option>
+                <option value="test">Test workspaces</option>
+              </Select>
+            </Field>
+            <Field label="Sort">
+              <Select value={sortBy} onChange={(event) => updateProjectIndexPrefs({ sortBy: event.target.value as ProjectIndexSort })}>
+                <option value="recent">Newest first</option>
+                <option value="name">Name</option>
+                <option value="path">Path</option>
+              </Select>
+            </Field>
+            <Button
+              appearance="secondary"
+              disabled={selectedCount === 0 || deleteProject.isPending}
+              onClick={() => void handleRemoveSelected()}
+            >
+              Remove selected
+            </Button>
+          </div>
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '12px', flexWrap: 'wrap' }}>
+            <Checkbox
+              checked={allVisibleSelected ? true : visibleSelectedCount > 0 ? 'mixed' : false}
+              onChange={(_, data) => toggleVisibleSelection(data.checked === true)}
+              label={allVisibleSelected ? 'Clear visible selection' : 'Select visible'}
             />
-          ))}
-        </div>
+            <Caption1 style={{ color: tokens.colorNeutralForeground3 }}>
+              Showing {visibleProjects.length} of {projects.length} projects
+              {selectedCount > 0 ? ` · ${selectedCount} selected for metadata-only removal` : ''}
+            </Caption1>
+          </div>
+
+          {visibleProjects.length === 0 ? (
+            <div style={{ border: '1px dashed var(--border)', borderRadius: 'var(--radius)', padding: '32px', textAlign: 'center' }}>
+              <Body1 style={{ color: tokens.colorNeutralForeground3 }}>No projects match the current search and filter.</Body1>
+            </div>
+          ) : (
+            <div
+              style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))',
+                gridAutoRows: '1fr',
+                gap: '16px',
+                alignItems: 'stretch',
+              }}
+            >
+              {visibleProjects.map((project) => (
+                <ProjectCard
+                  key={project.id}
+                  project={project}
+                  selectable
+                  selected={selectedIds.has(project.id)}
+                  onSelectedChange={(selected) => setProjectSelected(project.id, selected)}
+                  onClick={() => void navigate(`/projects/${project.id}/board`)}
+                />
+              ))}
+            </div>
+          )}
+        </>
       )}
 
       {showModal && (
@@ -179,7 +331,7 @@ function CreateFromTemplateModal({
     <Dialog open onOpenChange={(_, d) => { if (!d.open) onClose() }}>
       <DialogSurface style={{ maxWidth: 560, width: '100%' }}>
         <DialogBody>
-          <DialogTitle>Create project from template</DialogTitle>
+          <DialogTitle>Create project from project template</DialogTitle>
           <DialogContent style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
             {isLoading && (
               <Body1 style={{ color: 'var(--text-muted)' }}>Loading templates…</Body1>
@@ -194,7 +346,7 @@ function CreateFromTemplateModal({
             {!isLoading && builtinTemplates.length > 0 && (
               <>
                 <div style={{ fontSize: '11px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--text-muted)' }}>
-                  Built-in
+                  Generic built-in templates
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
                   {builtinTemplates.map((tpl) => (
@@ -845,7 +997,7 @@ function SuggestTab({
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: tokens.spacingVerticalM }}>
       <Body1 style={{ display: 'block', color: tokens.colorNeutralForeground3 }}>
-        Describe what you're building and we'll recommend a team, ceremonies, and board setup.
+        Describe what you're building and we'll recommend one of the generic project templates.
       </Body1>
 
       <Field label="Project description">

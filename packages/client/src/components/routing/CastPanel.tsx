@@ -116,7 +116,7 @@ export function CastPanel({ projectId, onUseAgent }: CastPanelProps) {
         <Sparkle20Regular style={{ color: '#bc8cff' }} />
         Cast an Issue
         <span style={{ fontSize: '11px', fontWeight: 400, color: 'var(--text-muted)', marginLeft: '4px' }}>
-          — see which agent the full 3-tier router would pick
+          — preview which agent the router would pick; does not change the Routing Log
         </span>
       </button>
 

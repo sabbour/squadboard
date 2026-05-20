@@ -9,7 +9,7 @@ interface CharterEditorProps {
 }
 
 export default function CharterEditor({ projectId, agentId }: CharterEditorProps) {
-  const { data, isLoading } = useAgentCharter(projectId, agentId)
+  const { data, isLoading, isError, error, refetch } = useAgentCharter(projectId, agentId)
   const updateCharter = useUpdateCharter(projectId, agentId)
   const [value, setValue] = useState('')
   const [dirty, setDirty] = useState(false)
@@ -37,6 +37,42 @@ export default function CharterEditor({ projectId, agentId }: CharterEditorProps
     return (
       <div style={{ color: 'var(--text-muted)', fontSize: '13px', padding: '12px 0' }}>
         Loading charter…
+      </div>
+    )
+  }
+
+  if (isError) {
+    return (
+      <div
+        style={{
+          border: '1px solid rgba(248,81,73,0.35)',
+          background: 'rgba(248,81,73,0.10)',
+          color: 'var(--text)',
+          borderRadius: 'var(--radius)',
+          padding: '12px',
+          fontSize: '13px',
+          lineHeight: 1.5,
+        }}
+      >
+        <strong style={{ display: 'block', marginBottom: '4px', color: '#f85149' }}>
+          Could not load this charter.
+        </strong>
+        <div style={{ color: 'var(--text-muted)', marginBottom: '10px' }}>
+          {error instanceof Error ? error.message : 'The backend did not return charter content for this agent.'}
+        </div>
+        <button
+          onClick={() => void refetch()}
+          style={{
+            background: 'transparent',
+            border: '1px solid var(--border)',
+            borderRadius: 'var(--radius)',
+            color: 'var(--text)',
+            padding: '6px 12px',
+            cursor: 'pointer',
+          }}
+        >
+          Retry
+        </button>
       </div>
     )
   }

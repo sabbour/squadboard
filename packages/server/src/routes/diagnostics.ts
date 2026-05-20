@@ -11,6 +11,7 @@ import { Router } from 'express';
 import type { Request, Response } from 'express';
 import { runDiagnostics } from '../services/diagnostics.js';
 import type { DiagnosticResult } from '../services/diagnostics.js';
+import { logMonitor } from '../services/log-monitor.js';
 
 const router = Router({ mergeParams: true });
 
@@ -100,3 +101,8 @@ projectDiagnosticsRouter.get('/', async (req: Request, res: Response) => {
 });
 
 export default router;
+
+/** GET /api/diagnostics/log-monitor — log monitor state for operational queries */
+diagnosticsRouter.get('/log-monitor', (_req: Request, res: Response) => {
+  res.json(logMonitor.getState());
+});

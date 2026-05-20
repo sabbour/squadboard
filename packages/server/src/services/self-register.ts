@@ -19,6 +19,7 @@ import { dirname, isAbsolute, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { eq } from 'drizzle-orm';
 import { getDb, schema } from '../db/index.js';
+import { isInternalSquadWorkspacePath } from './squad-path-safety.js';
 
 const SELF_REGISTER_NAME = 'Squadboard';
 
@@ -56,7 +57,9 @@ function findSquadDirUpward(start: string): string | null {
     const candidate = join(dir, '.squad');
     if (existsSync(candidate)) {
       try {
-        if (statSync(candidate).isDirectory()) return candidate;
+        if (statSync(candidate).isDirectory() && !isInternalSquadWorkspacePath(candidate)) {
+          return candidate;
+        }
       } catch {
         /* unreadable — skip */
       }
@@ -108,7 +111,11 @@ export async function registerSelfIfNeeded(): Promise<SelfRegisterResult> {
   // Dedup: any project whose `path` resolves to this same `.squad/` is treated
   // as already self-registered. We compare both the literal string AND the
   // resolved variant (covers `<repo>` vs `<repo>/.squad` storage conventions).
-  const existing = await db.select({ id: schema.projects.id, path: schema.projects.path })
+  const existing = await db.select({
+    id: schema.projects.id,
+    name: schema.projects.name,
+    path: schema.projects.path,
+  })
     .from(schema.projects);
 
   const wantAbs = resolve(squadDir);
@@ -123,6 +130,25 @@ export async function registerSelfIfNeeded(): Promise<SelfRegisterResult> {
       registered: false,
       reason: 'already_registered',
       projectId: match.id,
+      squadDir: wantAbs,
+    };
+  }
+
+  const staleInternalSelfProject = existing.find((row) => (
+    row.name === SELF_REGISTER_NAME
+    && isInternalSquadWorkspacePath(row.path)
+  ));
+
+  if (staleInternalSelfProject) {
+    await db
+      .update(schema.projects)
+      .set({ path: wantAbs, updatedAt: new Date() })
+      .where(eq(schema.projects.id, staleInternalSelfProject.id));
+
+    return {
+      registered: false,
+      reason: 'corrected_internal_path',
+      projectId: staleInternalSelfProject.id,
       squadDir: wantAbs,
     };
   }
@@ -155,6 +181,10 @@ export async function registerSelfAtBoot(): Promise<SelfRegisterResult> {
     } else if (result.reason === 'already_registered') {
       console.log(
         `[self-register] skipped — already registered as id=${result.projectId} path=${result.squadDir}`,
+      );
+    } else if (result.reason === 'corrected_internal_path') {
+      console.log(
+        `[self-register] corrected internal project path id=${result.projectId} path=${result.squadDir}`,
       );
     } else if (result.reason === 'no_squad_dir_found') {
       console.log('[self-register] skipped — no .squad/ directory found near CWD or source root');

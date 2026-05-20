@@ -14,6 +14,7 @@
  *   GET    /                         list (filters: kind, triggerKind)
  *   POST   /                         create (yamlContent + triggerKind + …)
  *   GET    /:id                      get + active version + versions[]
+ *   GET    /:id/runs                 list execution runs + step logs
  *   PATCH  /:id                      update name/desc/triggerKind/triggerConfig/kind/yaml
  *   DELETE /:id                      archive (deactivate all versions)
  *   POST   /:id/run                  ad-hoc spawn (Run-now button)
@@ -31,7 +32,7 @@
 
 import { Router } from 'express';
 import type { Request, Response } from 'express';
-import { eq, and, sql, gte, count, isNotNull, inArray, desc } from 'drizzle-orm';
+import { eq, and, sql, gte, count, isNotNull, inArray, desc, asc } from 'drizzle-orm';
 import { getDb, schema } from '../db/index.js';
 import { parseWorkflowYaml, validateWorkflowYaml } from '../services/workflow-parser.js';
 import { deriveOrigin, type CeremonyOrigin } from '../services/ceremony-origin.js';
@@ -77,6 +78,21 @@ function handleError(res: Response, err: unknown): void {
   console.error('[ceremonies] error:', err);
   const msg = err instanceof Error ? err.message : 'Internal server error';
   res.status(500).json({ error: msg });
+}
+
+function manualRunContext(body: unknown): Record<string, unknown> | undefined {
+  if (!body || typeof body !== 'object') return undefined;
+  const record = body as Record<string, unknown>;
+  const explicit = record['context'] ?? record['runContext'];
+  if (explicit && typeof explicit === 'object' && !Array.isArray(explicit)) {
+    return explicit as Record<string, unknown>;
+  }
+
+  const context: Record<string, unknown> = {};
+  for (const key of ['mode', 'selectedDocs', 'source', 'reason']) {
+    if (record[key] !== undefined) context[key] = record[key];
+  }
+  return Object.keys(context).length > 0 ? context : undefined;
 }
 
 function isValidTriggerKind(s: unknown): s is TriggerKind {
@@ -204,6 +220,12 @@ async function loadActiveVersionIdMap(workflowIds: string[]): Promise<Map<string
     }
   }
   return versionByWorkflow;
+}
+
+function parseRunLimit(value: unknown): number {
+  const parsed = typeof value === 'string' ? Number.parseInt(value, 10) : NaN;
+  if (!Number.isFinite(parsed)) return 25;
+  return Math.min(Math.max(parsed, 1), 100);
 }
 
 function sourceYamlPath(row: { triggerConfig: unknown }): string | null {
@@ -489,6 +511,151 @@ ceremoniesRouter.get('/:id/yaml', async (req: Request, res: Response) => {
   }
 });
 
+// GET /:id/runs — execution history and step-level logs for one ceremony.
+ceremoniesRouter.get('/:id/runs', async (req: Request, res: Response) => {
+  try {
+    const { projectId, id } = req.params as Record<string, string>;
+    const limit = parseRunLimit((req.query as Record<string, unknown>)['limit']);
+    const db = getDb();
+
+    const [ceremony] = await db
+      .select({
+        id: schema.workflows.id,
+        projectId: schema.workflows.projectId,
+        name: schema.workflows.name,
+        slug: schema.workflows.slug,
+        triggerKind: schema.workflows.triggerKind,
+        kind: schema.workflows.kind,
+      })
+      .from(schema.workflows)
+      .where(and(eq(schema.workflows.id, id), eq(schema.workflows.projectId, projectId)))
+      .limit(1);
+
+    if (!ceremony) {
+      res.status(404).json({ error: 'Ceremony not found' });
+      return;
+    }
+
+    const versions = await db
+      .select({
+        id: schema.workflowVersions.id,
+        version: schema.workflowVersions.version,
+        createdAt: schema.workflowVersions.createdAt,
+      })
+      .from(schema.workflowVersions)
+      .where(eq(schema.workflowVersions.workflowId, id))
+      .orderBy(desc(schema.workflowVersions.version));
+
+    const versionIds = versions.map((version) => version.id);
+    if (versionIds.length === 0) {
+      res.json({ ceremony, versions, runs: [] });
+      return;
+    }
+
+    const runRows = await db
+      .select({
+        id: schema.workflowRuns.id,
+        issueId: schema.workflowRuns.issueId,
+        issueTitle: schema.issues.title,
+        issueStatus: schema.issues.status,
+        workflowVersionId: schema.workflowRuns.workflowVersionId,
+        workflowVersionNumber: schema.workflowVersions.version,
+        status: schema.workflowRuns.status,
+        currentStepIndex: schema.workflowRuns.currentStepIndex,
+        triggerSource: schema.workflowRuns.triggerSource,
+        premiumRequests: schema.workflowRuns.premiumRequests,
+        createdAt: schema.workflowRuns.createdAt,
+        updatedAt: schema.workflowRuns.updatedAt,
+      })
+      .from(schema.workflowRuns)
+      .innerJoin(schema.workflowVersions, eq(schema.workflowRuns.workflowVersionId, schema.workflowVersions.id))
+      .leftJoin(schema.issues, eq(schema.workflowRuns.issueId, schema.issues.id))
+      .where(inArray(schema.workflowRuns.workflowVersionId, versionIds))
+      .orderBy(desc(schema.workflowRuns.createdAt))
+      .limit(limit);
+
+    const workflowRunIds = runRows.map((run) => run.id);
+    const stepRows = workflowRunIds.length > 0
+      ? await db
+        .select({
+          id: schema.stepRuns.id,
+          workflowRunId: schema.stepRuns.workflowRunId,
+          issueRunId: schema.stepRuns.issueRunId,
+          stepIndex: schema.stepRuns.stepIndex,
+          stepType: schema.stepRuns.stepType,
+          status: schema.stepRuns.status,
+          output: schema.stepRuns.output,
+          reviewDecision: schema.stepRuns.reviewDecision,
+          reviewComment: schema.stepRuns.reviewComment,
+          sessionId: schema.stepRuns.sessionId,
+          startedAt: schema.stepRuns.startedAt,
+          createdAt: schema.stepRuns.createdAt,
+          updatedAt: schema.stepRuns.updatedAt,
+          issueRunStatus: schema.issueRuns.status,
+          issueRunOutput: schema.issueRuns.output,
+          issueRunError: schema.issueRuns.errorMessage,
+          agentId: schema.issueRuns.agentId,
+          agentName: schema.agents.name,
+        })
+        .from(schema.stepRuns)
+        .leftJoin(schema.issueRuns, eq(schema.stepRuns.issueRunId, schema.issueRuns.id))
+        .leftJoin(schema.agents, eq(schema.issueRuns.agentId, schema.agents.id))
+        .where(inArray(schema.stepRuns.workflowRunId, workflowRunIds))
+        .orderBy(asc(schema.stepRuns.workflowRunId), asc(schema.stepRuns.stepIndex))
+      : [];
+
+    const issueRunIds = stepRows
+      .map((step) => step.issueRunId)
+      .filter((issueRunId): issueRunId is string => Boolean(issueRunId));
+
+    const eventRows = issueRunIds.length > 0
+      ? await db
+        .select({
+          id: schema.issueRunEvents.id,
+          runId: schema.issueRunEvents.runId,
+          seq: schema.issueRunEvents.seq,
+          eventType: schema.issueRunEvents.eventType,
+          payload: schema.issueRunEvents.payload,
+          createdAt: schema.issueRunEvents.createdAt,
+        })
+        .from(schema.issueRunEvents)
+        .where(inArray(schema.issueRunEvents.runId, issueRunIds))
+        .orderBy(desc(schema.issueRunEvents.createdAt), desc(schema.issueRunEvents.seq))
+        .limit(200)
+      : [];
+
+    const eventsByIssueRun = new Map<string, typeof eventRows>();
+    for (const event of eventRows) {
+      const events = eventsByIssueRun.get(event.runId) ?? [];
+      if (events.length < 10) events.push(event);
+      eventsByIssueRun.set(event.runId, events);
+    }
+
+    const stepsByWorkflowRun = new Map<string, Array<typeof stepRows[number] & { events: typeof eventRows }>>();
+    for (const step of stepRows) {
+      const steps = stepsByWorkflowRun.get(step.workflowRunId) ?? [];
+      steps.push({
+        ...step,
+        events: step.issueRunId
+          ? [...(eventsByIssueRun.get(step.issueRunId) ?? [])].reverse()
+          : [],
+      });
+      stepsByWorkflowRun.set(step.workflowRunId, steps);
+    }
+
+    res.json({
+      ceremony,
+      versions,
+      runs: runRows.map((run) => ({
+        ...run,
+        steps: stepsByWorkflowRun.get(run.id) ?? [],
+      })),
+    });
+  } catch (err) {
+    handleError(res, err);
+  }
+});
+
 // POST /import-yaml — CER-3: upsert ceremony from canonical YAML
 ceremoniesRouter.post('/import-yaml', async (req: Request, res: Response) => {
   try {
@@ -712,11 +879,14 @@ ceremoniesRouter.delete('/:id', async (req: Request, res: Response) => {
 });
 
 // POST /:id/run — ad-hoc spawn (Run-now button). Body may include
-// { anchorIssueId?: string }.
+// { anchorIssueId?: string, context?: object }. The context is persisted in
+// trigger_source so reusable manual ceremonies can receive selected-doc/source
+// payloads without a ceremony-specific endpoint.
 ceremoniesRouter.post('/:id/run', async (req: Request, res: Response) => {
   try {
     const { projectId, id } = req.params as Record<string, string>;
     const { anchorIssueId } = (req.body ?? {}) as { anchorIssueId?: string };
+    const context = manualRunContext(req.body);
     const db = getDb();
 
     const [workflow] = await db
@@ -735,6 +905,7 @@ ceremoniesRouter.post('/:id/run', async (req: Request, res: Response) => {
       triggerSource: {
         kind: 'manual',
         anchorIssueId,
+        ...(context ? { context } : {}),
         detail: 'POST /ceremonies/:id/run',
       },
     });

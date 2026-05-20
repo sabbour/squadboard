@@ -10,13 +10,15 @@ export type RoutingTier = 'T1' | 'T2' | 'T3'
 export interface RoutingLogEntry {
   id: string
   timestamp: string
-  issueId: string
+  issueId: string | null
   issueTitle: string
-  tier: RoutingTier
+  tier: RoutingTier | null
   matchedRule?: string
   agentAssigned?: string
   agentName?: string
   score?: number
+  reasoning?: string | null
+  source?: 'routing_log' | 'issue_run'
 }
 
 export interface RoutingStats {

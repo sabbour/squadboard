@@ -6,11 +6,11 @@
  * catalog returned by SquadClient.listModels(). When a model is unknown, falls
  * back to claude-sonnet-4.5's pricing which is roughly mid-tier.
  *
- * Stream D — D6: in addition to USD pricing this module exposes a GitHub
- * Copilot premium-request multiplier table for the alternate cost model
- * documented at https://docs.github.com/en/copilot/concepts/billing/copilot-requests.
- * The two cost models live side-by-side; Costs.tsx renders one or the other
- * based on the project setting / `SQUADBOARD_COST_MODEL` env flag.
+ * Stream D — D6 originally exposed GitHub Copilot premium-request multipliers.
+ * GitHub Copilot now uses GitHub AI Credits for individual usage-based billing:
+ * 1 credit = $0.01, with consumption based on model/token usage. The legacy
+ * multiplier helpers remain for backwards-compatible persisted fields, but new
+ * UI copy and cost rollups should treat USD-derived AI Credits as canonical.
  */
 
 export interface ModelPrice {
@@ -76,8 +76,13 @@ export function getPricing(model: string | null | undefined): ModelPrice {
   return (model && MODEL_PRICING[model]) || FALLBACK;
 }
 
+export function estimateAiCreditsFromUsd(costUsd: number): number {
+  if (!Number.isFinite(costUsd) || costUsd <= 0) return 0;
+  return Math.round(costUsd * 100 * 10_000) / 10_000;
+}
+
 // ---------------------------------------------------------------------------
-// Stream D — D6: GitHub Copilot premium-request multipliers.
+// Legacy GitHub Copilot premium-request multipliers.
 //
 // Each prompt counts as N premium requests where N comes from this table.
 // The "included" models (gpt-5-mini, gpt-4.1, gpt-4o) cost zero requests on

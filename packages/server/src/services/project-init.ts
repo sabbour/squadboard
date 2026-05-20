@@ -41,7 +41,7 @@ export async function createProject(
 
   const [project] = await db
     .insert(schema.projects)
-    .values({ name: options.name, path: safePath })
+    .values({ name: options.name, path: safePath, storageProviderMode: 'postgresql' })
     .returning();
 
   if (!project) {

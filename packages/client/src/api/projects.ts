@@ -8,7 +8,7 @@ export interface Project {
   defaultModel: string | null
   // Stream D — D6: which cost model the Costs page renders. null falls back
   // to env SQUADBOARD_COST_MODEL (server-side default).
-  costModel?: 'usd' | 'gh_multipliers' | null
+  costModel?: 'usd' | 'ai_credits' | 'gh_multipliers' | null
   createdAt: string
 }
 
@@ -34,7 +34,7 @@ export interface UpdateProjectInput {
   description?: string | null
   path?: string
   defaultModel?: string | null
-  costModel?: 'usd' | 'gh_multipliers' | null
+  costModel?: 'usd' | 'ai_credits' | 'gh_multipliers' | null
 }
 
 export function useProjects() {

@@ -152,4 +152,19 @@ describe('POST /api/squad/create folder structure', () => {
       expect(await exists(path.join(projectPath, entry))).toBe(false);
     }
   });
+
+  it('refuses to create projects directly under the repository packages directory', async () => {
+    const packagesPath = path.resolve(parentPath, '..', '..', '..', '..');
+    const projectName = `accidental-package-project-${Date.now()}`;
+    const { req, res, getStatus, getBody } = makeReqRes({ parentPath: packagesPath, projectName });
+
+    await createHandler(req, res);
+
+    expect(getStatus()).toBe(422);
+    expect(getBody()).toMatchObject({
+      ok: false,
+      error: expect.stringContaining('packages/ directory'),
+    });
+    expect(await exists(path.join(packagesPath, projectName))).toBe(false);
+  });
 });

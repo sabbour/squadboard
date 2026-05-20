@@ -2,7 +2,7 @@
  * POST /api/projects/:projectId/cast
  *   Body: { title, body?, labels? }
  *   Runs the full 3-tier routing pipeline and returns the suggested agent + reasoning.
- *   Persists to routing_log via resolveRouteFull's internal logger.
+ *   Preview-only: does not persist to routing_log or affect routing stats.
  *
  *   This is a thin "Cast this issue" UI layer over the existing router engine —
  *   not a separate matcher. Keeps suggestions consistent with production routing.

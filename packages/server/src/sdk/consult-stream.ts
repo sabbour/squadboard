@@ -30,7 +30,7 @@ import { eq } from 'drizzle-orm';
 import { getDb, schema } from '../db/index.js';
 import { eventBus } from '../realtime/event-bus.js';
 import { resolveModel } from './model-defaults.js';
-import { estimateCost, estimatePremiumRequests } from './pricing.js';
+import { estimateAiCreditsFromUsd, estimateCost } from './pricing.js';
 import * as consultService from '../services/consult.js';
 import { buildCoordinatorContext } from '../services/coordinator-context.js';
 import { tryDirectResponse } from './direct-response.js';
@@ -555,8 +555,8 @@ function attachListeners(running: RunningConsult): void {
     const outputTokens = pickNumber(e, 'outputTokens', 'output_tokens', 'completionTokens', 'completion_tokens') ?? 0;
     const model = pickString(e, 'model') ?? running.model ?? null;
     const turnCost = estimateCost(model, inputTokens, outputTokens);
-    const premiumRequests = estimatePremiumRequests(model);
-    await consultService.recordSessionUsage(consultId, inputTokens, outputTokens, turnCost.toFixed(6), premiumRequests);
+    const aiCredits = estimateAiCreditsFromUsd(turnCost);
+    await consultService.recordSessionUsage(consultId, inputTokens, outputTokens, turnCost.toFixed(6), aiCredits);
     eventBus.emitConsultEvent('consult.usage', consultId, {
       sessionId: consultId,
       inputTokens,

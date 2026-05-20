@@ -11,6 +11,7 @@ import { describe, it, expect } from 'vitest';
 import {
   backfillCharterContent,
   ensureCharterBackfill,
+  formatBackfillErrorSummary,
   type BackfillStats,
 } from '../services/charter-backfill.js';
 
@@ -29,6 +30,7 @@ describe('Charter Backfill Service (W29 MC-5)', () => {
         inspected: 0,
         updated: 0,
         skipped: 0,
+        suppressedInternal: 0,
         errors: [],
       };
       expect(stats.inspected).toBe(0);
@@ -42,6 +44,7 @@ describe('Charter Backfill Service (W29 MC-5)', () => {
         inspected: 1,
         updated: 0,
         skipped: 1,
+        suppressedInternal: 0,
         errors: [
           {
             agent: 'hockney',
@@ -77,6 +80,7 @@ describe('Charter Backfill Service (W29 MC-5)', () => {
         inspected: 5,
         updated: 3,
         skipped: 2,
+        suppressedInternal: 0,
         errors: [],
       };
       expect(sample.inspected).toBe(5);
@@ -87,11 +91,28 @@ describe('Charter Backfill Service (W29 MC-5)', () => {
     it('ensureCharterBackfill returns BackfillStats or null', () => {
       type ExpectedReturn = BackfillStats | null;
       const results: ExpectedReturn[] = [
-        { inspected: 0, updated: 0, skipped: 0, errors: [] },
+        { inspected: 0, updated: 0, skipped: 0, suppressedInternal: 0, errors: [] },
         null,
       ];
       expect(results[0]).not.toBeNull();
       expect(results[1]).toBeNull();
+    });
+  });
+
+  describe('error summaries', () => {
+    it('aggregates repeated missing-charter errors and samples examples', () => {
+      const errors = Array.from({ length: 8 }, (_, i) => ({
+        agent: `agent-${i}`,
+        error: `Charter file not found at /workspace/.squad/agents/agent-${i}/charter.md`,
+      }));
+
+      const summary = formatBackfillErrorSummary(errors, 3);
+
+      expect(summary).toContain('8× Charter file not found at <path>');
+      expect(summary).toContain('agent-0');
+      expect(summary).toContain('agent-2');
+      expect(summary).not.toContain('agent-7:');
+      expect(summary).toContain('5 more omitted');
     });
   });
 });

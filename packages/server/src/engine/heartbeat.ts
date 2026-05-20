@@ -180,6 +180,9 @@ export class Heartbeat {
     } else if (!enabled && state.intervalHandle) {
       clearInterval(state.intervalHandle);
       state.intervalHandle = undefined;
+      state.nextRunAt = undefined;
+    } else if (!enabled) {
+      state.nextRunAt = undefined;
     }
   }
 

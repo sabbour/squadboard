@@ -198,6 +198,69 @@ function sqlNumberList(values: readonly number[]): string {
   return values.join(', ');
 }
 
+async function migrateIssueStatusColumnToText(): Promise<void> {
+  if (!_pool) throw new Error('Pool not initialised');
+
+  let statusType: { data_type: string | null; udt_name: string | null } | undefined;
+  try {
+    const result = await _pool.query<{ data_type: string | null; udt_name: string | null }>(`
+      SELECT data_type, udt_name
+      FROM information_schema.columns
+      WHERE table_schema = 'public'
+        AND table_name = 'issues'
+        AND column_name = 'status'
+      LIMIT 1
+    `);
+    statusType = result.rows[0];
+  } catch (err) {
+    if (!isPgliteCatalogCorruptionError(err)) {
+      throw err;
+    }
+    console.warn(
+      '[db] skipped issues.status enum migration because PGlite catalog metadata is inconsistent; existing catalog will be left untouched:',
+      err instanceof Error ? err.message : String(err),
+    );
+    return;
+  }
+
+  if (!statusType) return;
+
+  const usesLegacyEnum =
+    statusType.udt_name === 'column_status' ||
+    statusType.data_type === 'USER-DEFINED';
+
+  if (!usesLegacyEnum) {
+    try {
+      await _pool.query('DROP TYPE IF EXISTS column_status');
+    } catch (err) {
+      if (!isPgliteCatalogCorruptionError(err)) {
+        throw err;
+      }
+      console.warn(
+        '[db] column_status type cleanup skipped because PGlite catalog metadata is inconsistent:',
+        err instanceof Error ? err.message : String(err),
+      );
+    }
+    return;
+  }
+
+  try {
+    await _pool.query(`
+      ALTER TABLE issues ALTER COLUMN status TYPE TEXT USING status::TEXT;
+      ALTER TABLE issues ALTER COLUMN status SET DEFAULT 'backlog';
+      DROP TYPE IF EXISTS column_status;
+    `);
+  } catch (err) {
+    if (!isPgliteCatalogCorruptionError(err)) {
+      throw err;
+    }
+    console.warn(
+      '[db] PGlite catalog corruption prevented legacy issues.status enum migration; skipping this non-destructive compatibility step:',
+      err instanceof Error ? err.message : String(err),
+    );
+  }
+}
+
 /**
  * Returns true for PGlite catalog/index corruption errors that can be repaired
  * by rebuilding known local indexes.
@@ -530,6 +593,7 @@ async function bootstrapSchema(): Promise<void> {
       id          UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
       name        TEXT        NOT NULL,
       path        TEXT        NOT NULL,
+      storage_provider_mode TEXT,
       created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       updated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
@@ -542,16 +606,12 @@ async function bootstrapSchema(): Promise<void> {
       CONSTRAINT settings_key_unique UNIQUE (key)
     );
 
-    DO $$ BEGIN
-      CREATE TYPE column_status AS ENUM ('backlog', 'ready', 'in_progress', 'in_review', 'done');
-    EXCEPTION WHEN duplicate_object THEN NULL; END $$;
-
     CREATE TABLE IF NOT EXISTS issues (
       id           UUID          PRIMARY KEY DEFAULT gen_random_uuid(),
       project_id   UUID          NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
       title        TEXT          NOT NULL,
       body         TEXT          NOT NULL DEFAULT '',
-      status       column_status NOT NULL DEFAULT 'backlog',
+      status       TEXT          NOT NULL DEFAULT 'backlog',
       assignee_id  UUID,
       position     INTEGER       NOT NULL DEFAULT 0,
       archived     INTEGER       NOT NULL DEFAULT 0,
@@ -1338,17 +1398,9 @@ async function bootstrapSchema(): Promise<void> {
   // Phase dynamic-columns: idempotent migration from column_status enum → TEXT
   // Runs on every server start; all steps are no-ops once applied.
   // ---------------------------------------------------------------------------
-  await _pool.query(`
-    -- Step 1: If the Postgres column_status enum still exists, migrate issues.status
-    -- to plain TEXT (enum→text is implicit in Postgres; USING clause is explicit for safety).
-    DO $$ BEGIN
-      IF EXISTS (SELECT 1 FROM pg_type WHERE typname = 'column_status') THEN
-        ALTER TABLE issues ALTER COLUMN status TYPE TEXT USING status::TEXT;
-        ALTER TABLE issues ALTER COLUMN status SET DEFAULT 'backlog';
-        DROP TYPE column_status;
-      END IF;
-    END $$;
+  await migrateIssueStatusColumnToText();
 
+  await _pool.query(`
     -- Step 2: Add semantic and is_default columns to column_meta if not present.
     ALTER TABLE column_meta
       ADD COLUMN IF NOT EXISTS semantic    TEXT    NOT NULL DEFAULT 'custom',
@@ -1358,7 +1410,9 @@ async function bootstrapSchema(): Promise<void> {
     UPDATE column_meta SET semantic = 'backlog'     WHERE column_id = 'backlog'     AND semantic = 'custom';
     UPDATE column_meta SET semantic = 'ready'       WHERE column_id = 'ready'       AND semantic = 'custom';
     UPDATE column_meta SET semantic = 'in_progress' WHERE column_id = 'in_progress' AND semantic = 'custom';
+    UPDATE column_meta SET semantic = 'in_progress' WHERE column_id = 'in-progress' AND semantic = 'custom';
     UPDATE column_meta SET semantic = 'review'      WHERE column_id = 'in_review'   AND semantic = 'custom';
+    UPDATE column_meta SET semantic = 'review'      WHERE column_id = 'in-review'   AND semantic = 'custom';
     UPDATE column_meta SET semantic = 'done'        WHERE column_id = 'done'        AND semantic = 'custom';
 
     -- Step 4: Backfill is_default=true on the backlog column for every project
@@ -1640,6 +1694,13 @@ async function bootstrapSchema(): Promise<void> {
   await _pool.query(`
     ALTER TABLE projects
       ADD COLUMN IF NOT EXISTS description TEXT;
+  `);
+
+  // Cross-surface Squad Sync: project-level authority mode. Null legacy rows
+  // are inferred from squad_storage/filesystem evidence at runtime.
+  await _pool.query(`
+    ALTER TABLE projects
+      ADD COLUMN IF NOT EXISTS storage_provider_mode TEXT;
   `);
 
   // Parity 6: Ralph-style autonomous monitor. Project-level opt-in is default

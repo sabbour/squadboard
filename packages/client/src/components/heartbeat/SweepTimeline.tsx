@@ -7,10 +7,10 @@
  *
  * Props:
  *   windowSizeMs — milliseconds of history to display (default 60_000)
- *   compact      — compact mode for the Now page (fewer lanes, shorter)
+ *   compact      — compact mode for the Now page (shorter rows)
  *
  * Rendering:
- *   - One row per sweep in ALL_SWEEPS (or COMPACT_SWEEPS subset when compact)
+ *   - One row per registered sweep
  *   - The track is a relatively-positioned bar; each pulse is an absolutely
  *     positioned dot whose `left` is computed from its receivedAt timestamp
  *     relative to the current window.
@@ -78,14 +78,28 @@ const ALL_SWEEPS = [
   { id: 'github-sync-overdue',  label: 'GitHub Sync'     },
   { id: 'pickup-ready',         label: 'Ready Pickup'    },
   { id: 'ralph-monitor',        label: 'Ralph Monitor'   },
+  { id: 'log-monitor',          label: 'Log Monitor'     },
 ] satisfies SweepDefinition[]
 
-const COMPACT_SWEEPS: ReadonlySet<string> = new Set([
-  'ceremonies-due',
-  'ready-workflow-steps',
-  'stuck-issue-runs',
-  'github-sync-overdue',
-])
+const ALL_SWEEP_IDS = new Set(ALL_SWEEPS.map((sweep) => sweep.id))
+
+export function mergeSweepDefinitions(sweeps?: SweepDefinition[]): SweepDefinition[] {
+  if (!sweeps?.length) return [...ALL_SWEEPS]
+
+  const suppliedById = new Map(sweeps.map((sweep) => [sweep.id, sweep]))
+  const merged = ALL_SWEEPS.map((fallback) => {
+    const supplied = suppliedById.get(fallback.id)
+    return supplied
+      ? { ...fallback, ...supplied, label: supplied.label || fallback.label }
+      : fallback
+  })
+
+  for (const sweep of sweeps) {
+    if (!ALL_SWEEP_IDS.has(sweep.id)) merged.push(sweep)
+  }
+
+  return merged
+}
 
 // ─── Styles ───────────────────────────────────────────────────────────────────
 
@@ -206,6 +220,7 @@ interface SweepTimelineProps {
   compact?:      boolean
   sweeps?:       SweepDefinition[]
   initialEvents?: SweepTimelineEvent[]
+  projectId?: string
 }
 
 export function SweepTimeline({
@@ -213,6 +228,7 @@ export function SweepTimeline({
   compact      = false,
   sweeps       = ALL_SWEEPS,
   initialEvents = [],
+  projectId,
 }: SweepTimelineProps) {
   const styles = useStyles()
   const [, forceTick] = useState(0)
@@ -220,9 +236,15 @@ export function SweepTimeline({
   const counterRef = useRef(0)
   const seededEventsRef = useRef(new Set<string>())
 
-  const visibleSweeps = compact
-    ? sweeps.filter((s) => COMPACT_SWEEPS.has(s.id))
-    : sweeps
+  const visibleSweeps = mergeSweepDefinitions(sweeps)
+  const shouldIncludeProject = (projectIds?: string[]) =>
+    !projectId || !projectIds?.length || projectIds.includes(projectId)
+
+  useEffect(() => {
+    pulsesRef.current = []
+    seededEventsRef.current.clear()
+    forceTick((n) => n + 1)
+  }, [projectId])
 
   // Prune old pulses + slide the window every 2 s.
   useEffect(() => {
@@ -240,6 +262,7 @@ export function SweepTimeline({
     let changed = false
     const seeded: SweepPulse[] = []
     for (const event of initialEvents) {
+      if (!shouldIncludeProject(event.result?.projectIds)) continue
       const key = event.seq !== undefined ? String(event.seq) : `${event.sweepId}:${event.ts}`
       if (seededEventsRef.current.has(key)) continue
       seededEventsRef.current.add(key)
@@ -260,11 +283,12 @@ export function SweepTimeline({
       pulsesRef.current = [...pulsesRef.current, ...seeded].slice(-200)
       forceTick((n) => n + 1)
     }
-  }, [initialEvents])
+  }, [initialEvents, projectId])
 
   // WS subscription — append new pulses on every sweep.tick.
   useEffect(() => {
     const handler = (payload: SweepTick) => {
+      if (!shouldIncludeProject(payload.projectIds)) return
       const pulse: SweepPulse = {
         ...payload,
         id:         `${payload.sweepName}-${++counterRef.current}`,
@@ -275,7 +299,7 @@ export function SweepTimeline({
     }
     wsClient.on('sweep.tick', handler)
     return () => wsClient.off('sweep.tick', handler)
-  }, [])
+  }, [projectId])
 
   const now = Date.now()
   const windowStart = now - windowSizeMs

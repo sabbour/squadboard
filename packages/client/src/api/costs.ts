@@ -45,7 +45,7 @@ export interface ServerCostBucket {
   bySource?: ServerCostBySource[]
 }
 
-export type CostModel = 'usd' | 'gh_multipliers'
+export type CostModel = 'usd' | 'ai_credits' | 'gh_multipliers'
 
 export interface ServerCostSummary {
   projectId: string
@@ -162,7 +162,7 @@ function adaptSummary(raw: ServerCostSummary | undefined | null): CostSummary {
     bySource,
     totalMtd: Number(mtd.totalCostUsd ?? 0),
     totalMtdPremiumRequests: Number(mtd.totalPremiumRequests ?? 0),
-    costModel: raw?.costModel ?? 'usd',
+    costModel: raw?.costModel === 'gh_multipliers' ? 'ai_credits' : raw?.costModel ?? 'usd',
   }
 }
 

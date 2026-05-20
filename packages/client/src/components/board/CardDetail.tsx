@@ -15,7 +15,7 @@ import {
   Textarea,
 } from '@fluentui/react-components'
 import { Dismiss20Regular, Settings20Regular } from '@fluentui/react-icons'
-import { type Issue, useUpdateDeliverable } from '../../api/issues.ts'
+import { type Issue, useAssignIssue, useUpdateDeliverable } from '../../api/issues.ts'
 import { useLabels } from '../../api/labels.ts'
 import { useIssueRuns } from '../../api/runs.ts'
 import { useAgents } from '../../api/agents.ts'
@@ -44,11 +44,14 @@ interface CardDetailProps {
 }
 
 type Tab = 'overview' | 'runs' | 'outputs' | 'flow'
+const UNASSIGNED_OPTION = '__unassigned__'
 
 export default function CardDetail({ projectId, issue, onClose, initialTab }: CardDetailProps) {
   const panelRef = useRef<HTMLDivElement>(null)
   const [activeTab, setActiveTab] = useState<Tab>(initialTab ?? 'overview')
   const [showAttachModal, setShowAttachModal] = useState(false)
+  const [selectedAssigneeId, setSelectedAssigneeId] = useState<string | null>(issue.assignee?.id ?? null)
+  const [assignmentError, setAssignmentError] = useState<string | null>(null)
   const { data: labels } = useLabels(projectId)
   const { data: runs } = useIssueRuns(projectId, issue.id)
   const { data: agents } = useAgents(projectId)
@@ -57,9 +60,33 @@ export default function CardDetail({ projectId, issue, onClose, initialTab }: Ca
   const { data: deliverables } = useDeliverables(projectId, issue.id)
   const { data: attachments } = useIssueAttachments(projectId, issue.id)
   const startWorkflow = useStartWorkflow(projectId, issue.id)
+  const assignIssue = useAssignIssue(projectId)
   const updateDeliverable = useUpdateDeliverable(projectId)
 
   const activeRun = runs?.find((r) => r.status === 'running' || r.status === 'pending')
+  const assignableAgents = (() => {
+    const activeAgents = (agents ?? []).filter((agent) => agent.status === 'active')
+    if (issue.assignee && !activeAgents.some((agent) => agent.id === issue.assignee?.id)) {
+      return [...activeAgents, {
+        id: issue.assignee.id,
+        name: issue.assignee.name,
+        role: issue.assignee.role ?? '',
+        status: 'disabled' as const,
+        charterPath: '',
+        createdAt: '',
+        updatedAt: '',
+      }]
+    }
+    return activeAgents
+  })()
+  const selectedAssigneeName =
+    selectedAssigneeId === null
+      ? 'Unassigned'
+      : assignableAgents.find((agent) => agent.id === selectedAssigneeId)?.name ?? issue.assignee?.name ?? 'Assigned agent'
+
+  useEffect(() => {
+    setSelectedAssigneeId(issue.assignee?.id ?? null)
+  }, [issue.assignee?.id])
 
   // Close on Escape
   useEffect(() => {
@@ -212,6 +239,46 @@ export default function CardDetail({ projectId, issue, onClose, initialTab }: Ca
                   {safeRelativeTime(issue.createdAt)}
                 </Caption1>
               </div>
+
+              <Field
+                label="Assignee"
+                hint="Only active project agents can be assigned to new work."
+                validationState={assignmentError ? 'error' : 'none'}
+                validationMessage={assignmentError ?? undefined}
+              >
+                <Dropdown
+                  value={selectedAssigneeName}
+                  selectedOptions={[selectedAssigneeId ?? UNASSIGNED_OPTION]}
+                  disabled={assignIssue.isPending}
+                  onOptionSelect={(_, data) => {
+                    const selected = data.optionValue === UNASSIGNED_OPTION ? null : data.optionValue ?? null
+                    if (selected === selectedAssigneeId) return
+                    const previous = selectedAssigneeId
+                    setSelectedAssigneeId(selected)
+                    setAssignmentError(null)
+                    assignIssue.mutate(
+                      { issueId: issue.id, assigneeId: selected },
+                      {
+                        onError: (err) => {
+                          setSelectedAssigneeId(previous)
+                          setAssignmentError(err instanceof Error ? err.message : 'Could not update assignee')
+                        },
+                      },
+                    )
+                  }}
+                >
+                  <Option value={UNASSIGNED_OPTION}>Unassigned</Option>
+                  {assignableAgents.map((agent) => (
+                    <Option
+                      key={agent.id}
+                      value={agent.id}
+                      text={agent.role ? `${agent.name} - ${agent.role}` : agent.name}
+                    >
+                      {agent.name}{agent.role ? ` - ${agent.role}` : ''}
+                    </Option>
+                  ))}
+                </Dropdown>
+              </Field>
 
               {/* Labels */}
               {issue.labels.length > 0 && (

@@ -2,16 +2,15 @@
  * sdk-state.ts — Phase 5 SquadState wrapper
  *
  * Provides a lazily-cached SquadState (and typed collection accessors)
- * per project, backed by PostgreSQL by default with an explicit filesystem
- * fallback for `.squad/` portability.
+ * per project, backed by project-level authority metadata when present with
+ * evidence-based fallback for legacy `.squad/` portability.
  *
  * Storage back-end selection
  * --------------------------
- * Unset config routes SquadState I/O through the PostgreSQL-backed adapter.
- * The adapter stores `.squad/` content in the `squad_storage` table via the
- * existing DB pool, so it works with either in-process PGlite or standalone
- * PostgreSQL selected by DATABASE_URL. Set `--squad-storage fs` or
- * SQUADBOARD_SQUAD_STORAGE_PROVIDER=fs to fall back to `.squad/` files.
+ * Project rows can persist `storage_provider_mode`. When that is absent,
+ * legacy rows are inferred from evidence: imported `squad_storage` rows mean
+ * PostgreSQL authority; an existing filesystem `.squad/` with no DB rows stays
+ * filesystem-authoritative. Process-level config is only the final fallback.
  *
  * @module services/sdk-state
  */
@@ -102,6 +101,18 @@ export function resolveStorageBackend(source?: StorageBackendConfigSource): Stor
   return 'fs';
 }
 
+function normalizeProjectStorageBackend(value?: string | null): StorageBackend | null {
+  const provider = value?.trim().toLowerCase();
+  if (!provider) return null;
+  if (provider === 'postgresql') return 'postgresql';
+  if (provider === 'fs' || provider === 'filesystem') return 'fs';
+  return null;
+}
+
+function storageProviderForBackend(backend: StorageBackend): string {
+  return backend === 'postgresql' ? 'postgresql' : 'fs';
+}
+
 async function listFilesystemSquadFiles(
   squadDir: string,
   relativeDir = '',
@@ -161,24 +172,90 @@ export async function seedPostgreSQLProviderFromFilesystemIfEmpty(
 // Core helpers
 // ---------------------------------------------------------------------------
 
+interface ProjectStorageContext {
+  squadPath: string;
+  rootDir: string;
+  backend: StorageBackend;
+  storageProvider: string;
+}
+
+interface ProjectStorageRow {
+  squadPath: string;
+  storageProviderMode?: string | null;
+}
+
 /**
- * Resolve the `.squad/` directory path for a project from the DB.
- * Throws `ProjectNotFoundError` if the project row is missing.
+ * Resolve the `.squad/` directory path and storage authority for a project.
+ * Project-level authority wins; legacy rows are inferred from evidence so
+ * CLI-first filesystem projects are not labeled DB-authoritative just because
+ * the server runtime default is PostgreSQL/PGlite.
  */
-async function resolveSquadPath(projectId: string): Promise<string> {
+async function resolveProjectStorageContext(projectId: string): Promise<ProjectStorageContext> {
   const db = getDb();
   const rows = await db
-    .select({ squadPath: projects.path })
+    .select({
+      squadPath: projects.path,
+      storageProviderMode: projects.storageProviderMode,
+    })
     .from(projects)
     .where(eq(projects.id, projectId))
-    .limit(1);
+    .limit(1) as ProjectStorageRow[];
 
-  const squadPath = rows[0]?.squadPath;
-  if (!squadPath) {
+  const storedSquadPath = rows[0]?.squadPath;
+  if (!storedSquadPath) {
     throw new ProjectNotFoundError(projectId);
   }
 
-  return squadPath;
+  const squadPath = path.basename(storedSquadPath) === '.squad'
+    ? storedSquadPath
+    : path.join(storedSquadPath, '.squad');
+  const rootDir = path.dirname(squadPath);
+
+  const backend = normalizeProjectStorageBackend(rows[0]?.storageProviderMode)
+    ?? await inferProjectStorageBackend(projectId, squadPath);
+
+  return {
+    squadPath,
+    rootDir,
+    backend,
+    storageProvider: storageProviderForBackend(backend),
+  };
+}
+
+async function inferProjectStorageBackend(
+  projectId: string,
+  squadPath: string,
+): Promise<StorageBackend> {
+  const envBackend = normalizeProjectStorageBackend(
+    process.env['SQUADBOARD_SQUAD_STORAGE_PROVIDER'],
+  );
+
+  if (envBackend === 'fs') {
+    return 'fs';
+  }
+
+  const rowCount = await countSquadStorageRows(projectId);
+  if (rowCount !== null && rowCount > 0) {
+    return 'postgresql';
+  }
+
+  if (existsSync(squadPath)) {
+    return 'fs';
+  }
+
+  return envBackend ?? resolveStorageBackend();
+}
+
+async function countSquadStorageRows(projectId: string): Promise<number | null> {
+  try {
+    const { rows } = await getPool().query<{ row_count: string | number | null }>(
+      'SELECT COUNT(*) AS row_count FROM squad_storage WHERE scope = $1',
+      [projectId],
+    );
+    return Number(rows[0]?.row_count ?? 0);
+  } catch {
+    return null;
+  }
 }
 
 /**
@@ -208,11 +285,10 @@ async function buildStorageProvider(
 /**
  * Return a SquadState bound to the given project's `.squad/` directory.
  *
- * The storage back-end is selected by CLI/config/env:
- *   - unset/blank       → PostgreSQLStorageProvider (default)
- *   - 'postgresql'      → PostgreSQLStorageProvider (all I/O via squad_storage table)
- *   - 'fs'              → FSStorageProvider (explicit filesystem fallback)
- *   - all other values  → FSStorageProvider (fallback, including 'pglite')
+ * The storage back-end is selected per project. Persisted
+ * `projects.storage_provider_mode` wins; legacy rows infer DB authority only
+ * when `squad_storage` rows exist, otherwise an existing `.squad/` remains the
+ * filesystem authority.
  *
  * Results are cached per projectId in-process.  Call `invalidateState()`
  * to drop the cached instance (e.g. after the user changes the linked path).
@@ -221,14 +297,9 @@ export async function getState(projectId: string): Promise<SquadState> {
   const cached = stateCache.get(projectId);
   if (cached) return cached;
 
-  // projects.path is the `.squad/` directory; SquadState.create() expects the
-  // parent (the project root where `.squad/` lives).
-  const squadPath = await resolveSquadPath(projectId);
-  const rootDir = path.dirname(squadPath);
-
-  const backend = resolveStorageBackend();
-  const storage = await buildStorageProvider(projectId, rootDir, backend);
-  const state = SquadState.fromStorage(storage, rootDir);
+  const context = await resolveProjectStorageContext(projectId);
+  const storage = await buildStorageProvider(projectId, context.rootDir, context.backend);
+  const state = SquadState.fromStorage(storage, context.rootDir);
 
   stateCache.set(projectId, state);
   return state;
@@ -245,33 +316,28 @@ export function invalidateState(projectId: string): void {
 /**
  * Build the SDK-facing sync ownership status for a project.
  *
- * This does not repair anything and does not query `squad_storage`; it reports
- * the declared authority mode plus the local projection artifacts Hockney can
- * expose through a status API later.
+ * This does not repair anything. It reports the project-level authority mode
+ * plus the local projection artifacts Hockney exposes through the status API.
  */
 export async function getProjectSyncOwnershipStatus(
   projectId: string,
 ): Promise<SquadSyncOwnershipStatus> {
-  const storedSquadPath = await resolveSquadPath(projectId);
-  const squadPath = path.basename(storedSquadPath) === '.squad'
-    ? storedSquadPath
-    : path.join(storedSquadPath, '.squad');
-  const projectRoot = path.dirname(squadPath);
+  const context = await resolveProjectStorageContext(projectId);
 
   return buildSyncOwnershipStatus({
-    storageProvider: process.env['SQUADBOARD_SQUAD_STORAGE_PROVIDER'] ?? null,
-    projectRoot,
-    squadPath,
+    storageProvider: context.storageProvider,
+    projectRoot: context.rootDir,
+    squadPath: context.squadPath,
     presence: {
-      squadDir: existsSync(squadPath),
-      agentsDir: existsSync(path.join(squadPath, 'agents')),
-      decisionsInboxDir: existsSync(path.join(squadPath, 'decisions', 'inbox')),
-      teamMd: existsSync(path.join(squadPath, 'team.md')),
-      routingMd: existsSync(path.join(squadPath, 'routing.md')),
-      decisionsMd: existsSync(path.join(squadPath, 'decisions.md')),
-      ceremoniesMd: existsSync(path.join(squadPath, 'ceremonies.md')),
-      ceremoniesDefaultsPresent: await hasSeededCeremonyDefaults(path.join(squadPath, 'ceremonies.md')),
-      copilotAgentMd: existsSync(path.join(projectRoot, '.github', 'agents', 'squad.agent.md')),
+      squadDir: existsSync(context.squadPath),
+      agentsDir: existsSync(path.join(context.squadPath, 'agents')),
+      decisionsInboxDir: existsSync(path.join(context.squadPath, 'decisions', 'inbox')),
+      teamMd: existsSync(path.join(context.squadPath, 'team.md')),
+      routingMd: existsSync(path.join(context.squadPath, 'routing.md')),
+      decisionsMd: existsSync(path.join(context.squadPath, 'decisions.md')),
+      ceremoniesMd: existsSync(path.join(context.squadPath, 'ceremonies.md')),
+      ceremoniesDefaultsPresent: await hasSeededCeremonyDefaults(path.join(context.squadPath, 'ceremonies.md')),
+      copilotAgentMd: existsSync(path.join(context.rootDir, '.github', 'agents', 'squad.agent.md')),
     },
   });
 }

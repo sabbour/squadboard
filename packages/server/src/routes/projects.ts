@@ -13,6 +13,7 @@ import {
 } from '../db/index.js';
 import { createProject } from '../services/project-init.js';
 import { suggestProjectSetup } from '../services/setup-lifecycle.js';
+import { isInternalSquadWorkspacePath } from '../services/squad-path-safety.js';
 import { assertProjectPathAvailable } from '../services/project-path-uniqueness.js';
 
 const router = Router();
@@ -40,7 +41,7 @@ function errorStatus(err: unknown): number {
 router.get('/', async (_req: Request, res: Response) => {
   const db = getDb();
   const rows = await db.select().from(schema.projects);
-  res.json(rows);
+  res.json(rows.filter((project) => !isInternalSquadWorkspacePath(project.path)));
 });
 
 router.post('/', async (req: Request, res: Response) => {
@@ -122,14 +123,14 @@ router.patch('/:id', async (req: Request, res: Response) => {
     updates.defaultModel = normalized;
   }
 
-  // Stream D — D6: cost model toggle. 'usd' | 'gh_multipliers' | null (use env default).
+  // Cost model toggle. Keep gh_multipliers as a legacy alias for AI Credits.
   if (costModel !== undefined) {
     if (costModel === null || costModel === '') {
       updates.costModel = null;
-    } else if (costModel === 'usd' || costModel === 'gh_multipliers') {
+    } else if (costModel === 'usd' || costModel === 'ai_credits' || costModel === 'gh_multipliers') {
       updates.costModel = costModel;
     } else {
-      res.status(400).json({ error: "costModel must be 'usd', 'gh_multipliers', or null" });
+      res.status(400).json({ error: "costModel must be 'usd', 'ai_credits', 'gh_multipliers', or null" });
       return;
     }
   }

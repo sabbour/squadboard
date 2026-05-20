@@ -23,6 +23,14 @@ import { eq, and, lte, sql, not, exists } from 'drizzle-orm';
 import { CronExpressionParser } from 'cron-parser';
 import { getDb, schema } from '../db/index.js';
 import { createWorkflowRun } from '../engine/workflow-runner.js';
+import {
+  isGitHubIssueIntakeConfig,
+  runGitHubIssueIntake,
+} from '../github/issue-intake.js';
+import {
+  isDocReviewIntakeConfig,
+  runGitHubDocReviewIntake,
+} from '../github/doc-review-intake.js';
 
 // In-memory consecutive-failure tracker per schedule id.
 // Resets on process restart; a persistent counter is a follow-up.
@@ -321,14 +329,7 @@ export async function sweepDueSchedules(now: Date = new Date()): Promise<SweepRe
         continue;
       }
 
-      const runId = await spawnCeremonyRun(sched.workflowId, {
-        trigger: 'on_schedule',
-        triggerSource: {
-          kind: 'on_schedule',
-          scheduleId: sched.id,
-          detail: sched.cronExpr,
-        },
-      });
+      const scheduledAction = await runScheduledAction(sched, now);
 
       // Recompute the true next fire time AFTER firing, so cron expressions
       // like '*/5 * * * *' advance from the actual fire instant.
@@ -346,7 +347,7 @@ export async function sweepDueSchedules(now: Date = new Date()): Promise<SweepRe
         })
         .where(eq(schema.ceremonySchedules.id, sched.id));
 
-      if (runId) result.fired += 1;
+      if (scheduledAction.fired) result.fired += 1;
       else result.skipped += 1;
       // Reset failure count on a clean fire/skip.
       sweepFailureCount.delete(sched.id);
@@ -385,4 +386,60 @@ export async function sweepDueSchedules(now: Date = new Date()): Promise<SweepRe
   }
 
   return result;
+}
+
+async function runScheduledAction(
+  sched: typeof schema.ceremonySchedules.$inferSelect,
+  now: Date,
+): Promise<{ fired: boolean }> {
+  const db = getDb();
+  const [workflow] = await db
+    .select({
+      projectId: schema.workflows.projectId,
+      triggerConfig: schema.workflows.triggerConfig,
+    })
+    .from(schema.workflows)
+    .where(eq(schema.workflows.id, sched.workflowId))
+    .limit(1);
+
+  if (workflow && isGitHubIssueIntakeConfig(workflow.triggerConfig)) {
+    const intake = await runGitHubIssueIntake({
+      projectId: workflow.projectId,
+      triggerConfig: workflow.triggerConfig as Record<string, unknown>,
+      scheduleId: sched.id,
+      now,
+    });
+    console.log(
+      `[ceremony] github issue intake ${intake.owner}/${intake.repo}: ` +
+      `fetched=${intake.fetched}, created=${intake.created}, updated=${intake.updated}, ` +
+      `workflows=${intake.workflowsStarted}, errors=${intake.errors}`,
+    );
+    return { fired: true };
+  }
+
+  if (workflow && isDocReviewIntakeConfig(workflow.triggerConfig)) {
+    const intake = await runGitHubDocReviewIntake({
+      projectId: workflow.projectId,
+      triggerConfig: workflow.triggerConfig as Record<string, unknown>,
+      workflowId: sched.workflowId,
+      scheduleId: sched.id,
+      now,
+    });
+    console.log(
+      `[ceremony] doc review intake ${intake.owner}/${intake.repo}: ` +
+      `fetched=${intake.fetched}, candidates=${intake.candidates}, created=${intake.created}, ` +
+      `updated=${intake.updated}, workflows=${intake.workflowsStarted}, errors=${intake.errors}`,
+    );
+    return { fired: true };
+  }
+
+  const runId = await spawnCeremonyRun(sched.workflowId, {
+    trigger: 'on_schedule',
+    triggerSource: {
+      kind: 'on_schedule',
+      scheduleId: sched.id,
+      detail: sched.cronExpr,
+    },
+  });
+  return { fired: Boolean(runId) };
 }

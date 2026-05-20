@@ -36,6 +36,9 @@ export interface HeartbeatConfig {
 
 let _cached: HeartbeatConfig | null = null;
 
+const STUCK_ISSUE_RUNS_SWEEP_ID = 'stuck-issue-runs';
+const STUCK_ISSUE_RUNS_MAX_INTERVAL_MS = 45_000;
+
 export function loadHeartbeatConfig(): HeartbeatConfig {
   if (_cached) return _cached;
   try {
@@ -83,6 +86,22 @@ export function applyHeartbeatConfig(sweeps: Sweep[]): void {
 
     if (typeof override.enabled === 'boolean') {
       sweep.enabled = override.enabled;
+    }
+
+    if (sweep.id === STUCK_ISSUE_RUNS_SWEEP_ID) {
+      if (sweep.intervalMs > STUCK_ISSUE_RUNS_MAX_INTERVAL_MS) {
+        console.warn(
+          `[heartbeat-config] ${STUCK_ISSUE_RUNS_SWEEP_ID}: intervalMs=${sweep.intervalMs}ms exceeds ` +
+          `${STUCK_ISSUE_RUNS_MAX_INTERVAL_MS}ms safety cap; clamping to preserve lease recovery`,
+        );
+        sweep.intervalMs = STUCK_ISSUE_RUNS_MAX_INTERVAL_MS;
+      }
+      if (!sweep.enabled) {
+        console.warn(
+          `[heartbeat-config] ${STUCK_ISSUE_RUNS_SWEEP_ID}: enabled=false ignored to preserve lease recovery`,
+        );
+        sweep.enabled = true;
+      }
     }
 
     const intervalChanged = sweep.intervalMs !== originalIntervalMs;

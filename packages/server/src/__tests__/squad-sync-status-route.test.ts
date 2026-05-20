@@ -199,4 +199,37 @@ describe('GET /api/projects/:projectId/squad-sync/status', () => {
     expect(body.data.repair.actions.map((action: Record<string, unknown>) => action.id))
       .toEqual(expect.arrayContaining(['generate-github-agent', 'seed-ceremony-defaults']));
   });
+
+  it('invariant: filesystem-authoritative projects are not labeled as squad_storage backed', async () => {
+    const handler = await loadStatusHandler();
+    const status = buildSyncOwnershipStatus({
+      storageProvider: 'fs',
+      projectRoot: '/repo',
+      squadPath: '/repo/.squad',
+      presence: {
+        squadDir: true,
+        agentsDir: true,
+        decisionsInboxDir: true,
+        teamMd: true,
+        routingMd: true,
+        decisionsMd: true,
+        ceremoniesMd: true,
+        ceremoniesDefaultsPresent: true,
+        copilotAgentMd: true,
+      },
+    });
+    getProjectSyncOwnershipStatusMock.mockResolvedValue(status);
+    const { req, res, getBody } = makeReqRes('project-fs');
+
+    await handler(req, res);
+
+    const body = getBody() as { ok: boolean; data: Record<string, any> };
+    expect(body.ok).toBe(true);
+    expect(body.data.authority).toMatchObject({
+      sourceOfTruth: 'filesystem',
+      storageMode: 'filesystem',
+    });
+    expect(body.data.storage.squadStorage).toBeNull();
+    expect(poolQueryMock).not.toHaveBeenCalled();
+  });
 });

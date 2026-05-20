@@ -6,7 +6,7 @@
  * The UI uses the idle state to dim the session card and stop the live
  * streaming animation.
  *
- * Runs every 60 s.
+ * Runs every 120 s by default.
  */
 import type { Sweep, SweepResult } from '../heartbeat.js';
 import { getDb, schema } from '../../db/index.js';
@@ -19,7 +19,7 @@ export const idleLiveSessionsSweep: Sweep = {
   label: 'Live sessions',
   description: 'Marks inactive live sessions idle so the UI stops showing them as actively streaming.',
   scope: 'project',
-  intervalMs: 60_000,
+  intervalMs: 120_000,
   enabled: true,
 
   async run(): Promise<SweepResult> {

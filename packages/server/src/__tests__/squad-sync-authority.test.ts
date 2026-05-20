@@ -3,8 +3,9 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const { projectRows } = vi.hoisted(() => ({
-  projectRows: [] as Array<{ squadPath: string }>,
+const { projectRows, poolQueryMock } = vi.hoisted(() => ({
+  projectRows: [] as Array<{ squadPath: string; storageProviderMode?: string | null }>,
+  poolQueryMock: vi.fn(),
 }));
 
 vi.mock('../db/index.js', () => ({
@@ -17,9 +18,7 @@ vi.mock('../db/index.js', () => ({
       }),
     }),
   }),
-  getPool: vi.fn(() => {
-    throw new Error('getPool must not be used by sync status tests');
-  }),
+  getPool: () => ({ query: poolQueryMock }),
 }));
 
 import { getProjectSyncOwnershipStatus } from '../services/sdk-state.js';
@@ -69,6 +68,8 @@ describe('squad sync authority status', () => {
   beforeEach(async () => {
     previousStorageProvider = process.env['SQUADBOARD_SQUAD_STORAGE_PROVIDER'];
     projectRows.length = 0;
+    poolQueryMock.mockReset();
+    poolQueryMock.mockResolvedValue({ rows: [{ row_count: '0' }] });
     await fs.rm(scratchRoot, { recursive: true, force: true });
     await fs.mkdir(scratchRoot, { recursive: true });
   });
@@ -80,6 +81,7 @@ describe('squad sync authority status', () => {
       process.env['SQUADBOARD_SQUAD_STORAGE_PROVIDER'] = previousStorageProvider;
     }
     projectRows.length = 0;
+    poolQueryMock.mockReset();
     await fs.rm(scratchRoot, { recursive: true, force: true });
   });
 
@@ -106,11 +108,49 @@ describe('squad sync authority status', () => {
     expect(JSON.stringify(status.storage)).not.toContain('squad_storage');
   });
 
+  it('invariant: legacy CLI/Copilot-first rows stay filesystem authority when DB has not imported state', async () => {
+    const { projectRoot, squadPath } = await createSquadFixture('legacy-cli-first');
+    projectRows.push({ squadPath, storageProviderMode: null });
+    delete process.env['SQUADBOARD_SQUAD_STORAGE_PROVIDER'];
+    poolQueryMock.mockResolvedValue({ rows: [{ row_count: '0' }] });
+
+    const status = await getProjectSyncOwnershipStatus('project-legacy-fs');
+
+    expect(poolQueryMock).toHaveBeenCalledWith(
+      'SELECT COUNT(*) AS row_count FROM squad_storage WHERE scope = $1',
+      ['project-legacy-fs'],
+    );
+    expect(status.storage).toMatchObject({
+      rawProvider: 'fs',
+      mode: 'filesystem',
+      authority: 'filesystem',
+      importBehavior: 'live-filesystem',
+    });
+    expect(status.projection).toMatchObject({ projectRoot, squadPath });
+    expect(JSON.stringify(status.storage)).not.toContain('squad_storage');
+  });
+
+  it('invariant: legacy projects with imported DB rows report squad_storage authority', async () => {
+    const { squadPath } = await createSquadFixture('legacy-db-imported');
+    projectRows.push({ squadPath, storageProviderMode: null });
+    delete process.env['SQUADBOARD_SQUAD_STORAGE_PROVIDER'];
+    poolQueryMock.mockResolvedValue({ rows: [{ row_count: '7' }] });
+
+    const status = await getProjectSyncOwnershipStatus('project-imported');
+
+    expect(status.storage).toMatchObject({
+      rawProvider: 'postgresql',
+      mode: 'postgresql',
+      authority: 'squad_storage',
+      importBehavior: 'one-time-filesystem-import-when-empty',
+    });
+  });
+
   it('invariant: Squadboard-first missing Copilot projection is repairable, not unusable', async () => {
     const { squadPath } = await createSquadFixture('squadboard-first', {
       includeCopilotProjection: false,
     });
-    projectRows.push({ squadPath });
+    projectRows.push({ squadPath, storageProviderMode: 'postgresql' });
     delete process.env['SQUADBOARD_SQUAD_STORAGE_PROVIDER'];
 
     const status = await getProjectSyncOwnershipStatus('project-db');

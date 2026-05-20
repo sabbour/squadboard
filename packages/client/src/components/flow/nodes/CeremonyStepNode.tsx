@@ -74,10 +74,14 @@ function summary(step: CeremonyStep): string {
         : `approvers: ${approvers.slice(0, 3).join(', ')}${approvers.length > 3 ? '…' : ''}`
     }
     case 'fan_out': {
-      const splitBy = step.split_by ?? '?'
-      const merge = step.merge_strategy ?? '?'
-      const mode = step.mode ?? 'serial'
-      return `split=${splitBy} · merge=${merge} · ${mode}`
+      const agents = step.agents?.length ? step.agents.slice(0, 3).join(', ') + (step.agents.length > 3 ? '…' : '') : null
+      const splitBy = step.split_by ?? 'agents'
+      const mode = step.mode ?? 'parallel'
+      const childCount = step.steps?.length ?? 0
+      const childLabel = childCount === 1 ? '1 child step' : `${childCount} child steps`
+      return agents
+        ? `${mode} · ${agents} · ${childLabel}`
+        : `split=${splitBy} · ${mode} · ${childLabel}`
     }
     case 'handoff':
       return step.to ? `to: ${step.to}` : 'no target'

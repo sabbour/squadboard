@@ -6,6 +6,7 @@
  * Empty state: centred card with CTA when no ceremonies exist.
  */
 
+import { useMemo } from 'react'
 import { useParams, useNavigate } from 'react-router'
 import { useProject } from '../api/projects.ts'
 import {
@@ -16,6 +17,7 @@ import {
 import PageHeader from '../components/layout/PageHeader.tsx'
 import { TriggerBadge, KindBadge, ScopeBadge, OriginBadge } from '../components/ceremony/CeremonyBadges.tsx'
 import { safeRelativeTime, safeAbsoluteTime } from '../utils/dates.ts'
+import { ceremonyRunsPath } from '../utils/ceremonyRoutes.ts'
 import { PageLoading } from '../components/loading/index.tsx'
 import {
   Button,
@@ -37,46 +39,67 @@ import {
 } from '@fluentui/react-components'
 import { Add16Regular, ChartMultiple20Regular } from '@fluentui/react-icons'
 
-const columns: TableColumnDefinition<Ceremony>[] = [
-  createTableColumn<Ceremony>({
-    columnId: 'name',
-    renderHeaderCell: () => 'Name',
-    renderCell: (item) => (
-      <TableCellLayout style={{ fontWeight: tokens.fontWeightSemibold }}>{item.name}</TableCellLayout>
-    ),
-  }),
-  createTableColumn<Ceremony>({
-    columnId: 'origin',
-    renderHeaderCell: () => 'Origin',
-    renderCell: (item) => <OriginBadge origin={item.origin} />,
-  }),
-  createTableColumn<Ceremony>({
-    columnId: 'trigger',
-    renderHeaderCell: () => 'Trigger',
-    renderCell: (item) => <TriggerBadge kind={item.triggerKind} />,
-  }),
-  createTableColumn<Ceremony>({
-    columnId: 'kind',
-    renderHeaderCell: () => 'Kind',
-    renderCell: (item) => <KindBadge kind={item.kind} />,
-  }),
-  createTableColumn<Ceremony>({
-    columnId: 'scope',
-    renderHeaderCell: () => 'Scope',
-    renderCell: (item) => <ScopeBadge triggerKind={item.triggerKind} triggerConfig={item.triggerConfig} />,
-  }),
-  createTableColumn<Ceremony>({
-    columnId: 'created',
-    renderHeaderCell: () => 'Created',
-    renderCell: (item) => (
-      <Tooltip content={safeAbsoluteTime(item.createdAt)} relationship="label">
-        <Caption1 style={{ color: tokens.colorNeutralForeground3 }}>
-          {safeRelativeTime(item.createdAt)}
-        </Caption1>
-      </Tooltip>
-    ),
-  }),
-]
+function buildColumns(
+  projectId: string,
+  navigate: ReturnType<typeof useNavigate>,
+): TableColumnDefinition<Ceremony>[] {
+  return [
+    createTableColumn<Ceremony>({
+      columnId: 'name',
+      renderHeaderCell: () => 'Name',
+      renderCell: (item) => (
+        <TableCellLayout style={{ fontWeight: tokens.fontWeightSemibold }}>{item.name}</TableCellLayout>
+      ),
+    }),
+    createTableColumn<Ceremony>({
+      columnId: 'origin',
+      renderHeaderCell: () => 'Origin',
+      renderCell: (item) => <OriginBadge origin={item.origin} />,
+    }),
+    createTableColumn<Ceremony>({
+      columnId: 'trigger',
+      renderHeaderCell: () => 'Trigger',
+      renderCell: (item) => <TriggerBadge kind={item.triggerKind} />,
+    }),
+    createTableColumn<Ceremony>({
+      columnId: 'kind',
+      renderHeaderCell: () => 'Kind',
+      renderCell: (item) => <KindBadge kind={item.kind} />,
+    }),
+    createTableColumn<Ceremony>({
+      columnId: 'scope',
+      renderHeaderCell: () => 'Scope',
+      renderCell: (item) => <ScopeBadge triggerKind={item.triggerKind} triggerConfig={item.triggerConfig} />,
+    }),
+    createTableColumn<Ceremony>({
+      columnId: 'created',
+      renderHeaderCell: () => 'Created',
+      renderCell: (item) => (
+        <Tooltip content={safeAbsoluteTime(item.createdAt)} relationship="label">
+          <Caption1 style={{ color: tokens.colorNeutralForeground3 }}>
+            {safeRelativeTime(item.createdAt)}
+          </Caption1>
+        </Tooltip>
+      ),
+    }),
+    createTableColumn<Ceremony>({
+      columnId: 'runs',
+      renderHeaderCell: () => 'Runs',
+      renderCell: (item) => (
+        <Button
+          appearance="subtle"
+          size="small"
+          onClick={(event) => {
+            event.stopPropagation()
+            navigate(ceremonyRunsPath(projectId, item.id))
+          }}
+        >
+          Runs / logs
+        </Button>
+      ),
+    }),
+  ]
+}
 
 export default function CeremonyList() {
   const { id } = useParams<{ id: string }>()
@@ -87,6 +110,7 @@ export default function CeremonyList() {
   const { data: ceremonies, isLoading, isError } = useCeremonies(projectId)
   const { data: drafts } = useDraftCeremonies(projectId)
   const draftCount = drafts?.length ?? 0
+  const columns = useMemo(() => buildColumns(projectId, navigate), [projectId, navigate])
 
   const toolbar = (
     <div style={{ display: 'flex', alignItems: 'center', gap: tokens.spacingHorizontalS }}>

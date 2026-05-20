@@ -17,7 +17,7 @@
  * Read-only mode for kind='narrative' (Phase 11 will add Convert).
  */
 
-import { useState, useEffect, useMemo, useCallback } from 'react'
+import { Component, useState, useEffect, useMemo, useCallback, type ErrorInfo, type ReactNode } from 'react'
 import { useParams, useNavigate, Navigate, useSearchParams } from 'react-router'
 import {
   useCeremony,
@@ -101,6 +101,7 @@ import {
 import PageHeader from '../components/layout/PageHeader.tsx'
 import FormulatePanel from '../components/formulate/FormulatePanel.tsx'
 import { safeAbsoluteTime } from '../utils/dates.ts'
+import { ceremonyRunsPath } from '../utils/ceremonyRoutes.ts'
 import { SectionLoading } from '../components/loading/index.tsx'
 import { useUnsavedChangesWarning } from '../hooks/useUnsavedChangesWarning.ts'
 
@@ -132,18 +133,18 @@ const TRIGGER_KIND_OPTIONS: { value: TriggerKind; label: string; description: st
 const CEREMONY_KIND_OPTIONS: { value: CeremonyKind; label: string; description: string; deprecated?: boolean }[] = [
   {
     value: 'workflow',
-    label: 'Workflow',
-    description: 'Execution graph — the ordered steps (route, agent_run, approve, …) that run inside a ceremony.',
+    label: 'Reusable workflow',
+    description: 'A step graph that another ceremony can run or reuse; usually not what you manually schedule.',
   },
   {
     value: 'ceremony',
-    label: 'Ceremony',
-    description: 'Named triggered process — has a trigger (schedule, label, event) and runs a workflow graph.',
+    label: 'Runnable ceremony',
+    description: 'Choose this for a manual, scheduled, or event-triggered team ritual that users can run.',
   },
   {
     value: 'review_policy',
-    label: 'Review Policy',
-    description: 'Defines who-can-approve rules applied to peer_review and approve steps.',
+    label: 'Approval policy',
+    description: 'Reviewer and approval rules used by review/approve steps; not a runnable process by itself.',
   },
   {
     value: 'narrative',
@@ -206,13 +207,58 @@ const DEFAULT_STEPS: CeremonyStep[] = [
 // Component
 // ---------------------------------------------------------------------------
 
+class CeremonyEditorErrorBoundary extends Component<
+  { children: ReactNode; resetKey: string },
+  { error: Error | null }
+> {
+  state: { error: Error | null } = { error: null }
+
+  static getDerivedStateFromError(error: Error) {
+    return { error }
+  }
+
+  componentDidCatch(error: Error, info: ErrorInfo) {
+    console.error('[CeremonyEditor] render failed', { error, componentStack: info.componentStack })
+  }
+
+  componentDidUpdate(prevProps: { resetKey: string }) {
+    if (prevProps.resetKey !== this.props.resetKey && this.state.error) {
+      this.setState({ error: null })
+    }
+  }
+
+  render() {
+    if (this.state.error) {
+      return (
+        <div style={{ padding: tokens.spacingHorizontalXL }}>
+          <MessageBar intent="error">
+            <MessageBarBody>
+              Ceremony editor failed to render: {this.state.error.message}
+            </MessageBarBody>
+          </MessageBar>
+        </div>
+      )
+    }
+
+    return this.props.children
+  }
+}
+
 export default function CeremonyEditor() {
   const { id: projectId, ceremonyId } = useParams<{ id: string; ceremonyId?: string }>()
+  if (!projectId) return <Navigate to="/" replace />
+
+  return (
+    <CeremonyEditorErrorBoundary resetKey={`${projectId}:${ceremonyId ?? 'new'}`}>
+      <CeremonyEditorInner projectId={projectId} ceremonyId={ceremonyId} />
+    </CeremonyEditorErrorBoundary>
+  )
+}
+
+function CeremonyEditorInner({ projectId, ceremonyId }: { projectId: string; ceremonyId?: string }) {
   const isNew = !ceremonyId || ceremonyId === 'new'
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
-
-  if (!projectId) return <Navigate to="/" replace />
 
   // Bug W15-1: read ?template=<slug> and pre-fill form from built-in ceremony template.
   const templateSlug = isNew ? searchParams.get('template') : null
@@ -472,13 +518,14 @@ export default function CeremonyEditor() {
       return
     }
     try {
-      await runCeremony.mutateAsync({ ceremonyId: ceremonyId! })
+      const result = await runCeremony.mutateAsync({ ceremonyId: ceremonyId! })
       setSaveOk(true)
       setTimeout(() => setSaveOk(false), 2500)
+      navigate(`${ceremonyRunsPath(projectId, ceremonyId!)}?run=${result.workflowRunId}`)
     } catch (err) {
       setSaveErr(err instanceof Error ? err.message : 'Run failed')
     }
-  }, [isNew, ceremonyId, runCeremony])
+  }, [isNew, ceremonyId, projectId, runCeremony, navigate])
 
   const handlePreviewCron = useCallback(async () => {
     setCronPreviewErr(null)
@@ -602,6 +649,12 @@ export default function CeremonyEditor() {
             </Caption1>
           )}
           <Button onClick={handleValidate} disabled={readOnly}>Validate</Button>
+          <Button
+            appearance="secondary"
+            onClick={() => navigate(ceremonyRunsPath(projectId, ceremonyId!))}
+          >
+            Runs
+          </Button>
           <Button onClick={handleRunNow} icon={<Play16Regular />} disabled={readOnly}>
             Run now
           </Button>
@@ -769,7 +822,7 @@ export default function CeremonyEditor() {
                         />
                       </Field>
                       <Field
-                        label="Kind"
+                        label="Type"
                         hint={CEREMONY_KIND_OPTIONS.find((o) => o.value === kind)?.description ?? ''}
                       >
                         <Dropdown
@@ -1139,19 +1192,27 @@ export default function CeremonyEditor() {
             </Caption1>
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-            <Label weight="semibold">Kind</Label>
+            <Label weight="semibold">Type</Label>
             <Dropdown
-              value={kind}
+              value={CEREMONY_KIND_OPTIONS.find((o) => o.value === kind)?.label ?? kind}
               selectedOptions={[kind]}
               onOptionSelect={(_, d) => setKind(d.optionValue as CeremonyKind)}
               disabled={readOnly}
             >
-              {(['workflow', 'ceremony', 'review_policy'] as CeremonyKind[]).map((k) => (
-                <Option key={k} value={k}>{k}</Option>
+              {CEREMONY_KIND_OPTIONS.filter((o) => !o.deprecated).map((opt) => (
+                <Option key={opt.value} value={opt.value} text={opt.label}>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                    <span style={{ fontWeight: 600 }}>{opt.label}</span>
+                    <span style={{ fontSize: 11, color: 'inherit', opacity: 0.7 }}>
+                      {opt.description}
+                    </span>
+                  </div>
+                </Option>
               ))}
             </Dropdown>
             <Caption1 style={{ color: tokens.colorNeutralForeground3 }}>
-              Use <strong>workflow</strong> for most automations.
+              {CEREMONY_KIND_OPTIONS.find((o) => o.value === kind)?.description
+                ?? 'Choose what this definition represents.'}
             </Caption1>
           </div>
 

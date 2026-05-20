@@ -1,12 +1,16 @@
 {
   "_comment": "Per-sweep cadence overrides. intervalMs replaces the coded default. multiplier scales the coded default (ignored if intervalMs is set). Set enabled=false to disable a sweep. Restart the server to apply changes.",
+  "_safety": "stuck-issue-runs MUST remain enabled and ≤45 s (half the 90 s lease TTL); heartbeat-config.ts enforces this to prevent lease-expiry cascades.",
+  "_logMonitorSafety": "log-monitor auto-fixes are allowlisted to non-critical diagnostics sweeps only; core workflow/lease sweeps remain advisory.",
   "sweeps": {
-    "ceremonies-due":       { "intervalMs": 15000, "enabled": true  },
-    "ready-workflow-steps": { "intervalMs": 5000,  "enabled": true  },
-    "stuck-issue-runs":     { "intervalMs": 30000, "enabled": true  },
-    "stale-presence":       { "intervalMs": 60000, "enabled": true  },
-    "idle-live-sessions":   { "intervalMs": 120000, "enabled": true  },
-    "github-sync-overdue":  { "intervalMs": 120000, "enabled": true  },
-    "pickup-ready":         { "intervalMs": 15000, "enabled": true  }
+    "ceremonies-due":       { "intervalMs": 30000,  "enabled": true },
+    "ready-workflow-steps": { "intervalMs": 15000,  "enabled": true },
+    "stuck-issue-runs":     { "intervalMs": 30000,  "enabled": true },
+    "stale-presence":       { "intervalMs": 60000,  "enabled": true },
+    "idle-live-sessions":   { "intervalMs": 120000, "enabled": true },
+    "github-sync-overdue":  { "intervalMs": 120000, "enabled": true },
+    "pickup-ready":         { "intervalMs": 30000,  "enabled": true },
+    "ralph-monitor":        { "intervalMs": 60000,  "enabled": true },
+    "log-monitor":          { "intervalMs": 60000,  "enabled": true }
   }
 }

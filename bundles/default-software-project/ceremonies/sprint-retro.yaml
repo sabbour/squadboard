@@ -1,19 +1,28 @@
 name: Sprint Retro
 description: Summarize the sprint, surface patterns, and capture improvements.
 steps:
+  - type: fan_out
+    label: Gather team observations
+    split_by: agents
+    agents: [Lead, Backend, Frontend, Tester]
+    merge_strategy: all
+    mode: parallel
+    steps:
+      - type: agent_run
+        label: Review sprint evidence
+        prompt: |
+          Review completed cards, run history, review notes, incidents, and unresolved
+          follow-ups from the sprint from your specialty's point of view. Capture
+          what went well, what slowed the team down, surprises, and concrete
+          improvement ideas for next sprint.
+        timeout: 45m
   - type: agent_run
-    label: Gather evidence
+    label: Synthesize retro themes
     agent: Lead
     prompt: |
-      Review completed cards, run history, review notes, incidents, and unresolved
-      follow-ups from the sprint. Highlight what actually happened.
-    timeout: 45m
-  - type: agent_run
-    label: Identify themes
-    agent: Lead
-    prompt: |
-      Group the evidence into what went well, what slowed the team down, and
-      concrete experiments or process improvements for the next sprint.
+      Synthesize the team observations into themes: what went well, what slowed
+      the team down, and concrete experiments or process improvements for the
+      next sprint.
     timeout: 45m
   - type: approve
     label: Accept follow-ups

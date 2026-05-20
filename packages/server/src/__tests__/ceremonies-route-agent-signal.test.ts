@@ -75,6 +75,12 @@ vi.mock('../db/index.js', () => {
       projects: { id: 'id' },
       ceremonySchedules: { workflowId: 'workflow_id', id: 'id', enabled: 'enabled', nextFireAt: 'next_fire_at' },
       agents: { projectId: 'project_id', name: 'name', role: 'role' },
+      workflowRuns: {
+        id: 'id',
+        status: 'status',
+        createdAt: 'created_at',
+        updatedAt: 'updated_at',
+      },
     },
   };
 });
@@ -168,6 +174,7 @@ vi.mock('express', async () => {
 
 // Load the route module — registers all handlers as a side-effect
 await import('../routes/ceremonies.js');
+const { spawnCeremonyRun } = await import('../services/ceremony-scheduler.js');
 
 // ---------------------------------------------------------------------------
 // 4. Helper: build stub req/res
@@ -206,6 +213,7 @@ function makeReqRes(
 describe('triggerKind validation — agent-signal support', () => {
   beforeEach(() => {
     selectQueue = [];
+    vi.mocked(spawnCeremonyRun).mockReset();
   });
 
   it('POST / with triggerKind=agent-signal passes validation (does not return 400)', async () => {
@@ -310,5 +318,43 @@ describe('triggerKind validation — agent-signal support', () => {
     const jsonRes = res.getJson() as any;
     const errorMsg = jsonRes?.error ?? '';
     expect(errorMsg).toContain('agent-signal');
+  });
+
+  it('POST /:id/run persists reusable manual context in triggerSource', async () => {
+    const handler = handlers['POST']?.['/:id/run'];
+    expect(handler).toBeDefined();
+    vi.mocked(spawnCeremonyRun).mockResolvedValue('run-123');
+
+    pushSelect({ id: 'ceremony-1', projectId: 'proj-1', kind: 'ceremony', status: 'active' });
+    pushSelect({
+      id: 'run-123',
+      status: 'pending',
+      createdAt: new Date('2026-05-20T12:00:00.000Z'),
+      updatedAt: new Date('2026-05-20T12:00:00.000Z'),
+    });
+
+    const context = {
+      mode: 'selected-docs',
+      selectedDocs: [{ path: 'docs/getting-started.md', blobSha: 'blob-1' }],
+    };
+    const { req, res } = makeReqRes(
+      { projectId: 'proj-1', id: 'ceremony-1' },
+      { anchorIssueId: 'issue-1', context },
+    );
+
+    await handler(req, res);
+
+    expect(res.getStatus()).toBe(201);
+    expect(spawnCeremonyRun).toHaveBeenCalledWith('ceremony-1', {
+      trigger: 'manual',
+      anchorIssueId: 'issue-1',
+      triggerSource: {
+        kind: 'manual',
+        anchorIssueId: 'issue-1',
+        context,
+        detail: 'POST /ceremonies/:id/run',
+      },
+    });
+    expect((res.getJson() as { workflowRunId?: string }).workflowRunId).toBe('run-123');
   });
 });

@@ -7,6 +7,7 @@
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import {
+  formatBackendErrorLog,
   formatUnhandledRejection,
   formatUncaughtException,
   gracefulTeardown,
@@ -26,6 +27,10 @@ function silentlyRejected<T = unknown>(reason: T): Promise<T> {
   return p;
 }
 
+function parseLog(line: string): Record<string, unknown> {
+  return JSON.parse(line) as Record<string, unknown>;
+}
+
 describe('process-handlers — formatUnhandledRejection', () => {
   it('formats an Error rejection with stack trace', () => {
     const err = new Error('Something went wrong');
@@ -33,9 +38,12 @@ describe('process-handlers — formatUnhandledRejection', () => {
 
     const result = formatUnhandledRejection(err, silentlyRejected(err));
 
-    expect(result).toContain('unhandledRejection');
-    expect(result).toContain('Something went wrong');
-    expect(result).toContain('at file.ts:10');
+    const log = parseLog(result);
+    expect(log.event).toBe('unhandledRejection');
+    expect(log.source).toBe('process');
+    expect(log.severity).toBe('fatal');
+    expect(log.message).toBe('Something went wrong');
+    expect(log.stack).toContain('at file.ts:10');
   });
 
   it('handles Error with no stack', () => {
@@ -44,35 +52,38 @@ describe('process-handlers — formatUnhandledRejection', () => {
 
     const result = formatUnhandledRejection(err, silentlyRejected(err));
 
-    expect(result).toContain('No stack error');
-    expect(result).toContain('(no stack)');
+    const log = parseLog(result);
+    expect(log.message).toBe('No stack error');
+    expect(log.stack).toBe('(no stack)');
   });
 
   it('formats a string rejection', () => {
     const result = formatUnhandledRejection('string rejection', silentlyRejected('string'));
 
-    expect(result).toContain('string rejection');
+    expect(parseLog(result).message).toBe('string rejection');
   });
 
   it('formats null rejection', () => {
     const result = formatUnhandledRejection(null, silentlyRejected(null));
 
-    expect(result).toContain('null');
+    expect(parseLog(result).message).toContain('null');
   });
 
   it('formats undefined rejection', () => {
     const result = formatUnhandledRejection(undefined, silentlyRejected(undefined));
 
-    expect(result).toContain('undefined');
+    expect(parseLog(result).message).toContain('undefined');
   });
 
   it('formats object rejection as JSON', () => {
     const obj = { error: 'test', code: 42 };
     const result = formatUnhandledRejection(obj, silentlyRejected(obj));
 
-    expect(result).toContain('error');
-    expect(result).toContain('test');
-    expect(result).toContain('42');
+    const log = parseLog(result);
+    expect(log.reasonType).toBe('Object');
+    expect(log.details).toContain('error');
+    expect(log.details).toContain('test');
+    expect(log.details).toContain('42');
   });
 
   it('handles circular reference in object rejection', () => {
@@ -81,13 +92,13 @@ describe('process-handlers — formatUnhandledRejection', () => {
 
     const result = formatUnhandledRejection(circular, silentlyRejected(circular));
 
-    expect(result).toContain('circular');
+    expect(parseLog(result).message).toContain('circular');
   });
 
   it('includes timestamp', () => {
     const result = formatUnhandledRejection('test', silentlyRejected('test'));
 
-    expect(result).toMatch(/\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/); // ISO timestamp
+    expect(parseLog(result).timestamp).toMatch(/\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/); // ISO timestamp
   });
 });
 
@@ -98,9 +109,12 @@ describe('process-handlers — formatUncaughtException', () => {
 
     const result = formatUncaughtException(err);
 
-    expect(result).toContain('uncaughtException');
-    expect(result).toContain('Uncaught error');
-    expect(result).toContain('at app.ts:20');
+    const log = parseLog(result);
+    expect(log.event).toBe('uncaughtException');
+    expect(log.source).toBe('process');
+    expect(log.severity).toBe('fatal');
+    expect(log.message).toBe('Uncaught error');
+    expect(log.stack).toContain('at app.ts:20');
   });
 
   it('handles Error with no stack', () => {
@@ -109,15 +123,33 @@ describe('process-handlers — formatUncaughtException', () => {
 
     const result = formatUncaughtException(err);
 
-    expect(result).toContain('No stack');
-    expect(result).toContain('no stack trace');
+    const log = parseLog(result);
+    expect(log.message).toBe('No stack');
+    expect(log.stack).toContain('no stack trace');
   });
 
   it('includes timestamp', () => {
     const err = new Error('test');
     const result = formatUncaughtException(err);
 
-    expect(result).toMatch(/\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/); // ISO timestamp
+    expect(parseLog(result).timestamp).toMatch(/\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/); // ISO timestamp
+  });
+});
+
+describe('process-handlers — formatBackendErrorLog', () => {
+  it('emits structured JSON with context for backend errors', () => {
+    const line = formatBackendErrorLog(
+      'http.route_error',
+      new Error('route exploded'),
+      { method: 'GET', path: '/api/test', status: 500 },
+    );
+
+    const log = parseLog(line);
+    expect(log.component).toBe('squadboard');
+    expect(log.event).toBe('http.route_error');
+    expect(log.severity).toBe('error');
+    expect(log.message).toBe('route exploded');
+    expect(log.context).toMatchObject({ method: 'GET', path: '/api/test', status: 500 });
   });
 });
 

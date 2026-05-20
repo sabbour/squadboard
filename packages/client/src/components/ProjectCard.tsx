@@ -6,7 +6,9 @@ import {
   Card,
   CardHeader,
   Button,
+  Badge,
   Caption1,
+  Checkbox,
   Text,
   makeStyles,
   tokens,
@@ -16,12 +18,20 @@ import { Delete20Regular } from '@fluentui/react-icons'
 interface ProjectCardProps {
   project: Project
   onClick: () => void
+  selectable?: boolean
+  selected?: boolean
+  onSelectedChange?: (selected: boolean) => void
 }
 
 const useStyles = makeStyles({
   card: {
     cursor: 'pointer',
     width: '100%',
+    height: '100%',
+    minHeight: '150px',
+    display: 'flex',
+    flexDirection: 'column',
+    alignSelf: 'stretch',
     // Wave 10 B4: hover treatment must NOT change the bounding box. The
     // previous behaviour scaled the tile (Fluent's default Card hover plus an
     // implicit transform) which pushed neighbouring grid cells around. Lock
@@ -44,14 +54,34 @@ const useStyles = makeStyles({
     display: 'flex',
     flexDirection: 'column',
     gap: tokens.spacingVerticalXS,
+    marginTop: 'auto',
     padding: `0 ${tokens.spacingHorizontalM} ${tokens.spacingVerticalM}`,
   },
 })
 
-export default function ProjectCard({ project, onClick }: ProjectCardProps) {
+function isTestWorkspace(project: Project): boolean {
+  return project.squadPath.includes('/.e2e-workspaces/')
+    || project.squadPath.includes('\\.e2e-workspaces\\')
+    || /\be2e\b/i.test(project.name)
+}
+
+function projectFolder(project: Project): string {
+  return project.squadPath.replace(/[\\/]?\.squad[\\/]?$/, '')
+}
+
+export default function ProjectCard({
+  project,
+  onClick,
+  selectable = false,
+  selected = false,
+  onSelectedChange,
+}: ProjectCardProps) {
   const [hovered, setHovered] = useState(false)
   const { mutate: deleteProject, isPending: isDeleting } = useDeleteProject()
   const styles = useStyles()
+  const testWorkspace = isTestWorkspace(project)
+  const folder = projectFolder(project)
+  const hasSquadFolder = project.squadPath.endsWith('.squad')
 
   const createdDate = new Date(project.createdAt).toLocaleDateString('en-US', {
     month: 'short',
@@ -79,6 +109,10 @@ export default function ProjectCard({ project, onClick }: ProjectCardProps) {
       onClick={onClick}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
+      style={{
+        borderColor: selected ? tokens.colorBrandStroke1 : undefined,
+        boxShadow: selected ? tokens.shadow8 : undefined,
+      }}
     >
       <CardHeader
         image={<ClipboardTaskListLtr20Regular />}
@@ -88,20 +122,43 @@ export default function ProjectCard({ project, onClick }: ProjectCardProps) {
           </Text>
         }
         action={
-          hovered ? (
-            <Button
-              appearance="transparent"
-              icon={<Delete20Regular />}
-              size="small"
-              onClick={handleRemove}
-              disabled={isDeleting}
-              title="Remove from Squadboard"
-              style={{ color: isDeleting ? undefined : tokens.colorPaletteRedForeground1 }}
-            />
-          ) : undefined
+          <div style={{ display: 'flex', alignItems: 'center', gap: tokens.spacingHorizontalXS }}>
+            {selectable && (
+              <Checkbox
+                checked={selected}
+                aria-label={`Select ${project.name}`}
+                onClick={(e) => e.stopPropagation()}
+                onChange={(_, data) => onSelectedChange?.(data.checked === true)}
+              />
+            )}
+            {hovered && (
+              <Button
+                appearance="transparent"
+                icon={<Delete20Regular />}
+                size="small"
+                onClick={handleRemove}
+                disabled={isDeleting}
+                title="Remove from Squadboard"
+                style={{ color: isDeleting ? undefined : tokens.colorPaletteRedForeground1 }}
+              />
+            )}
+          </div>
         }
       />
       <div className={styles.metaRow}>
+        <div style={{ display: 'flex', gap: tokens.spacingHorizontalXS, flexWrap: 'wrap' }}>
+          {testWorkspace && <Badge appearance="tint" color="warning" size="small">Test workspace</Badge>}
+          <Badge
+            appearance="tint"
+            color={hasSquadFolder ? 'success' : 'subtle'}
+            size="small"
+            title={hasSquadFolder
+              ? 'This project points to a .squad folder on disk. CLI/Copilot can share this project when they use the same folder or connect through the Squadboard broker.'
+              : 'This project has a folder path, but it does not currently point at a .squad directory.'}
+          >
+            {hasSquadFolder ? 'Local .squad folder' : 'Folder path set'}
+          </Badge>
+        </div>
         <Caption1
           style={{
             fontFamily: 'monospace',
@@ -111,7 +168,7 @@ export default function ProjectCard({ project, onClick }: ProjectCardProps) {
             whiteSpace: 'nowrap',
           }}
         >
-          {project.squadPath}
+          {folder}
         </Caption1>
         <Caption1 style={{ color: tokens.colorNeutralForeground3 }}>
           Created {createdDate}

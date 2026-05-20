@@ -9,7 +9,8 @@
  * progress" operations from the old dispatcher tick — and surfaces their
  * combined effect as a SweepResult.
  *
- * Runs every 5 s.
+ * Runs every 15 s by default. This remains frequent enough for stepper
+ * progress while avoiding noisy idle heartbeats.
  */
 import type { Sweep, SweepResult } from '../heartbeat.js';
 import { getDb } from '../../db/index.js';
@@ -21,7 +22,7 @@ export const readyWorkflowStepsSweep: Sweep = {
   label: 'Workflow steps',
   description: 'Advances unblocked workflow steps and lets the stepper claim one pending agent run.',
   scope: 'project',
-  intervalMs: 5_000,
+  intervalMs: 15_000,
   enabled: true,
 
   async run(): Promise<SweepResult> {

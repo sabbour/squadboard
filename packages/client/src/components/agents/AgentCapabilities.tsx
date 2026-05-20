@@ -39,6 +39,7 @@ import {
   useMcpServers,
   useUnassignMcpServerFromAgent,
 } from '../../api/mcp.ts'
+import { getSkillProvenanceMeta } from '../../utils/skill-provenance.ts'
 
 interface AgentCapabilitiesProps {
   projectId: string
@@ -91,6 +92,7 @@ function SkillsSection({ projectId, agentId }: AgentCapabilitiesProps) {
             primary={s.name}
             secondary={s.category ?? undefined}
             tertiary={s.description ?? undefined}
+            badge={<SkillSourceBadge source={s.source} curatedKey={s.curatedKey} sourceUri={s.sourceUri} />}
             onUnassign={() => unassign.mutate(s.id)}
           />
         ))}
@@ -98,7 +100,13 @@ function SkillsSection({ projectId, agentId }: AgentCapabilitiesProps) {
       {picking && (
         <PickerDialog
           title="Assign skills"
-          items={available.map((s) => ({ id: s.id, label: s.name, hint: s.category ?? undefined }))}
+          items={available.map((s) => ({
+            id: s.id,
+            label: s.name,
+            hint: [s.category, getSkillProvenanceMeta(s.source, s.curatedKey, s.sourceUri).label]
+              .filter(Boolean)
+              .join(' · ') || undefined,
+          }))}
           onClose={() => setPicking(false)}
           onConfirm={(ids) => ({ projectId, agentId, ids, kind: 'skills' as const })}
           projectId={projectId}
@@ -195,16 +203,19 @@ function McpSection({ projectId, agentId }: AgentCapabilitiesProps) {
         <EmptyState>No MCP servers assigned. <a href={`/projects/${projectId}/mcp-servers`}>Manage registry →</a></EmptyState>
       )}
       <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-        {assigned.map((s) => (
-          <CapabilityRow
-            key={s.id}
-            primary={s.name}
-            secondary={`${s.transport} • ${s.headers.length} header${s.headers.length === 1 ? '' : 's'}`}
-            tertiary={s.description ?? undefined}
-            badge={s.enabled ? <Badge appearance="outline" color="success" size="extra-small">enabled</Badge> : <Badge appearance="outline" color="subtle" size="extra-small">disabled</Badge>}
-            onUnassign={() => unassign.mutate(s.id)}
-          />
-        ))}
+        {assigned.map((s) => {
+          const headerCount = Array.isArray(s.headers) ? s.headers.length : 0
+          return (
+            <CapabilityRow
+              key={s.id}
+              primary={s.name}
+              secondary={`${s.transport} • ${headerCount} header${headerCount === 1 ? '' : 's'}`}
+              tertiary={s.description ?? undefined}
+              badge={s.enabled ? <Badge appearance="outline" color="success" size="extra-small">enabled</Badge> : <Badge appearance="outline" color="subtle" size="extra-small">disabled</Badge>}
+              onUnassign={() => unassign.mutate(s.id)}
+            />
+          )
+        })}
       </div>
       {picking && (
         <PickerDialog
@@ -224,6 +235,36 @@ function McpSection({ projectId, agentId }: AgentCapabilitiesProps) {
 // ---------------------------------------------------------------------------
 // Shared sub-components
 // ---------------------------------------------------------------------------
+
+function SkillSourceBadge({
+  source,
+  curatedKey,
+  sourceUri,
+}: {
+  source?: string | null
+  curatedKey?: string | null
+  sourceUri?: string | null
+}) {
+  const provenance = getSkillProvenanceMeta(source, curatedKey, sourceUri)
+  const colors = (() => {
+    switch (source) {
+      case 'curated':
+        return { bg: tokens.colorBrandBackground2, fg: tokens.colorBrandForeground1 }
+      case 'imported':
+        return { bg: tokens.colorPaletteGreenBackground2, fg: tokens.colorPaletteGreenForeground2 }
+      case 'project':
+        return { bg: tokens.colorNeutralBackground3, fg: tokens.colorNeutralForeground2 }
+      case 'custom':
+      default:
+        return { bg: tokens.colorNeutralBackground3, fg: tokens.colorNeutralForeground2 }
+    }
+  })()
+  return (
+    <Badge appearance="filled" size="extra-small" style={{ background: colors.bg, color: colors.fg }} title={provenance.title}>
+      {provenance.label}
+    </Badge>
+  )
+}
 
 function SectionHeader({
   title, count, actionLabel, onAction, emptyHint,

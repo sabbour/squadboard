@@ -3,6 +3,7 @@ import type { Dirent } from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 import { SquadDirectory, TeamMember, ValidationResult } from '../types/squad.js';
+import { isInternalSquadWorkspacePath } from './squad-path-safety.js';
 
 const COMMON_DEV_DIRS = ['src', 'code', 'projects', 'dev', 'workspace'];
 const SCAN_DEPTH = 3;
@@ -30,7 +31,10 @@ async function scanForSquadDirs(
     if (!entry.isDirectory()) continue;
 
     if (entry.name === '.squad') {
-      found.push(path.join(dir, '.squad'));
+      const squadPath = path.join(dir, '.squad');
+      if (!isInternalSquadWorkspacePath(squadPath)) {
+        found.push(squadPath);
+      }
       continue; // Don't descend into .squad itself
     }
 
@@ -130,6 +134,10 @@ export async function validateSquadDir(squadPath: string): Promise<ValidationRes
   // Must end in .squad (canonical name)
   if (path.basename(squadPath) !== '.squad') {
     errors.push(`Directory must be named ".squad" (got "${path.basename(squadPath)}")`);
+  }
+
+  if (isInternalSquadWorkspacePath(squadPath)) {
+    errors.push('Internal Squadboard package workspaces are not selectable projects');
   }
 
   // Must contain team.md

@@ -315,8 +315,10 @@ export default function Heartbeat() {
         {/* Section d — Sweep Animation Timeline (W25) */}
         <SectionCard title="Sweep Activity Timeline">
           <SweepTimeline
+            key={projectId ?? '__global__'}
             windowSizeMs={60_000}
             compact={false}
+            projectId={projectId}
             sweeps={snap?.sweeps.map((sweep) => ({
               id: sweep.id,
               label: sweep.label,

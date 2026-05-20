@@ -126,11 +126,12 @@ function serialize<T extends { status?: string }>(issue: T): T & { column: strin
 router.get('/', async (req: Request, res: Response) => {
   try {
     const { projectId } = req.params as Record<string, string>;
-    const { status, label, search } = req.query as Record<string, string>;
+    const { status, label, search, assignee } = req.query as Record<string, string>;
     const rows = await issuesService.listIssues(projectId, {
       status: status as ColumnStatus | undefined,
       labelId: label,
       search,
+      assigneeId: assignee,
     });
     res.json(rows.map(serialize));
   } catch (err) {
@@ -220,7 +221,14 @@ router.post('/', async (req: Request, res: Response) => {
           );
 
         if (agent) {
-          await createRoutedRun(created.id, agent.id, match.rule.rawRule);
+          await createRoutedRun(
+            created.id,
+            agent.id,
+            match.rule.rawRule,
+            1,
+            null,
+            `tier1: matched rule "${match.rule.rawRule}"`,
+          );
           autoRoutedTo = match.agentName;
           console.log(`[issues] auto-routed issue ${created.id} to agent '${match.agentName}'`);
         } else {

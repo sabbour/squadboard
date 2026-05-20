@@ -36,6 +36,7 @@ const gridStyle: React.CSSProperties = {
   display: 'grid',
   gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))',
   gap: '12px',
+  alignItems: 'stretch',
 }
 
 // Wave 10 B9: three-state legend pinned to the top of the grid so the

@@ -1,5 +1,5 @@
-import { useState, useRef } from 'react'
-import { useParams, useNavigate } from 'react-router'
+import { Component, useEffect, useState, useRef, type ErrorInfo, type ReactNode } from 'react'
+import { useParams, useNavigate, useSearchParams } from 'react-router'
 import { useProject, useUpdateProject, useDeleteProject } from '../api/projects.ts'
 import type { Project } from '../api/projects.ts'
 import { useModels } from '../api/agents.ts'
@@ -67,7 +67,7 @@ const SECTIONS: { id: Section; label: string; icon: React.ReactNode }[] = [
   { id: 'general', label: 'General', icon: <TextDescription20Regular /> },
   { id: 'display', label: 'Display', icon: <Eye20Regular /> },
   { id: 'mcp', label: 'MCP Config', icon: <PlugConnected20Regular /> },
-  { id: 'sync', label: 'Team Sync', icon: <ArrowSync20Regular /> },
+  { id: 'sync', label: 'Squad Sync', icon: <ArrowSync20Regular /> },
   { id: 'budget', label: 'Budget', icon: <Money20Regular /> },
   { id: 'reviews', label: 'Review policy', icon: <Shield20Regular /> },
   { id: 'portability', label: 'Portability', icon: <FolderArrowRight20Regular /> },
@@ -75,6 +75,10 @@ const SECTIONS: { id: Section; label: string; icon: React.ReactNode }[] = [
   { id: 'github', label: 'GitHub', icon: <Branch20Regular /> },
   { id: 'danger', label: 'Danger Zone', icon: <Delete20Regular /> },
 ]
+
+function parseSection(value: string | null): Section | null {
+  return SECTIONS.some((section) => section.id === value) ? (value as Section) : null
+}
 
 function SectionHeader({ title, sub }: { title: string; sub?: string }) {
   return (
@@ -87,6 +91,56 @@ function SectionHeader({ title, sub }: { title: string; sub?: string }) {
       )}
     </div>
   )
+}
+
+class SettingsSectionErrorBoundary extends Component<
+  { children: ReactNode; resetKey: string; section: string },
+  { error: Error | null }
+> {
+  state: { error: Error | null } = { error: null }
+
+  static getDerivedStateFromError(error: Error) {
+    return { error }
+  }
+
+  componentDidCatch(error: Error, info: ErrorInfo) {
+    console.error('[Settings] section crashed', {
+      section: this.props.section,
+      error,
+      componentStack: info.componentStack,
+    })
+  }
+
+  componentDidUpdate(prevProps: { resetKey: string }) {
+    if (prevProps.resetKey !== this.props.resetKey && this.state.error) {
+      this.setState({ error: null })
+    }
+  }
+
+  render() {
+    if (this.state.error) {
+      return (
+        <div
+          style={{
+            background: 'rgba(248,81,73,0.10)',
+            border: '1px solid rgba(248,81,73,0.35)',
+            borderRadius: '8px',
+            padding: '14px 16px',
+            maxWidth: 640,
+          }}
+        >
+          <Body1 style={{ display: 'block', fontWeight: tokens.fontWeightSemibold, color: tokens.colorPaletteRedForeground1 }}>
+            This settings section could not be shown.
+          </Body1>
+          <Caption1 style={{ display: 'block', color: tokens.colorNeutralForeground3, marginTop: '6px' }}>
+            {this.state.error.message}
+          </Caption1>
+        </div>
+      )
+    }
+
+    return this.props.children
+  }
 }
 
 function DisplaySection() {
@@ -838,7 +892,22 @@ function displayProjectFolderPath(squadPath: string): string {
 export default function Settings() {
   const { id: projectId = '' } = useParams<{ id: string }>()
   const { data: project, isLoading, isError } = useProject(projectId)
-  const [activeSection, setActiveSection] = useState<Section>('general')
+  const [searchParams, setSearchParams] = useSearchParams()
+  const sectionParam = parseSection(searchParams.get('section'))
+  const [activeSection, setActiveSection] = useState<Section>(() => sectionParam ?? 'general')
+
+  useEffect(() => {
+    const next = sectionParam ?? 'general'
+    if (next !== activeSection) setActiveSection(next)
+  }, [activeSection, sectionParam])
+
+  function selectSection(next: Section) {
+    setActiveSection(next)
+    const nextParams = new URLSearchParams(searchParams)
+    if (next === 'general') nextParams.delete('section')
+    else nextParams.set('section', next)
+    setSearchParams(nextParams, { replace: true })
+  }
 
   if (isLoading) {
     return <PageLoading label="Loading settings…" />
@@ -891,7 +960,7 @@ export default function Settings() {
           {SECTIONS.map((s) => (
             <button
               key={s.id}
-              onClick={() => setActiveSection(s.id)}
+              onClick={() => selectSection(s.id)}
               style={navItemStyle(activeSection === s.id, s.id === 'danger')}
             >
               <span>{s.icon}</span>
@@ -902,7 +971,8 @@ export default function Settings() {
 
         {/* Section content */}
         <div style={{ flex: 1, overflowY: 'auto', padding: '24px' }}>
-          {activeSection === 'general' && (
+          <SettingsSectionErrorBoundary resetKey={`${projectId}:${activeSection}`} section={activeSection}>
+            {activeSection === 'general' && (
             <>
               <SectionHeader title="General" sub="Basic project settings." />
               <ProjectIdentityForm project={project} />
@@ -930,7 +1000,7 @@ export default function Settings() {
           {activeSection === 'sync' && (
             <>
               <SectionHeader
-                title="Team Sync"
+                title="Squad Sync"
                 sub="Verify whether Squadboard and CLI/Copilot can start or continue work interchangeably."
               />
               <SquadSyncStatusPanel projectId={projectId} />
@@ -1001,6 +1071,7 @@ export default function Settings() {
               <DangerZoneSection project={project} />
             </>
           )}
+          </SettingsSectionErrorBoundary>
         </div>
       </div>
     </div>

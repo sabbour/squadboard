@@ -12,7 +12,7 @@
  * project was just enabled). It does NOT start a new loop; it triggers a
  * one-off pull directly.
  *
- * Runs every 60 s.
+ * Runs every 120 s by default.
  */
 import type { Sweep, SweepResult } from '../heartbeat.js';
 import { getDb, schema } from '../../db/index.js';
@@ -26,7 +26,7 @@ export const githubSyncOverdueSweep: Sweep = {
   label: 'GitHub sync',
   description: 'Runs catch-up pulls for GitHub-connected projects whose sync loop is overdue.',
   scope: 'project',
-  intervalMs: 60_000,
+  intervalMs: 120_000,
   enabled: true,
 
   async run(): Promise<SweepResult> {

@@ -43,7 +43,7 @@ export function RoutingLogTable({ entries, isLoading }: RoutingLogTableProps) {
             <TableHeaderCell>Time</TableHeaderCell>
             <TableHeaderCell>Issue</TableHeaderCell>
             <TableHeaderCell>Tier</TableHeaderCell>
-            <TableHeaderCell>Matched Rule</TableHeaderCell>
+            <TableHeaderCell>Decision</TableHeaderCell>
             <TableHeaderCell>Agent</TableHeaderCell>
             <TableHeaderCell style={{ textAlign: 'right' }}>Score</TableHeaderCell>
           </TableRow>
@@ -70,11 +70,30 @@ export function RoutingLogTable({ entries, isLoading }: RoutingLogTableProps) {
                 </TableCellLayout>
               </TableCell>
               <TableCell>
-                <RoutingTierBadge tier={entry.tier} showLabel />
+                {entry.tier ? (
+                  <RoutingTierBadge tier={entry.tier} showLabel />
+                ) : (
+                  <span style={{ color: tokens.colorNeutralForeground3 }}>Triage</span>
+                )}
               </TableCell>
               <TableCell>
-                <TableCellLayout style={{ color: tokens.colorNeutralForeground3, fontFamily: tokens.fontFamilyMonospace, fontSize: '11px' }}>
-                  {entry.matchedRule ?? <span style={{ color: tokens.colorNeutralForeground3, opacity: 0.6 }}>—</span>}
+                <TableCellLayout
+                  style={{
+                    maxWidth: '360px',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    whiteSpace: 'nowrap',
+                    color: tokens.colorNeutralForeground3,
+                    fontSize: '12px',
+                  }}
+                  title={[entry.matchedRule, entry.reasoning].filter(Boolean).join(' — ')}
+                >
+                  <span style={{ fontFamily: tokens.fontFamilyMonospace, fontSize: '11px' }}>
+                    {entry.matchedRule ?? 'no match'}
+                  </span>
+                  {entry.reasoning ? (
+                    <span> — {entry.reasoning}</span>
+                  ) : null}
                 </TableCellLayout>
               </TableCell>
               <TableCell>

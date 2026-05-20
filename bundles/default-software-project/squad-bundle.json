@@ -19,8 +19,8 @@
     "columns": [
       { "slug": "backlog",     "label": "Backlog",     "order": 0 },
       { "slug": "ready",       "label": "Ready",       "order": 1 },
-      { "slug": "in_progress", "label": "In Progress", "order": 2, "wip_limit": 3 },
-      { "slug": "in_review",   "label": "In Review",   "order": 3 },
+      { "slug": "in-progress", "label": "In Progress", "order": 2, "wip_limit": 3 },
+      { "slug": "in-review",   "label": "In Review",   "order": 3 },
       { "slug": "done",        "label": "Done",        "order": 4 }
     ],
     "defaultColumn": "backlog"
@@ -60,7 +60,7 @@
       "scope": "task",
       "trigger": {
         "kind": "on_issue_entry",
-        "config": { "column": "in_review" }
+        "config": { "column": "in-review" }
       },
       "workflowYaml": "name: Simple Review\nsteps:\n  - type: route\n    label: Route to reviewer\n    agent: \"{{ assignee }}\"\n  - type: agent_run\n    label: Agent reviews the work\n    agent: \"{{ assignee }}\"\n    prompt: \"Review the attached work. Check for correctness, style, and test coverage. Leave clear feedback.\"\n    timeout: 30m\n  - type: approve\n    label: Human approval gate\n    approvers: []\n    timeout: 2h\n    timeoutAction: notify\n"
     },
@@ -92,7 +92,7 @@
         "kind": "manual",
         "config": { "cadence": "sprint" }
       },
-      "workflowYaml": "name: Sprint Planning\nsteps:\n  - type: agent_run\n    label: Collect candidate work\n    agent: Lead\n    prompt: \"Review the project goal, current backlog, recent decisions, and open risks. Summarize the candidate work that should be considered for the next sprint.\"\n    timeout: 45m\n  - type: agent_run\n    label: Draft sprint plan\n    agent: Lead\n    prompt: \"Propose a sprint plan: objective, selected cards, likely owners, risks, dependencies, and what should stay out of scope.\"\n    timeout: 45m\n  - type: approve\n    label: Commit the plan\n    approvers: [Lead]\n    request_changes_policy: first\n    timeout: 24h\n    timeoutAction: notify\n"
+      "workflowYaml": "name: Sprint Planning\ndescription: Review goals, select Ready work, identify risks, and publish a sprint plan.\nsteps:\n  - type: fan_out\n    label: Gather team recommendations\n    split_by: agents\n    agents: [Lead, Backend, Frontend, Tester]\n    merge_strategy: all\n    mode: parallel\n    steps:\n      - type: agent_run\n        label: Review sprint candidates\n        prompt: |\n          Review the project goal, current backlog, recent decisions, open risks,\n          and any work related to your specialty. Recommend what should be in the\n          next sprint, what should stay out, and what dependencies or risks need\n          the Lead's attention.\n        timeout: 45m\n  - type: agent_run\n    label: Synthesize sprint plan\n    agent: Lead\n    prompt: |\n      Synthesize the team recommendations into a sprint plan: objective, selected\n      cards, likely owners, risks, dependencies, and what should stay out of scope.\n    timeout: 45m\n  - type: approve\n    label: Commit the plan\n    approvers: [Lead]\n    request_changes_policy: first\n    timeout: 24h\n    timeoutAction: notify\n"
     },
     {
       "id": "sprint-retro",
@@ -102,7 +102,7 @@
         "kind": "manual",
         "config": { "cadence": "sprint" }
       },
-      "workflowYaml": "name: Sprint Retro\nsteps:\n  - type: agent_run\n    label: Gather evidence\n    agent: Lead\n    prompt: \"Review completed cards, run history, review notes, incidents, and unresolved follow-ups from the sprint. Highlight what actually happened.\"\n    timeout: 45m\n  - type: agent_run\n    label: Identify themes\n    agent: Lead\n    prompt: \"Group the evidence into what went well, what slowed the team down, and concrete experiments or process improvements for the next sprint.\"\n    timeout: 45m\n  - type: approve\n    label: Accept follow-ups\n    approvers: [Lead]\n    request_changes_policy: first\n    timeout: 24h\n    timeoutAction: notify\n"
+      "workflowYaml": "name: Sprint Retro\ndescription: Summarize the sprint, surface patterns, and capture improvements.\nsteps:\n  - type: fan_out\n    label: Gather team observations\n    split_by: agents\n    agents: [Lead, Backend, Frontend, Tester]\n    merge_strategy: all\n    mode: parallel\n    steps:\n      - type: agent_run\n        label: Review sprint evidence\n        prompt: |\n          Review completed cards, run history, review notes, incidents, and unresolved\n          follow-ups from the sprint from your specialty's point of view. Capture\n          what went well, what slowed the team down, surprises, and concrete\n          improvement ideas for next sprint.\n        timeout: 45m\n  - type: agent_run\n    label: Synthesize retro themes\n    agent: Lead\n    prompt: |\n      Synthesize the team observations into themes: what went well, what slowed\n      the team down, and concrete experiments or process improvements for the\n      next sprint.\n    timeout: 45m\n  - type: approve\n    label: Accept follow-ups\n    approvers: [Lead]\n    request_changes_policy: first\n    timeout: 24h\n    timeoutAction: notify\n"
     }
   ],
 

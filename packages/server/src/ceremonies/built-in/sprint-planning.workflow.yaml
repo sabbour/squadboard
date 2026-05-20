@@ -14,11 +14,27 @@ spec:
       agent: "@lead"
       prompt: "Review the project goal, backlog, recent decisions, open risks, and current Ready column. Summarize the candidate work that should be considered for the next sprint."
       timeout: 45m
+    - id: specialist-capacity-check
+      kind: fan_out
+      label: Specialist capacity check
+      split_by: agents
+      agents:
+        - "@backend"
+        - "@frontend"
+        - "@tester"
+      mode: parallel
+      merge_strategy: all
+      steps:
+        - id: capacity-input
+          kind: agent-task
+          label: Capacity input
+          prompt: "Given the candidate work, flag any dependencies, risks, or blockers in your area. Suggest which cards you can own this sprint and flag anything that should stay out of scope."
+          timeout: 30m
     - id: draft-sprint-plan
       kind: agent-task
       label: Draft sprint plan
       agent: "@lead"
-      prompt: "Propose a sprint plan with an objective, selected cards, likely owners, risks, dependencies, and what should stay out of scope."
+      prompt: "Synthesize the specialist capacity inputs and candidate work into a sprint plan with an objective, selected cards, assigned owners, risks, dependencies, and what should stay out of scope."
       timeout: 45m
     - id: commit-plan
       kind: approve

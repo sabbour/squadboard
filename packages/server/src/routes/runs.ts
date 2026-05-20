@@ -34,6 +34,8 @@ import {
 
 const CIRCUIT_BREAKER_MIN_FAILURES = 3;
 const CIRCUIT_BREAKER_WINDOW_MS = 30 * 60 * 1000;
+const ACTIVE_RUN_STATUSES = ['pending', 'running'] as const;
+const RETRIGGERABLE_RUN_STATUSES = ['completed', 'failed', 'cancelled'] as const;
 
 /** Sanitize a branch name — reject any shell-unsafe characters */
 function sanitizeBranchName(name: string): string {
@@ -83,6 +85,10 @@ function handleCoordinatorNonDispatch(res: Response, decision: Exclude<Coordinat
     candidates: decision.suggestedAgents,
     question: decision.question,
   });
+}
+
+function isRetriggerableRunStatus(status: string): boolean {
+  return (RETRIGGERABLE_RUN_STATUSES as readonly string[]).includes(status);
 }
 
 // ---------------------------------------------------------------------------
@@ -421,6 +427,90 @@ issueRunsRouter.get('/', async (req: Request, res: Response) => {
       .where(eq(schema.issueRuns.issueId, issueId))
       .orderBy(schema.issueRuns.createdAt);
     res.json(rows);
+  } catch (err) {
+    handleError(res, err);
+  }
+});
+
+// POST /:runId/retrigger — create a fresh pending run using the same agent/run settings.
+issueRunsRouter.post('/:runId/retrigger', async (req: Request, res: Response) => {
+  try {
+    const { projectId, issueId, runId } = req.params as Record<string, string>;
+    const db = getDb();
+
+    const [sourceRun] = await db
+      .select({
+        id: schema.issueRuns.id,
+        issueId: schema.issueRuns.issueId,
+        agentId: schema.issueRuns.agentId,
+        kind: schema.issueRuns.kind,
+        status: schema.issueRuns.status,
+        workspaceStrategy: schema.issueRuns.workspaceStrategy,
+        workspacePath: schema.issueRuns.workspacePath,
+        inputContext: schema.issueRuns.inputContext,
+        agentName: schema.agents.name,
+        agentStatus: schema.agents.status,
+      })
+      .from(schema.issueRuns)
+      .innerJoin(schema.issues, eq(schema.issueRuns.issueId, schema.issues.id))
+      .innerJoin(schema.agents, eq(schema.issueRuns.agentId, schema.agents.id))
+      .where(and(
+        eq(schema.issueRuns.id, runId),
+        eq(schema.issueRuns.issueId, issueId),
+        eq(schema.issues.projectId, projectId),
+      ))
+      .limit(1);
+
+    if (!sourceRun) {
+      res.status(404).json({ error: 'Run not found for this issue' });
+      return;
+    }
+
+    if (!isRetriggerableRunStatus(sourceRun.status)) {
+      res.status(409).json({
+        error: `Run is ${sourceRun.status}. Only completed, failed, or cancelled runs can be retriggered.`,
+      });
+      return;
+    }
+
+    if (sourceRun.agentStatus !== 'active') {
+      res.status(422).json({
+        error: `Agent "${sourceRun.agentName}" is ${sourceRun.agentStatus} — re-enable it before retriggering this run.`,
+      });
+      return;
+    }
+
+    const activeRows = await db
+      .select({ id: schema.issueRuns.id })
+      .from(schema.issueRuns)
+      .where(and(
+        eq(schema.issueRuns.issueId, issueId),
+        inArray(schema.issueRuns.status, [...ACTIVE_RUN_STATUSES]),
+      ))
+      .limit(1);
+
+    if (activeRows.length > 0) {
+      res.status(409).json({
+        error: 'This card already has a pending or running run. Wait for it to finish before retriggering another run.',
+      });
+      return;
+    }
+
+    const [run] = await db
+      .insert(schema.issueRuns)
+      .values({
+        issueId,
+        agentId: sourceRun.agentId,
+        kind: sourceRun.kind,
+        status: 'pending',
+        workspaceStrategy: sourceRun.workspaceStrategy,
+        workspacePath: null,
+        inputContext: sourceRun.inputContext ?? null,
+      })
+      .returning();
+
+    eventBus.emitRunEvent('run.started', projectId, { run, retriggeredFromRunId: sourceRun.id });
+    res.status(201).json({ ...run, retriggeredFromRunId: sourceRun.id });
   } catch (err) {
     handleError(res, err);
   }

@@ -22,7 +22,7 @@ const TIER_CONFIG: Record<RoutingTier, { label: string; sublabel: string; color:
   },
   T3: {
     label: 'T3',
-    sublabel: 'LLM',
+    sublabel: 'Fallback',
     color: '#bc8cff',
     bg: 'rgba(188,140,255,0.15)',
     border: 'rgba(188,140,255,0.3)',

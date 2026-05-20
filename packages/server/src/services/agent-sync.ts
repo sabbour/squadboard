@@ -4,6 +4,7 @@ import { eq, and } from 'drizzle-orm';
 import { getDb, schema } from '../db/index.js';
 import { parseCharterContent, computeContentHash } from './charter-compiler.js';
 import { getAgents } from './sdk-state.js';
+import { isInternalSquadWorkspacePath } from './squad-path-safety.js';
 
 export interface SyncResult {
   added: number;
@@ -26,6 +27,11 @@ export async function syncAgentsFromDisk(
   projectId: string,
   squadPath: string,
 ): Promise<SyncResult> {
+  if (isInternalSquadWorkspacePath(squadPath)) {
+    console.warn(`[agent-sync] skipped internal Squadboard workspace: ${squadPath}`);
+    return { added: 0, updated: 0, removed: 0 };
+  }
+
   const agentsDir = path.join(squadPath, 'agents');
 
   let sdkAgents: Awaited<ReturnType<typeof getAgents>> | null = null;
@@ -195,7 +201,14 @@ async function listAgentDirs(agentsDir: string): Promise<AgentDirListing> {
   try {
     const dirents = await fs.readdir(agentsDir, { withFileTypes: true });
     return {
-      names: new Set(dirents.filter((d) => d.isDirectory()).map((d) => d.name)),
+      // Underscore-prefixed directories (e.g. `_alumni`, `_archive`) are
+      // internal housekeeping folders, not agents. Silently skip them so
+      // sync never tries to read their charter or logs spurious warnings.
+      names: new Set(
+        dirents
+          .filter((d) => d.isDirectory() && !d.name.startsWith('_'))
+          .map((d) => d.name),
+      ),
       reliableForRetirement: true,
     };
   } catch (err) {

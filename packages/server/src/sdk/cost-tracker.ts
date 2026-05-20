@@ -1,7 +1,7 @@
 import type { DrizzleDb } from '../db/index.js';
 import { issueRuns } from '../db/schema.js';
 import { eq, sql } from 'drizzle-orm';
-import { estimatePremiumRequests, type PremiumRequestOptions } from './pricing.js';
+import { estimateAiCreditsFromUsd, type PremiumRequestOptions } from './pricing.js';
 
 // ---------------------------------------------------------------------------
 // Model pricing table (USD per million tokens)
@@ -109,9 +109,8 @@ export class CostTracker {
     const cachedCost = cachedInputTokens ? computeCachedInputCost(cachedInputTokens, pricing) : 0;
     const costUsd = (baseCost + cachedCost).toFixed(6);
     const totalTokens = inputTokens + outputTokens + (cachedInputTokens ?? 0);
-    // Stream D — D6: stamp the GitHub Copilot premium-request equivalent
-    // alongside the USD figure so the Costs page can render either model.
-    const premiumRequests = estimatePremiumRequests(modelId, premiumOpts);
+    void premiumOpts;
+    const aiCredits = estimateAiCreditsFromUsd(Number(costUsd));
 
     await this.db
       .update(issueRuns)
@@ -121,7 +120,7 @@ export class CostTracker {
         cachedInputTokens: cachedInputTokens ?? 0,
         costTokens: totalTokens,
         costUsd,
-        premiumRequests: premiumRequests.toString(),
+        premiumRequests: aiCredits.toString(),
         updatedAt: new Date(),
       })
       .where(eq(issueRuns.id, this.issueRunId));
@@ -181,8 +180,8 @@ export interface CostSummary {
   projectId: string;
   /** Sources that were included in the totals (defaults to ['run','live_session']). */
   sources: CostSource[];
-  /** Stream D — D6: which cost model the consuming UI should render by default. */
-  costModel: 'usd' | 'gh_multipliers';
+  /** Which cost model the consuming UI should render by default. */
+  costModel: 'usd' | 'ai_credits';
   /** Month-to-date (calendar month of query time) */
   mtd: {
     totalInputTokens: number;
@@ -325,13 +324,14 @@ export async function getCostSummary(
       const input = Number(r.input_tokens ?? 0);
       const output = Number(r.output_tokens ?? 0);
       const cost = parseFloat(r.cost_usd ?? '0') || 0;
-      // Stream D — D6: prefer the persisted column when present (paid/agent
-      // runs), otherwise estimate from the model multiplier so live_session
-      // rows still contribute a sensible figure.
+      // The column is still named premium_requests for schema compatibility;
+      // new rows store GitHub AI Credits (1 credit = $0.01). For rows that do
+      // not persist that field (for example live sessions), derive credits from
+      // the USD/token rollup instead of old premium-request multipliers.
       const stored = r.premium_requests == null ? null : Number(r.premium_requests);
       const premium = stored !== null && Number.isFinite(stored)
         ? stored
-        : estimatePremiumRequests(r.model_id ?? undefined);
+        : estimateAiCreditsFromUsd(cost);
       totalInput += input;
       totalOutput += output;
       totalCost += cost;
@@ -405,17 +405,21 @@ export async function getCostSummary(
     };
   }
 
-  // Stream D — D6: resolve the project's cost model preference.
-  let costModel: 'usd' | 'gh_multipliers' = (process.env.SQUADBOARD_COST_MODEL === 'gh_multipliers')
-    ? 'gh_multipliers'
+  // Resolve the project's cost model preference. gh_multipliers is a legacy
+  // persisted/env alias for the GitHub AI Credits display mode.
+  let costModel: 'usd' | 'ai_credits' = (
+    process.env.SQUADBOARD_COST_MODEL === 'ai_credits'
+    || process.env.SQUADBOARD_COST_MODEL === 'gh_multipliers'
+  )
+    ? 'ai_credits'
     : 'usd';
   try {
     const proj = await db.execute(sql`
       SELECT cost_model FROM projects WHERE id = ${projectId} LIMIT 1
     `);
     const stored = (proj.rows as Array<{ cost_model: string | null }>)[0]?.cost_model;
-    if (stored === 'usd' || stored === 'gh_multipliers') {
-      costModel = stored;
+    if (stored === 'usd' || stored === 'ai_credits' || stored === 'gh_multipliers') {
+      costModel = stored === 'usd' ? 'usd' : 'ai_credits';
     }
   } catch {
     // Pre-D6 schema or transient error — keep env default.

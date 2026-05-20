@@ -12,15 +12,27 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 const mockSelect = vi.fn();
 const mockInsert = vi.fn();
+const mockUpdate = vi.fn();
 const mockDb = {
   select: mockSelect,
   insert: mockInsert,
+  update: mockUpdate,
 };
 
 vi.mock('../db/index.js', () => ({
   getDb: () => mockDb,
   schema: {
-    issues: { id: 'id', projectId: 'project_id', title: 'title', archived: 'archived', createdAt: 'created_at', status: 'status', position: 'position' },
+    issues: {
+      id: 'id',
+      projectId: 'project_id',
+      title: 'title',
+      archived: 'archived',
+      createdAt: 'created_at',
+      status: 'status',
+      position: 'position',
+      assigneeId: 'assignee_id',
+      updatedAt: 'updated_at',
+    },
     issueLabels: { issueId: 'issue_id', labelId: 'label_id' },
   },
 }));
@@ -39,7 +51,7 @@ vi.mock('drizzle-orm', () => ({
 // Now import services (they see the mocked DB).
 // ---------------------------------------------------------------------------
 
-import { createIssue } from '../services/issues.js';
+import { createIssue, updateIssue } from '../services/issues.js';
 import { bulkImportIssues, BulkImportInvariantError } from '../services/bulk-import-issues.js';
 
 // ---------------------------------------------------------------------------
@@ -69,6 +81,15 @@ function makeInsertChain(returning: unknown[]) {
     values: vi.fn().mockReturnThis(),
     returning: vi.fn().mockResolvedValue(returning),
     onConflictDoNothing: vi.fn().mockResolvedValue([]),
+  };
+  return chain;
+}
+
+function makeUpdateChain(returning: unknown[]) {
+  const chain = {
+    set: vi.fn().mockReturnThis(),
+    where: vi.fn().mockReturnThis(),
+    returning: vi.fn().mockResolvedValue(returning),
   };
   return chain;
 }
@@ -134,6 +155,33 @@ describe('createIssue()', () => {
     const completedMs = (valuesArg.completedAt as Date).getTime();
     expect(completedMs).toBeGreaterThanOrEqual(before);
     expect(completedMs).toBeLessThanOrEqual(after);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// updateIssue() smoke tests
+// ---------------------------------------------------------------------------
+
+describe('updateIssue()', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('persists assigneeId=null so cards can be unassigned', async () => {
+    mockSelect.mockReturnValueOnce(makeSelectChain([{
+      id: 'issue-1',
+      projectId: 'proj-1',
+      archived: 0,
+      assigneeId: 'agent-1',
+    }]));
+    mockUpdate.mockReturnValueOnce(makeUpdateChain([{ id: 'issue-1', assigneeId: null }]));
+
+    const result = await updateIssue('proj-1', 'issue-1', { assigneeId: null });
+
+    expect(result).toEqual({ id: 'issue-1', assigneeId: null });
+    const updateCall = mockUpdate.mock.results[0].value;
+    const patch = updateCall.set.mock.calls[0][0] as Record<string, unknown>;
+    expect(patch.assigneeId).toBeNull();
   });
 });
 

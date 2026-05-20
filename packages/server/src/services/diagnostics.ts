@@ -22,6 +22,7 @@ import {
   getBuiltinBundleScanError,
   resetBuiltinBundleCache,
 } from './builtin-bundles.js';
+import { getProjectSyncOwnershipStatus, ProjectNotFoundError } from './sdk-state.js';
 
 const execFileAsync = promisify(execFile);
 
@@ -488,6 +489,63 @@ async function checkMcpServersGlobal(): Promise<DiagnosticResult> {
   };
 }
 
+async function checkSquadSync(projectId: string): Promise<DiagnosticResult> {
+  const start = Date.now();
+  try {
+    const status = await getProjectSyncOwnershipStatus(projectId);
+    const missingRequired = status.bootstrap.missingRequired;
+    const missingRecommended = status.bootstrap.missingRecommended;
+    const clientStates = Object.values(status.clients);
+    const blockedClients = clientStates.filter((client) => client.status === 'blocked');
+    const degradedClients = clientStates.filter((client) => client.status === 'degraded');
+
+    if (missingRequired.length > 0 || blockedClients.length > 0) {
+      return {
+        id: 'squad_sync.status',
+        label: 'Squad Sync projection',
+        status: 'fail',
+        detail:
+          `Authority: ${status.authority.sourceOfTruth}; missing required: ` +
+          `${missingRequired.join(', ') || 'none'}; blocked clients: ${blockedClients.map((c) => c.client).join(', ') || 'none'}`,
+        remediation: 'Open Squad Sync for this project and run the required repair actions.',
+        durationMs: Date.now() - start,
+      };
+    }
+
+    if (missingRecommended.length > 0 || status.repairActions.length > 0 || degradedClients.length > 0) {
+      return {
+        id: 'squad_sync.status',
+        label: 'Squad Sync projection',
+        status: 'warn',
+        detail:
+          `Authority: ${status.authority.sourceOfTruth}; storage: ${status.authority.storageMode}; ` +
+          `recommended missing: ${missingRecommended.join(', ') || 'none'}; ` +
+          `repair actions: ${status.repairActions.map((a) => a.id).join(', ') || 'none'}`,
+        remediation: 'Run optional Squad Sync repairs to restore the complete CLI/Copilot projection.',
+        durationMs: Date.now() - start,
+      };
+    }
+
+    return {
+      id: 'squad_sync.status',
+      label: 'Squad Sync projection',
+      status: 'ok',
+      detail: `Authority: ${status.authority.sourceOfTruth}; storage: ${status.authority.storageMode}; all required and recommended projection artifacts are present.`,
+      durationMs: Date.now() - start,
+    };
+  } catch (err) {
+    const notFound = err instanceof ProjectNotFoundError;
+    return {
+      id: 'squad_sync.status',
+      label: 'Squad Sync projection',
+      status: notFound ? 'fail' : 'warn',
+      detail: err instanceof Error ? err.message : String(err),
+      remediation: notFound ? 'Register or select an existing project before checking Squad Sync.' : undefined,
+      durationMs: Date.now() - start,
+    };
+  }
+}
+
 async function checkDiskWriteable(projectId?: string): Promise<DiagnosticResult> {
   const start = Date.now();
   const targets: Array<{ label: string; dir: string }> = [
@@ -619,6 +677,7 @@ export async function runDiagnostics(
     checkSdkModels,
     checkGitHubAuth,
     ...(projectId ? [() => checkSquadDirShape(projectId)] : []),
+    ...(projectId ? [() => checkSquadSync(projectId)] : []),
     checkPostgresHealth,
     checkWebSocketHealth,
     ...(projectId ? [() => checkMcpServers(projectId)] : [() => checkMcpServersGlobal()]),

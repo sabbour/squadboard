@@ -13,7 +13,7 @@ import { apiFetch } from './client.ts'
 // Types
 // ---------------------------------------------------------------------------
 
-export type TriggerKind = 'on_issue_entry' | 'on_schedule' | 'on_event' | 'manual'
+export type TriggerKind = 'on_issue_entry' | 'on_schedule' | 'on_event' | 'manual' | 'agent-signal'
 export type CeremonyKind = 'workflow' | 'ceremony' | 'review_policy' | 'narrative'
 
 export type CeremonyStatus = 'active' | 'draft' | 'paused' | 'archived'
@@ -125,6 +125,59 @@ export interface WorkflowRun {
   updatedAt: string
 }
 
+export interface CeremonyRunEvent {
+  id: number
+  runId: string
+  seq: number
+  eventType: string
+  payload: Record<string, unknown>
+  createdAt: string
+}
+
+export interface CeremonyRunStep {
+  id: string
+  workflowRunId: string
+  issueRunId: string | null
+  stepIndex: number
+  stepType: string
+  status: WorkflowRun['status']
+  output: string | null
+  reviewDecision: string | null
+  reviewComment: string | null
+  sessionId: string | null
+  startedAt: string | null
+  createdAt: string
+  updatedAt: string
+  issueRunStatus: WorkflowRun['status'] | null
+  issueRunOutput: string | null
+  issueRunError: string | null
+  agentId: string | null
+  agentName: string | null
+  events: CeremonyRunEvent[]
+}
+
+export interface CeremonyRunSummary {
+  id: string
+  issueId: string
+  issueTitle: string | null
+  issueStatus: string | null
+  workflowVersionId: string | null
+  workflowVersionNumber: number | null
+  status: WorkflowRun['status']
+  currentStepIndex: number | null
+  triggerSource: Record<string, unknown> | null
+  premiumRequests: string | number | null
+  createdAt: string
+  updatedAt: string
+  steps: CeremonyRunStep[]
+}
+
+export interface CeremonyRunsResponse {
+  ceremony: Pick<Ceremony, 'id' | 'projectId' | 'name' | 'slug' | 'triggerKind' | 'kind'>
+  versions: Array<Pick<CeremonyVersion, 'id' | 'version' | 'createdAt'>>
+  runs: CeremonyRunSummary[]
+}
+
 // ---------------------------------------------------------------------------
 // Project ceremonies
 // ---------------------------------------------------------------------------
@@ -224,8 +277,24 @@ export function useRunCeremony(projectId: string) {
         `/api/projects/${projectId}/ceremonies/${ceremonyId}/run`,
         { method: 'POST', body: JSON.stringify(anchorIssueId ? { anchorIssueId } : {}) },
       ),
-    onSuccess: () => {
+    onSuccess: (_resp, input) => {
       void queryClient.invalidateQueries({ queryKey: ['ceremonies', projectId] })
+      void queryClient.invalidateQueries({ queryKey: ['ceremony-runs', projectId, input.ceremonyId] })
+    },
+  })
+}
+
+export function useCeremonyRuns(projectId: string, ceremonyId: string) {
+  return useQuery<CeremonyRunsResponse>({
+    queryKey: ['ceremony-runs', projectId, ceremonyId],
+    queryFn: () =>
+      apiFetch<CeremonyRunsResponse>(
+        `/api/projects/${projectId}/ceremonies/${ceremonyId}/runs`,
+      ),
+    enabled: Boolean(projectId) && Boolean(ceremonyId),
+    refetchInterval: (query) => {
+      const runs = query.state.data?.runs ?? []
+      return runs.some((run) => run.status === 'pending' || run.status === 'running') ? 3000 : false
     },
   })
 }

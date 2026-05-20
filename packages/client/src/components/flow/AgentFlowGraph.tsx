@@ -33,12 +33,13 @@ import type {
   FlowLineageRelation,
 } from '../../api/flow.ts'
 
-const ROW_HEIGHT       = 84
-const ROW_HEADER_WIDTH = 200
-const NODE_WIDTH       = 160
-const NODE_HEIGHT      = 56
-const NODE_GAP         = 24
-const ROW_PADDING_X    = 24
+const ROW_HEIGHT       = 72
+const ROW_HEADER_WIDTH = 180
+const NODE_WIDTH       = 148
+const NODE_HEIGHT      = 52
+const NODE_GAP         = 20
+const ROW_PADDING_X    = 20
+const LEGEND_HEIGHT    = 34
 
 const STATUS_COLOR: Record<FlowAgentInstanceStatus, string> = {
   active:    '#3fb950',
@@ -90,6 +91,7 @@ function layoutGraph(graph: FlowGraph) {
     maxNodesInAnyRow = Math.max(maxNodesInAnyRow, sorted.length)
   })
 
+  // Reserve at least one node column width even for zero-instance agents.
   const width  = ROW_HEADER_WIDTH + ROW_PADDING_X * 2
                  + Math.max(1, maxNodesInAnyRow) * (NODE_WIDTH + NODE_GAP)
   const height = Math.max(1, graph.agents.length) * ROW_HEIGHT
@@ -119,9 +121,22 @@ function fmtClock(iso?: string): string {
 
 export interface AgentFlowGraphProps {
   graph: FlowGraph
-  /** When provided, instance nodes navigate to /projects/{projectId}/agents/{agentId} on click */
+  /** When provided, instance nodes navigate to the most specific detail surface available. */
   projectId?: string
   onSelectInstance?: (instance: FlowAgentInstance, agent: FlowAgent) => void
+}
+
+function instanceDetailPath(projectId: string, instance: FlowAgentInstance, agent: FlowAgent): string {
+  if (instance.instanceKind === 'issue_run' && instance.currentIssue) {
+    return `/projects/${projectId}/issues/${instance.currentIssue.issueId}/runs/${instance.instanceId}/live`
+  }
+  if (instance.instanceKind === 'consult_session') {
+    return `/projects/${projectId}/consult/${instance.instanceId}`
+  }
+  if (instance.currentIssue) {
+    return `/projects/${projectId}/board?openIssue=${instance.currentIssue.issueId}&tab=flow`
+  }
+  return `/projects/${projectId}/agents/${agent.agentId}`
 }
 
 export default function AgentFlowGraph({ graph, projectId, onSelectInstance }: AgentFlowGraphProps) {
@@ -134,26 +149,36 @@ export default function AgentFlowGraph({ graph, projectId, onSelectInstance }: A
   if (graph.agents.length === 0) {
     return (
       <div style={{
-        padding: '60px 24px',
+        padding: '48px 24px',
         textAlign: 'center',
-        color: 'var(--text-muted)',
+        border: '1px dashed var(--border)',
+        borderRadius: 10,
+        color: tokens.colorNeutralForeground3,
         fontSize: 13,
       }}>
-        No agents have been active in this project yet.
+        <div style={{ fontSize: 28, marginBottom: 10 }}>🤖</div>
+        <div style={{ fontWeight: 600, color: tokens.colorNeutralForeground2, marginBottom: 6 }}>
+          No agent activity yet
+        </div>
+        <div>
+          Agents appear here once a ceremony or workflow run starts them.
+        </div>
       </div>
     )
   }
+
+  const totalInstances = graph.agents.reduce((sum, a) => sum + a.instances.length, 0)
+  const totalHeight = height + LEGEND_HEIGHT
 
   return (
     <div style={{
       width: '100%',
       overflowX: 'auto',
       overflowY: 'visible',
-      paddingBottom: 16,
     }}>
       <svg
         width={width}
-        height={height}
+        height={totalHeight}
         style={{
           minWidth: '100%',
           background: 'var(--surface)',
@@ -165,6 +190,7 @@ export default function AgentFlowGraph({ graph, projectId, onSelectInstance }: A
         {/* Row backgrounds + agent labels */}
         {graph.agents.map((agent, rowIndex) => {
           const y = rowIndex * ROW_HEIGHT
+          const hasInstances = agent.instances.length > 0
           return (
             <g key={`row-${agent.agentId}`}>
               <rect
@@ -183,23 +209,54 @@ export default function AgentFlowGraph({ graph, projectId, onSelectInstance }: A
                 strokeWidth={1}
               />
               <text
-                x={16}
-                y={y + ROW_HEIGHT / 2 - 6}
+                x={14}
+                y={y + ROW_HEIGHT / 2 - 7}
                 fill="var(--text)"
-                fontSize={13}
+                fontSize={12}
                 fontWeight={600}
               >
                 {truncate(agent.name, 22)}
               </text>
               <text
-                x={16}
-                y={y + ROW_HEIGHT / 2 + 12}
+                x={14}
+                y={y + ROW_HEIGHT / 2 + 9}
                 fill="var(--text-muted)"
-                fontSize={11}
+                fontSize={10}
               >
-                {agent.role} · {agent.instances.length} instance{agent.instances.length === 1 ? '' : 's'}
+                {agent.role} · {agent.instances.length} run{agent.instances.length === 1 ? '' : 's'}
               </text>
+              {/* Zero-instance placeholder */}
+              {!hasInstances && (
+                <text
+                  x={ROW_HEADER_WIDTH + ROW_PADDING_X}
+                  y={y + ROW_HEIGHT / 2 + 4}
+                  fill="var(--text-muted)"
+                  fontSize={11}
+                  fontStyle="italic"
+                  opacity={0.6}
+                >
+                  no runs yet
+                </text>
+              )}
             </g>
+          )
+        })}
+
+        {/* Separator between rows */}
+        {graph.agents.map((agent, rowIndex) => {
+          if (rowIndex === 0) return null
+          const y = rowIndex * ROW_HEIGHT
+          return (
+            <line
+              key={`sep-${agent.agentId}`}
+              x1={0}
+              y1={y}
+              x2={width}
+              y2={y}
+              stroke="var(--border)"
+              strokeWidth={0.5}
+              opacity={0.5}
+            />
           )
         })}
 
@@ -252,7 +309,7 @@ export default function AgentFlowGraph({ graph, projectId, onSelectInstance }: A
           const handleClick = () => {
             onSelectInstance?.(instance, agent)
             if (projectId) {
-              void navigate(`/projects/${projectId}/agents/${agent.agentId}`)
+              void navigate(instanceDetailPath(projectId, instance, agent))
             }
           }
           const handleKeyDown = (e: React.KeyboardEvent<SVGGElement>) => {
@@ -280,7 +337,6 @@ export default function AgentFlowGraph({ graph, projectId, onSelectInstance }: A
                 stroke={color}
                 strokeWidth={1.5}
               />
-              {/* Hover highlight overlay — toggled via CSS since SVG has no :hover in makeStyles */}
               <rect
                 className="node-hover-bg"
                 width={NODE_WIDTH}
@@ -300,66 +356,102 @@ export default function AgentFlowGraph({ graph, projectId, onSelectInstance }: A
               />
               <text
                 x={12}
-                y={18}
+                y={17}
                 fill="var(--text)"
-                fontSize={12}
+                fontSize={11}
                 fontWeight={600}
               >
-                {truncate(instance.currentStep?.label ?? instance.instanceKind, 22)}
+                {truncate(instance.currentStep?.label ?? instance.instanceKind, 20)}
               </text>
               <text
                 x={12}
-                y={34}
+                y={30}
                 fill={color}
                 fontSize={10}
                 fontWeight={600}
+                textAnchor="start"
               >
                 {instance.status.toUpperCase()}
               </text>
               <text
                 x={12}
-                y={48}
+                y={44}
                 fill="var(--text-muted)"
-                fontSize={10}
+                fontSize={9}
               >
                 {fmtClock(instance.startedAt)}
-                {instance.currentIssue ? ` · ${truncate(instance.currentIssue.title, 14)}` : ''}
+                {instance.currentIssue ? ` · ${truncate(instance.currentIssue.title, 16)}` : ''}
               </text>
             </g>
           )
         })}
-      </svg>
 
-      {/* Legend */}
-      <div style={{
-        display: 'flex',
-        gap: 16,
-        padding: '12px 4px',
-        flexWrap: 'wrap',
-        fontSize: 11,
-        color: 'var(--text-muted)',
-      }}>
-        <strong style={{ color: 'var(--text)' }}>Status:</strong>
-        {(Object.keys(STATUS_COLOR) as FlowAgentInstanceStatus[]).map((s) => (
-          <span key={s} style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-            <span style={{
-              display: 'inline-block', width: 8, height: 8, borderRadius: '50%',
-              background: STATUS_COLOR[s],
-            }} />
-            {s}
-          </span>
-        ))}
-        <strong style={{ color: 'var(--text)', marginLeft: 12 }}>Edges:</strong>
-        {(Object.keys(RELATION_COLOR) as FlowLineageRelation[]).map((r) => (
-          <span key={r} style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-            <span style={{
-              display: 'inline-block', width: 14, height: 2,
-              background: RELATION_COLOR[r],
-            }} />
-            {RELATION_LABEL[r]}
-          </span>
-        ))}
-      </div>
+        {/* Inline legend bar at the bottom of the SVG */}
+        <g transform={`translate(0, ${height})`}>
+          <rect x={0} y={0} width={width} height={LEGEND_HEIGHT}
+            fill="var(--surface)" opacity={0.96} />
+          <line x1={0} y1={0} x2={width} y2={0} stroke="var(--border)" strokeWidth={0.5} />
+
+          {/* Status legend */}
+          {(() => {
+            const statuses = Object.keys(STATUS_COLOR) as FlowAgentInstanceStatus[]
+            let cx = 14
+            const items: React.ReactNode[] = []
+            items.push(
+              <text key="status-lbl" x={cx} y={21} fill="var(--text-muted)" fontSize={9}
+                fontWeight={600} textAnchor="start">
+                STATUS
+              </text>,
+            )
+            cx += 46
+            statuses.forEach((s) => {
+              items.push(
+                <circle key={`s-${s}`} cx={cx + 4} cy={17} r={4} fill={STATUS_COLOR[s]} />,
+              )
+              items.push(
+                <text key={`sl-${s}`} x={cx + 12} y={21} fill="var(--text-muted)" fontSize={9}>
+                  {s}
+                </text>,
+              )
+              cx += 12 + s.length * 6 + 10
+            })
+            // Edges legend
+            items.push(
+              <text key="edge-lbl" x={cx + 8} y={21} fill="var(--text-muted)" fontSize={9}
+                fontWeight={600} textAnchor="start">
+                EDGES
+              </text>,
+            )
+            cx += 54
+            ;(Object.keys(RELATION_COLOR) as FlowLineageRelation[]).forEach((r) => {
+              items.push(
+                <line key={`e-${r}`} x1={cx} y1={17} x2={cx + 14} y2={17}
+                  stroke={RELATION_COLOR[r]} strokeWidth={2} />,
+              )
+              items.push(
+                <text key={`el-${r}`} x={cx + 18} y={21} fill="var(--text-muted)" fontSize={9}>
+                  {RELATION_LABEL[r]}
+                </text>,
+              )
+              cx += 18 + RELATION_LABEL[r].length * 6 + 10
+            })
+            return items
+          })()}
+        </g>
+
+        {/* Zero-instances note when all agents have no runs */}
+        {totalInstances === 0 && (
+          <text
+            x={ROW_HEADER_WIDTH + ROW_PADDING_X}
+            y={height / 2 + 4}
+            fill="var(--text-muted)"
+            fontSize={12}
+            fontStyle="italic"
+          >
+            No active runs — agents are registered but haven't been invoked yet.
+          </text>
+        )}
+      </svg>
     </div>
   )
 }

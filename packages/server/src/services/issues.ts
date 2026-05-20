@@ -8,6 +8,7 @@ export type ColumnStatus = string;
 export interface ListIssuesFilters {
   status?: ColumnStatus;
   labelId?: string;
+  assigneeId?: string;
   search?: string;
 }
 
@@ -72,6 +73,9 @@ export async function listIssues(projectId: string, filters: ListIssuesFilters =
   }
   if (filters.search) {
     conditions.push(ilike(issues.title, `%${filters.search}%`));
+  }
+  if (filters.assigneeId) {
+    conditions.push(eq(issues.assigneeId, filters.assigneeId));
   }
 
   let rows = await db
@@ -442,7 +446,7 @@ export async function updateIssue(projectId: string, id: string, data: {
   if (data.title !== undefined) patch.title = data.title.trim();
   if (data.body !== undefined) patch.body = data.body;
   if (data.status !== undefined) patch.status = data.status;
-  if ('assigneeId' in data) patch.assigneeId = data.assigneeId ?? undefined;
+  if ('assigneeId' in data) patch.assigneeId = data.assigneeId;
 
   const [updated] = await db
     .update(issues)

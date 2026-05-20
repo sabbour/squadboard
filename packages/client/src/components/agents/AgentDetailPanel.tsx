@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { Component, useState, useEffect, useRef, type ErrorInfo, type ReactNode } from 'react'
 import { Subtitle2, Caption1, tokens } from '@fluentui/react-components'
 import { Dismiss20Regular } from '@fluentui/react-icons'
 import { type Agent, useAgent, useDeleteAgentPermanently, useUpdateAgent } from '../../api/agents.ts'
@@ -33,6 +33,52 @@ function getInitials(name: string): string {
 
 type Tab = 'overview' | 'charter' | 'capabilities'
 
+class AgentTabErrorBoundary extends Component<
+  { children: ReactNode; resetKey: string },
+  { error: Error | null }
+> {
+  state: { error: Error | null } = { error: null }
+
+  static getDerivedStateFromError(error: Error) {
+    return { error }
+  }
+
+  componentDidCatch(error: Error, info: ErrorInfo) {
+    console.error('[AgentDetailPanel] tab crashed', { error, componentStack: info.componentStack })
+  }
+
+  componentDidUpdate(prevProps: { resetKey: string }) {
+    if (prevProps.resetKey !== this.props.resetKey && this.state.error) {
+      this.setState({ error: null })
+    }
+  }
+
+  render() {
+    if (this.state.error) {
+      return (
+        <div
+          style={{
+            border: '1px solid rgba(248,81,73,0.35)',
+            background: 'rgba(248,81,73,0.10)',
+            borderRadius: 'var(--radius)',
+            padding: '12px',
+            color: 'var(--text-muted)',
+            fontSize: '13px',
+            lineHeight: 1.5,
+          }}
+        >
+          <strong style={{ display: 'block', color: '#f85149', marginBottom: '4px' }}>
+            This agent tab could not be shown.
+          </strong>
+          {this.state.error.message}
+        </div>
+      )
+    }
+
+    return this.props.children
+  }
+}
+
 export default function AgentDetailPanel({ projectId, agent, onClose }: AgentDetailPanelProps) {
   const [tab, setTab] = useState<Tab>('overview')
   const panelRef = useRef<HTMLDivElement>(null)
@@ -46,6 +92,7 @@ export default function AgentDetailPanel({ projectId, agent, onClose }: AgentDet
   const currentReadOnly = isReadOnlyAgent(current)
   const originBadge = getAgentOriginBadge(current)
   const tabs: Tab[] = currentReadOnly ? ['overview'] : ['overview', 'charter', 'capabilities']
+  const activeTab: Tab = currentReadOnly && tab !== 'overview' ? 'overview' : tab
   const avatarBg = getAvatarColor(current.name)
   const initials = getInitials(current.name)
   const displayName = formatAgentDisplayName(current.name)
@@ -218,10 +265,10 @@ export default function AgentDetailPanel({ projectId, agent, onClose }: AgentDet
                 padding: '10px 20px',
                 background: 'none',
                 border: 'none',
-                borderBottom: `2px solid ${tab === t ? 'var(--accent)' : 'transparent'}`,
-                color: tab === t ? 'var(--text)' : 'var(--text-muted)',
+                borderBottom: `2px solid ${activeTab === t ? 'var(--accent)' : 'transparent'}`,
+                color: activeTab === t ? 'var(--text)' : 'var(--text-muted)',
                 fontSize: '13px',
-                fontWeight: tab === t ? tokens.fontWeightMedium : tokens.fontWeightRegular,
+                fontWeight: activeTab === t ? tokens.fontWeightMedium : tokens.fontWeightRegular,
                 cursor: 'pointer',
                 textTransform: 'capitalize',
                 marginBottom: '-1px',
@@ -234,7 +281,8 @@ export default function AgentDetailPanel({ projectId, agent, onClose }: AgentDet
 
         {/* Tab body */}
         <div style={{ flex: 1, overflowY: 'auto', padding: '20px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
-          {tab === 'overview' && (
+          <AgentTabErrorBoundary resetKey={`${current.id}:${activeTab}`}>
+          {activeTab === 'overview' && (
             <>
               {/* Model */}
               {currentReadOnly && (
@@ -336,13 +384,14 @@ export default function AgentDetailPanel({ projectId, agent, onClose }: AgentDet
             </>
           )}
 
-          {!currentReadOnly && tab === 'charter' && (
+          {!currentReadOnly && activeTab === 'charter' && (
             <CharterEditor projectId={projectId} agentId={current.id} />
           )}
 
-          {!currentReadOnly && tab === 'capabilities' && (
+          {!currentReadOnly && activeTab === 'capabilities' && (
             <AgentCapabilities projectId={projectId} agentId={current.id} />
           )}
+          </AgentTabErrorBoundary>
         </div>
 
         {/* Footer actions — Wave 10 B9 three-state controls.

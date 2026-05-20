@@ -57,12 +57,15 @@ import { githubSyncOverdueSweep } from './engine/sweeps/github-sync-overdue.js';
 import { ceremoniesDueSweep } from './engine/sweeps/ceremonies-due.js';
 import { pickupReadySweep } from './engine/sweeps/pickup-ready.js';
 import { ralphMonitorSweep } from './services/ralph-monitor.js';
+import { logMonitorDrainSweep } from './engine/sweeps/log-monitor-drain.js';
+import { logMonitor } from './services/log-monitor.js';
 import { seedBuiltInCeremoniesForAllProjects } from './ceremonies/seed-built-in.js';
 // Phase 10: side-effect import — registers the on_event ceremony listener
 // against the in-process event bus.
 import './services/ceremony-dispatcher.js';
 import { initWebSocketServer } from './realtime/ws-server.js';
 import { listPresence } from './realtime/presence.js';
+import { eventBus } from './realtime/event-bus.js';
 import { initGitHubSyncHooks } from './github/sync-hook.js';
 import { stopAllSyncLoops } from './github/sync.js';
 // Phase 19: Templates & Portability
@@ -79,16 +82,20 @@ import { maybeAutoStartDaemon } from './daemon/auto-start.js';
 import { copilotRouter } from './routes/copilot.js';
 import { startCopilotWatcher, stopCopilotWatcher } from './services/copilot-watcher.js';
 import {
+  formatBackendErrorLog,
   formatUnhandledRejection,
   formatUncaughtException,
   gracefulTeardown,
 } from './process-handlers.js';
 import { authMiddleware, csrfMiddleware } from './middleware/index.js';
+import { configureCopilotCliWarningSuppression } from './services/copilot-cli-warnings.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
 const PORT = parseInt(process.env.PORT ?? '3000', 10);
+
+configureCopilotCliWarningSuppression();
 
 // packages/server/dist/index.js → up 2 → packages/ → client/dist
 const CLIENT_DIST = join(__dirname, '..', '..', 'client', 'dist');
@@ -197,15 +204,32 @@ async function main(): Promise<void> {
     ceremoniesDueSweep,
     pickupReadySweep,
     ralphMonitorSweep,
+    logMonitorDrainSweep,
   ]);
   heartbeat.register(stuckIssueRunsSweep);      // 30 s — reclaim expired/orphaned runs
-  heartbeat.register(idleLiveSessionsSweep);    // 60 s — mark inactive sessions idle
-  heartbeat.register(stalePresenceSweep);       // 30 s — evict phantom presence records
-  heartbeat.register(readyWorkflowStepsSweep);  //  5 s — advance workflow steps + stepper
-  heartbeat.register(githubSyncOverdueSweep);   // 60 s — catch-up GitHub pulls
-  heartbeat.register(ceremoniesDueSweep);       //  5 s — fire due ceremony schedules
-  heartbeat.register(pickupReadySweep);         // 10 s — dispatch unattended Ready items (W26)
-  heartbeat.register(ralphMonitorSweep);        // 30 s — opt-in Ralph autonomous monitor
+  heartbeat.register(idleLiveSessionsSweep);    // 120 s — mark inactive sessions idle
+  heartbeat.register(stalePresenceSweep);       // 60 s — evict phantom presence records
+  heartbeat.register(readyWorkflowStepsSweep);  // 15 s — advance workflow steps + stepper
+  heartbeat.register(githubSyncOverdueSweep);   // 120 s — catch-up GitHub pulls
+  heartbeat.register(ceremoniesDueSweep);       // 30 s — fire due ceremony schedules
+  heartbeat.register(pickupReadySweep);         // 30 s — dispatch unattended Ready items (W26)
+  heartbeat.register(ralphMonitorSweep);        // 60 s — opt-in Ralph autonomous monitor
+  heartbeat.register(logMonitorDrainSweep);     // 60 s — drain queued safe diagnostics fixes
+
+  // Wire heartbeat events before start() so no first-cycle failure can be missed.
+  eventBus.onHeartbeat((event) => {
+    if (event.type === 'heartbeat.sweep.error') {
+      const payload = event.payload as { sweepId?: string; error?: string };
+      if (payload.sweepId) {
+        logMonitor.recordSweepFailure(payload.sweepId);
+        if (payload.error) {
+          logMonitor.ingest(`sweep:${payload.sweepId}`, payload.error, {
+            sweepId: payload.sweepId,
+          });
+        }
+      }
+    }
+  });
   heartbeat.start();
 
   // Demo 15: register GitHub sync event-bus hooks
@@ -332,13 +356,17 @@ async function main(): Promise<void> {
   // any unhandled DB error (e.g. PGlite stale OID "could not open relation with
   // OID NNNNN") returns application/json instead of Express's default text/html.
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  app.use((err: unknown, _req: Request, res: Response, _next: NextFunction) => {
+  app.use((err: unknown, req: Request, res: Response, _next: NextFunction) => {
     const status =
       (err as { status?: number })?.status ??
       (err as { statusCode?: number })?.statusCode ??
       500;
     const message = err instanceof Error ? err.message : 'Internal server error';
-    console.error('[squadboard] unhandled route error:', err);
+    console.error(formatBackendErrorLog('http.route_error', err, {
+      method: req.method,
+      path: req.originalUrl,
+      status,
+    }));
     res.status(status).json({ error: message });
   });
 
@@ -385,7 +413,13 @@ async function main(): Promise<void> {
     // Give in-flight requests up to 10 s to complete.
     const DRAIN_TIMEOUT_MS = 10_000;
     const drainTimer = setTimeout(() => {
-      console.warn(`[squadboard] drain timeout (${DRAIN_TIMEOUT_MS}ms) exceeded — forcing exit`);
+      console.warn(formatBackendErrorLog(
+        'shutdown.drain_timeout',
+        new Error('HTTP server drain timeout exceeded'),
+        { signal, timeoutMs: DRAIN_TIMEOUT_MS },
+        'fatal',
+        'shutdown',
+      ));
       process.exit(1);
     }, DRAIN_TIMEOUT_MS);
     // Allow process to exit even if drainTimer is still pending.
@@ -400,7 +434,13 @@ async function main(): Promise<void> {
           try {
             await pglite.exec('CHECKPOINT');
           } catch (cpErr) {
-            console.warn('[squadboard] CHECKPOINT failed (non-fatal):', cpErr);
+            console.warn(formatBackendErrorLog(
+              'pglite.checkpoint_failed',
+              cpErr,
+              { signal, phase: 'shutdown' },
+              'warn',
+              'shutdown',
+            ));
           }
         }
         await closeDb();
@@ -410,7 +450,13 @@ async function main(): Promise<void> {
         process.exit(0);
       } catch (err) {
         const elapsed = Date.now() - shutdownStart;
-        console.error(`[squadboard] shutdown.error signal=${signal} duration=${elapsed}ms`, err);
+        console.error(formatBackendErrorLog(
+          'shutdown.error',
+          err,
+          { signal, durationMs: elapsed },
+          'fatal',
+          'shutdown',
+        ));
         process.exit(1);
       }
     });
@@ -437,14 +483,26 @@ async function main(): Promise<void> {
           try {
             await pglite.exec('CHECKPOINT');
           } catch (cpErr) {
-            console.warn('[squadboard] unhandledRejection.CHECKPOINT failed (non-fatal):', cpErr);
+            console.warn(formatBackendErrorLog(
+              'pglite.checkpoint_failed',
+              cpErr,
+              { phase: 'unhandledRejection' },
+              'warn',
+              'process',
+            ));
           }
         }
         await closeDb();
       },
       5000,
       () => {
-        console.warn('[squadboard] unhandledRejection teardown timeout — force exiting');
+        console.warn(formatBackendErrorLog(
+          'teardown.timeout.force_exit',
+          new Error('unhandledRejection teardown timeout'),
+          { timeoutMs: 5000 },
+          'fatal',
+          'process',
+        ));
       },
     )
       .catch(() => {}) // Should not throw, but catch just in case
@@ -470,14 +528,26 @@ async function main(): Promise<void> {
           try {
             await pglite.exec('CHECKPOINT');
           } catch (cpErr) {
-            console.warn('[squadboard] uncaughtException.CHECKPOINT failed (non-fatal):', cpErr);
+            console.warn(formatBackendErrorLog(
+              'pglite.checkpoint_failed',
+              cpErr,
+              { phase: 'uncaughtException' },
+              'warn',
+              'process',
+            ));
           }
         }
         await closeDb();
       },
       5000,
       () => {
-        console.warn('[squadboard] uncaughtException teardown timeout — force exiting');
+        console.warn(formatBackendErrorLog(
+          'teardown.timeout.force_exit',
+          new Error('uncaughtException teardown timeout'),
+          { timeoutMs: 5000 },
+          'fatal',
+          'process',
+        ));
       },
     )
       .catch(() => {}) // Should not throw, but catch just in case
@@ -488,16 +558,6 @@ async function main(): Promise<void> {
 }
 
 main().catch((err: unknown) => {
-  const msg =
-    err instanceof Error
-      ? `${err.message}\n${err.stack ?? ''}`
-      : err === undefined
-        ? 'rejected with undefined (likely an `await` that threw with no value — check recent error handlers)'
-        : err === null
-          ? 'rejected with null'
-          : typeof err === 'object'
-            ? JSON.stringify(err, null, 2)
-            : String(err);
-  console.error('[squadboard] fatal startup error:', msg);
+  console.error(formatBackendErrorLog('startup.fatal', err, undefined, 'fatal', 'startup'));
   process.exit(1);
 });

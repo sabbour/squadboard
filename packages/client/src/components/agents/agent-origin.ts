@@ -14,12 +14,35 @@ export function normalizeAgentOrigin(agent: Pick<Agent, 'origin' | 'agentKind'>)
   return agent.agentKind === 'copilot' ? 'virtual-copilot' : 'project'
 }
 
-export function isReadOnlyAgent(agent: Pick<Agent, 'origin' | 'agentKind' | 'readOnly'>): boolean {
-  const origin = normalizeAgentOrigin(agent)
-  return agent.readOnly === true || origin === 'human' || origin === 'virtual-copilot'
+export function isInternalAgentFolder(agent: Partial<Pick<Agent, 'name' | 'charterPath'>>): boolean {
+  if (agent.name?.startsWith('_')) return true
+
+  const charterPath = agent.charterPath?.replace(/\\/g, '/')
+  const agentFolder = charterPath?.match(/(?:^|\/)agents\/([^/]+)/)?.[1]
+  return agentFolder?.startsWith('_') === true
 }
 
-export function getAgentOriginBadge(agent: Pick<Agent, 'origin' | 'agentKind'>): AgentOriginBadge {
+export function isReadOnlyAgent(
+  agent: Pick<Agent, 'origin' | 'agentKind' | 'readOnly'> & Partial<Pick<Agent, 'name' | 'charterPath'>>,
+): boolean {
+  const origin = normalizeAgentOrigin(agent)
+  return agent.readOnly === true || origin === 'human' || origin === 'virtual-copilot' || isInternalAgentFolder(agent)
+}
+
+export function getAgentOriginBadge(
+  agent: Pick<Agent, 'origin' | 'agentKind'> & Partial<Pick<Agent, 'name' | 'charterPath'>>,
+): AgentOriginBadge {
+  if (isInternalAgentFolder(agent)) {
+    return {
+      origin: 'project',
+      label: 'Internal folder',
+      title: 'Internal .squad/agents housekeeping folder; read-only in Squadboard',
+      background: 'rgba(139,148,158,0.12)',
+      color: 'var(--text-muted)',
+      border: 'rgba(139,148,158,0.25)',
+    }
+  }
+
   const origin = normalizeAgentOrigin(agent)
   switch (origin) {
     case 'virtual-copilot':

@@ -37,11 +37,12 @@ export interface GitHubIssue {
   title: string;
   body: string | null;
   state: 'open' | 'closed';
-  labels: Array<{ name: string }>;
+  labels: Array<{ name: string; color?: string | null }>;
   html_url: string;
   node_id: string;
   updated_at: string;
   created_at: string;
+  pull_request?: unknown;
 }
 
 export interface GitHubComment {
@@ -49,6 +50,25 @@ export interface GitHubComment {
   body: string;
   html_url: string;
   created_at: string;
+}
+
+export interface GitHubTreeEntry {
+  path: string;
+  mode: string;
+  type: 'blob' | 'tree' | 'commit' | string;
+  sha: string;
+  size?: number;
+  url?: string;
+}
+
+export interface GitHubCommitSummary {
+  sha: string;
+  html_url: string;
+  commit: {
+    message?: string;
+    author?: { date?: string | null } | null;
+    committer?: { date?: string | null } | null;
+  };
 }
 
 // ─── Installation token cache ─────────────────────────────────────────────────
@@ -67,24 +87,31 @@ export class GitHubClient {
   private readonly headers: Record<string, string>;
 
   constructor(
-    private readonly token: string,
+    private readonly token: string | null,
     private readonly owner: string,
     private readonly repo: string,
   ) {
     this.base = `https://api.github.com/repos/${owner}/${repo}`;
     this.headers = {
-      'Authorization': `Bearer ${token}`,
       'Accept': 'application/vnd.github+json',
       'X-GitHub-Api-Version': '2022-11-28',
       'Content-Type': 'application/json',
       'User-Agent': 'Squadboard/0.1.0',
     };
+    if (token?.trim()) {
+      this.headers['Authorization'] = `Bearer ${token}`;
+    }
   }
 
   // ── Factory: PAT auth ──────────────────────────────────────────────────────
 
-  static fromPat(token: string, owner: string, repo: string): GitHubClient {
+  static fromPat(token: string | null, owner: string, repo: string): GitHubClient {
     return new GitHubClient(token, owner, repo);
+  }
+
+  /** Public, read-only access for unauthenticated repository issue intake. */
+  static fromPublic(owner: string, repo: string): GitHubClient {
+    return new GitHubClient(null, owner, repo);
   }
 
   // ── Factory: GitHub App auth ───────────────────────────────────────────────
@@ -277,10 +304,42 @@ export class GitHubClient {
    * List issues updated since a given ISO timestamp.
    * Returns up to 100 per page (sufficient for polling loop cadence).
    */
-  async listIssues(since?: string): Promise<GitHubIssue[]> {
-    const params = new URLSearchParams({ state: 'all', per_page: '100', sort: 'updated', direction: 'desc' });
+  async listIssues(
+    since?: string,
+    options: { state?: 'open' | 'closed' | 'all'; perPage?: number } = {},
+  ): Promise<GitHubIssue[]> {
+    const params = new URLSearchParams({
+      state: options.state ?? 'all',
+      per_page: String(options.perPage ?? 100),
+      sort: 'updated',
+      direction: 'desc',
+    });
     if (since) params.set('since', since);
     return this.request<GitHubIssue[]>('GET', `/issues?${params.toString()}`);
+  }
+
+  /** List repository tree entries from the default branch (or provided ref). */
+  async listRepositoryTree(ref?: string): Promise<GitHubTreeEntry[]> {
+    const treeRef = ref ?? (await this.getDefaultBranchSha()).sha;
+    const encodedRef = encodeURIComponent(treeRef);
+    const data = await this.request<{ tree: GitHubTreeEntry[] }>(
+      'GET',
+      `/git/trees/${encodedRef}?recursive=1`,
+    );
+    return data.tree;
+  }
+
+  /** List recent commits affecting a single repo-relative path. */
+  async listCommitsForPath(
+    path: string,
+    options: { since?: string; perPage?: number } = {},
+  ): Promise<GitHubCommitSummary[]> {
+    const params = new URLSearchParams({
+      path,
+      per_page: String(options.perPage ?? 1),
+    });
+    if (options.since) params.set('since', options.since);
+    return this.request<GitHubCommitSummary[]>('GET', `/commits?${params.toString()}`);
   }
 
   // ── Branch + PR + Check-run methods (Demo 15 advanced) ────────────────────
@@ -364,4 +423,3 @@ export class GitHubClient {
     });
   }
 }
-

@@ -37,13 +37,13 @@
         "order": 1
       },
       {
-        "slug": "in_progress",
+        "slug": "in-progress",
         "label": "In Progress",
         "order": 2,
         "wip_limit": 3
       },
       {
-        "slug": "in_review",
+        "slug": "in-review",
         "label": "In Review",
         "order": 3
       },
@@ -89,7 +89,7 @@
       "trigger": {
         "kind": "on_issue_entry",
         "config": {
-          "column": "in_review"
+          "column": "in-review"
         }
       },
       "workflowPath": "ceremonies/simple-review.yaml"

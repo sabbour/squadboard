@@ -59,7 +59,7 @@ function fmtK(n: number | null | undefined): string {
   return String(v)
 }
 
-function fmtPremium(n: number | null | undefined): string {
+function fmtAiCredits(n: number | null | undefined): string {
   const v = Number.isFinite(n) ? Number(n) : 0
   return v >= 100 ? v.toFixed(0) : v.toFixed(2)
 }
@@ -137,7 +137,7 @@ export default function CostDashboard({ projectId }: CostDashboardProps) {
   }
 
   const overBudget = budget && budget.monthlyBudgetUsd !== null && budget.percentUsed > 100
-  const showPremium = costModel === 'gh_multipliers'
+  const showAiCredits = costModel !== 'usd'
 
   function handleCostModelChange(next: CostModel) {
     setCostModel(next)
@@ -168,12 +168,12 @@ export default function CostDashboard({ projectId }: CostDashboardProps) {
           onTabSelect={(_e: SelectTabEvent, data: SelectTabData) => handleCostModelChange(data.value as CostModel)}
         >
           <Tab value="usd">USD (token pricing)</Tab>
-          <Tab value="gh_multipliers">
+          <Tab value="ai_credits">
             <Tooltip
-              content="GitHub Copilot premium-request multipliers. Auto-select −10%, FedRAMP/data residency +10%. Source: docs.github.com/copilot/billing/copilot-requests"
+              content="GitHub AI Credits are usage-based billing units for Copilot. Squadboard derives them from token-priced USD estimates at 1 credit = $0.01; GitHub does not bill individual plans by premium requests."
               relationship="label"
             >
-              <span>GitHub premium requests</span>
+              <span>GitHub AI Credits</span>
             </Tooltip>
           </Tab>
         </TabList>
@@ -218,18 +218,18 @@ export default function CostDashboard({ projectId }: CostDashboardProps) {
           Month-to-date spend
         </span>
         <span style={{ fontSize: '36px', fontWeight: 700, letterSpacing: '-0.02em', color: 'var(--text)', fontVariantNumeric: 'tabular-nums' }}>
-          {showPremium
-            ? `${fmtPremium(summary.totalMtdPremiumRequests)} premium req`
+          {showAiCredits
+            ? `${fmtAiCredits(summary.totalMtdPremiumRequests)} AI credits`
             : fmtShort(summary.totalMtd)}
         </span>
-        {showPremium && (
+        {showAiCredits && (
           <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
-            Equivalent USD spend (token pricing): {fmtShort(summary.totalMtd)}
+            Based on {fmtShort(summary.totalMtd)} estimated token spend (1 credit = $0.01).
           </span>
         )}
 
         {/* Budget progress bar — only when budget is set (USD model only) */}
-        {!showPremium && budget && budget.monthlyBudgetUsd !== null && (
+        {!showAiCredits && budget && budget.monthlyBudgetUsd !== null && (
           <BudgetBar
             percent={budget.percentUsed}
             budgetUsd={budget.monthlyBudgetUsd}
@@ -254,8 +254,8 @@ export default function CostDashboard({ projectId }: CostDashboardProps) {
                   <TableHeaderCell style={NUMERIC_HEADER}>Runs</TableHeaderCell>
                   <TableHeaderCell style={NUMERIC_HEADER}>Total Cost</TableHeaderCell>
                   <TableHeaderCell style={NUMERIC_HEADER}>Avg / Run</TableHeaderCell>
-                  {showPremium && (
-                    <TableHeaderCell style={NUMERIC_HEADER}>Premium req</TableHeaderCell>
+                  {showAiCredits && (
+                    <TableHeaderCell style={NUMERIC_HEADER}>AI Credits</TableHeaderCell>
                   )}
                 </TableRow>
               </TableHeader>
@@ -274,9 +274,9 @@ export default function CostDashboard({ projectId }: CostDashboardProps) {
                     <TableCell style={{ ...NUMERIC_CELL, color: tokens.colorNeutralForeground3 }}>
                       {fmt(row.avgUsdPerRun)}
                     </TableCell>
-                    {showPremium && (
+                    {showAiCredits && (
                       <TableCell style={NUMERIC_CELL}>
-                        {fmtPremium(row.totalPremiumRequests)}
+                        {fmtAiCredits(row.totalPremiumRequests)}
                       </TableCell>
                     )}
                   </TableRow>
@@ -304,8 +304,8 @@ export default function CostDashboard({ projectId }: CostDashboardProps) {
                   <TableHeaderCell style={NUMERIC_HEADER}>Tokens In</TableHeaderCell>
                   <TableHeaderCell style={NUMERIC_HEADER}>Tokens Out</TableHeaderCell>
                   <TableHeaderCell style={NUMERIC_HEADER}>Cost</TableHeaderCell>
-                  {showPremium && (
-                    <TableHeaderCell style={NUMERIC_HEADER}>Premium req</TableHeaderCell>
+                  {showAiCredits && (
+                    <TableHeaderCell style={NUMERIC_HEADER}>AI Credits</TableHeaderCell>
                   )}
                 </TableRow>
               </TableHeader>
@@ -329,9 +329,9 @@ export default function CostDashboard({ projectId }: CostDashboardProps) {
                     <TableCell style={NUMERIC_CELL}>
                       {fmt(row.totalUsd)}
                     </TableCell>
-                    {showPremium && (
+                    {showAiCredits && (
                       <TableCell style={NUMERIC_CELL}>
-                        {fmtPremium(row.totalPremiumRequests)}
+                        {fmtAiCredits(row.totalPremiumRequests)}
                       </TableCell>
                     )}
                   </TableRow>

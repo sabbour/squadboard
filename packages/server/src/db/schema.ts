@@ -12,6 +12,7 @@ export const projects = pgTable('projects', {
   id: uuid('id').primaryKey().defaultRandom(),
   name: text('name').notNull(),
   path: text('path').notNull(), // path to .squad/ directory
+  storageProviderMode: text('storage_provider_mode'), // 'postgresql' | 'filesystem' | null for legacy inference
   description: text('description'),               // free-form project description (PATCH-able)
   monthlyBudgetUsd: numeric('monthly_budget_usd', { precision: 10, scale: 2 }), // opt-in budget cap
   // Demo 15: GitHub Sync (OQ #8 resolution — OFF by default, opt-in per project)
@@ -33,9 +34,9 @@ export const projects = pgTable('projects', {
   // Project-level default model used by the auto-model resolution chain
   // (sdk/model-defaults.ts). Null means "use BUILTIN_FALLBACK".
   defaultModel: text('default_model'),
-  // Stream D — D6: which cost model the Costs page renders for this project.
-  // 'usd' = legacy token-derived USD, 'gh_multipliers' = GitHub Copilot
-  // premium-request multipliers. Null falls back to env SQUADBOARD_COST_MODEL.
+  // Which cost model the Costs page renders for this project.
+  // 'usd' = token-derived USD, 'ai_credits' = GitHub AI Credits.
+  // 'gh_multipliers' is a legacy alias. Null falls back to env.
   costModel: text('cost_model'),
   // Ralph-style autonomous monitor. Disabled by default; state is ignored while
   // ralph_autonomy_enabled=false so projects never opt into autonomous work by accident.
@@ -278,7 +279,7 @@ export const workflowRuns = pgTable('workflow_runs', {
   pinnedAgentRevisions: text('pinned_agent_revisions'),  // JSON: {agentName: charterHash}; inherited from parent
   variables: jsonb('variables').default('{}'),            // propagated from parent on fan_out
   inlineStepsJson: text('inline_steps_json'),            // JSON: WorkflowStep[] for fan_out child workflows
-  // Stream D — D4: provenance for how this run was spawned. {kind: 'manual'|'manual_force'|'on_schedule'|'on_event'|'unknown', detail?: string, eventType?, anchorIssueId?, scheduleId?, by?}
+  // Stream D — D4: provenance for how this run was spawned. {kind, detail?, eventType?, anchorIssueId?, scheduleId?, by?, context?}
   triggerSource: jsonb('trigger_source'),
   // Stream D — D6: GitHub Copilot premium-request consumption (rolled up from child issue_runs)
   premiumRequests: numeric('premium_requests', { precision: 12, scale: 4 }).default('0'),

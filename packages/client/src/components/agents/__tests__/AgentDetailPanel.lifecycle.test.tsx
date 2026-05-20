@@ -5,6 +5,7 @@ import AgentDetailPanel from '../AgentDetailPanel.tsx'
 import type { Agent } from '../../../api/agents.ts'
 
 const apiMocks = vi.hoisted(() => ({
+  useAgent: vi.fn(),
   updateMutate: vi.fn(),
   deletePermanentlyMutate: vi.fn(),
   updatePending: false,
@@ -15,7 +16,7 @@ vi.mock('../../../api/agents.ts', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../../../api/agents.ts')>()
   return {
     ...actual,
-    useAgent: () => ({ data: undefined }),
+    useAgent: (...args: unknown[]) => apiMocks.useAgent(...args),
     useUpdateAgent: () => ({
       mutate: apiMocks.updateMutate,
       isPending: apiMocks.updatePending,
@@ -48,6 +49,7 @@ function agent(overrides: Partial<Agent> = {}): Agent {
 describe('AgentDetailPanel lifecycle actions', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    apiMocks.useAgent.mockReturnValue({ data: undefined })
     apiMocks.updatePending = false
     apiMocks.deletePending = false
   })
@@ -100,5 +102,24 @@ describe('AgentDetailPanel lifecycle actions', () => {
 
     expect(screen.queryByRole('button', { name: /delete agent/i })).not.toBeInTheDocument()
     expect(screen.getByText(/read-only roster entry/i)).toBeInTheDocument()
+  })
+
+  it('treats underscore agent folders as read-only overview entries', () => {
+    render(
+      <AgentDetailPanel
+        projectId="project-1"
+        agent={agent({
+          id: 'legacy-alumni-row',
+          name: '_alumni',
+          charterPath: '/workspace/.squad/agents/_alumni/charter.md',
+        })}
+        onClose={vi.fn()}
+      />,
+    )
+
+    expect(apiMocks.useAgent).toHaveBeenCalledWith('project-1', 'legacy-alumni-row', { enabled: false })
+    expect(screen.queryByRole('button', { name: /charter/i })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /capabilities/i })).not.toBeInTheDocument()
+    expect(screen.getByText(/internal \.squad\/agents housekeeping folder/i)).toBeInTheDocument()
   })
 })

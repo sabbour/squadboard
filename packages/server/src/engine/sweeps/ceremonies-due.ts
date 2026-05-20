@@ -5,7 +5,8 @@
  * Does NOT reimplement the logic — all idempotency guarding, backoff state,
  * and Verbal's 504f4a57 consecutive-failure backoff live in ceremony-scheduler.ts.
  *
- * Runs every 5 s.
+ * Runs every 30 s by default. Schedule execution remains idempotent; exact
+ * second-level firing is not required for ceremonies.
  */
 import type { Sweep, SweepResult } from '../heartbeat.js';
 import { sweepDueSchedules } from '../../services/ceremony-scheduler.js';
@@ -15,7 +16,7 @@ export const ceremoniesDueSweep: Sweep = {
   label: 'Ceremonies',
   description: 'Checks scheduled ceremonies and starts any due ceremony runs.',
   scope: 'project',
-  intervalMs: 5_000,
+  intervalMs: 30_000,
   enabled: true,
 
   async run(): Promise<SweepResult> {

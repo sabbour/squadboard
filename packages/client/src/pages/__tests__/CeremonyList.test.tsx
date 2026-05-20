@@ -10,6 +10,7 @@ import { describe, it, expect, vi } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import { OriginBadge } from '../../components/ceremony/CeremonyBadges'
 import type { CeremonyOrigin } from '../../api/ceremonies'
+import { ceremonyRunsPath } from '../../utils/ceremonyRoutes'
 
 // ── Mock Fluent2 Badge so we don't need FluentProvider in tests ───────────────
 
@@ -79,5 +80,11 @@ describe('CeremonyList origin column', () => {
       expect(screen.getByTestId('badge')).toBeInTheDocument()
       unmount()
     }
+  })
+
+  it('builds a ceremony-scoped runs/logs route', () => {
+    expect(ceremonyRunsPath('project-123', 'ceremony-456')).toBe(
+      '/projects/project-123/ceremonies/ceremony-456/runs',
+    )
   })
 })
