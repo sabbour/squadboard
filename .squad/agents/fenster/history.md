@@ -48,6 +48,24 @@
 
 ---
 
+## 2026-05-20 — Live Run Viewer UX Spec
+
+**Task:** Redesign the in-progress run viewer to fix hierarchy/labeling chaos from screenshot.
+
+**Key UX fixes:**
+- Single status badge in header (was duplicated)
+- Recovery events as MessageBar warnings (were buried in log stream)
+- Elapsed time live-ticks during running state
+- Raw UUIDs hidden; only 8-char suffix shown
+- Plain-English labels: "Auto-started by scheduler" not "pickup-ready sweep"
+- Three-zone layout: Header → Metrics strip → Event stream → Steer bar
+
+**Spec delivered:** `.squad/decisions/inbox/fenster-live-run-viewer.md`
+
+**Learning:** When run viewers show nested run-within-run UI, the user loses track of *what* is running. The fix is strict hierarchy: one header row owns status/elapsed/cost, the stream below is just events.
+
+---
+
 ## 2026-05-15 — Project name relocated to top header
 
 **Task:** The project name was hidden/clipped in the sidebar after the recent sidebar overhaul. Relocated it to the global top header bar so it is persistently visible.

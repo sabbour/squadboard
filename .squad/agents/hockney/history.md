@@ -318,6 +318,20 @@ Hockney-close-w24 dispatched in parallel to run build + main FF + smoke tests be
 
 **Invariant:** Dispatcher/stepper/spawner discipline unaffected. No real folders touched in tests. Safety guards unchanged.
 
+---
+
+## logs-heartbeat-diagnostics — 2026-05-20
+
+- Slowed heartbeat defaults in code and config while enforcing the `stuck-issue-runs` safety cap.
+- Kept log-monitor auto-fixes allowlisted to optional diagnostics sweeps; core engine sweeps remain advisory-only.
+- Structured process/backend error logs as JSON for deterministic diagnostics.
+- Follow-up: the noisy SQLite ExperimentalWarning is emitted by the Copilot CLI child process via `@github/copilot-sdk`; suppress it with child-only `NODE_OPTIONS=--disable-warning=ExperimentalWarning`, not by muting server warnings globally.
+- Follow-up: Now's Sweep Activity must be seeded from `/api/heartbeat/status` and show every registered sweep lane; otherwise it drifts from the Heartbeat page's ring-buffer view.
+- Follow-up: never scaffold user-created projects directly under the monorepo `packages/` tree. The only repo-internal exception is the isolated E2E workspace at `packages/e2e/.e2e-workspaces`.
+- Follow-up: direct package `.squad` folders (notably `packages/server/.squad`) are internal test/runtime state, not selectable projects. Self-register and discovery must skip them, and charter backfill must use per-agent/project charter paths with aggregated errors rather than `process.cwd()/.squad` fan-out noise.
+- Follow-up: scheduled GitHub issue intake should be a backend primitive, not an agent prompt placeholder. The `squadboard.github-issue-intake.v1` contract maps to public/read-only GitHub issue pulls, `project.githubSyncLastAt` cursor state, `github:{owner}/{repo}#{number}` idempotency, and `on_issue_entry` triage workflow runs.
+- Follow-up: Squad Doc Review uses the same source-intake pattern with a source-specific cursor setting, doc idempotency keyed by repo/path/blob-or-commit/profile version, and traceable Squadboard review issues. Manual ceremony run-now remains generic: persist selected-doc/manual-mode context in `workflow_runs.trigger_source.context`; do not create doc-specific buttons or auto-edit/push docs by default.
+
 ## Learnings
 
 - Express route registration order is a backend invariant: project-scoped static ceremony paths such as `/audit` must be registered before `/:id`, or PostgreSQL will receive reserved words as UUID ceremony ids.

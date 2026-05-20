@@ -244,3 +244,17 @@ Added focused client regressions for the sync status bug in `SquadSyncStatusPane
 **Failure modes covered:** When a database-authoritative project has no live filesystem mirror, the panel must present user-facing actions such as Preview Export without leaking provider/env-var/internal broker jargon (`SQUADBOARD_SQUAD_STORAGE_PROVIDER`, storage provider wording, MCP/API broker, explicit bridge, or magic enable-auto copy). When Preview Export reports only `already_up_to_date` file results, the modal must summarize that no files need updating and must not dump every unchanged `.squad` path or raw `already_up_to_date` status.
 
 **Validation:** Focused command `pnpm --filter @sabbour/squadboard-client test -- --run src/components/settings/__tests__/SquadSyncStatusPanel.test.tsx` is red against the current UI implementation: 2 new regression tests fail, 5 existing tests pass. The failures reproduce the reported bug exactly, so Keyser owns the production UI revision before this suite can go green.
+
+### 2026-05-20T09:26:00-07:00 — CeremonyEditor Validate button regression (canonical YAML)
+
+**Bug covered:** Built-in ceremonies (e.g., Work Pickup) failed server-side validation when the Validate button was clicked in the CeremonyEditor.  Error: `'name' is required and must be a string; 'steps' is required and must be a non-empty array`.
+
+**Root cause:** Before the `normalizeWorkflowDocument` fix in commit `5bdd378db`, `validateWorkflowYaml` only inspected flat top-level keys (`name`, `steps`).  Canonical YAML (`apiVersion: squad.io/v1 / kind: Ceremony / metadata / spec`) stores `name` under `metadata.displayName` and `steps` under `spec.steps`, so both checks failed for ANY canonical document.
+
+**What the regression test proves:**  The client's `graphToCeremonyYaml` (after `ceremonyYamlToGraph`) re-emits canonical YAML that may omit non-essential metadata fields (`category`, `tags`).  The test inlines that client-emitted form verbatim and asserts `validateWorkflowYaml` returns `{ valid: true }`.  It also asserts `parseWorkflowYaml` resolves the correct `name`, `description`, and step types — so any future regression in `normalizeWorkflowDocument` will be caught at both the validation and parse layers.
+
+**Tests added (`workflow-parser-canonical.test.ts`):**
+1. `regression: validateWorkflowYaml accepts client-emitted canonical YAML (CeremonyEditor Validate button)` — primary regression guard
+2. `regression: parseWorkflowYaml correctly resolves canonical metadata from client-emitted YAML` — confirms full parse path also works on client-emitted shape
+
+All 3 tests in the file pass (including the pre-existing stored-file test).

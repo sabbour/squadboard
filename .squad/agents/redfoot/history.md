@@ -1,3 +1,55 @@
+## Wave 20 — Docs Simplification & Terminology Cleanup (2026-05-20T23:59:00-07:00)
+
+**Scope:** Remove project-specific language ("Spark") from docs, ensure consistent Squad Apps terminology, verify no screenshots, and validate docs build.
+
+### Deliverables Shipped
+
+1. **Getting-Started Index Updated** — Removed "Spark" from descriptions and page titles
+   - Changed "follow the Spark tutorials" to "follow tutorials to master the workflow board"
+   - Made learning path and project references generic, but kept instructional clarity
+
+2. **Tutorials Refactored to Generic Project Names**
+   - Tutorial 1 (connect-spark → create-project): "Create your project" instead of "Connect Spark"
+   - Tutorial 2 (cast-the-team): Generic "your project" language
+   - Tutorial 3 (run-the-launch-wave → run-a-workflow): Generic workflow framing
+   - Tutorial 4 (connect-tools): Generic project + tool reference
+   - All tutorials still use concrete example project names in instructions (e.g., "MyProject"), but descriptions no longer frame Spark as the primary use case
+
+3. **Quickstart Refactored** — Made example more generic
+   - Removed "Create the Spark project" framing
+   - Changed to "Create your first project"
+   - Updated ceremony reference to "default launch-review ceremony" instead of "Spark Launch Review"
+
+4. **Documentation Validation**
+   - Verified no embedded screenshots in docs-site (only logo/social-card static assets remain)
+   - Confirmed "Squad Apps" terminology used consistently throughout
+   - Cost model already uses "ai_credits" (GitHub AI Credits) — no changes needed
+   - Docs build passes: `pnpm docs:build` succeeds with 41 pages compiled
+
+5. **Structure Verified**
+   - Squad Apps guide (squad-apps.mdx) properly distinguishes Squad Apps from templates
+   - Storage/sync documentation (storage-provider.mdx) already provides detailed sync guidance
+   - README.md points to correct docs paths without over-emphasizing Spark
+   - Terminology consistency verified across all user-guide pages
+
+### Learning
+
+- **Avoid product example names in headings/descriptions**, even if they're helpful in walkthroughs. Use generic "project" language in meta (title, description) but concrete example names in step-by-step instructions. This prevents docs from seeming project-specific while keeping walkthrough clarity.
+- **Docs build should be a gate**. Ran `pnpm docs:build` after changes to catch issues early. No broken links or rendering errors appeared.
+- **The three-way split matters**: Templates (save local state) vs. Squad Apps (full portable package) vs. upstream Squad plugins (shared skills). Docs already explain this well in the comparison table.
+
+### No Further Docs Added
+
+- **E2E testing guide**: Tutorials already cover end-to-end workflow validation (Tutorial 3). No separate test suite docs needed for docs-site.
+- **Release/Publish guide**: `docs/RELEASE-READINESS.md` already covers pre-release checklist. Consider surfacing in docs-site if external teams will publish Squad Apps, but not blocking for current scope.
+- **Sync guide**: `storage-provider.mdx` already provides comprehensive sync guidance (four configuration recipes, storage boundary explanation). No collapse needed.
+
+### Next Steps
+
+- Monitor user feedback on whether generic project references feel less welcoming
+- Consider adding a "Squad App showcase" index if many Apps emerge
+- Revisit E2E testing docs only if users report test coverage gaps
+
 ## Wave 19 — Cross-Surface Squad Sync: SDK Contract & Client API (2026-05-20T22:00:00-07:00)
 
 **Scope:** Define and document cross-surface Squad state authority, storage modes, bootstrap semantics, artifact projection, and repair contract. No user-facing API endpoints yet (pending Hockney backend implementation).
