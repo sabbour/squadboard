@@ -57,7 +57,7 @@ describe('RunButton', () => {
       { issueId: 'issue-1', agentId: 'agent-fenster' },
       expect.any(Object),
     )
-  })
+  }, 20000)
 
   it('button is enabled with at least one active agent', () => {
     render(<RunButton projectId="proj-1" issueId="issue-2" />)

@@ -124,6 +124,7 @@ vi.mock('../engine/active-issue-sessions.js', () => ({
 // ---------------------------------------------------------------------------
 
 vi.mock('../sdk/squad-client.js', () => ({
+  AgentRunTimeoutError: class AgentRunTimeoutError extends Error {},
   createAgentSession: vi.fn(async (opts: {
     onEvent?: (event: { type: string; payload: Record<string, unknown> }) => void | Promise<void>;
   } = {}) => {

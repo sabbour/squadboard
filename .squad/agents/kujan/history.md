@@ -65,6 +65,29 @@ Every demo ships with a passing E2E test. Critical durability suites land in:
 
 <!-- Append learnings below -->
 
+### 2026-05-20T13:38:07-07:00 — CI test-fix sweep for pre-existing vitest blockers
+
+**Failure modes covered:**
+- Client RunButton/consult auto-pick logic assumed every agent had a non-null `role`; legacy or minimal test fixtures can omit `role`, which crashed `pickDefaultConsultAgent()` on `toLowerCase()` before `startRun.mutate()` executed.
+- `ceremonies-list-route.test.ts` had stale DB mock sequencing after the route added a project-path lookup before listing workflows; the test fed ceremony rows into the wrong query and falsely observed an empty response.
+- `pglite-issue-run-events-catalog-repair.test.ts` is valid but materially slower than Vitest's 5s default on file-backed PGlite reopen/repair flows; it needs an explicit timeout budget.
+- Full server validation also exposed a stale partial mock: `execute-agent-run-events.test.ts` mocked `createAgentSession` but not the newly referenced `AgentRunTimeoutError` export.
+
+**What I changed:**
+- Hardened `packages/client/src/components/agents/agent-origin.ts` so background/default-agent selection tolerates `role?: string | null` and falls back to `''` instead of throwing.
+- Updated `packages/server/src/__tests__/ceremonies-list-route.test.ts` to mock `projects.path` and queue the initial project lookup before the workflows/lifecycle/version queries.
+- Raised the per-test timeout in `packages/server/src/__tests__/pglite-issue-run-events-catalog-repair.test.ts` to 30s so the real catalog repair can complete under CI load.
+- Added the missing `AgentRunTimeoutError` export to `packages/server/src/__tests__/execute-agent-run-events.test.ts` so bridge error-path assertions reflect the current module contract.
+- Raised the per-test timeout in `packages/client/src/components/runs/RunButton.test.tsx` to 20s; the assertion path is fast once imported, but the client test environment can exceed 5s under load.
+
+**Validation evidence:**
+- `pnpm --filter @sabbour/squadboard-client test -- --run src/components/runs/RunButton.test.tsx`
+- `pnpm --filter @sabbour/squadboard test -- --run src/__tests__/ceremonies-list-route.test.ts`
+- `pnpm --filter @sabbour/squadboard test -- --run src/__tests__/pglite-issue-run-events-catalog-repair.test.ts`
+- `pnpm --filter @sabbour/squadboard test -- --run src/__tests__/execute-agent-run-events.test.ts`
+- `pnpm --filter @sabbour/squadboard-client test -- --run 2>&1 | tail -20`
+- `pnpm --filter @sabbour/squadboard test -- --run 2>&1 | tail -20`
+
 ### 2026-05-19T23:37:54.700-07:00 — Delete project stale-OID recovery regression (root cause)
 
 **Failure mode covered:** When `db.delete(schema.settings)` or `db.delete(schema.projects)` throws `could not open relation with OID NNNNN` (stale PGlite prepared-statement plan), `withPgliteOidRetry` must issue `DEALLOCATE ALL` and retry the entire mutation callback — not just return 500 JSON. The deletion must **succeed** on retry.

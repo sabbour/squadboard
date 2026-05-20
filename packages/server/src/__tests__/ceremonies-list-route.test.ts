@@ -72,7 +72,7 @@ vi.mock('../db/index.js', () => {
       createdAt: 'issue_runs.created_at',
       updatedAt: 'issue_runs.updated_at',
     },
-    projects: { id: 'projects.id' },
+    projects: { id: 'projects.id', path: 'projects.path' },
     ceremonySchedules: { workflowId: 'ceremony_schedules.workflow_id', id: 'ceremony_schedules.id' },
     agents: { projectId: 'agents.project_id', name: 'agents.name', role: 'agents.role' },
   };
@@ -213,6 +213,7 @@ describe('GET / ceremonies list', () => {
     const handler = handlers.GET?.['/'];
     expect(handler).toBeDefined();
 
+    pushSelect([]);
     pushSelect([
       coreBuiltInRow('work-pickup', 'Work Pickup'),
       coreBuiltInRow('scribe-close-out', 'Scribe Close-Out'),

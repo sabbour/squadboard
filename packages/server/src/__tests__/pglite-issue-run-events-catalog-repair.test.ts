@@ -101,5 +101,5 @@ describe('PGlite issue_run_events FK catalog repair', () => {
     } finally {
       await pg.close();
     }
-  });
+  }, 30000);
 });

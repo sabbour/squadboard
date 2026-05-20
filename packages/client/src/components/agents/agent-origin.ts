@@ -38,8 +38,12 @@ export function isReadOnlyAgent(
  */
 const BACKGROUND_ROLE_KEYWORDS = ['monitor', 'logger', 'observer', 'watcher', 'scribe', 'recorder']
 
-export function isBackgroundAgent(agent: Pick<Agent, 'role'>): boolean {
-  const role = agent.role.toLowerCase()
+function normalizedRole(role: string | null | undefined): string {
+  return typeof role === 'string' ? role.toLowerCase() : ''
+}
+
+export function isBackgroundAgent(agent: Pick<Agent, 'role'> | { role?: string | null }): boolean {
+  const role = normalizedRole(agent.role)
   return BACKGROUND_ROLE_KEYWORDS.some((kw) => role.includes(kw))
 }
 
@@ -47,10 +51,10 @@ export function isBackgroundAgent(agent: Pick<Agent, 'role'>): boolean {
  * Pick the best default conversational agent from a list.
  * Priority: lead/architect role > first non-background agent > first agent.
  */
-export function pickDefaultConsultAgent(agents: Pick<Agent, 'id' | 'role'>[]): string | undefined {
+export function pickDefaultConsultAgent(agents: Array<Pick<Agent, 'id' | 'role'> | { id: string; role?: string | null }>): string | undefined {
   if (agents.length === 0) return undefined
   const lead = agents.find((a) => {
-    const role = a.role.toLowerCase()
+    const role = normalizedRole(a.role)
     return role.includes('lead') || role.includes('architect') || role.includes('coordinator')
   })
   if (lead) return lead.id
