@@ -61,6 +61,52 @@ import {
 import ProjectCard from '../components/ProjectCard.tsx'
 import { useUserPrefs, type ProjectIndexFilter, type ProjectIndexSort } from '../utils/userPrefs.ts'
 
+/**
+ * Returns true when the page is running inside the Electron shell, where
+ * `window.squadboard` is injected by the preload script.
+ */
+function isElectronShell(): boolean {
+  return typeof window !== 'undefined' && 'squadboard' in window
+}
+
+/**
+ * Invokes the native folder-picker dialog (Electron only).
+ * Returns the selected path string, or null if cancelled.
+ */
+async function pickFolder(): Promise<string | null> {
+  if (!isElectronShell()) return null
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const api = (window as any).squadboard as { invoke: (ch: string) => Promise<unknown> }
+  return api.invoke('dialog.openFolder') as Promise<string | null>
+}
+
+/**
+ * Browse button shown only when running inside Electron.
+ * Clicking it opens a native OS folder-picker and calls `onPath` with the result.
+ * Renders nothing in a plain browser context (cross-platform safe).
+ */
+function BrowseFolderButton({ onPath }: { onPath: (path: string) => void }) {
+  if (!isElectronShell()) return null
+
+  async function handleClick() {
+    const result = await pickFolder()
+    if (result) onPath(result)
+  }
+
+  return (
+    <Button
+      appearance="subtle"
+      size="small"
+      icon={<Folder20Regular />}
+      onClick={() => void handleClick()}
+      title="Browse for a folder"
+      style={{ whiteSpace: 'nowrap', flexShrink: 0 }}
+    >
+      Browse…
+    </Button>
+  )
+}
+
 function isTestProject(project: Project): boolean {
   return project.squadPath.includes('/.e2e-workspaces/')
     || project.squadPath.includes('\\.e2e-workspaces\\')
@@ -473,14 +519,17 @@ function CreateFromTemplateModal({
                   <label style={{ fontSize: '12px', color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>
                     Project folder or .squad path <span style={{ color: 'var(--danger)' }}>*</span>
                   </label>
-                  <input
-                    type="text"
-                    placeholder="/home/you/projects/my-new-project"
-                    value={squadPath}
-                    onChange={(e) => setSquadPath(e.target.value)}
-                    onKeyDown={(e) => { if (e.key === 'Enter') void handleCreate() }}
-                    style={inputStyle}
-                  />
+                  <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+                    <input
+                      type="text"
+                      placeholder="/home/you/projects/my-new-project"
+                      value={squadPath}
+                      onChange={(e) => setSquadPath(e.target.value)}
+                      onKeyDown={(e) => { if (e.key === 'Enter') void handleCreate() }}
+                      style={{ ...inputStyle, flex: 1 }}
+                    />
+                    <BrowseFolderButton onPath={setSquadPath} />
+                  </div>
                   <span style={{ fontSize: '11px', color: 'var(--text-muted)', display: 'block', marginTop: '4px' }}>
                     If you provide a project folder, Squadboard creates .squad/ inside it.
                   </span>
@@ -843,13 +892,17 @@ function ConnectTab({
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: tokens.spacingVerticalS }}>
         <Field label="Directory path" required>
-          <Input
-            value={path}
-            onChange={(_, d) => setPath(d.value)}
-            onKeyDown={(e) => { if (e.key === 'Enter') onSubmit() }}
-            placeholder="/absolute/path/to/project"
-            input={{ style: { fontFamily: tokens.fontFamilyMonospace } }}
-          />
+          <div style={{ display: 'flex', gap: tokens.spacingHorizontalXS, alignItems: 'center' }}>
+            <Input
+              style={{ flex: 1 }}
+              value={path}
+              onChange={(_, d) => setPath(d.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter') onSubmit() }}
+              placeholder="/absolute/path/to/project"
+              input={{ style: { fontFamily: tokens.fontFamilyMonospace } }}
+            />
+            <BrowseFolderButton onPath={setPath} />
+          </div>
         </Field>
 
         <Field label="Project name" hint="Optional — defaults to directory name.">
@@ -906,12 +959,16 @@ function CreateTab({
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: tokens.spacingVerticalS }}>
         <Field label="Parent directory" required>
-          <Input
-            value={parentPath}
-            onChange={(_, d) => setParentPath(d.value)}
-            placeholder="/absolute/path/to/parent"
-            input={{ style: { fontFamily: tokens.fontFamilyMonospace } }}
-          />
+          <div style={{ display: 'flex', gap: tokens.spacingHorizontalXS, alignItems: 'center' }}>
+            <Input
+              style={{ flex: 1 }}
+              value={parentPath}
+              onChange={(_, d) => setParentPath(d.value)}
+              placeholder="/absolute/path/to/parent"
+              input={{ style: { fontFamily: tokens.fontFamilyMonospace } }}
+            />
+            <BrowseFolderButton onPath={setParentPath} />
+          </div>
         </Field>
 
         <Field label="Project name" required>
@@ -1188,15 +1245,19 @@ function SuggestTab({
           </Field>
 
           <Field label="Parent directory" required hint="Where to create the .squad/ scaffold.">
-            <Input
-              value={applyPath}
-              onChange={(_, d) => {
-                setApplyPath(d.value)
-                setCreateParent(d.value)
-              }}
-              placeholder="/absolute/path/to/parent"
-              input={{ style: { fontFamily: tokens.fontFamilyMonospace } }}
-            />
+            <div style={{ display: 'flex', gap: tokens.spacingHorizontalXS, alignItems: 'center' }}>
+              <Input
+                style={{ flex: 1 }}
+                value={applyPath}
+                onChange={(_, d) => {
+                  setApplyPath(d.value)
+                  setCreateParent(d.value)
+                }}
+                placeholder="/absolute/path/to/parent"
+                input={{ style: { fontFamily: tokens.fontFamilyMonospace } }}
+              />
+              <BrowseFolderButton onPath={(p) => { setApplyPath(p); setCreateParent(p) }} />
+            </div>
           </Field>
 
           {applyPath.trim() && applyName.trim() && (
