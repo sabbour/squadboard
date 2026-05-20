@@ -4,7 +4,7 @@ description: Connect Squadboard to Copilot CLI, VS Code, or HTTP clients through
 ---
 
 import {PlugConnectedRegular, WrenchRegular, ClipboardTaskListLtrRegular} from '@fluentui/react-icons';
-import {IconCard, IconGrid, Screenshot, ScreenshotGrid} from '../../src/components/FluentDoc';
+import {IconCard, IconGrid} from '../../src/components/FluentDoc';
 
 # MCP integration
 
@@ -15,11 +15,6 @@ Squadboard exposes board, project, run, capture, and routing tools through Model
   <IconCard icon={WrenchRegular} title="Expose tools">Make board and run operations available without direct database access.</IconCard>
   <IconCard icon={ClipboardTaskListLtrRegular} title="Capture work">Turn driver directives into inbox items, cards, or decision files.</IconCard>
 </IconGrid>
-
-<ScreenshotGrid>
-  <Screenshot src="/img/scenarios/spark-13-mcp-list.png" alt="Spark MCP servers page." caption="Project MCP servers are visible and configurable." />
-  <Screenshot src="/img/scenarios/spark-14-mcp-dialog.png" alt="New MCP server dialog." caption="Server recipes describe the specific bridge a client should use." />
-</ScreenshotGrid>
 
 ## Copilot CLI
 

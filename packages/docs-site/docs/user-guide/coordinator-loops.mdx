@@ -4,7 +4,7 @@ description: How Squadboard deterministically picks up Ready work, starts runs, 
 ---
 
 import {ArrowSyncRegular, ClipboardTaskListLtrRegular, SparkleRegular} from '@fluentui/react-icons';
-import {IconCard, IconGrid, Screenshot} from '@site/src/components/FluentDoc';
+import {IconCard, IconGrid} from '@site/src/components/FluentDoc';
 
 # Coordinator loops
 
@@ -15,8 +15,6 @@ Squadboard uses deterministic server loops for repeatable control flow and reser
   <IconCard icon={SparkleRegular} title="Bounded judgment">The coordinator asks an LLM only when role fit or summarization requires interpretation.</IconCard>
   <IconCard icon={ArrowSyncRegular} title="Lifecycle loops">Run advancement, ceremonies, close-out, GitHub sync, and Ralph decisions are audited loops.</IconCard>
 </IconGrid>
-
-<Screenshot src="/img/scenarios/spark-19-ready-pickup.png" alt="Spark board with Ready work assigned by automatic pickup" caption="Ready is the automatic pickup column. Moving work there starts the coordinator path." />
 
 ## Ready pickup loop
 

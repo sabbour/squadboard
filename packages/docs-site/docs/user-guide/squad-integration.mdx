@@ -4,7 +4,7 @@ description: How Squadboard works with upstream Squad and Copilot CLI.
 ---
 
 import {FolderRegular, PlugConnectedRegular, ClipboardTaskListLtrRegular} from '@fluentui/react-icons';
-import {IconCard, IconGrid, Screenshot, ScreenshotGrid} from '../../src/components/FluentDoc';
+import {IconCard, IconGrid} from '../../src/components/FluentDoc';
 
 # Squad integration
 
@@ -15,12 +15,6 @@ Squadboard is designed to complement upstream [Squad](https://github.com/bradyga
   <IconCard icon={ClipboardTaskListLtrRegular} title="Board state is durable">Cards and runs are queryable after the chat session ends.</IconCard>
   <IconCard icon={PlugConnectedRegular} title="MCP connects clients">Copilot CLI and VS Code can interact through explicit tools.</IconCard>
 </IconGrid>
-
-<ScreenshotGrid>
-  <Screenshot src="/img/scenarios/spark-01-projects.png" alt="Spark project entry in Squadboard." caption="A Squadboard project points at the repository workspace that owns `.squad/`." />
-  <Screenshot src="/img/scenarios/spark-13-mcp-list.png" alt="Spark MCP server configuration." caption="MCP is the bridge for Copilot CLI, VS Code, and services that need board tools." />
-  <Screenshot src="/img/scenarios/spark-03-board-plan.png" alt="Spark board state." caption="Driver directives can become durable board state rather than remaining in a single chat." />
-</ScreenshotGrid>
 
 ## Responsibilities
 

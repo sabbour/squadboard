@@ -4,7 +4,7 @@ description: Project board, cards, run history, live output, and audit state.
 ---
 
 import {ClipboardTaskListLtrRegular, FlashRegular, ChartMultipleRegular} from '@fluentui/react-icons';
-import {IconCard, IconGrid, Screenshot, ScreenshotGrid} from '../../src/components/FluentDoc';
+import {IconCard, IconGrid} from '../../src/components/FluentDoc';
 
 # Board and runs
 
@@ -15,11 +15,6 @@ Each project owns a durable board and run history. Cards are the stable objects 
   <IconCard icon={FlashRegular} title="Run actions">Manual or coordinator-selected runs attach execution to a card.</IconCard>
   <IconCard icon={ChartMultipleRegular} title="Audit history">Routing, monitor decisions, and lifecycle changes remain queryable.</IconCard>
 </IconGrid>
-
-<ScreenshotGrid>
-  <Screenshot src="/img/scenarios/spark-03-board-plan.png" alt="Spark board before adding a launch-note card." caption="Backlog cards hold launch work until the team is ready to route it." />
-  <Screenshot src="/img/scenarios/spark-05-board-after-create.png" alt="Spark board after adding a launch-note card." caption="New work becomes durable board state before an agent starts." />
-</ScreenshotGrid>
 
 ## Board model
 

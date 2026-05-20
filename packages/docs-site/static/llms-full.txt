@@ -213,11 +213,6 @@ Squadboard treats agents as durable project participants with explicit origin an
   <IconCard icon={SettingsRegular} title="Workspaces">Scratch, directory, and worktree strategies isolate parallel runs.</IconCard>
 </IconGrid>
 
-<ScreenshotGrid>
-  <Screenshot src="/img/scenarios/spark-06-agents.png" alt="Spark project agents." caption="Agent roles and expertise are visible before routing work." />
-  <Screenshot src="/img/scenarios/spark-08-consult.png" alt="Spark Consult page." caption="Consult remains proposal-driven; it is not a hidden project mutation path." />
-</ScreenshotGrid>
-
 ## Capability summary
 
 | Capability | What it gives you |
@@ -242,11 +237,6 @@ Each project owns a durable board and run history. Cards are the stable objects 
   <IconCard icon={FlashRegular} title="Run actions">Manual or coordinator-selected runs attach execution to a card.</IconCard>
   <IconCard icon={ChartMultipleRegular} title="Audit history">Routing, monitor decisions, and lifecycle changes remain queryable.</IconCard>
 </IconGrid>
-
-<ScreenshotGrid>
-  <Screenshot src="/img/scenarios/spark-03-board-plan.png" alt="Spark board before adding a launch-note card." caption="Backlog cards hold launch work until the team is ready to route it." />
-  <Screenshot src="/img/scenarios/spark-05-board-after-create.png" alt="Spark board after adding a launch-note card." caption="New work becomes durable board state before an agent starts." />
-</ScreenshotGrid>
 
 ## Board model
 
@@ -285,11 +275,6 @@ Ceremonies are named processes that wrap workflow graphs in a trigger and metada
   <IconCard icon={ArrowSyncRegular} title="Triggers">Manual, scheduled, GitHub event, and agent-signal entry points.</IconCard>
   <IconCard icon={ClipboardRegular} title="Close-out">Scribe records health, summaries, and next-wave hints through automation paths.</IconCard>
 </IconGrid>
-
-<ScreenshotGrid>
-  <Screenshot src="/img/scenarios/spark-09-templates-ceremonies.png" alt="Spark ceremony templates page." caption="Reusable ceremony templates help projects start from known rituals." />
-  <Screenshot src="/img/scenarios/spark-11-ceremonies.png" alt="Spark ceremonies page." caption="Project ceremonies have visible triggers, versions, and lifecycle state." />
-</ScreenshotGrid>
 
 ## Capability summary
 
@@ -347,12 +332,6 @@ Squadboard exposes product state and orchestration through integration surfaces 
   <IconCard icon={ArrowUploadRegular} title="Imports">Templates, bundles, and Squad Apps package reusable operating models.</IconCard>
 </IconGrid>
 
-<ScreenshotGrid>
-  <Screenshot src="/img/scenarios/spark-13-mcp-list.png" alt="Spark MCP servers page." caption="MCP servers are project-visible tool bridges." />
-  <Screenshot src="/img/scenarios/spark-17-settings-github.png" alt="Spark GitHub integration settings." caption="GitHub integration is configured from project settings." />
-  <Screenshot src="/img/scenarios/spark-10-templates-projects.png" alt="Spark project template import page." caption="Project imports can seed a full operating model." />
-</ScreenshotGrid>
-
 ## Capability summary
 
 | Surface | What it is for |
@@ -379,13 +358,6 @@ Squadboard combines a durable work board, deterministic orchestration, and LLM-a
   <IconCard icon={PlugConnectedRegular} title="Integrations">GitHub, MCP, SDK, CLI, imports, and Squad Apps.</IconCard>
   <IconCard icon={SettingsRegular} title="Operations">Project settings, portability, costs, health, and reliability surfaces.</IconCard>
 </IconGrid>
-
-<ScreenshotGrid>
-  <Screenshot src="/img/scenarios/spark-03-board-plan.png" alt="Spark board with launch-planning work." caption="The board is the operational center for project work." />
-  <Screenshot src="/img/scenarios/spark-06-agents.png" alt="Spark project agents." caption="Project agents and charters keep role context explicit." />
-  <Screenshot src="/img/scenarios/spark-11-ceremonies.png" alt="Spark ceremonies list." caption="Ceremonies make recurring project rituals durable." />
-  <Screenshot src="/img/scenarios/spark-13-mcp-list.png" alt="Spark MCP servers page." caption="MCP connects external clients through explicit tool surfaces." />
-</ScreenshotGrid>
 
 | Area | Start here |
 | --- | --- |
@@ -510,23 +482,33 @@ Retries, waits, fan-out, and approvals are deterministic engine behavior. Agents
 
 Source: /squadboard/docs/getting-started/index
 
-Start here if you are setting up Squadboard for the first time or evaluating the pre-alpha workflow with the Spark project. Read the pages in order if you want one continuous path: install locally, finish the quickstart, then continue into the Spark tutorials.
+## Choose Your Path
 
-The tutorials follow the same operating flow throughout: create Spark, review the team, delegate cards by moving them to Ready, approve the work that needs judgment, and watch the board, ceremonies, and MCP surfaces stay in sync.
+**New to Squadboard?** Pick one:
 
 <IconGrid>
-  <IconCard icon={FolderRegular} title="Install" to="/getting-started/installation">
-    Set up the local-first app, server, docs package, and database.
+  <IconCard icon={FolderRegular} title="Set Up Locally" to="/getting-started/installation">
+    Install dependencies and start the server with a local database.
   </IconCard>
-  <IconCard icon={SparkleRegular} title="Quickstart" to="/getting-started/quickstart">
-    Create Spark, capture work, assign an agent, and watch the board advance.
+  <IconCard icon={SparkleRegular} title="Run Quickstart" to="/getting-started/quickstart">
+    Create your first project and run a workflow in 10 minutes.
   </IconCard>
   <IconCard icon={ClipboardTaskListLtrRegular} title="Tutorials" to="/getting-started/tutorials">
-    Walk through complete end-to-end scenarios with screenshots from the same Spark workspace.
+    Walk through complete end-to-end workflows with real examples.
   </IconCard>
 </IconGrid>
 
-After the tutorials, move into the [Product Guide](/features/overview) to understand the underlying board, runs, ceremonies, imports, and Copilot CLI + Squad coexistence model.
+---
+
+## Learning Path
+
+Follow these pages in order:
+
+1. **[Installation](/getting-started/installation)** — Set up Node, pnpm, and start the server
+2. **[Quickstart](/getting-started/quickstart)** — Create your first project, add tasks, and run a workflow
+3. **[Tutorials](/getting-started/tutorials)** — Walk through complete end-to-end workflows with real examples
+
+After the quickstart, explore the **[Product Guide](/features/overview)** to understand the board, runs, ceremonies, and how Squadboard syncs with Copilot CLI + Squad.
 
 ## Installation
 
@@ -652,32 +634,26 @@ Source: /squadboard/docs/getting-started/quickstart
 
 The shortest path through Squadboard. In about ten minutes you will:
 
-1. Create the **Spark** project.
+1. Create your first project.
 2. Confirm the team that will pick up work.
-3. Capture a launch idea and shape it into a card.
+3. Capture a work idea and shape it into a card.
 4. Move the card to **Ready** and watch Squadboard pick it up automatically.
 5. Inspect the run.
 6. Run a ceremony to close the loop.
 
-This is the same Spark loop the [tutorials](./tutorials/index.mdx) walk through in detail. Do the quickstart first to get the shape; do the tutorials when you want to understand each step deeply.
+This is the same workflow loop the [tutorials](./tutorials/index.mdx) walk through in detail. Do the quickstart first to get the shape; do the tutorials when you want to understand each step deeply.
 
 If Squadboard is not installed yet, do [Installation](./installation.md) first.
 
-## 1. Create Spark
+## 1. Create your project
 
-Open Squadboard. On the **Projects** page, create a new project named `Spark` and point it at a repository folder. If the folder already has `.squad/`, Squadboard reads it; if not, choose the **Default Software Project** template and it will scaffold the basics.
+Open Squadboard. On the **Projects** page, create a new project (e.g., `MyProject`) and point it at a repository folder. If the folder already has `.squad/`, Squadboard reads it; if not, choose the **Default Software Project** template and it will scaffold the basics.
 
-<Screenshot src="/img/scenarios/spark-01-projects.png" alt="Squadboard Projects page with the Spark project listed." caption="Spark is the project you will reuse across the quickstart and every tutorial." />
-
-Open Spark. The dashboard is the cockpit — confirm the repository path is right before you move anything.
-
-<Screenshot src="/img/scenarios/spark-02-dashboard.png" alt="The Spark dashboard with project identity and board health." caption="If the project path is wrong here, fix it before you queue work." />
+Open your project. The dashboard is the cockpit — confirm the repository path is right before you move anything.
 
 ## 2. Confirm the team
 
 Open **Agents**. Every agent needs a name, a role, and a charter — those are what the coordinator uses to assign work, not the name alone.
-
-<Screenshot src="/img/scenarios/spark-06-agents.png" alt="Spark Agents page showing the launch lead and integration engineer with roles and expertise." caption="Two agents are enough for the quickstart: a launch lead and an integration engineer." />
 
 If a role is missing, click **Cast Team** and accept the proposal. Five minutes here saves bad assignments later.
 
@@ -685,24 +661,16 @@ If a role is missing, click **Cast Team** and accept the proposal. Five minutes 
 
 Open the **Board**. You should see five columns: **Backlog → Ready → In Progress → In Review → Done**.
 
-<Screenshot src="/img/scenarios/spark-03-board-plan.png" alt="Spark board with Backlog and Ready columns visible." caption="Backlog is for ideas being shaped. Ready is the pickup boundary." />
-
 Click **Create issue** and fill in a card. Title it with a concrete outcome; write a body that explains user impact and what evidence to link when the work is done.
-
-<Screenshot src="/img/scenarios/spark-04-new-card.png" alt="New Spark card dialog being filled out for the launch-note publish work." caption="The body should be specific enough to route but ambiguous enough to leave the agent room to interpret." />
 
 Example body:
 
 ```md
-Publish a short Spark launch note that explains how Squadboard relates to upstream Squad
-and where imports live.
-
-When done, link the published file and update the tutorial copy if the UI moved.
+Write a short guide that explains how Squadboard relates to upstream Squad
+and how to get started. Link the published guide when done.
 ```
 
 Save. The card lands in **Backlog**.
-
-<Screenshot src="/img/scenarios/spark-05-board-after-create.png" alt="Spark board after the launch-note card lands in Backlog beside the existing launch checklist." caption="Nothing automated runs against Backlog. The card waits for you to decide it is ready." />
 
 ## 4. Move to Ready — pickup is automatic
 
@@ -710,28 +678,22 @@ Drag the card from **Backlog** into **Ready**. This is the only step that trigge
 
 When the card enters Ready, Squadboard runs deterministic gates, picks the best agent from the roster you reviewed in step 2, creates an issue run, and starts it. The card moves into **In Progress** under the runtime's control. There is no separate play button.
 
-<Screenshot src="/img/scenarios/spark-19-ready-pickup.png" alt="Spark board after Ready pickup assigns the card automatically." caption="The Ready card now shows the assigned agent and an active run." />
-
 ## 5. Inspect the run
 
 Click the card. The right-hand panel shows the issue run: which agent picked it up, the prompt context, the model output, and any tool calls.
 
 Use this to confirm three things: the right agent was chosen, the prompt included the context you expected, and the output matches the outcome you wrote in step 3. If the assignment was wrong, fix the role or charter in **Agents** — do not override the assignment by hand.
 
-<Screenshot src="/img/scenarios/spark-20-run-detail.png" alt="Spark card detail panel showing the active Work Pickup run and assigned agent." caption="The run detail is where you inspect the assignment, run state, and output before moving the card forward." />
-
 ## 6. Close the loop with a ceremony
 
-Open **Ceremonies** and run **Spark Launch Review**. The ceremony walks its workflow steps (route → agent_run → approve), summarizes the runs you just produced, and records the handoff.
-
-<Screenshot src="/img/scenarios/spark-11-ceremonies.png" alt="Spark Ceremonies page listing the Spark Launch Review ceremony." caption="Ceremonies give recurring rituals a durable trigger, version, and run history." />
+Open **Ceremonies** and run the default launch-review ceremony. The ceremony walks its workflow steps (route → agent_run → approve), summarizes the runs you just produced, and records the handoff.
 
 That's the full loop: capture → shape → Ready → pickup → run → review.
 
 ## Where to go next
 
 - Do the [tutorials](./tutorials/index.mdx) for each step in depth.
-- Wire Copilot CLI and GitHub to the same Spark via [Tutorial 4](./tutorials/connect-tools).
+- Wire Copilot CLI and GitHub to your project via [Tutorial 4](./tutorials/connect-tools).
 - Read [Board and Runs](../user-guide/board-and-runs.mdx) to understand the pickup and run lifecycle in detail.
 
 ## 2. Cast and review the team
@@ -740,9 +702,9 @@ Source: /squadboard/docs/getting-started/tutorials/cast-the-team
 
 # 2. Cast and review the team
 
-Spark needs a small, project-specific team — not a generic pool of assistants. In this tutorial, you will review who is on the roster, fill any role gaps with **Cast Team**, and use **Consult** to think out loud before you commit anything to the board.
+Your project needs a small, project-specific team — not a generic pool of assistants. In this tutorial, you will review who is on the roster, fill any role gaps with **Cast Team**, and use **Consult** to think out loud before you commit anything to the board.
 
-This tutorial assumes you completed [Tutorial 1](./connect-spark.mdx) and have Spark open.
+This tutorial assumes you completed [Tutorial 1](./connect-spark.mdx) and have your project open.
 
 ## Why this matters
 
@@ -750,38 +712,32 @@ When you move a card to Ready (next tutorial), Squadboard's coordinator decides 
 
 ## 1. Open the roster
 
-Open **Agents**. Spark from Tutorial 1 should have at least a launch lead and an integration owner already present (either from the template or from your existing `.squad/`).
-
-<Screenshot src="/img/scenarios/spark-06-agents.png" alt="Spark Agents page listing the launch lead and integration engineer with roles and expertise." caption="Each agent needs a name, a role, and expertise. Names alone are not enough for assignment." />
+Open **Agents**. Your project from Tutorial 1 should have at least a launch lead and an integration owner already present (either from the template or from your existing `.squad/`).
 
 For each agent, confirm:
 
 1. **Name** is stable and easy to reference in cards and labels.
 2. **Role** describes an outcome (Launch lead, Integration engineer), not just a technology.
-3. **Expertise** covers the recurring decisions Spark will make.
+3. **Expertise** covers the recurring decisions your project will make.
 
 If any agent is missing a role or charter, fix it now. Charters live under `.squad/` and are shared with upstream Squad and Copilot CLI — edits here are durable.
 
 ## 2. Fill role gaps with Cast Team
 
-If Spark is missing a role you know it needs — say a reviewer or a docs lead — click **Cast Team**. Cast Team turns "what team should Spark have?" into a reviewable proposal you can edit before accepting.
-
-<Screenshot src="/img/scenarios/spark-07-team-casting.png" alt="Cast Team dialog suggesting a proposed Spark roster." caption="Cast Team is a draft proposal. Accept the parts that fit, edit the charters, and discard the rest." />
+If your project is missing a role you know it needs — say a reviewer or a docs lead — click **Cast Team**. Cast Team turns "what team should this project have?" into a reviewable proposal you can edit before accepting.
 
 Accept only the roles you actually need. A small team with sharp charters routes better than a big team with vague ones.
 
 ## 3. Use Consult when the work is still ambiguous
 
-Before queuing a card, you often want to think it through with an agent or with a raw model. That is what **Consult** is for. It is exploration; nothing it produces changes Spark until you create a card or accept a proposal.
+Before queuing a card, you often want to think it through with an agent or with a raw model. That is what **Consult** is for. It is exploration; nothing it produces changes your project until you create a card or accept a proposal.
 
-Open **Consult → New consult**, pick **Model** (or a specific Spark agent), and ask a narrow question. For example:
+Open **Consult → New consult**, pick **Model** (or a specific agent), and ask a narrow question. For example:
 
 ```text
-Spark needs a launch note that explains Squadboard's relationship to upstream Squad.
-What are the three points the launch lead should cover, and what tone should it use?
+Write a guide that explains Squadboard's relationship to upstream Squad.
+What are the three main topics to cover, and what tone should it use?
 ```
-
-<Screenshot src="/img/scenarios/spark-08-consult.png" alt="Spark Consult page in Model mode with a launch-note prompt drafted." caption="Consult is for brainstorming. The board is for durable execution. Decide which one you need before opening." />
 
 Rules of thumb:
 
@@ -791,25 +747,25 @@ Rules of thumb:
 
 ## What you should have now
 
-- A Spark roster where every agent has a name, role, and charter.
+- A project roster where every agent has a name, role, and charter.
 - A casting decision recorded (either "current roster is fine" or "added X via Cast Team").
 - A Consult conversation that helped you sharpen the next card — or a confirmed plan to skip Consult and go straight to the board.
 
-Continue with [3. Run the Spark launch wave →](./run-the-launch-wave.mdx) to capture work, move it into Ready, watch automatic pickup, and inspect what the agent produced.
+Continue with [3. Run a workflow →](./run-the-launch-wave.mdx) to capture work, move it into Ready, watch automatic pickup, and inspect what the agent produced.
 
-## 1. Connect Spark
+## 1. Create your project
 
 Source: /squadboard/docs/getting-started/tutorials/connect-spark
 
-# 1. Connect Spark
+# 1. Create your project
 
-Spark is the project you will use for every tutorial that follows. This page gets Spark created and pointed at a repository, no matter which starting point you have. By the end, you should be looking at the Spark dashboard with a healthy board ready for the next tutorial.
+This page gets your project created and pointed at a repository, no matter which starting point you have. By the end, you should be looking at the project dashboard with a healthy board ready for the next tutorial.
 
 If you have not installed Squadboard yet, follow [Installation](../installation.md) first, then come back here.
 
 ## Pick your starting point
 
-Choose the path that matches what you already have. All three converge on the same Spark project.
+Choose the path that matches what you already have. All three converge on the same project.
 
 <IconGrid>
   <IconCard icon={FolderAddRegular} title="A. New repo with Squad initialized">Best when you already ran <code>squad init</code> in a fresh repo and want Squadboard to give that team a board.</IconCard>
@@ -821,26 +777,20 @@ Choose the path that matches what you already have. All three converge on the sa
 
 Open Squadboard. The first screen is **Projects** — the boundary for every board card, agent, ceremony, run, MCP server, and integration you create.
 
-<Screenshot src="/img/scenarios/spark-01-projects.png" alt="Squadboard Projects page with the Spark project listed." caption="Every tutorial uses one project named Spark. Reuse it; do not create a second project per tutorial." />
-
-Click **New project**, name it `Spark`, and pick the repository folder:
+Click **New project**, name it (e.g., `MyProject`), and pick the repository folder:
 
 - **Path A or C** — choose the existing repository that already owns `.squad/`. Squadboard reads that folder as the operating model; it will not overwrite the agents, decisions, or history that are already there.
 - **Path B** — pick an empty folder, then choose the **Default Software Project** template. Squadboard scaffolds `.squad/` with a roster, routing rules, casting state, and example ceremonies.
 
-Either way, Spark now exists.
+Either way, your project now exists.
 
 ## 2. Read the dashboard before touching anything
 
-Open Spark from the project list. The dashboard is the cockpit: project identity, board state, recent runs, and automation status all in one place. Confirm the project name and repository path match what you intended before you move work around.
-
-<Screenshot src="/img/scenarios/spark-02-dashboard.png" alt="The Spark dashboard showing project identity and board health." caption="The dashboard is the first sanity check. If the repository path is wrong here, fix it before adding cards." />
+Open your project from the project list. The dashboard is the cockpit: project identity, board state, recent runs, and automation status all in one place. Confirm the project name and repository path match what you intended before you move work around.
 
 ## 3. Confirm the board exists with the expected columns
 
 Open **Board**. You should see five columns — **Backlog → Ready → In Progress → In Review → Done**. Template- and existing-repo paths may already have cards; the new-repo path will be empty except for any seeded launch work.
-
-<Screenshot src="/img/scenarios/spark-03-board-plan.png" alt="Spark board with backlog and ready columns visible." caption="Ready is intentionally a separate column. It is the pickup boundary — moving a card there starts work automatically (Tutorial 3)." />
 
 You do not need to add a card yet. The board is just here so you know where work will live.
 
@@ -850,40 +800,38 @@ Squad Apps package reusable team + ceremonies + skills + tool recipes + seed wor
 
 Open **Templates** and switch to the **Projects** tab to see what is available.
 
-<Screenshot src="/img/scenarios/spark-10-templates-projects.png" alt="Project templates available for Spark, including the default software project and additional Squad Apps." caption="Project-level imports can carry team, board layout, ceremonies, skills, tools, MCP recipes, and seed backlog. Read the manifest before applying." />
-
 Before applying any import, check:
 
 1. Which agents and charters will be added.
 2. Which skills or tool instructions will be injected into agent prompts.
 3. Whether MCP servers or GitHub settings need secrets you have not configured yet.
-4. What seed work will appear on the Spark board.
+4. What seed work will appear on the project board.
 
 For the rest of these tutorials, the default software template is enough. Heavier imports (launch-readiness, integration-validation) are reviewed in [Tutorial 4](./connect-tools.mdx).
 
 ## What you should have now
 
-- A Spark project visible on the Projects page.
+- A project visible on the Projects page.
 - A dashboard pointed at the repository you intended.
 - A board with the standard five columns.
 - (Optional) An imported Squad App you reviewed before applying.
 
-Continue with [2. Cast and review the team →](./cast-the-team.mdx) to give Spark a roster the coordinator can actually route work to.
+Continue with [2. Cast and review the team →](./cast-the-team.mdx) to give your project a roster the coordinator can actually route work to.
 
-## 4. Connect Copilot CLI, Squad, and MCP
+## 4. Connect external tools
 
 Source: /squadboard/docs/getting-started/tutorials/connect-tools
 
-# 4. Connect Copilot CLI, Squad, and MCP
+# 4. Connect external tools
 
-Spark works on its own. It becomes a lot more useful once the same project state is reachable from Copilot CLI, upstream Squad, and (when you are ready) GitHub. This tutorial wires the outer surfaces around the loop you ran in Tutorial 3.
+Your project works on its own. It becomes a lot more useful once the same project state is reachable from Copilot CLI, upstream Squad, and (when you are ready) GitHub. This tutorial wires the outer surfaces around the loop you ran in Tutorial 3.
 
 ## How these three pieces fit together
 
 Squadboard is the **multi-agent inner loop** — capture, shape, route, run, review — that happens *before* work reaches GitHub.
 
 - **Upstream [Squad](https://github.com/bradygaster/squad)** owns the on-disk operating convention: agents, charters, decisions, ceremonies all live in `.squad/`. Squadboard reads and writes that folder; it does not replace it.
-- **Copilot CLI** uses MCP to call Spark's tools (`capture`, `create_issue`, `run_agent`, `get_run_status`) instead of editing the database directly.
+- **Copilot CLI** uses MCP to call your project's tools (`capture`, `create_issue`, `run_agent`, `get_run_status`) instead of editing the database directly.
 - **GitHub** is the outer loop — issues, pull requests, checks, review signals — that reflects work *after* the inner loop has done its job.
 
 :::note Shared storage status
@@ -905,54 +853,44 @@ See [Storage provider — Configuration recipes](../../user-guide/storage-provid
 
 ## 1. Add an MCP server for the bridge
 
-Open **MCP Servers**. This page lists every external tool bridge Spark exposes.
-
-<Screenshot src="/img/scenarios/spark-13-mcp-list.png" alt="Spark MCP Servers page listing configured bridges." caption="MCP entries make external tool access explicit and reviewable instead of ambient." />
+Open **MCP Servers**. This page lists every external tool bridge your project exposes.
 
 Click **New MCP server** and fill in a recognizable name plus the endpoint your client will use:
 
 - For local Copilot CLI, use the stdio CLI command from [MCP integration](../../user-guide/mcp.mdx) instead of an HTTP URL.
 - For a hosted MCP gateway, paste the HTTP endpoint and any required credential ID.
 
-<Screenshot src="/img/scenarios/spark-14-mcp-dialog.png" alt="New MCP server dialog being filled out with a name and endpoint for the Spark bridge." caption="Keep tool access narrow. Give the launch agent only the tools Spark needs — do not share unrelated machine-level capabilities." />
-
 Save. The bridge appears in the list and is immediately callable by clients pointed at it.
 
-### What Copilot CLI can now do against Spark
+### What Copilot CLI can now do with your project
 
 With the MCP bridge in place, a developer in Copilot CLI can:
 
-- Drop a freeform note into the Spark **Inbox** with `capture`.
+- Drop a freeform note into your project's **Inbox** with `capture`.
 - Create a structured card with `create_issue` (it lands in Backlog so a human can still shape it).
 - Trigger a run with `run_agent` and check progress with `get_run_status`.
 
-The result of every call shows up on the Spark board with the same audit trail as if you had clicked through the UI. Copilot CLI does not need (and should not have) direct database access.
+The result of every call shows up on your project board with the same audit trail as if you had clicked through the UI. Copilot CLI does not need (and should not have) direct database access.
 
 ## 2. Connect GitHub as the outer loop
 
-When the team is ready for issues, pull requests, checks, and review signals to flow back into Spark, connect GitHub. Open **Settings**.
-
-<Screenshot src="/img/scenarios/spark-15-settings-general.png" alt="Spark Settings — General tab — showing project identity and runtime defaults." caption="General settings live with the rest of Spark navigation because they affect the same operating loop as the board and ceremonies." />
+When the team is ready for issues, pull requests, checks, and review signals to flow back into your project, connect GitHub. Open **Settings**.
 
 Switch to the **GitHub** tab and connect the repository, install the app, and configure label and webhook routing.
 
-<Screenshot src="/img/scenarios/spark-17-settings-github.png" alt="Spark Settings — GitHub Integration tab — showing repository connection and webhook configuration." caption="Connect GitHub only after the inner loop is healthy. GitHub should reinforce the loop, not bypass it." />
-
 Once connected:
 
-- GitHub issues with matching labels become Spark cards.
-- Spark runs that produce PRs link back from the card.
+- GitHub issues with matching labels become project cards.
+- Project runs that produce PRs link back from the card.
 - Check and review state flows back into the board so ceremonies can act on it.
 
 For the policy and webhook details, see [GitHub integration](../../user-guide/github.md).
 
-## 3. Save Spark as a template (portability)
+## 3. Save your project as a template (portability)
 
-If Spark turned into a launch loop you want to reuse — same team shape, same ceremonies, same board structure — save it as a template before you tear it down or move on.
+If your project turned into a workflow loop you want to reuse — same team shape, same ceremonies, same board structure — save it as a template before you tear it down or move on.
 
 Open **Settings → Portability**.
-
-<Screenshot src="/img/scenarios/spark-16-settings-portability.png" alt="Spark Settings — Portability tab — with the Save as template action visible." caption="Portability turns the Spark operating model into something another project can start from on day one." />
 
 Click **Save as template**. The export includes:
 
@@ -966,9 +904,9 @@ Anyone starting a new project can pick this template in step 1 of [Tutorial 1](.
 
 ## What you have now
 
-- An MCP server entry that lets Copilot CLI work against Spark without direct DB access.
+- An MCP server entry that lets Copilot CLI work with your project without direct DB access.
 - GitHub connected (optional) so the outer loop reinforces the inner loop.
-- Spark saved as a reusable template.
+- Your project saved as a reusable template.
 
 ## Where to go next
 
@@ -983,34 +921,34 @@ Source: /squadboard/docs/getting-started/tutorials/index
 
 # Tutorials
 
-These tutorials form **one continuous Spark project**. Do them in order. Each builds on the state created by the one before it — agents from Tutorial 2 do the work in Tutorial 3, MCP in Tutorial 4 connects back to the runs you watched in Tutorial 3.
+These tutorials form **one continuous workflow**. Do them in order. Each builds on the state created by the one before it — agents from Tutorial 2 do the work in Tutorial 3, MCP in Tutorial 4 connects back to the runs you watched in Tutorial 3.
 
 If you only have 10 minutes, do the [Quickstart](../quickstart.mdx) instead. It is the same loop in compressed form.
 
 <IconGrid>
-  <IconCard icon={FolderAddRegular} title="1. Connect Spark" to="/getting-started/tutorials/connect-spark">
-    Create the project and point it at a repository — new repo with Squad, project template, or existing Squad repo.
+  <IconCard icon={FolderAddRegular} title="1. Create your project" to="/getting-started/tutorials/connect-spark">
+    Set up your project and point it at a repository — new repo with Squad, project template, or existing Squad repo.
   </IconCard>
   <IconCard icon={PeopleRegular} title="2. Cast and review the team" to="/getting-started/tutorials/cast-the-team">
-    Give Spark a small roster with real charters, and use Consult to think before you commit.
+    Give your project a small roster with real charters, and use Consult to think before you commit.
   </IconCard>
-  <IconCard icon={ArrowSyncRegular} title="3. Run the Spark launch wave" to="/getting-started/tutorials/run-the-launch-wave">
+  <IconCard icon={ArrowSyncRegular} title="3. Run a workflow" to="/getting-started/tutorials/run-the-launch-wave">
     Capture work → Backlog → Ready → automatic pickup → inspect the run → ceremony close-out.
   </IconCard>
-  <IconCard icon={PlugConnectedRegular} title="4. Connect Copilot CLI, Squad, and MCP" to="/getting-started/tutorials/connect-tools">
-    Wire MCP for Copilot CLI, connect GitHub for the outer loop, and save Spark as a reusable template.
+  <IconCard icon={PlugConnectedRegular} title="4. Connect external tools" to="/getting-started/tutorials/connect-tools">
+    Wire MCP for Copilot CLI, connect GitHub for the outer loop, and save your project as a reusable template.
   </IconCard>
 </IconGrid>
 
 When a tutorial references a concept you want to understand more deeply (the coordinator's pickup gates, the workflow engine, the storage layout), jump to the matching [Product Guide](../../features/overview.mdx) page and then come back to the next step.
 
-## 3. Run the Spark launch wave
+## 3. Run a workflow
 
 Source: /squadboard/docs/getting-started/tutorials/run-the-launch-wave
 
-# 3. Run the Spark launch wave
+# 3. Run a workflow
 
-This is the end-to-end. You will take one rough launch idea from "I need a thing" all the way to "an agent ran, produced output, and a ceremony recorded the handoff." Every step uses the Spark project from Tutorials 1 and 2.
+This is the end-to-end. You will take one rough idea from "I need a thing" all the way to "an agent ran, produced output, and a ceremony recorded the handoff." Every step uses the project from Tutorials 1 and 2.
 
 The flow is one continuous loop:
 
@@ -1020,11 +958,9 @@ No manual "play" button. Once a card lands in Ready, Squadboard does the rest.
 
 ## 1. Capture the raw request in the Inbox
 
-Real launch work rarely arrives as a clean ticket. The **Inbox** is where freeform notes, Copilot CLI captures, and MCP-submitted ideas land before they become structured cards. They keep the user's original wording so nothing is lost in translation.
+Real work rarely arrives as a clean ticket. The **Inbox** is where freeform notes, Copilot CLI captures, and MCP-submitted ideas land before they become structured cards. They keep the user's original wording so nothing is lost in translation.
 
-Open **Inbox**. You should see a launch-note request that still reads like a human note.
-
-<Screenshot src="/img/scenarios/spark-12-inbox.png" alt="Spark Inbox showing a freeform launch-note request waiting to be shaped." caption="The Inbox preserves raw intent. Shape it into a card when you understand the outcome — not before." />
+Open **Inbox**. You should see a request that still reads like a human note.
 
 Read the request. Decide whether the outcome is clear enough to become a card.
 
@@ -1032,9 +968,7 @@ Read the request. Decide whether the outcome is clear enough to become a card.
 
 Open the **Board** and click **Create issue**. Title the card with a concrete outcome and write the body so the agent who picks it up knows what to produce.
 
-<Screenshot src="/img/scenarios/spark-04-new-card.png" alt="New Spark card dialog being filled out for the launch-note publish work." caption="A card body should explain user-facing outcome, related context (Squad, integrations), and what evidence to link when the work is done." />
-
-A useful Spark card body covers:
+A useful card body covers:
 
 1. **The user-facing outcome.** What changes for someone reading this?
 2. **The context.** What `.squad/`, upstream Squad, or integration relationship matters?
@@ -1043,8 +977,6 @@ A useful Spark card body covers:
 Leave appropriate ambiguity. Deterministic things (project, status, labels, assignee, audit) belong to Squadboard. Ambiguous things (wording, tone, interpretation) belong to the agent. Do not over-specify either.
 
 Save the card. It lands in **Backlog**.
-
-<Screenshot src="/img/scenarios/spark-05-board-after-create.png" alt="Spark board after creating the launch-note card; it sits in Backlog beside the existing launch checklist." caption="Cards live in Backlog while they are still being shaped. Nothing automated runs against Backlog." />
 
 ## 3. Move the card to Ready — automatic pickup starts
 
@@ -1059,8 +991,6 @@ When a card enters Ready, Squadboard:
 
 You do not click play. There is no play button for the normal Ready path — In Progress is runtime state, not a status you set manually.
 
-<Screenshot src="/img/scenarios/spark-19-ready-pickup.png" alt="Spark board after the Ready card has been picked up and assigned automatically." caption="The Ready card now shows the assigned agent and an active run. Squadboard chose the assignee from the roster you reviewed in Tutorial 2." />
-
 ## 4. Inspect the run and its output
 
 Click the card to open its detail view. The right-hand panel shows the issue run: which agent picked it up, when, the prompt context Squadboard composed, the model output, any tool calls, and the final artifact reference.
@@ -1071,19 +1001,15 @@ This is the part most teams overlook. The run detail is where you confirm that:
 - The **prompt context** included the card body, parent links, and project rules you expected.
 - The **output** matches the outcome you wrote in step 2.
 
-<Screenshot src="/img/scenarios/spark-20-run-detail.png" alt="Spark card detail panel showing the active Work Pickup run and assigned agent." caption="Open the picked-up card to inspect the run state, selected agent, run plan, and output without leaving the board." />
-
 If you need to understand the deeper mechanics later, read [Board and Runs](../../user-guide/board-and-runs.mdx) and [Coordinator loops](../../user-guide/coordinator-loops.mdx).
 
 ## 5. Close the wave with a ceremony
 
-Once a run produces output, you want a repeatable way to review it, summarize it, and hand it off. That is what **ceremonies** are for. Spark ships with a launch-review ceremony you can run on demand or on a schedule.
+Once a run produces output, you want a repeatable way to review it, summarize it, and hand it off. That is what **ceremonies** are for. Your project ships with a default launch-review ceremony you can run on demand or on a schedule.
 
-Open **Ceremonies**. You should see **Spark Launch Review**.
+Open **Ceremonies**. You should see a launch-review ceremony.
 
-<Screenshot src="/img/scenarios/spark-11-ceremonies.png" alt="Spark Ceremonies page listing the Spark Launch Review ceremony." caption="Ceremonies give recurring rituals a durable trigger, version, and run history — they are not chat sessions." />
-
-Click into **Spark Launch Review** and run it. The ceremony walks its workflow steps (route → agent_run → approve) using the runs you just produced as input. The output becomes part of the project record.
+Click into it and run it. The ceremony walks its workflow steps (route → agent_run → approve) using the runs you just produced as input. The output becomes part of the project record.
 
 Other ceremonies worth knowing about:
 
@@ -1093,13 +1019,9 @@ Other ceremonies worth knowing about:
 
 You can review the visual flow of any ceremony before activating it.
 
-<Screenshot src="/img/scenarios/spark-09-templates-ceremonies.png" alt="Ceremony templates page showing the step sequence of each available ceremony." caption="Always preview a ceremony — especially imported ones — before attaching it. The preview shows what tools and approvals it will use." />
-
 ## 6. Watch cost as part of operations
 
 Open **Costs** after a few runs and ceremonies have executed. Cost belongs next to operations, not buried in settings — surprising bills come from work patterns you did not notice early enough.
-
-<Screenshot src="/img/scenarios/spark-18-costs.png" alt="Spark Costs page showing per-run and per-ceremony model usage." caption="Use Costs to spot which cards or ceremonies are burning the most model usage and decide whether the pattern is worth it." />
 
 ## What you just did
 
@@ -1110,7 +1032,7 @@ Open **Costs** after a few runs and ceremonies have executed. Cost belongs next 
 - Ran a ceremony to record the handoff.
 - Watched cost to keep the loop honest.
 
-Continue with [4. Connect Copilot CLI, Squad, and MCP →](./connect-tools.mdx) to make the same flow accessible from outside Squadboard.
+Continue with [4. Connect external tools →](./connect-tools.mdx) to make the same flow accessible from Copilot CLI, Squad, and other tools via MCP.
 
 ## Squadboard documentation
 
@@ -1335,12 +1257,6 @@ Squadboard treats the project roster as shared repository state. The canonical t
   <IconCard icon={LibraryRegular} title="Skills">Reusable SKILL.md-style instructions can be assigned to agents.</IconCard>
 </IconGrid>
 
-<ScreenshotGrid>
-  <Screenshot src="/img/scenarios/spark-06-agents.png" alt="Spark agents page." caption="Agent roles and expertise make future routes understandable." />
-  <Screenshot src="/img/scenarios/spark-07-team-casting.png" alt="Spark team-casting dialog." caption="Casting turns a team gap into an editable proposal." />
-  <Screenshot src="/img/scenarios/spark-08-consult.png" alt="Spark Consult page." caption="Consult lets the team explore ambiguity before changing project state." />
-</ScreenshotGrid>
-
 ## Agent origins
 
 | Origin | Meaning |
@@ -1380,12 +1296,6 @@ The board is where Spark turns intent into durable work. A card can start as a r
   <IconCard icon={FlashRegular} title="Runs">Attach execution and streamed output to the card that caused it.</IconCard>
   <IconCard icon={ChartMultipleRegular} title="History">Keep routing decisions and lifecycle state queryable later.</IconCard>
 </IconGrid>
-
-<ScreenshotGrid>
-  <Screenshot src="/img/scenarios/spark-03-board-plan.png" alt="Spark board with launch-planning work." caption="Use the board to decide what is ready for routing and what still needs shaping." />
-  <Screenshot src="/img/scenarios/spark-04-new-card.png" alt="New Spark issue card dialog." caption="Create cards with enough context for future routing, not just a short title." />
-  <Screenshot src="/img/scenarios/spark-05-board-after-create.png" alt="Spark board after creating a launch-note card." caption="New cards become part of the shared project state immediately." />
-</ScreenshotGrid>
 
 ## Board model
 
@@ -1457,11 +1367,6 @@ Squadboard includes built-in starting points so a new project can become useful 
 ## Review before deploying
 
 Open **Templates** from the project navigation. Use **Review** to inspect a ceremony, team, or project template before you apply it to Spark. Applying a template should be an explicit deployment decision, not a blind import.
-
-<ScreenshotGrid>
-  <Screenshot src="/img/scenarios/spark-09-templates-ceremonies.png" alt="Spark ceremony templates with review and use actions" caption="Ceremony templates can be reviewed before opening the new ceremony flow." />
-  <Screenshot src="/img/scenarios/spark-10-templates-projects.png" alt="Spark project templates" caption="Project templates package setup defaults for reuse." />
-</ScreenshotGrid>
 
 ## Built-in ceremonies
 
@@ -1570,12 +1475,6 @@ Use configuration to make runtime defaults, integrations, costs, and portability
   <IconCard icon={MoneyRegular} title="Cost">Choose how model usage is accounted for and reviewed.</IconCard>
 </IconGrid>
 
-<ScreenshotGrid>
-  <Screenshot src="/img/scenarios/spark-15-settings-general.png" alt="Spark general settings." caption="Project settings capture runtime and repository-level defaults." />
-  <Screenshot src="/img/scenarios/spark-17-settings-github.png" alt="Spark GitHub settings." caption="GitHub configuration is project-level so automation can stay opt-in." />
-  <Screenshot src="/img/scenarios/spark-18-costs.png" alt="Spark costs page." caption="The cost view helps teams tune model usage as work runs." />
-</ScreenshotGrid>
-
 ## Runtime
 
 The app runs as a local monorepo during development:
@@ -1604,7 +1503,7 @@ Useful environment variables:
 | --- | --- |
 | `SQUADBOARD_DEFAULT_PROJECT_ID` | Default project for MCP tools and capture flows |
 | `SQUADBOARD_SQUAD_STORAGE_PROVIDER` | `postgresql` (default) or `fs` filesystem fallback for Squad state |
-| `SQUADBOARD_COST_MODEL` | Use `usd` or `gh_multipliers` cost accounting |
+| `SQUADBOARD_COST_MODEL` | Use `usd` or `ai_credits` cost accounting (`gh_multipliers` is a legacy alias) |
 | `COORDINATOR_DISPATCH_ENABLED` | Set `0` to disable coordinator dispatch |
 | `COORDINATOR_MODEL` | Primary model for bounded coordinator judgment |
 | `COORDINATOR_MODEL_FALLBACKS` | Comma-separated fallback model chain |
@@ -1642,8 +1541,6 @@ Squadboard uses deterministic server loops for repeatable control flow and reser
   <IconCard icon={SparkleRegular} title="Bounded judgment">The coordinator asks an LLM only when role fit or summarization requires interpretation.</IconCard>
   <IconCard icon={ArrowSyncRegular} title="Lifecycle loops">Run advancement, ceremonies, close-out, GitHub sync, and Ralph decisions are audited loops.</IconCard>
 </IconGrid>
-
-<Screenshot src="/img/scenarios/spark-19-ready-pickup.png" alt="Spark board with Ready work assigned by automatic pickup" caption="Ready is the automatic pickup column. Moving work there starts the coordinator path." />
 
 ## Ready pickup loop
 
@@ -1793,12 +1690,6 @@ Squadboard has two related import paths:
   <IconCard icon={SettingsRegular} title="Save what works">Export a known-good project as a template later.</IconCard>
 </IconGrid>
 
-<ScreenshotGrid>
-  <Screenshot src="/img/scenarios/spark-10-templates-projects.png" alt="Spark project templates page." caption="Project imports create or update a full operating model." />
-  <Screenshot src="/img/scenarios/spark-09-templates-ceremonies.png" alt="Spark ceremony templates page." caption="Ceremony imports are smaller building blocks inside a project." />
-  <Screenshot src="/img/scenarios/spark-16-settings-portability.png" alt="Spark portability settings." caption="Portability controls save reusable project state after you refine it." />
-</ScreenshotGrid>
-
 ## Built-in project bundles
 
 The server scans `bundles/` and exposes built-in project bundles through:
@@ -1842,11 +1733,6 @@ Squadboard exposes board, project, run, capture, and routing tools through Model
   <IconCard icon={WrenchRegular} title="Expose tools">Make board and run operations available without direct database access.</IconCard>
   <IconCard icon={ClipboardTaskListLtrRegular} title="Capture work">Turn driver directives into inbox items, cards, or decision files.</IconCard>
 </IconGrid>
-
-<ScreenshotGrid>
-  <Screenshot src="/img/scenarios/spark-13-mcp-list.png" alt="Spark MCP servers page." caption="Project MCP servers are visible and configurable." />
-  <Screenshot src="/img/scenarios/spark-14-mcp-dialog.png" alt="New MCP server dialog." caption="Server recipes describe the specific bridge a client should use." />
-</ScreenshotGrid>
 
 ## Copilot CLI
 
@@ -2050,12 +1936,6 @@ A Squad App is a portable, self-describing package that can stand up a Squadboar
   <IconCard icon={ShieldRegular} title="Treat imports carefully">Prompt instructions and tool recipes are code-adjacent configuration.</IconCard>
 </IconGrid>
 
-<ScreenshotGrid>
-  <Screenshot src="/img/scenarios/spark-10-templates-projects.png" alt="Spark project template import page." caption="Project templates and Squad Apps are reviewed from the Templates surface." />
-  <Screenshot src="/img/scenarios/spark-09-templates-ceremonies.png" alt="Spark ceremony template page." caption="An app can include reusable ceremonies as part of the package." />
-  <Screenshot src="/img/scenarios/spark-11-ceremonies.png" alt="Spark ceremonies after import." caption="Imported ceremonies become normal project automation." />
-</ScreenshotGrid>
-
 ## What a Squad App can include
 
 - project metadata and README content
@@ -2076,6 +1956,17 @@ A Squad App is a portable, self-describing package that can stand up a Squadboar
 | Squad plugin | Individual skill/tool/instruction convention from upstream [Squad](https://github.com/bradygaster/squad) | Sharing capabilities across agents and clients |
 
 Squad Apps can contain SKILL.md files that follow the upstream Squad plugin convention. That lets an app bundle a full project while still sharing individual skills with Squad-compatible tooling.
+
+## Integration-backed apps
+
+Apps that promise recurring external intake, such as a GitHub issue router, should keep the reusable integration behavior separate from app-specific configuration:
+
+- Built-in behavior: authenticate, fetch incrementally, maintain a cursor, dedupe/upsert by the external issue id, and hand changed cards to a triage ceremony.
+- App configuration: source repo, query or labels, cadence, target column, triage ceremony, and routing agents.
+
+If the reusable importer is not implemented yet, app copy should say the bundle declares an intake contract rather than claiming issues will be fetched automatically.
+
+For documentation review apps, use the same split. The app should own repo/docs globs, cadence, stale threshold, review rubric, triage labels/stages, and final-action policy. The platform should provide reusable scheduled execution and manual **Run now** with context. The safe default final action is to create or update review findings/issues with suggested fixes, owner, and severity — not to auto-edit docs. PR drafting should be a separate explicit action.
 
 ## Canonical layout
 
@@ -2128,12 +2019,6 @@ Squadboard is designed to complement upstream [Squad](https://github.com/bradyga
   <IconCard icon={ClipboardTaskListLtrRegular} title="Board state is durable">Cards and runs are queryable after the chat session ends.</IconCard>
   <IconCard icon={PlugConnectedRegular} title="MCP connects clients">Copilot CLI and VS Code can interact through explicit tools.</IconCard>
 </IconGrid>
-
-<ScreenshotGrid>
-  <Screenshot src="/img/scenarios/spark-01-projects.png" alt="Spark project entry in Squadboard." caption="A Squadboard project points at the repository workspace that owns `.squad/`." />
-  <Screenshot src="/img/scenarios/spark-13-mcp-list.png" alt="Spark MCP server configuration." caption="MCP is the bridge for Copilot CLI, VS Code, and services that need board tools." />
-  <Screenshot src="/img/scenarios/spark-03-board-plan.png" alt="Spark board state." caption="Driver directives can become durable board state rather than remaining in a single chat." />
-</ScreenshotGrid>
 
 ## Responsibilities
 

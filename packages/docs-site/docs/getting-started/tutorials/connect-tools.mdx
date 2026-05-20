@@ -1,21 +1,21 @@
 ---
-title: 4. Connect Copilot CLI, Squad, and MCP
-description: Wire Spark to Copilot CLI and upstream Squad via MCP, connect GitHub for the outer loop, and save Spark as a reusable template.
+title: 4. Connect external tools
+description: Wire your project to Copilot CLI and upstream Squad via MCP, connect GitHub for the outer loop, and save your project as a reusable template.
 ---
 
 import {PlugConnectedRegular, ArrowSyncRegular, SettingsRegular, DocumentCopyRegular} from '@fluentui/react-icons';
-import {IconCard, IconGrid, Screenshot, ScreenshotGrid} from '../../../src/components/FluentDoc';
+import {IconCard, IconGrid} from '../../../src/components/FluentDoc';
 
-# 4. Connect Copilot CLI, Squad, and MCP
+# 4. Connect external tools
 
-Spark works on its own. It becomes a lot more useful once the same project state is reachable from Copilot CLI, upstream Squad, and (when you are ready) GitHub. This tutorial wires the outer surfaces around the loop you ran in Tutorial 3.
+Your project works on its own. It becomes a lot more useful once the same project state is reachable from Copilot CLI, upstream Squad, and (when you are ready) GitHub. This tutorial wires the outer surfaces around the loop you ran in Tutorial 3.
 
 ## How these three pieces fit together
 
 Squadboard is the **multi-agent inner loop** — capture, shape, route, run, review — that happens *before* work reaches GitHub.
 
 - **Upstream [Squad](https://github.com/bradygaster/squad)** owns the on-disk operating convention: agents, charters, decisions, ceremonies all live in `.squad/`. Squadboard reads and writes that folder; it does not replace it.
-- **Copilot CLI** uses MCP to call Spark's tools (`capture`, `create_issue`, `run_agent`, `get_run_status`) instead of editing the database directly.
+- **Copilot CLI** uses MCP to call your project's tools (`capture`, `create_issue`, `run_agent`, `get_run_status`) instead of editing the database directly.
 - **GitHub** is the outer loop — issues, pull requests, checks, review signals — that reflects work *after* the inner loop has done its job.
 
 :::note Shared storage status
@@ -37,54 +37,44 @@ See [Storage provider — Configuration recipes](../../user-guide/storage-provid
 
 ## 1. Add an MCP server for the bridge
 
-Open **MCP Servers**. This page lists every external tool bridge Spark exposes.
-
-<Screenshot src="/img/scenarios/spark-13-mcp-list.png" alt="Spark MCP Servers page listing configured bridges." caption="MCP entries make external tool access explicit and reviewable instead of ambient." />
+Open **MCP Servers**. This page lists every external tool bridge your project exposes.
 
 Click **New MCP server** and fill in a recognizable name plus the endpoint your client will use:
 
 - For local Copilot CLI, use the stdio CLI command from [MCP integration](../../user-guide/mcp.mdx) instead of an HTTP URL.
 - For a hosted MCP gateway, paste the HTTP endpoint and any required credential ID.
 
-<Screenshot src="/img/scenarios/spark-14-mcp-dialog.png" alt="New MCP server dialog being filled out with a name and endpoint for the Spark bridge." caption="Keep tool access narrow. Give the launch agent only the tools Spark needs — do not share unrelated machine-level capabilities." />
-
 Save. The bridge appears in the list and is immediately callable by clients pointed at it.
 
-### What Copilot CLI can now do against Spark
+### What Copilot CLI can now do with your project
 
 With the MCP bridge in place, a developer in Copilot CLI can:
 
-- Drop a freeform note into the Spark **Inbox** with `capture`.
+- Drop a freeform note into your project's **Inbox** with `capture`.
 - Create a structured card with `create_issue` (it lands in Backlog so a human can still shape it).
 - Trigger a run with `run_agent` and check progress with `get_run_status`.
 
-The result of every call shows up on the Spark board with the same audit trail as if you had clicked through the UI. Copilot CLI does not need (and should not have) direct database access.
+The result of every call shows up on your project board with the same audit trail as if you had clicked through the UI. Copilot CLI does not need (and should not have) direct database access.
 
 ## 2. Connect GitHub as the outer loop
 
-When the team is ready for issues, pull requests, checks, and review signals to flow back into Spark, connect GitHub. Open **Settings**.
-
-<Screenshot src="/img/scenarios/spark-15-settings-general.png" alt="Spark Settings — General tab — showing project identity and runtime defaults." caption="General settings live with the rest of Spark navigation because they affect the same operating loop as the board and ceremonies." />
+When the team is ready for issues, pull requests, checks, and review signals to flow back into your project, connect GitHub. Open **Settings**.
 
 Switch to the **GitHub** tab and connect the repository, install the app, and configure label and webhook routing.
 
-<Screenshot src="/img/scenarios/spark-17-settings-github.png" alt="Spark Settings — GitHub Integration tab — showing repository connection and webhook configuration." caption="Connect GitHub only after the inner loop is healthy. GitHub should reinforce the loop, not bypass it." />
-
 Once connected:
 
-- GitHub issues with matching labels become Spark cards.
-- Spark runs that produce PRs link back from the card.
+- GitHub issues with matching labels become project cards.
+- Project runs that produce PRs link back from the card.
 - Check and review state flows back into the board so ceremonies can act on it.
 
 For the policy and webhook details, see [GitHub integration](../../user-guide/github.md).
 
-## 3. Save Spark as a template (portability)
+## 3. Save your project as a template (portability)
 
-If Spark turned into a launch loop you want to reuse — same team shape, same ceremonies, same board structure — save it as a template before you tear it down or move on.
+If your project turned into a workflow loop you want to reuse — same team shape, same ceremonies, same board structure — save it as a template before you tear it down or move on.
 
 Open **Settings → Portability**.
-
-<Screenshot src="/img/scenarios/spark-16-settings-portability.png" alt="Spark Settings — Portability tab — with the Save as template action visible." caption="Portability turns the Spark operating model into something another project can start from on day one." />
 
 Click **Save as template**. The export includes:
 
@@ -98,9 +88,9 @@ Anyone starting a new project can pick this template in step 1 of [Tutorial 1](.
 
 ## What you have now
 
-- An MCP server entry that lets Copilot CLI work against Spark without direct DB access.
+- An MCP server entry that lets Copilot CLI work with your project without direct DB access.
 - GitHub connected (optional) so the outer loop reinforces the inner loop.
-- Spark saved as a reusable template.
+- Your project saved as a reusable template.
 
 ## Where to go next
 

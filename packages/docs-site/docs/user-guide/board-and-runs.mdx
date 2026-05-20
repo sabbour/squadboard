@@ -4,7 +4,7 @@ description: Work with cards, run agents, monitor live output, and understand ru
 ---
 
 import {ClipboardTaskListLtrRegular, FlashRegular, ChartMultipleRegular} from '@fluentui/react-icons';
-import {IconCard, IconGrid, Screenshot, ScreenshotGrid} from '../../src/components/FluentDoc';
+import {IconCard, IconGrid} from '../../src/components/FluentDoc';
 
 # Board and runs
 
@@ -15,12 +15,6 @@ The board is where Spark turns intent into durable work. A card can start as a r
   <IconCard icon={FlashRegular} title="Runs">Attach execution and streamed output to the card that caused it.</IconCard>
   <IconCard icon={ChartMultipleRegular} title="History">Keep routing decisions and lifecycle state queryable later.</IconCard>
 </IconGrid>
-
-<ScreenshotGrid>
-  <Screenshot src="/img/scenarios/spark-03-board-plan.png" alt="Spark board with launch-planning work." caption="Use the board to decide what is ready for routing and what still needs shaping." />
-  <Screenshot src="/img/scenarios/spark-04-new-card.png" alt="New Spark issue card dialog." caption="Create cards with enough context for future routing, not just a short title." />
-  <Screenshot src="/img/scenarios/spark-05-board-after-create.png" alt="Spark board after creating a launch-note card." caption="New cards become part of the shared project state immediately." />
-</ScreenshotGrid>
 
 ## Board model
 

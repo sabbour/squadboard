@@ -1,14 +1,14 @@
 ---
-title: 3. Run the Spark launch wave
+title: 3. Run a workflow
 description: Capture work in the inbox, shape it into a card, move it to Ready, watch automatic pickup, inspect the run, and close the loop with a ceremony.
 ---
 
 import {ClipboardTaskListLtrRegular, ArrowSyncRegular, ChartMultipleRegular} from '@fluentui/react-icons';
-import {IconCard, IconGrid, Screenshot, ScreenshotGrid} from '../../../src/components/FluentDoc';
+import {IconCard, IconGrid} from '../../../src/components/FluentDoc';
 
-# 3. Run the Spark launch wave
+# 3. Run a workflow
 
-This is the end-to-end. You will take one rough launch idea from "I need a thing" all the way to "an agent ran, produced output, and a ceremony recorded the handoff." Every step uses the Spark project from Tutorials 1 and 2.
+This is the end-to-end. You will take one rough idea from "I need a thing" all the way to "an agent ran, produced output, and a ceremony recorded the handoff." Every step uses the project from Tutorials 1 and 2.
 
 The flow is one continuous loop:
 
@@ -18,11 +18,9 @@ No manual "play" button. Once a card lands in Ready, Squadboard does the rest.
 
 ## 1. Capture the raw request in the Inbox
 
-Real launch work rarely arrives as a clean ticket. The **Inbox** is where freeform notes, Copilot CLI captures, and MCP-submitted ideas land before they become structured cards. They keep the user's original wording so nothing is lost in translation.
+Real work rarely arrives as a clean ticket. The **Inbox** is where freeform notes, Copilot CLI captures, and MCP-submitted ideas land before they become structured cards. They keep the user's original wording so nothing is lost in translation.
 
-Open **Inbox**. You should see a launch-note request that still reads like a human note.
-
-<Screenshot src="/img/scenarios/spark-12-inbox.png" alt="Spark Inbox showing a freeform launch-note request waiting to be shaped." caption="The Inbox preserves raw intent. Shape it into a card when you understand the outcome — not before." />
+Open **Inbox**. You should see a request that still reads like a human note.
 
 Read the request. Decide whether the outcome is clear enough to become a card.
 
@@ -30,9 +28,7 @@ Read the request. Decide whether the outcome is clear enough to become a card.
 
 Open the **Board** and click **Create issue**. Title the card with a concrete outcome and write the body so the agent who picks it up knows what to produce.
 
-<Screenshot src="/img/scenarios/spark-04-new-card.png" alt="New Spark card dialog being filled out for the launch-note publish work." caption="A card body should explain user-facing outcome, related context (Squad, integrations), and what evidence to link when the work is done." />
-
-A useful Spark card body covers:
+A useful card body covers:
 
 1. **The user-facing outcome.** What changes for someone reading this?
 2. **The context.** What `.squad/`, upstream Squad, or integration relationship matters?
@@ -41,8 +37,6 @@ A useful Spark card body covers:
 Leave appropriate ambiguity. Deterministic things (project, status, labels, assignee, audit) belong to Squadboard. Ambiguous things (wording, tone, interpretation) belong to the agent. Do not over-specify either.
 
 Save the card. It lands in **Backlog**.
-
-<Screenshot src="/img/scenarios/spark-05-board-after-create.png" alt="Spark board after creating the launch-note card; it sits in Backlog beside the existing launch checklist." caption="Cards live in Backlog while they are still being shaped. Nothing automated runs against Backlog." />
 
 ## 3. Move the card to Ready — automatic pickup starts
 
@@ -57,8 +51,6 @@ When a card enters Ready, Squadboard:
 
 You do not click play. There is no play button for the normal Ready path — In Progress is runtime state, not a status you set manually.
 
-<Screenshot src="/img/scenarios/spark-19-ready-pickup.png" alt="Spark board after the Ready card has been picked up and assigned automatically." caption="The Ready card now shows the assigned agent and an active run. Squadboard chose the assignee from the roster you reviewed in Tutorial 2." />
-
 ## 4. Inspect the run and its output
 
 Click the card to open its detail view. The right-hand panel shows the issue run: which agent picked it up, when, the prompt context Squadboard composed, the model output, any tool calls, and the final artifact reference.
@@ -69,19 +61,15 @@ This is the part most teams overlook. The run detail is where you confirm that:
 - The **prompt context** included the card body, parent links, and project rules you expected.
 - The **output** matches the outcome you wrote in step 2.
 
-<Screenshot src="/img/scenarios/spark-20-run-detail.png" alt="Spark card detail panel showing the active Work Pickup run and assigned agent." caption="Open the picked-up card to inspect the run state, selected agent, run plan, and output without leaving the board." />
-
 If you need to understand the deeper mechanics later, read [Board and Runs](../../user-guide/board-and-runs.mdx) and [Coordinator loops](../../user-guide/coordinator-loops.mdx).
 
 ## 5. Close the wave with a ceremony
 
-Once a run produces output, you want a repeatable way to review it, summarize it, and hand it off. That is what **ceremonies** are for. Spark ships with a launch-review ceremony you can run on demand or on a schedule.
+Once a run produces output, you want a repeatable way to review it, summarize it, and hand it off. That is what **ceremonies** are for. Your project ships with a default launch-review ceremony you can run on demand or on a schedule.
 
-Open **Ceremonies**. You should see **Spark Launch Review**.
+Open **Ceremonies**. You should see a launch-review ceremony.
 
-<Screenshot src="/img/scenarios/spark-11-ceremonies.png" alt="Spark Ceremonies page listing the Spark Launch Review ceremony." caption="Ceremonies give recurring rituals a durable trigger, version, and run history — they are not chat sessions." />
-
-Click into **Spark Launch Review** and run it. The ceremony walks its workflow steps (route → agent_run → approve) using the runs you just produced as input. The output becomes part of the project record.
+Click into it and run it. The ceremony walks its workflow steps (route → agent_run → approve) using the runs you just produced as input. The output becomes part of the project record.
 
 Other ceremonies worth knowing about:
 
@@ -91,13 +79,9 @@ Other ceremonies worth knowing about:
 
 You can review the visual flow of any ceremony before activating it.
 
-<Screenshot src="/img/scenarios/spark-09-templates-ceremonies.png" alt="Ceremony templates page showing the step sequence of each available ceremony." caption="Always preview a ceremony — especially imported ones — before attaching it. The preview shows what tools and approvals it will use." />
-
 ## 6. Watch cost as part of operations
 
 Open **Costs** after a few runs and ceremonies have executed. Cost belongs next to operations, not buried in settings — surprising bills come from work patterns you did not notice early enough.
-
-<Screenshot src="/img/scenarios/spark-18-costs.png" alt="Spark Costs page showing per-run and per-ceremony model usage." caption="Use Costs to spot which cards or ceremonies are burning the most model usage and decide whether the pattern is worth it." />
 
 ## What you just did
 
@@ -108,4 +92,4 @@ Open **Costs** after a few runs and ceremonies have executed. Cost belongs next 
 - Ran a ceremony to record the handoff.
 - Watched cost to keep the loop honest.
 
-Continue with [4. Connect Copilot CLI, Squad, and MCP →](./connect-tools.mdx) to make the same flow accessible from outside Squadboard.
+Continue with [4. Connect external tools →](./connect-tools.mdx) to make the same flow accessible from Copilot CLI, Squad, and other tools via MCP.

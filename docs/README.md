@@ -10,4 +10,5 @@
 | [`concepts/dogfood-loop.md`](./concepts/dogfood-loop.md) | How directives, routing, agent runs, GitHub events, and Scribe close-out feed the next wave |
 | [`ceremonies/`](./ceremonies/README.md) | Authoring, lifecycle, trigger, and YAML reference docs for ceremonies |
 | [`setup/mcp-install.md`](./setup/mcp-install.md) | MCP setup for Copilot CLI, VS Code, and HTTP embedding |
+| [`RELEASE-READINESS.md`](./RELEASE-READINESS.md) | Pre-release validation, publishing steps, and rollback plan |
 | [`demos/`](./demos/) | Demo scripts and acceptance notes for vertical slices |

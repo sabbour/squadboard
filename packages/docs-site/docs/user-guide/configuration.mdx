@@ -4,7 +4,7 @@ description: Configure runtime, database, cost model, project defaults, and docs
 ---
 
 import {SettingsRegular, MoneyRegular, ArrowSyncRegular} from '@fluentui/react-icons';
-import {IconCard, IconGrid, Screenshot, ScreenshotGrid} from '../../src/components/FluentDoc';
+import {IconCard, IconGrid} from '../../src/components/FluentDoc';
 
 # Configuration
 
@@ -15,12 +15,6 @@ Use configuration to make runtime defaults, integrations, costs, and portability
   <IconCard icon={ArrowSyncRegular} title="Integrations">Configure GitHub and MCP from explicit project surfaces.</IconCard>
   <IconCard icon={MoneyRegular} title="Cost">Choose how model usage is accounted for and reviewed.</IconCard>
 </IconGrid>
-
-<ScreenshotGrid>
-  <Screenshot src="/img/scenarios/spark-15-settings-general.png" alt="Spark general settings." caption="Project settings capture runtime and repository-level defaults." />
-  <Screenshot src="/img/scenarios/spark-17-settings-github.png" alt="Spark GitHub settings." caption="GitHub configuration is project-level so automation can stay opt-in." />
-  <Screenshot src="/img/scenarios/spark-18-costs.png" alt="Spark costs page." caption="The cost view helps teams tune model usage as work runs." />
-</ScreenshotGrid>
 
 ## Runtime
 
@@ -50,7 +44,7 @@ Useful environment variables:
 | --- | --- |
 | `SQUADBOARD_DEFAULT_PROJECT_ID` | Default project for MCP tools and capture flows |
 | `SQUADBOARD_SQUAD_STORAGE_PROVIDER` | `postgresql` (default) or `fs` filesystem fallback for Squad state |
-| `SQUADBOARD_COST_MODEL` | Use `usd` or `gh_multipliers` cost accounting |
+| `SQUADBOARD_COST_MODEL` | Use `usd` or `ai_credits` cost accounting (`gh_multipliers` is a legacy alias) |
 | `COORDINATOR_DISPATCH_ENABLED` | Set `0` to disable coordinator dispatch |
 | `COORDINATOR_MODEL` | Primary model for bounded coordinator judgment |
 | `COORDINATOR_MODEL_FALLBACKS` | Comma-separated fallback model chain |

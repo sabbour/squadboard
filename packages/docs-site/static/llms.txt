@@ -14,15 +14,15 @@ Machine-readable entry point for the Squadboard documentation site.
 - [Reliability and real-time UI](/squadboard/docs/features/reliability-and-ui) - Persistence, backup/restore, migration safety, live updates, and operational visibility.
 - [Current pre-alpha limits](/squadboard/docs/features/roadmap-gaps) - Current pre-alpha constraints and feature areas that remain intentionally future work.
 - [Workflow engine](/squadboard/docs/features/workflow-engine) - Durable workflow execution, recovery, retries, and step orchestration.
-- [Getting Started](/squadboard/docs/getting-started/index) - Install Squadboard, create your first project, and follow the Spark tutorials.
+- [Getting Started](/squadboard/docs/getting-started/index) - Install Squadboard, create your first project, and follow tutorials to master the workflow board.
 - [Installation](/squadboard/docs/getting-started/installation) - Install dependencies, start the local app, and build the docs site.
 - [Learning path](/squadboard/docs/getting-started/learning-path) - Choose the docs path that matches your role and goal.
-- [Quickstart](/squadboard/docs/getting-started/quickstart) - Ten minutes from install to a Spark card that an agent picked up automatically — the same loop the tutorials expand on.
-- [2. Cast and review the team](/squadboard/docs/getting-started/tutorials/cast-the-team) - Give Spark a small launch team with real names, roles, and charters, and use Consult when the right answer is still ambiguous.
-- [1. Connect Spark](/squadboard/docs/getting-started/tutorials/connect-spark) - Create the Spark project and connect it to a repository — whether the repo is new, came from a template, or already has Squad initialized.
-- [4. Connect Copilot CLI, Squad, and MCP](/squadboard/docs/getting-started/tutorials/connect-tools) - Wire Spark to Copilot CLI and upstream Squad via MCP, connect GitHub for the outer loop, and save Spark as a reusable template.
-- [Tutorials](/squadboard/docs/getting-started/tutorials/index) - Four sequential tutorials that take Spark from "nothing" to "running, observed, and connected to your other tools".
-- [3. Run the Spark launch wave](/squadboard/docs/getting-started/tutorials/run-the-launch-wave) - Capture work in the inbox, shape it into a card, move it to Ready, watch automatic pickup, inspect the run, and close the loop with a ceremony.
+- [Quickstart](/squadboard/docs/getting-started/quickstart) - Ten minutes from install to your first workflow card that an agent picks up automatically — the same loop the tutorials expand on.
+- [2. Cast and review the team](/squadboard/docs/getting-started/tutorials/cast-the-team) - Give your project a small team with real names, roles, and charters, and use Consult when the right answer is still ambiguous.
+- [1. Create your project](/squadboard/docs/getting-started/tutorials/connect-spark) - Create your project and connect it to a repository — whether the repo is new, came from a template, or already has Squad initialized.
+- [4. Connect external tools](/squadboard/docs/getting-started/tutorials/connect-tools) - Wire your project to Copilot CLI and upstream Squad via MCP, connect GitHub for the outer loop, and save your project as a reusable template.
+- [Tutorials](/squadboard/docs/getting-started/tutorials/index) - Four sequential tutorials that take your project from setup to running, observed, and connected to your other tools.
+- [3. Run a workflow](/squadboard/docs/getting-started/tutorials/run-the-launch-wave) - Capture work in the inbox, shape it into a card, move it to Ready, watch automatic pickup, inspect the run, and close the loop with a ceremony.
 - [Squadboard documentation](/squadboard/docs/) - Start here for installation, quick links, and a map of the Squadboard docs.
 - [FAQ](/squadboard/docs/reference/faq) - Frequently asked questions about Squadboard.
 - [Reference](/squadboard/docs/reference/index) - Focused reference pages for operating and troubleshooting Squadboard.

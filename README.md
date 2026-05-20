@@ -43,6 +43,18 @@ The intended split is:
 - **Squadboard (`sabbour/squadboard`)** mirrors those outcomes in a local-first control plane: board cards, coordinator decisions, runs, ceremonies, Scribe close-out, GitHub sync, and MCP tools.
 - **MCP integration** lets Copilot CLI and compatible clients send directives into Squadboard so ambiguous instructions can become durable cards, decisions, and auditable runs.
 
+## Typical Workflows
+
+Pick your starting point:
+
+- **🚀 [Getting Started](packages/docs-site/docs/getting-started/)** — Clone, install, and run Squadboard locally in 5 minutes.
+- **📦 [Create a Squad App](packages/docs-site/docs/user-guide/squad-apps.mdx)** — Build, test, and publish a reusable workflow template.
+- **📤 [Publishing & Release Checklist](docs/deliverables.md)** — Pre-flight validation before shipping to npm or GitHub.
+
+For more details, see the **[full documentation](packages/docs-site/docs/)**.
+
+---
+
 ## Getting Started
 
 ### Prerequisites
@@ -125,6 +137,8 @@ squadboard start --squad-storage fs
 ```
 
 Use this when you intentionally want Squad state to stay in repository `.squad/` files.
+
+Squad Sync status is project-aware: registered CLI/Copilot-first projects remain labeled as filesystem-authoritative unless they have a persisted PostgreSQL authority mode or imported `squad_storage` rows. The process storage provider is a runtime default, not proof that every project is database-authoritative.
 
 **Override with an external PostgreSQL instance:**
 
@@ -321,7 +335,7 @@ squadboard start --squad-storage fs
 
 1. **Create in Squadboard UI** — Click "New Project" → project is created in PostgreSQL mode.
 2. **Squadboard bootstraps** — Seeds team roster, ceremonies defaults (Simple Review, Bug Fix, RFC, Spike, Pair Programming), routing rules, and agent files.
-3. **Repair client projections** — Settings → **Team Sync** shows missing ceremony defaults and missing `.github/agents/squad.agent.md` with one-click repair actions.
+3. **Repair client projections** — Settings → **Squad Sync** shows missing ceremony defaults and missing `.github/agents/squad.agent.md` with one-click repair actions.
 4. **Open in Copilot CLI** — Configure MCP (see "MCP Integration" above). Copilot CLI uses the generated Squad agent file plus Squadboard's MCP/API broker to share the same Squad state.
 5. **Write code, run ceremonies** — Teams use both surfaces interchangeably. There is one active authority and no implicit background two-way mirror.
 
@@ -360,7 +374,7 @@ Repair actions include:
 - `project-squad-to-fs` — Explicitly project database-backed Squad state to `.squad/` files when PostgreSQL is authoritative
 
 **UI Sync Panel:**
-Project Settings → **Team Sync** shows:
+Project Settings → **Squad Sync** shows:
 - Active storage mode and authority
 - Bootstrap health and drift status
 - One-click repair buttons per issue
@@ -373,7 +387,7 @@ Before cross-surface sync, teams faced a choice:
 - Use CLI/Copilot, lose Squadboard (unclear if filesystem owned state or database)
 - Juggle both but risk data loss on mode switch
 
-Now: **choose your starting point, both surfaces stay in sync, no data loss.**
+Now: **choose your starting point, make the active authority explicit, and use repair/export actions when you intentionally hand state between surfaces.**
 
 ### Test Coverage Inventory
 
@@ -382,8 +396,8 @@ Run the automated suite with `pnpm test:e2e`. The Playwright config starts the S
 | Layer | Command | Coverage |
 | --- | --- | --- |
 | Server Vitest | `pnpm --filter @sabbour/squadboard exec vitest run src/sdk/sync-ownership.test.ts src/__tests__/squad-sync-authority.test.ts src/__tests__/squad-sync-route.test.ts src/__tests__/squad-sync-status-route.test.ts` | Storage authority, bootstrap artifacts, repair actions, status/repair route envelopes, filesystem-authoritative safety. |
-| Client Vitest | `pnpm --filter @sabbour/squadboard-client test -- src/components/settings/__tests__/SquadSyncStatusPanel.test.tsx` | Settings → Team Sync normalization, labels, repair buttons, and unavailable status handling. |
-| Playwright E2E | `pnpm test:e2e` | Full-stack launch, onboarding, kanban smoke paths, navigation, agents, templates, WebSocket connectivity, team portability, consult send guards, disabled-agent guards, loading pattern, cast team, jump-into-session, docs scenarios, Team Sync status/repair/projection paths, and deterministic Copilot CLI command-runner coverage. |
+| Client Vitest | `pnpm --filter @sabbour/squadboard-client test -- src/components/settings/__tests__/SquadSyncStatusPanel.test.tsx` | Settings → Squad Sync normalization, labels, repair buttons, and unavailable status handling. |
+| Playwright E2E | `pnpm test:e2e` | Full-stack launch, onboarding, kanban smoke paths, navigation, agents, templates, WebSocket connectivity, team portability, consult send guards, disabled-agent guards, loading pattern, cast team, jump-into-session, docs scenarios, Squad Sync status/repair/projection paths, and deterministic Copilot CLI command-runner coverage. |
 | Live gated E2E | `SQUADBOARD_E2E_LIVE_COPILOT=1 pnpm test:e2e -- 13-copilot-cli-launch.spec.ts` | Launches a real authenticated Copilot CLI from a repaired test project and asks Squad. This is opt-in because CI may not have Copilot CLI auth/network access. |
 
 ### Build for Production
@@ -432,21 +446,21 @@ directives → decisions → board cards → runs → Scribe close-out.
 See [Dogfood Playbook](.squad/dogfood.md) and [MCP tool reference](packages/server/src/mcp/README.md)
 for details on the `capture` tool and when the coordinator calls it.
 
-### Cost Tracking — GitHub Copilot Premium-Request Multipliers (Wave 10)
+### Cost Tracking — GitHub AI Credits
 
 Squadboard tracks cost in two models:
-- **Legacy (USD):** Token-based pricing (Anthropic / OpenAI public rates)
-- **GitHub Copilot multipliers:** Premium-request equivalent (1 premium request ≈ 10,000 tokens)
+- **USD:** Token-based pricing estimates.
+- **GitHub AI Credits:** Usage-based Copilot billing display derived from the USD estimate (`1 credit = $0.01`). GitHub no longer bills individual plans by premium requests.
 
 Switch models via:
 ```bash
 # Set globally
-export SQUADBOARD_COST_MODEL=gh_multipliers
+export SQUADBOARD_COST_MODEL=ai_credits
 
 # Or per-project via the API (see next section)
 curl -X PATCH http://localhost:3000/api/projects/{projectId} \
   -H "Content-Type: application/json" \
-  -d '{"costModel": "gh_multipliers"}'
+  -d '{"costModel": "ai_credits"}'
 ```
 
 See `packages/server/src/sdk/cost-tracker.ts` for pricing details.

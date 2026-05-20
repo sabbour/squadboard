@@ -1,26 +1,36 @@
 ---
 id: index
 title: Getting Started
-description: Install Squadboard, create your first project, and follow the Spark tutorials.
+description: Install Squadboard, create your first project, and follow tutorials to master the workflow board.
 ---
 
 import {ClipboardTaskListLtrRegular, FolderRegular, SparkleRegular} from '@fluentui/react-icons';
 import {IconGrid, IconCard} from '@site/src/components/FluentDoc';
 
-Start here if you are setting up Squadboard for the first time or evaluating the pre-alpha workflow with the Spark project. Read the pages in order if you want one continuous path: install locally, finish the quickstart, then continue into the Spark tutorials.
+## Choose Your Path
 
-The tutorials follow the same operating flow throughout: create Spark, review the team, delegate cards by moving them to Ready, approve the work that needs judgment, and watch the board, ceremonies, and MCP surfaces stay in sync.
+**New to Squadboard?** Pick one:
 
 <IconGrid>
-  <IconCard icon={FolderRegular} title="Install" to="/getting-started/installation">
-    Set up the local-first app, server, docs package, and database.
+  <IconCard icon={FolderRegular} title="Set Up Locally" to="/getting-started/installation">
+    Install dependencies and start the server with a local database.
   </IconCard>
-  <IconCard icon={SparkleRegular} title="Quickstart" to="/getting-started/quickstart">
-    Create Spark, capture work, assign an agent, and watch the board advance.
+  <IconCard icon={SparkleRegular} title="Run Quickstart" to="/getting-started/quickstart">
+    Create your first project and run a workflow in 10 minutes.
   </IconCard>
   <IconCard icon={ClipboardTaskListLtrRegular} title="Tutorials" to="/getting-started/tutorials">
-    Walk through complete end-to-end scenarios with screenshots from the same Spark workspace.
+    Walk through complete end-to-end workflows with real examples.
   </IconCard>
 </IconGrid>
 
-After the tutorials, move into the [Product Guide](/features/overview) to understand the underlying board, runs, ceremonies, imports, and Copilot CLI + Squad coexistence model.
+---
+
+## Learning Path
+
+Follow these pages in order:
+
+1. **[Installation](/getting-started/installation)** — Set up Node, pnpm, and start the server
+2. **[Quickstart](/getting-started/quickstart)** — Create your first project, add tasks, and run a workflow
+3. **[Tutorials](/getting-started/tutorials)** — Walk through complete end-to-end workflows with real examples
+
+After the quickstart, explore the **[Product Guide](/features/overview)** to understand the board, runs, ceremonies, and how Squadboard syncs with Copilot CLI + Squad.

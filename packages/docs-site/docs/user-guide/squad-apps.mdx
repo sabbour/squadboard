@@ -4,7 +4,7 @@ description: Package complete Squadboard projects as installable apps.
 ---
 
 import {ArrowUploadRegular, DocumentCopyRegular, ShieldRegular} from '@fluentui/react-icons';
-import {IconCard, IconGrid, Screenshot, ScreenshotGrid} from '../../src/components/FluentDoc';
+import {IconCard, IconGrid} from '../../src/components/FluentDoc';
 
 # Squad Apps
 
@@ -15,12 +15,6 @@ A Squad App is a portable, self-describing package that can stand up a Squadboar
   <IconCard icon={DocumentCopyRegular} title="Review before use">Inspect manifests and templates before running imported automation.</IconCard>
   <IconCard icon={ShieldRegular} title="Treat imports carefully">Prompt instructions and tool recipes are code-adjacent configuration.</IconCard>
 </IconGrid>
-
-<ScreenshotGrid>
-  <Screenshot src="/img/scenarios/spark-10-templates-projects.png" alt="Spark project template import page." caption="Project templates and Squad Apps are reviewed from the Templates surface." />
-  <Screenshot src="/img/scenarios/spark-09-templates-ceremonies.png" alt="Spark ceremony template page." caption="An app can include reusable ceremonies as part of the package." />
-  <Screenshot src="/img/scenarios/spark-11-ceremonies.png" alt="Spark ceremonies after import." caption="Imported ceremonies become normal project automation." />
-</ScreenshotGrid>
 
 ## What a Squad App can include
 
@@ -42,6 +36,17 @@ A Squad App is a portable, self-describing package that can stand up a Squadboar
 | Squad plugin | Individual skill/tool/instruction convention from upstream [Squad](https://github.com/bradygaster/squad) | Sharing capabilities across agents and clients |
 
 Squad Apps can contain SKILL.md files that follow the upstream Squad plugin convention. That lets an app bundle a full project while still sharing individual skills with Squad-compatible tooling.
+
+## Integration-backed apps
+
+Apps that promise recurring external intake, such as a GitHub issue router, should keep the reusable integration behavior separate from app-specific configuration:
+
+- Built-in behavior: authenticate, fetch incrementally, maintain a cursor, dedupe/upsert by the external issue id, and hand changed cards to a triage ceremony.
+- App configuration: source repo, query or labels, cadence, target column, triage ceremony, and routing agents.
+
+If the reusable importer is not implemented yet, app copy should say the bundle declares an intake contract rather than claiming issues will be fetched automatically.
+
+For documentation review apps, use the same split. The app should own repo/docs globs, cadence, stale threshold, review rubric, triage labels/stages, and final-action policy. The platform should provide reusable scheduled execution and manual **Run now** with context. The safe default final action is to create or update review findings/issues with suggested fixes, owner, and severity — not to auto-edit docs. PR drafting should be a separate explicit action.
 
 ## Canonical layout
 
