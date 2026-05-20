@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react'
 import { Outlet, useParams, useNavigate, useLocation } from 'react-router'
 import { apiFetch } from '../api/client.ts'
 import { useProjects } from '../api/projects.ts'
+import { useInboxItems } from '../api/inbox.ts'
 import squadboardLogo from '../assets/squadboard-horizontal.png'
 import {
   NavDrawer,
@@ -10,6 +11,7 @@ import {
   NavSectionHeader,
   Button,
   Combobox,
+  CounterBadge,
   Option,
   OptionGroup,
   Tooltip,
@@ -224,6 +226,11 @@ function LayoutInner() {
   const [projectName, setProjectName] = useState<string | null>(null)
   const projectsQuery = useProjects()
   const projects = projectsQuery.data
+
+  const inboxQuery = useInboxItems({ projectId: id })
+  const unreadInboxCount = (inboxQuery.data ?? []).filter(
+    (item) => item.status === 'captured' || item.status === 'formulated'
+  ).length
 
   const [navCollapsed, setNavCollapsed] = useState(() => localStorage.getItem('squadboard.nav.collapsed') === 'true')
 
@@ -555,7 +562,18 @@ function LayoutInner() {
             </Button>
             <Button
               appearance="subtle"
-              icon={<Mail20Regular />}
+              icon={
+                <span style={{ position: 'relative', display: 'inline-flex', alignItems: 'center' }}>
+                  <Mail20Regular />
+                  {unreadInboxCount > 0 && (
+                    <CounterBadge
+                      count={unreadInboxCount}
+                      size="small"
+                      style={{ position: 'absolute', top: -6, right: -8 }}
+                    />
+                  )}
+                </span>
+              }
               onClick={() => navigate(id ? `/projects/${id}/inbox` : '/inbox')}
               title="Inbox"
             >
