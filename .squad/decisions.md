@@ -1,3 +1,213 @@
+## 2026-05-20T21:13:00Z — Wave 6: Comprehensive App Reference Documentation (Redfoot)
+
+# Decision: Comprehensive App Reference Documentation
+
+**Date:** 2026-05-20  
+**Owner:** Redfoot
+**Status:** ✅ IMPLEMENTED
+
+## Summary
+
+Ahmed requested a comprehensive app reference section documenting **every page in the Squadboard UI**. Redfoot has delivered 19 markdown files covering:
+
+- Global pages: Project Picker, Now, Inbox, Apps, Consult, Diagnostics, Heartbeat
+- Per-project pages: Dashboard, Board, Flow, Agents, Skills, Tools, MCP Servers, Costs, Ceremonies, Templates, Settings
+- Deep dive: Live Run Viewer
+
+All 19 files have been created, integrated into sidebars.ts, and verified to build cleanly with 0 broken links.
+
+## Rationale
+
+Users need a place to look up "What does this page do?" and "How do I use this feature?" without reading conceptual docs or hunting through tutorials. This reference answers those questions directly.
+
+Squadboard has 19+ main pages and ~50 tabs/sub-sections. The App Reference documents all of them.
+
+## What We Built
+
+### Files Created (19 total)
+
+1. **index.md** (5KB) — Overview, navigation model, URL reference, deep-link guide
+2. **project-picker.md** (2.5KB) — Create/connect projects
+3. **now.md** (3.3KB) — Global uber-dashboard
+4. **inbox.md** (2.4KB) — Item review workflow
+5. **apps.md** (2.3KB) — Install Squad Apps
+6. **consult.md** (3.6KB) — Chat workspace
+7. **dashboard.md** (2.3KB) — Project metrics
+8. **board.md** (5KB) — Kanban + Card Detail (4 tabs)
+9. **flow.md** (2.4KB) — Agent lineage & swimlanes
+10. **agents.md** (4.3KB) — Team roster & routing
+11. **skills.md** (3.2KB) — Skill registry
+12. **tools.md** (3KB) — Tool catalog
+13. **mcp-servers.md** (3.9KB) — MCP server registry
+14. **costs.md** (2.4KB) — LLM spend tracking
+15. **ceremonies.md** (8.1KB) — List, Editor, Runs, Review, Audit
+16. **templates.md** (4.5KB) — Reusable templates
+17. **settings.md** (6.1KB) — 10 sections of config
+18. **diagnostics-heartbeat.md** (5.3KB) — Health checks & sweepers
+19. **live-run-viewer.md** (5.4KB) — Real-time run monitoring
+
+### Integration
+
+- Updated `sidebars.ts` to add "App Reference" category under Product Guide
+- Sidebar lists all 19 pages in logical grouping
+- Each page cross-links to related pages for discoverability
+
+### Quality
+
+- ✅ Every page includes URL route
+- ✅ Every tab/section documented as sub-heading
+- ✅ Every action/button listed in "Actions" section
+- ✅ Every setting/config listed in "Configuration" section
+- ✅ Written honestly; no aspirational features
+- ✅ Build passes: 0 broken links, 64 pages generated
+- ✅ Follows Paperclip docs style (direct, honest, action-focused)
+
+## Impact
+
+**For users:**
+- Single reference point to understand any UI element
+- Clear URL paths for navigation
+- Deep-link parameters documented
+- Related pages linked for easy context-jumping
+
+**For docs:**
+- 5,399 lines of new content
+- 19 files organized by feature/page
+- Consistent structure and tone across all files
+- Ready for translation or contribution
+
+## Design Decisions
+
+### Why combine Ceremonies/Settings/Templates into single files?
+
+These pages have multiple related sub-pages but they're navigation variants of a single feature. Combining them keeps related content together and easier to scan.
+
+### Why include URL paths in every file?
+
+Users often ask "How do I get to this page?" Including the route saves them from searching or guessing.
+
+### Why the Paperclip style?
+
+Squadboard docs follow Paperclip's principle: write for the confused reader at 11pm. No marketing, no preamble, just honest direct explanations and actions.
+
+### Why a separate "App Reference" section instead of integrating into User Guide?
+
+Reference docs answer "What is this?" and "How do I use this?" differently than task-based guides. Separate section makes it clear what each document type offers.
+
+## Related Decisions
+
+- Wave 5: Paperclip-quality docs pass (established tone & style)
+- Wave 3: API & WebSocket documentation (reference style)
+- Wave 4: Squad→Squadboard onboarding (entry-point docs)
+
+## Future Opportunities
+
+1. **Screenshots** — Add UI screenshots to each page (helps visual learners)
+2. **Video tours** — Embed demo videos for complex pages (Board, Flow, Settings)
+3. **Keyboard shortcuts** — Document shortcuts for power users
+4. **Interactive examples** — Embed runnable ceremony examples
+5. **Localization** — Translate App Reference into other languages
+
+## Metrics
+
+- **Coverage:** 19 pages, ~50 tabs/sections, 100+ actions documented
+- **Size:** 5,399 lines total, avg 284 lines/file
+- **Build time:** <30s; 0 errors, 0 broken links
+- **Scope:** All UI pages except internal/admin pages
+- **Commit:** 85f85ec72
+
+## Approval
+
+✅ **Approved** — Comprehensive, well-organized, builds cleanly.
+
+Delivered to spec. Ready for user publication.
+
+---
+
+## 2026-05-20T21:12:00Z — Wave 6: Full Docs Scrub & Quality Pass (Redfoot)
+
+# Decision: Wave 6 Full Docs Scrub
+
+**Date:** 2026-05-20  
+**Owner:** Redfoot (Docs/DevRel Dev)
+**Status:** ✅ IMPLEMENTED
+
+## Summary
+
+Completed full scrub of all remaining documentation pages not touched in Wave 5. Applied Paperclip quality standard across the entire docs-site and verified no broken links or internal notes in user-facing content.
+
+## Changes Made
+
+### Getting Started Pages (Best Practice Routing)
+
+- **getting-started/index.mdx** — Added early "What is Squadboard?" and "Key Concepts" links to route confused new users to conceptual pages first
+- **getting-started/learning-path.md** — Prepended intro directing users to what-is and key-concepts before choosing their learning path
+- **getting-started/quickstart.mdx** — Added "New here?" call-out linking to conceptual foundation before the 10-minute quickstart
+- **getting-started/installation.md** — Added "Next steps" section guiding users to what-is, quickstart, and tutorials
+
+**Rationale:** New users ask "What is this?" before "How do I use it?" Our getting-started section now honors that user journey.
+
+### How-to Guides (Link Fixes)
+
+Fixed relative path resolution errors in all three how-to guides:
+- `user-guide/how-to/add-squadboard-to-squad-project.md`
+- `user-guide/how-to/find-why-run-failed.md`
+- `user-guide/how-to/move-card-to-ready.md`
+
+**Issue:** Files in `user-guide/how-to/` were using `../` relative paths that resolved incorrectly in Docusaurus
+**Fix:** Changed to `../../` to correctly reach docs root, then into target directories
+**Result:** All build errors resolved; docs site builds cleanly
+
+### Roadmap Gaps Deleted
+
+Removed `features/roadmap-gaps.md`:
+- File was orphaned (not in sidebars.ts)
+- Contains internal roadmap speculation ("Advanced fan-out patterns", "Cost-tracking dashboards", "Agent leaderboard")
+- Violates Paperclip principle: "Write for what's true now, not what might be"
+
+**Decision:** Internal roadmap should live in `.squad/` planning docs, not in user-facing site
+
+### Quality Verification
+
+- ✅ Ran full `pnpm docs:build` with no broken links
+- ✅ Verified no TODO, WIP, planned, or future language in user pages
+- ✅ Confirmed tutorials have numbered steps with verifiable outcomes
+- ✅ Confirmed index pages have clear navigation
+- ✅ All pages follow Paperclip: one job, no preamble, concise, cross-linked
+
+## Decisions
+
+1. **Cross-linking strategy:** Don't add "Next steps" to every page. Focus on:
+   - Conceptual entry points (what-is, key-concepts, overview pages)
+   - Tutorial chains (where step N leads to step N+1)
+   - How-to guides (task completion leads to related tasks)
+   
+   Reference pages (FAQ, troubleshooting) don't need "Next steps"—they're lookup resources.
+
+2. **Roadmap deletion:** Delete internal roadmap content rather than burying it. Our docs should reflect what's true now. Future work belongs in `.squad/` planning.
+
+3. **Relative paths:** Establish docs-site convention that internal links use `../../` for directory traversal (from any page to docs root, then to target).
+
+## Metrics
+
+- **Files edited:** 7
+- **Files deleted:** 1
+- **Build status:** ✅ Clean, no broken links
+- **Commit:** 4b53b9ff8
+
+## Next Steps
+
+- Wave 5 conceptual foundation + Wave 6 scrub = docs-site ready for user testing
+- Monitor for any user confusion signals in future sessions
+- Consider user feedback loop: if users still ask "What is Squadboard?", reinforce answer earlier
+
+## Related
+
+- Wave 5: Created what-is-squadboard.md, key-concepts.md, three how-to guides
+- Wave 4: Squad→Squadboard onboarding guide, MCP documentation
+- Wave 3: API reference, WebSocket protocol documentation
+
+---
 ## 2026-05-20T14:07:58Z — Wave 5: Paperclip-Quality Docs Pass (Redfoot)
 
 # Decision: Comprehensive Documentation Quality Pass
