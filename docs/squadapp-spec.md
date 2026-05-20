@@ -176,7 +176,7 @@ The installer normalises all three to a temporary directory before processing.
 > If absent, the installer defaults to `project-template`. The `kind` field is informational: it controls install dialog presentation and marketplace browse filters. The installer does not gate artifact sections on `kind` — any section may be present regardless of `kind`.
 
 > 📌 **Resolved 2026-05-16 (Gap 2 — Kobayashi W23): `displayName` field.**  
-> Kobayashi used `"displayName": "AKS Feature Kanban"` alongside `"name"` without it being formally specced. **`displayName` is now an optional top-level field.** When present, the UI renders `displayName` in the install dialog, app card, and marketplace listing in preference to `name`. `name` remains the canonical identifier used in CLI output and the installed-app registry. Both fields share the same constraints (1–128 chars, free text). If `displayName` is absent, the UI falls back to `name` — authors may omit it when the two would be identical.
+> Kobayashi used `"displayName": "Feature Kanban"` alongside `"name"` without it being formally specced. **`displayName` is now an optional top-level field.** When present, the UI renders `displayName` in the install dialog, app card, and marketplace listing in preference to `name`. `name` remains the canonical identifier used in CLI output and the installed-app registry. Both fields share the same constraints (1–128 chars, free text). If `displayName` is absent, the UI falls back to `name` — authors may omit it when the two would be identical.
 
 > 📌 **Resolved 2026-05-16 (Gap 3 — Kobayashi W23): `artifacts` section.**  
 > Kobayashi added an `artifacts` object listing the relative paths of included files per section. **Decision: `artifacts` is OPTIONAL.** The installer does **not** require it — file discovery happens by scanning the filesystem (the filesystem is the authoritative source of truth). If `artifacts` is present, it serves as a declaration index used by:
@@ -839,21 +839,21 @@ The `install_app` MCP tool allows AI agents (e.g., Copilot via Conjure) to insta
 | Field | Type | Required | Default | Description | Example |
 |---|---|---|---|---|---|
 | `schemaVersion` | `integer` | **Yes** | — | Format version. Must equal `1`. | `1` |
-| `appId` | `string` | **Yes** | — | Globally unique, kebab-case, 3–64 chars. | `"aks-feature-kanban"` |
+| `appId` | `string` | **Yes** | — | Globally unique, kebab-case, 3–64 chars. | `"feature-kanban"` |
 | `version` | `string` | **Yes** | — | SemVer content version. | `"1.0.0"` |
-| `name` | `string` | **Yes** | — | Canonical display name (1–128 chars). Used in CLI output and installed-app registry. | `"AKS Feature Kanban"` |
-| `displayName` | `string` | No | *(value of `name`)* | Optional UI-facing display name. If present, shown in the install dialog, app card, and marketplace listing in preference to `name`. Same 1–128 char constraint. *(W23 gap resolved)* | `"AKS Feature Kanban"` |
+| `name` | `string` | **Yes** | — | Canonical display name (1–128 chars). Used in CLI output and installed-app registry. | `"Feature Kanban"` |
+| `displayName` | `string` | No | *(value of `name`)* | Optional UI-facing display name. If present, shown in the install dialog, app card, and marketplace listing in preference to `name`. Same 1–128 char constraint. *(W23 gap resolved)* | `"Feature Kanban"` |
 | `kind` | `string` | No | `"project-template"` | App classification. Controls install dialog and marketplace filters. Valid values: `project-template`, `skills-pack`, `team-preset`, `ceremony-pack`. *(W23 gap resolved)* | `"project-template"` |
-| `description` | `string` | **Yes** | — | One-liner for install dialog (1–512 chars). | `"Engineering team kanban for shipping AKS features."` |
+| `description` | `string` | **Yes** | — | One-liner for install dialog (1–512 chars). | `"Product workflow for customer-backed feature launches."` |
 | `author` | `string` | No | `""` | Author name or org. | `"Ahmed Sabbour"` |
 | `license` | `string` | No | `"proprietary"` | SPDX identifier or `"proprietary"`. | `"MIT"` |
 | `homepage` | `string` | No | — | URI. | `"https://github.com/acme/squad-app"` |
-| `tags` | `string[]` | No | `[]` | Freeform tags for search/filter (max 20, max 32 chars each). | `["engineering", "agile", "aks"]` |
+| `tags` | `string[]` | No | `[]` | Freeform tags for search/filter (max 20, max 32 chars each). | `["feature", "product-management"]` |
 | `requires.squadboard` | `string` | No | — | semver range for Squadboard version. | `">=0.1.0"` |
-| `project` | `object` | No | *(name from `name`)* | Project skeleton. | `{"name": "AKS Kanban", "icon": "☸️"}` |
-| `project.name` | `string` | If `project` present | — | Project display name. | `"AKS Feature Kanban"` |
-| `project.description` | `string` | No | — | Project description. | `"Track AKS feature work."` |
-| `project.icon` | `string` | No | `"📋"` | Emoji or single character. | `"☸️"` |
+| `project` | `object` | No | *(name from `name`)* | Project skeleton. | `{"name": "Feature Kanban", "icon": "🧭"}` |
+| `project.name` | `string` | If `project` present | — | Project display name. | `"Feature Kanban"` |
+| `project.description` | `string` | No | — | Project description. | `"Track feature work from discovery to launch."` |
+| `project.icon` | `string` | No | `"📋"` | Emoji or single character. | `"🧭"` |
 | `kanban` | `object` | No | — | Board configuration. | — |
 | `kanban.columns` | `object[]` | If `kanban` present | — | Column definitions (≥1). | — |
 | `kanban.columns[].slug` | `string` | Yes | — | Kebab-case column identifier. | `"in-progress"` |
@@ -1003,33 +1003,29 @@ Apply when an issue lacks clear reproduction steps or the environment is under-s
 
 ---
 
-### Example B — Full Squad App (AKS Feature Kanban)
+### Example B — Full Squad App (Feature Kanban)
 
-**Use case:** A complete AKS engineering team kanban: 4 agents, 3 ceremonies, 2 skills, 1 tool, 1 MCP server, seed issues, README.
+**Use case:** A complete product feature workflow: 5 agents, 3 ceremonies, reusable PM skills, seed issues, and README.
 
 **Directory layout:**
-```
+```text
 .squadapp/
 ├── squadapp.json
 ├── README.md
-├── team/
-│   ├── Lead.md
-│   ├── Backend.json
-│   ├── Frontend.json
-│   └── Tester.json
+├── agents/
+│   ├── ProductManager/charter.md
+│   ├── ProductResearcher/charter.md
+│   ├── PrototypeDesigner/charter.md
+│   ├── DocsWriter/charter.md
+│   └── QualityReviewer/charter.md
 ├── ceremonies/
-│   ├── sprint-planning.yaml
-│   ├── pr-review.yaml
-│   └── bug-fix.yaml
+│   ├── signal-triage.yaml
+│   ├── feature-shaping-review.yaml
+│   └── launch-readiness-review.yaml
 ├── skills/
-│   ├── aks-networking/
-│   │   └── SKILL.md
-│   └── repro-steps/
-│       └── SKILL.md
-├── tools/
-│   └── run-e2e-tests.json
-├── mcp/
-│   └── github.json
+│   ├── customer-research/SKILL.md
+│   ├── prd-writing/SKILL.md
+│   └── feature-disclosure/SKILL.md
 └── issues/
     └── seed.json
 ```
@@ -1038,106 +1034,83 @@ Apply when an issue lacks clear reproduction steps or the environment is under-s
 ```json
 {
   "schemaVersion": 1,
-  "appId": "aks-feature-kanban",
+  "appId": "feature-kanban",
   "version": "1.0.0",
-  "name": "AKS Feature Kanban",
-  "description": "Engineering team kanban for shipping AKS features: architect + backend + frontend + tester, sprint planning, PR review, and bug-fix ceremonies.",
+  "name": "Feature Kanban",
+  "description": "Product/PM feature workflow for customer research, PRDs, prototypes, naming, release notes, documentation, and launch readiness.",
   "author": "Squadboard Team",
   "license": "MIT",
   "homepage": "https://github.com/sabbour/squadboard",
-  "tags": ["engineering", "aks", "kubernetes", "azure"],
+  "tags": ["feature", "product-management", "research", "prototype"],
   "requires": { "squadboard": ">=0.1.0" },
 
   "project": {
-    "name": "AKS Feature Kanban",
-    "description": "Track AKS feature work from design to ship.",
-    "icon": "☸️"
+    "name": "Feature Kanban",
+    "description": "Track product feature work from customer signal through launch readiness.",
+    "icon": "🧭"
   },
 
   "kanban": {
     "columns": [
-      { "slug": "inbox",       "label": "Inbox",       "order": 0 },
-      { "slug": "design",      "label": "Design",      "order": 1 },
-      { "slug": "in-progress", "label": "In Progress", "order": 2, "wip_limit": 3 },
-      { "slug": "review",      "label": "Review",      "order": 3 },
-      { "slug": "done",        "label": "Done",        "order": 4 }
+      { "slug": "backlog", "label": "Backlog", "order": 0 },
+      { "slug": "discovery", "label": "Discovery", "order": 1 },
+      { "slug": "shaping", "label": "Shaping", "order": 2 },
+      { "slug": "prototyping", "label": "Prototyping", "order": 3 },
+      { "slug": "launch-readiness", "label": "Launch Readiness", "order": 4 },
+      { "slug": "done", "label": "Done", "order": 5 }
     ],
-    "defaultColumn": "inbox"
+    "defaultColumn": "backlog"
   },
 
   "team": [
-    {
-      "name": "Lead",
-      "role": "Lead Architect",
-      "persistent": true,
-      "charterPath": "team/Lead.md"
-    },
-    {
-      "name": "Backend",
-      "role": "Backend Engineer",
-      "persistent": true,
-      "charterPath": "team/Backend.md"
-    },
-    {
-      "name": "Frontend",
-      "role": "Frontend Engineer",
-      "persistent": true,
-      "charterPath": "team/Frontend.md"
-    },
-    {
-      "name": "Tester",
-      "role": "QA Engineer",
-      "persistent": true,
-      "charterPath": "team/Tester.md"
-    }
+    { "name": "ProductManager", "role": "Lead Product Manager", "persistent": true, "charterPath": "agents/ProductManager/charter.md" },
+    { "name": "ProductResearcher", "role": "Customer Researcher", "persistent": true, "charterPath": "agents/ProductResearcher/charter.md" },
+    { "name": "PrototypeDesigner", "role": "Prototype Designer", "persistent": true, "charterPath": "agents/PrototypeDesigner/charter.md" },
+    { "name": "DocsWriter", "role": "Feature Documentation Writer", "persistent": true, "charterPath": "agents/DocsWriter/charter.md" },
+    { "name": "QualityReviewer", "role": "Quality Reviewer", "persistent": true, "charterPath": "agents/QualityReviewer/charter.md" }
   ],
 
   "routing": [
-    { "label": "backend",  "agent": "Backend" },
-    { "label": "frontend", "agent": "Frontend" },
-    { "label": "bug",      "agent": "Tester"  }
+    { "label": "feature", "agent": "ProductManager" },
+    { "label": "customer-signal", "agent": "ProductResearcher" },
+    { "label": "prototype", "agent": "PrototypeDesigner" },
+    { "label": "docs", "agent": "DocsWriter" },
+    { "label": "validation", "agent": "QualityReviewer" }
   ],
 
   "seedIssues": [
     {
-      "title": "Set up CI/CD pipeline for AKS",
-      "body": "Configure GitHub Actions: build, test, lint, and AKS deploy stages.",
-      "labels": ["infrastructure", "good-first-issue"],
-      "column": "inbox"
+      "title": "[SIGNAL] Trial users abandon onboarding after the import step",
+      "body": "Gather examples, identify the confusing step, and recommend one product change that would reduce drop-off.",
+      "labels": ["customer-signal", "research"],
+      "column": "discovery"
     },
     {
-      "title": "Define networking policy for feature X",
-      "body": "Document ingress rules, network policies, and service mesh configuration.",
-      "labels": ["design", "aks"],
-      "column": "inbox"
-    },
-    {
-      "title": "Write E2E tests for feature X",
-      "labels": ["testing"],
-      "column": "inbox"
+      "title": "[FEATURE] Guided first-run checklist for new workspaces",
+      "labels": ["feature", "prd"],
+      "column": "shaping"
     }
   ]
 }
 ```
 
-**`team/Lead.md`** (example — full charter in the file):
+**`agents/ProductManager/charter.md`** (example — full charter in the file):
 ```markdown
-# Lead
+# ProductManager
 
 ## Role
-Lead Architect — owns AKS architecture decisions, PR reviews, and technical direction.
+Lead Product Manager — owns product outcomes, feature strategy, PRD quality, launch readiness, and the final ship recommendation.
 
 ## Expertise
-- AKS node pools, VMSS, cluster autoscaler
-- Azure networking (VNet, NSG, private endpoints)
-- Helm, Kustomize, GitOps (Flux/Argo)
-- Security: workload identity, RBAC, policy
+- Turning customer problems into crisp opportunity statements
+- Writing PRDs with goals, non-goals, personas, requirements, risks, metrics, and rollout plans
+- Naming features and framing customer-facing value
 
 ## Style
-Direct. Decides fast. Revisits when telemetry says otherwise.
+Customer-first, structured, decisive, and brief.
 ```
 
-**Install result:** Creates a project "AKS Feature Kanban" with a 5-column board, 4 agents, 3 ceremonies (loaded from `ceremonies/*.yaml`), 2 skills (from `skills/*/SKILL.md`), 1 tool, 1 MCP server (GitHub), routing rules, and 3 seed issues in Inbox. Init Mode automatically re-casts agent names on first project use.
+**Install result:** Creates a project "Feature Kanban" with a 6-column board, 5 agents, 3 ceremonies, reusable PM skills, routing rules, and seed issues. Init Mode can re-cast agent names on first project use.
 
 ---
 
@@ -1148,10 +1121,10 @@ Direct. Decides fast. Revisits when telemetry says otherwise.
 When a Squad App is successfully installed, Squadboard records it in a per-project installed-app registry:
 ```json
 {
-  "appId": "aks-feature-kanban",
+  "appId": "feature-kanban",
   "version": "1.0.0",
   "installedAt": "2026-05-16T01:40:00Z",
-  "source": "https://github.com/sabbour/aks-squad-app"
+  "source": "https://github.com/sabbour/feature-kanban-squad-app"
 }
 ```
 

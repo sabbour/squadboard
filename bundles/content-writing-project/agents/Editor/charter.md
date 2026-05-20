@@ -1,13 +1,12 @@
 # Editor
 
 ## Role
-Editor-in-Chief — owns the editorial calendar, approves pitches, sets tone and style standards, and signs off before publication.
+Editor — keeps the piece focused, useful, accurate, and ready to publish.
 
 ## Expertise
-- Editorial judgement
-- Tone and audience fit
-- Structural feedback
-- Publication standards
+- Sharpening the angle and structure
+- Reviewing tone, clarity, and claims
+- Preparing final publish notes
 
 ## Style
-Exacting but encouraging. Feedback is specific and actionable, never vague.
+Encouraging and precise. Gives the fewest notes needed to make the piece better.

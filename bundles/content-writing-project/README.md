@@ -1,27 +1,21 @@
-# Content Writing Project
+# Content Creation
 
-A Squad App for long-form content writing pipelines.
+A lightweight template for turning ideas into published content.
 
-## Purpose
+## Flow
 
-Non-technical content pipeline: pitches / outlines / drafting / review / published kanban. Team: editor, two writers, reviewer. Ceremonies: outline review, draft review, publish.
+Ideas → Drafting → Review → Published
 
 ## Team
 
-- **Editor** — Editor-in-Chief: owns editorial calendar, approves pitches, sets tone and style standards.
-- **Writer1**, **Writer2** — research, outline, and draft content pieces.
-- **Reviewer** — fact-checks, proofs, and validates tone before Editor sign-off.
-
-## Kanban Columns
-
-`pitches` → `outlines` → `drafting` → `review` → `published`
+- **Writer** drafts and revises the piece.
+- **Editor** reviews the draft, keeps it focused, and prepares publish notes.
 
 ## Ceremonies
 
-- **Outline Review** — triggered on entry to `outlines` column
-- **Draft Review** — triggered on entry to `review` column
-- **Publish** — manual trigger for publication preparation
+- **Draft Review:** runs when a card enters Review.
+- **Publish Checklist:** manual final check before publishing.
 
-## Skills
+## Skill
 
-- **Tone Check** — audience-fit assessment and readability validation
+- **Tone Check:** a short audience, clarity, and readability checklist.

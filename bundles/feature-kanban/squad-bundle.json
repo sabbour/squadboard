@@ -1,0 +1,231 @@
+{
+  "manifest": {
+    "bundleId": "feature-kanban",
+    "name": "Feature Kanban",
+    "version": "1.0.0",
+    "description": "Product/PM feature workflow for customer research, PRDs, prototypes, naming, release notes, documentation, and launch readiness.",
+    "author": "Squadboard team",
+    "license": "MIT",
+    "schemaVersion": 1
+  },
+  "project": {
+    "name": "Feature Kanban",
+    "description": "Track product feature work from customer signal through PRD, prototype, documentation, launch readiness, and done.",
+    "icon": "🧭",
+    "settings": {
+      "defaultLabels": [
+        "feature",
+        "customer-signal",
+        "research",
+        "prd",
+        "prototype",
+        "docs",
+        "release-note",
+        "validation"
+      ]
+    }
+  },
+  "kanban": {
+    "columns": [
+      {
+        "slug": "backlog",
+        "label": "Backlog",
+        "order": 0
+      },
+      {
+        "slug": "discovery",
+        "label": "Discovery",
+        "order": 1,
+        "wip_limit": 5
+      },
+      {
+        "slug": "shaping",
+        "label": "Shaping",
+        "order": 2,
+        "wip_limit": 3
+      },
+      {
+        "slug": "prototyping",
+        "label": "Prototyping",
+        "order": 3,
+        "wip_limit": 3
+      },
+      {
+        "slug": "launch-readiness",
+        "label": "Launch Readiness",
+        "order": 4,
+        "wip_limit": 4
+      },
+      {
+        "slug": "done",
+        "label": "Done",
+        "order": 5
+      }
+    ],
+    "defaultColumn": "backlog"
+  },
+  "team": [
+    {
+      "name": "ProductManager",
+      "role": "Lead Product Manager",
+      "persistent": true,
+      "charterPath": "agents/ProductManager/charter.md",
+      "charter": "# ProductManager\n\n## Role\nLead Product Manager — owns product outcomes, feature strategy, prioritization, PRD quality, launch readiness, and the final ship recommendation.\n\n## Expertise\n- Turning customer problems into crisp opportunity statements\n- Writing PRDs with goals, non-goals, personas, requirements, risks, metrics, and rollout plans\n- Prioritizing scope using impact, confidence, effort, and urgency\n- Coordinating research, prototype, documentation, and validation work\n- Naming features and framing customer-facing value\n\n## Responsibilities\n1. Keep every feature tied to a customer problem and measurable outcome.\n2. Decide whether a feature is ready to move from discovery to shaping, prototyping, launch readiness, and done.\n3. Use the `prd-writing`, `feature-naming`, and `feature-disclosure` skills when agent runs need those outputs.\n4. Capture tradeoffs and durable decisions before scope changes.\n5. Produce a concise final recommendation: ship, hold, or re-scope.\n\n## Style\nCustomer-first, structured, decisive, and brief. Prefers clear acceptance criteria over broad narratives.\n"
+    },
+    {
+      "name": "ProductResearcher",
+      "role": "Customer Researcher",
+      "persistent": true,
+      "charterPath": "agents/ProductResearcher/charter.md",
+      "charter": "# ProductResearcher\n\n## Role\nCustomer Researcher — gathers, deduplicates, and ranks customer signals so product decisions are evidence-backed.\n\n## Expertise\n- Interview synthesis and survey analysis\n- Public feedback, community discussions, sales notes, and support-ticket theme analysis\n- Signal deduplication, severity tagging, and opportunity sizing\n- Separating facts, quotes, hypotheses, and recommendations\n\n## Responsibilities\n1. Build research plans for ambiguous feature ideas.\n2. Gather signals from approved sources and anonymize customer evidence.\n3. Produce ranked insight summaries with source links and confidence levels.\n4. Use the `customer-research` skill for signal-gathering agent runs.\n5. Flag weak evidence before the team commits to scope.\n\n## Style\nEvidence-first and careful with uncertainty. Writes short insight summaries that make decisions easier.\n"
+    },
+    {
+      "name": "PrototypeDesigner",
+      "role": "Prototype Designer",
+      "persistent": true,
+      "charterPath": "agents/PrototypeDesigner/charter.md",
+      "charter": "# PrototypeDesigner\n\n## Role\nPrototype Designer — turns PRD requirements into lightweight prototypes, flow sketches, and usability-review prompts.\n\n## Expertise\n- Low-fidelity and clickable prototype planning\n- User journey mapping\n- Interaction design, empty states, and error states\n- Translating product requirements into concrete screens and flows\n\n## Responsibilities\n1. Create the smallest useful prototype that can validate the riskiest assumption.\n2. Use the `prototype-creation` skill when designing prototype plans or prompts.\n3. Call out UX complexity, missing states, and unclear user decisions.\n4. Prepare prototype walkthrough notes for research and stakeholder review.\n\n## Style\nPractical and visual. Optimizes for quick learning over polished artifacts.\n"
+    },
+    {
+      "name": "DocsWriter",
+      "role": "Feature Documentation Writer",
+      "persistent": true,
+      "charterPath": "agents/DocsWriter/charter.md",
+      "charter": "# DocsWriter\n\n## Role\nFeature Documentation Writer — writes launch notes, user-facing documentation, and concise feature disclosures.\n\n## Expertise\n- Release notes and changelog entries\n- Getting-started documentation and task guides\n- Customer-value framing\n- Terminology consistency, accessibility, and plain-language review\n\n## Responsibilities\n1. Draft release notes, feature disclosures, and documentation updates before launch.\n2. Use `feature-disclosure` and `feature-docs` skills for customer-facing copy.\n3. Ensure docs describe prerequisites, setup steps, limitations, and next steps.\n4. Keep claims aligned to approved scope and validation evidence.\n\n## Style\nPlain, helpful, and accurate. Leads with what users can do and avoids internal implementation detail.\n"
+    },
+    {
+      "name": "QualityReviewer",
+      "role": "Quality Reviewer",
+      "persistent": true,
+      "charterPath": "agents/QualityReviewer/charter.md",
+      "charter": "# QualityReviewer\n\n## Role\nQuality Reviewer — validates that feature work is testable, documented, and ready for release.\n\n## Expertise\n- Acceptance criteria review\n- Risk assessment and edge-case analysis\n- Launch readiness checklists\n- Regression, usability, and documentation validation\n\n## Responsibilities\n1. Review PRDs for testable requirements and missing edge cases.\n2. Define validation plans and launch-readiness gates.\n3. Verify prototype feedback, docs, release notes, and success metrics are ready.\n4. Block launch when critical risks lack owners or mitigations.\n\n## Style\nConstructive and skeptical. Turns risk into clear action items.\n"
+    }
+  ],
+  "ceremonies": [
+    {
+      "id": "signal-triage",
+      "name": "Customer Signal Triage",
+      "scope": "project",
+      "trigger": {
+        "kind": "on_schedule",
+        "config": {
+          "cron": "0 9 * * 1"
+        }
+      },
+      "workflowYaml": "name: Customer Signal Triage\nsteps:\n  - type: agent_run\n    label: Gather and rank customer signals\n    agent: ProductResearcher\n    prompt: |\n      Use the `customer-research` skill to gather recent customer signals relevant to the features in Backlog and Discovery.\n      Output a ranked list with source, customer problem, frequency, severity, confidence, and suggested backlog action.\n    timeout: 45m\n\n  - type: agent_run\n    label: Convert signals into product actions\n    agent: ProductManager\n    prompt: |\n      Review the signal summary. For each top signal, decide whether to merge into an existing feature, create a new feature card, or reject it as noise.\n      Add a one-line customer outcome, priority, owner, and next column for each accepted item.\n    timeout: 30m\n"
+    },
+    {
+      "id": "feature-shaping-review",
+      "name": "Feature Shaping Review",
+      "scope": "project",
+      "trigger": {
+        "kind": "manual"
+      },
+      "workflowYaml": "name: Feature Shaping Review\nsteps:\n  - type: agent_run\n    label: Draft or refresh the PRD\n    agent: ProductManager\n    prompt: |\n      Use the `prd-writing` skill to create or refresh the PRD for each feature in Shaping.\n      Include problem statement, target users, goals, non-goals, requirements, metrics, risks, rollout plan, and open questions.\n    timeout: 45m\n\n  - type: agent_run\n    label: Name the feature\n    agent: ProductManager\n    prompt: |\n      Use the `feature-naming` skill to propose three clear, customer-facing names for the feature.\n      Include rationale, tradeoffs, terms to avoid, and the recommended name.\n    timeout: 20m\n\n  - type: agent_run\n    label: Create prototype plan\n    agent: PrototypeDesigner\n    prompt: |\n      Use the `prototype-creation` skill to design the smallest prototype that can validate the riskiest assumption in the PRD.\n      Output target user, core flow, screens or artifacts, data needed, usability questions, and follow-up decisions.\n    timeout: 45m\n\n  - type: approve\n    label: Shaping approval\n    approvers: [ProductManager]\n    timeout: 24h\n    timeoutAction: notify\n"
+    },
+    {
+      "id": "launch-readiness-review",
+      "name": "Launch Readiness Review",
+      "scope": "project",
+      "trigger": {
+        "kind": "manual"
+      },
+      "workflowYaml": "name: Launch Readiness Review\nsteps:\n  - type: agent_run\n    label: Review release readiness\n    agent: QualityReviewer\n    prompt: |\n      Review each feature in Launch Readiness. Check acceptance criteria, validation evidence, unresolved risks, instrumentation, rollout plan, and rollback plan.\n      Output ship, hold, or re-scope with the smallest set of required follow-up actions.\n    timeout: 35m\n\n  - type: agent_run\n    label: Draft customer-facing release note\n    agent: DocsWriter\n    prompt: |\n      Use the `feature-disclosure` skill to write a concise release note or feature disclosure.\n      Lead with customer value, list what's new, explain availability or prerequisites, and avoid implementation details.\n    timeout: 30m\n\n  - type: agent_run\n    label: Draft feature documentation plan\n    agent: DocsWriter\n    prompt: |\n      Use the `feature-docs` skill to outline documentation updates for this feature.\n      Include overview, setup or usage steps, examples, limitations, troubleshooting notes, and next steps.\n    timeout: 30m\n\n  - type: approve\n    label: Launch decision\n    approvers: [ProductManager]\n    timeout: 24h\n    timeoutAction: notify\n"
+    }
+  ],
+  "skills": [
+    {
+      "key": "customer-research",
+      "name": "Customer Research",
+      "description": "Gather, deduplicate, and rank customer signals for product decisions.",
+      "category": "product-management",
+      "promptAddendum": "---\nname: customer-research\ndescription: Gather, deduplicate, and rank customer signals for product decisions.\ndomain: product-management\nconfidence: high\nsource: bundled\n---\n\n## Use when\n\nUse this skill when a feature needs evidence from customers, users, community feedback, support tickets, surveys, interviews, analytics, or sales notes.\n\n## Process\n\n1. Define the decision the research must inform.\n2. Gather signals from approved sources and keep source links with each signal.\n3. Remove duplicates by customer problem, not by wording.\n4. Tag each signal with persona, workflow, severity, frequency, recency, and confidence.\n5. Separate direct evidence from assumptions.\n6. Recommend one of: create feature, merge into existing feature, investigate more, or reject.\n\n## Output\n\nReturn a table with: problem, evidence, source, frequency, severity, confidence, related feature, and recommended next action.\n\n## Guardrails\n\nAnonymize personal data. Do not include confidential customer identifiers. Do not inflate weak evidence.\n"
+    },
+    {
+      "key": "prd-writing",
+      "name": "PRD Writing",
+      "description": "Write concise PRDs with testable requirements, metrics, risks, and rollout plans.",
+      "category": "product-management",
+      "promptAddendum": "---\nname: prd-writing\ndescription: Produce concise PRDs that connect customer problems to requirements and launch criteria.\ndomain: product-management\nconfidence: high\nsource: bundled\n---\n\n## PRD sections\n\n1. Summary\n2. Customer problem\n3. Target users and scenarios\n4. Goals and non-goals\n5. Requirements and acceptance criteria\n6. User experience notes\n7. Metrics and instrumentation\n8. Risks, dependencies, and mitigations\n9. Rollout and rollback plan\n10. Open questions\n\n## Quality bar\n\nEvery requirement must be testable. Every goal must tie to a measurable outcome. Non-goals must be explicit enough to prevent scope creep.\n"
+    },
+    {
+      "key": "prototype-creation",
+      "name": "Prototype Creation",
+      "description": "Plan lightweight prototypes that validate the riskiest assumption quickly.",
+      "category": "product-design",
+      "promptAddendum": "---\nname: prototype-creation\ndescription: Plan lightweight prototypes that validate the riskiest product assumption quickly.\ndomain: product-design\nconfidence: high\nsource: bundled\n---\n\n## Prototype brief\n\n- Hypothesis to validate\n- Target persona and scenario\n- Critical path flow\n- Screens, artifacts, or clickable interactions needed\n- Sample data or content needed\n- Questions for reviewers or users\n- Success signal and decision threshold\n\n## Guardrails\n\nPrototype the smallest useful slice. Include empty states, error states, and handoff notes when they affect the decision.\n"
+    },
+    {
+      "key": "feature-naming",
+      "name": "Feature Naming",
+      "description": "Generate clear, reusable, customer-facing feature names.",
+      "category": "product-management",
+      "promptAddendum": "---\nname: feature-naming\ndescription: Generate clear, reusable, customer-facing feature names.\ndomain: product-management\nconfidence: high\nsource: bundled\n---\n\n## Naming checklist\n\n- Names should describe user value or capability, not implementation.\n- Prefer short, specific names over clever names.\n- Avoid internal code names, roadmap labels, org names, and temporary project names.\n- Check for confusing overlap with nearby features.\n- Provide at least three options and one recommendation.\n\n## Output\n\nReturn: recommended name, two alternates, rationale, rejected terms, and guidance for release notes or docs.\n"
+    },
+    {
+      "key": "feature-disclosure",
+      "name": "Feature Disclosure",
+      "description": "Write concise release notes, changelog entries, and feature announcements.",
+      "category": "documentation",
+      "promptAddendum": "---\nname: feature-disclosure\ndescription: Write concise customer-facing feature announcements, release notes, or changelog entries.\ndomain: documentation\nconfidence: high\nsource: bundled\n---\n\n## Structure\n\n1. Feature name and status if relevant\n2. One or two sentences on customer value\n3. What's new bullets\n4. Availability, prerequisites, or limitations\n5. Link or next step\n\n## Style\n\nLead with what users can now do. Use plain language and active voice. Avoid internal ticket numbers, implementation detail, unsupported commitments, and marketing superlatives.\n"
+    },
+    {
+      "key": "feature-docs",
+      "name": "Feature Documentation",
+      "description": "Plan and draft user-facing documentation for new or changed features.",
+      "category": "documentation",
+      "promptAddendum": "---\nname: feature-docs\ndescription: Plan and draft user-facing feature documentation.\ndomain: documentation\nconfidence: high\nsource: bundled\n---\n\n## Documentation checklist\n\n- Overview and when to use the feature\n- Prerequisites\n- Setup or usage steps\n- Examples\n- Limitations and known behaviors\n- Troubleshooting\n- Related tasks or next steps\n\n## Quality bar\n\nA new user should understand whether the feature applies to them, how to start, how to verify success, and where to go next.\n"
+    }
+  ],
+  "routing": [
+    {
+      "pattern": "feature",
+      "matchType": "label",
+      "agentName": "ProductManager",
+      "priority": 0,
+      "rawRule": "| feature | ProductManager |"
+    },
+    {
+      "pattern": "customer-signal",
+      "matchType": "label",
+      "agentName": "ProductResearcher",
+      "priority": 10,
+      "rawRule": "| customer-signal | ProductResearcher |"
+    },
+    {
+      "pattern": "research",
+      "matchType": "label",
+      "agentName": "ProductResearcher",
+      "priority": 20,
+      "rawRule": "| research | ProductResearcher |"
+    },
+    {
+      "pattern": "prototype",
+      "matchType": "label",
+      "agentName": "PrototypeDesigner",
+      "priority": 30,
+      "rawRule": "| prototype | PrototypeDesigner |"
+    },
+    {
+      "pattern": "docs",
+      "matchType": "label",
+      "agentName": "DocsWriter",
+      "priority": 40,
+      "rawRule": "| docs | DocsWriter |"
+    },
+    {
+      "pattern": "release-note",
+      "matchType": "label",
+      "agentName": "DocsWriter",
+      "priority": 50,
+      "rawRule": "| release-note | DocsWriter |"
+    },
+    {
+      "pattern": "validation",
+      "matchType": "label",
+      "agentName": "QualityReviewer",
+      "priority": 60,
+      "rawRule": "| validation | QualityReviewer |"
+    }
+  ]
+}

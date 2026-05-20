@@ -6,7 +6,16 @@ import {
   runFormulator,
   type ResolveModelResult,
 } from './formulator.js';
-import { getBuiltinBundle, getBuiltinBundles } from './builtin-bundles.js';
+import { getBuiltinBundle, getBuiltinProjectTemplateBundles } from './builtin-bundles.js';
+import {
+  assertSafeSquadScaffoldTarget,
+  normalizeSquadPath,
+} from './squad-path-safety.js';
+
+export {
+  assertSafeSquadScaffoldTarget,
+  normalizeSquadPath,
+} from './squad-path-safety.js';
 
 export type SetupMemberKind = 'project-agent' | 'human' | 'virtual-copilot';
 
@@ -74,32 +83,24 @@ export interface ProjectSuggestion {
 
 const KEYWORD_MAP: Array<{ keywords: string[]; bundleId: string }> = [
   {
-    keywords: ['rust', 'cargo', 'crate', 'npm', 'pypi', 'pip', 'gem', 'nuget', 'library', 'sdk', 'package', 'cli', 'command-line', 'module'],
-    bundleId: 'library-or-sdk-project',
-  },
-  {
-    keywords: ['writing', 'blog', 'content', 'article', 'newsletter', 'editorial', 'copywriting', 'post', 'publication'],
-    bundleId: 'content-writing-project',
-  },
-  {
     keywords: ['research', 'spike', 'analysis', 'explore', 'investigation', 'data', 'ml', 'machine learning', 'ai', 'experiment', 'python', 'jupyter', 'notebook'],
     bundleId: 'research-spike',
   },
   {
-    keywords: ['ops', 'devops', 'infra', 'infrastructure', 'incident', 'runbook', 'sre', 'monitoring', 'cloud', 'kubernetes', 'k8s', 'docker', 'ci/cd', 'deployment'],
-    bundleId: 'ops-runbook-project',
+    keywords: ['writing', 'blog', 'content', 'article', 'newsletter', 'editorial', 'copywriting', 'post', 'publication', 'script', 'copy'],
+    bundleId: 'content-writing-project',
   },
   {
-    keywords: ['bug', 'test', 'qa', 'quality', 'bash', 'regression', 'testing', 'validation'],
-    bundleId: 'bug-bash-project',
+    keywords: ['open source', 'oss', 'github', 'repository', 'repo', 'pull request', 'pr', 'maintainer', 'contributor', 'community', 'npm', 'pypi', 'pip', 'gem', 'nuget', 'crate', 'package', 'sdk', 'library', 'cli', 'semver', 'versioning'],
+    bundleId: 'open-source-project',
   },
   {
-    keywords: ['node', 'express', 'react', 'next', 'typescript', 'javascript', 'web', 'api', 'http', 'rest', 'graphql', 'app', 'application', 'backend', 'frontend', 'go', 'golang', 'java', 'kotlin', 'swift', 'c#', 'dotnet', 'php', 'ruby', 'rails'],
-    bundleId: 'default-software-project',
+    keywords: ['feature', 'product', 'pm', 'prd', 'prototype', 'roadmap', 'customer', 'signal', 'signals', 'persona', 'launch', 'release note', 'release-note', 'changelog', 'disclosure', 'docs', 'documentation', 'naming', 'beta', 'ga', 'quality', 'validation', 'test', 'bug', 'app', 'application', 'web', 'api', 'software', 'workflow'],
+    bundleId: 'feature-kanban',
   },
 ];
 
-const DEFAULT_BUNDLE_ID = 'default-software-project';
+const DEFAULT_BUNDLE_ID = 'feature-kanban';
 
 function asObject(value: unknown): Record<string, unknown> {
   return value && typeof value === 'object' ? value as Record<string, unknown> : {};
@@ -112,13 +113,6 @@ export function slugifySetupName(name: string): string {
     .replace(/^@/, '')
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-+|-+$/g, '') || 'member';
-}
-
-export function normalizeSquadPath(inputPath: string): string {
-  const resolved = path.resolve(inputPath.trim());
-  return path.basename(resolved) === '.squad'
-    ? resolved
-    : path.join(resolved, '.squad');
 }
 
 function roleBadge(role: string, name?: string): string {
@@ -523,7 +517,7 @@ function suggestionFromBundle(
   };
 }
 
-function buildSetupPrompt(description: string, bundles: Awaited<ReturnType<typeof getBuiltinBundles>>): string {
+function buildSetupPrompt(description: string, bundles: Awaited<ReturnType<typeof getBuiltinProjectTemplateBundles>>): string {
   const bundleLines = bundles.map((bundle) => (
     `- ${bundle.bundleId}: ${bundle.name} — ${bundle.description}`
   )).join('\n');
@@ -568,7 +562,7 @@ export async function suggestProjectSetup(
   }
 
   const deterministic = selectDeterministicBundle(trimmed);
-  const bundles = await getBuiltinBundles();
+  const bundles = await getBuiltinProjectTemplateBundles();
   const bundleIds = new Set(bundles.map((bundle) => bundle.bundleId));
 
   if (options.useLlm !== false && bundles.length > 0) {
@@ -603,7 +597,7 @@ export async function suggestProjectSetup(
     source: options.useLlm === false ? 'deterministic' : 'deterministic-fallback',
     rationale: deterministic.matchedKeywords.length > 0
       ? `Matched ${deterministic.matchedKeywords.slice(0, 3).join(', ')}.`
-      : 'No specific setup keywords matched; using the default software project setup.',
+      : 'No specific setup keywords matched; using the Feature Kanban setup.',
     modelUsed: null,
   });
 }

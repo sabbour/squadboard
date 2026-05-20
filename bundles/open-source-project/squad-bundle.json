@@ -1,7 +1,7 @@
 {
   "manifest": {
     "bundleId": "open-source-project",
-    "name": "Open Source Project",
+    "name": "Open Source",
     "version": "1.0.0",
     "description": "Community-driven open source workflow: triage / backlog / in-progress / in-review / done kanban, 4 role-skeleton agents (Maintainer, Contributor, Reviewer, Triage), ceremonies for PR review, issue triage, and release cutting.",
     "author": "Squadboard Team",

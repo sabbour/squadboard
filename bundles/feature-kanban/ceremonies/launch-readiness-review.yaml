@@ -1,0 +1,31 @@
+name: Launch Readiness Review
+steps:
+  - type: agent_run
+    label: Review release readiness
+    agent: QualityReviewer
+    prompt: |
+      Review each feature in Launch Readiness. Check acceptance criteria, validation evidence, unresolved risks, instrumentation, rollout plan, and rollback plan.
+      Output ship, hold, or re-scope with the smallest set of required follow-up actions.
+    timeout: 35m
+
+  - type: agent_run
+    label: Draft customer-facing release note
+    agent: DocsWriter
+    prompt: |
+      Use the `feature-disclosure` skill to write a concise release note or feature disclosure.
+      Lead with customer value, list what's new, explain availability or prerequisites, and avoid implementation details.
+    timeout: 30m
+
+  - type: agent_run
+    label: Draft feature documentation plan
+    agent: DocsWriter
+    prompt: |
+      Use the `feature-docs` skill to outline documentation updates for this feature.
+      Include overview, setup or usage steps, examples, limitations, troubleshooting notes, and next steps.
+    timeout: 30m
+
+  - type: approve
+    label: Launch decision
+    approvers: [ProductManager]
+    timeout: 24h
+    timeoutAction: notify

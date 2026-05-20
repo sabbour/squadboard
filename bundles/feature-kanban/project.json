@@ -1,0 +1,17 @@
+{
+  "name": "Feature Kanban",
+  "description": "Track product feature work from customer signal through PRD, prototype, documentation, launch readiness, and done.",
+  "icon": "🧭",
+  "settings": {
+    "defaultLabels": [
+      "feature",
+      "customer-signal",
+      "research",
+      "prd",
+      "prototype",
+      "docs",
+      "release-note",
+      "validation"
+    ]
+  }
+}

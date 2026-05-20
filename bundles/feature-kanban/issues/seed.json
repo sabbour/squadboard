@@ -1,0 +1,47 @@
+[
+  {
+    "title": "[SIGNAL] Trial users abandon onboarding after the import step",
+    "body": "Recent feedback suggests new users understand the value proposition but get stuck when asked to import existing data. Gather examples, identify the confusing step, and recommend one product change that would reduce drop-off.",
+    "labels": [
+      "customer-signal",
+      "research"
+    ],
+    "column": "discovery"
+  },
+  {
+    "title": "[FEATURE] Guided first-run checklist for new workspaces",
+    "body": "Create a PRD for a lightweight first-run checklist that helps new teams invite collaborators, add their first item, and run their first review. Include success metrics and non-goals.",
+    "labels": [
+      "feature",
+      "prd"
+    ],
+    "column": "shaping"
+  },
+  {
+    "title": "[PROTOTYPE] Compare two approaches for bulk item editing",
+    "body": "Prototype two flows for selecting multiple items, changing status, and applying labels. Capture the riskiest usability questions and the minimum artifact needed for a decision.",
+    "labels": [
+      "prototype",
+      "feature"
+    ],
+    "column": "prototyping"
+  },
+  {
+    "title": "[DOCS] Draft release note for saved filters",
+    "body": "Write a short release note that explains the customer value of saved filters, what is new, prerequisites or limitations, and a getting-started link placeholder.",
+    "labels": [
+      "docs",
+      "release-note"
+    ],
+    "column": "launch-readiness"
+  },
+  {
+    "title": "[VALIDATION] Define launch metrics for notification preferences",
+    "body": "Identify activation, adoption, retention, and quality metrics for a notification-preferences launch. Include instrumentation gaps and a ship/hold recommendation template.",
+    "labels": [
+      "validation",
+      "feature"
+    ],
+    "column": "launch-readiness"
+  }
+]

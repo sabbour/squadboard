@@ -1,0 +1,31 @@
+name: Feature Shaping Review
+steps:
+  - type: agent_run
+    label: Draft or refresh the PRD
+    agent: ProductManager
+    prompt: |
+      Use the `prd-writing` skill to create or refresh the PRD for each feature in Shaping.
+      Include problem statement, target users, goals, non-goals, requirements, metrics, risks, rollout plan, and open questions.
+    timeout: 45m
+
+  - type: agent_run
+    label: Name the feature
+    agent: ProductManager
+    prompt: |
+      Use the `feature-naming` skill to propose three clear, customer-facing names for the feature.
+      Include rationale, tradeoffs, terms to avoid, and the recommended name.
+    timeout: 20m
+
+  - type: agent_run
+    label: Create prototype plan
+    agent: PrototypeDesigner
+    prompt: |
+      Use the `prototype-creation` skill to design the smallest prototype that can validate the riskiest assumption in the PRD.
+      Output target user, core flow, screens or artifacts, data needed, usability questions, and follow-up decisions.
+    timeout: 45m
+
+  - type: approve
+    label: Shaping approval
+    approvers: [ProductManager]
+    timeout: 24h
+    timeoutAction: notify

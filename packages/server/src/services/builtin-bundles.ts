@@ -23,8 +23,19 @@ import type { SquadboardBundle } from '@sabbour/squadboard-sdk/bundle';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
-/** bundles/ lives four directories above packages/server/src/services/ */
-const BUNDLES_DIR = join(__dirname, '..', '..', '..', '..', 'bundles');
+/** Repo root lives four directories above packages/server/src/services/ */
+const REPO_ROOT = join(__dirname, '..', '..', '..', '..');
+const BUNDLES_DIR = join(REPO_ROOT, 'bundles');
+const SQUADBOARD_APPS_DIR = join(REPO_ROOT, 'squadboard-apps');
+
+const VISIBLE_PROJECT_TEMPLATE_IDS = new Set([
+  'content-writing-project',
+  'feature-kanban',
+  'open-source-project',
+  'research-spike',
+]);
+
+type BundleCatalog = 'template' | 'squadboard-app';
 
 export interface BuiltinBundleEntry {
   bundleId: string;
@@ -38,6 +49,10 @@ export interface BuiltinBundleEntry {
   tags: string[];
   /** App kind from squadapp.json — e.g. 'project-template'. Defaults to 'project-template'. */
   kind: string;
+  /** Catalog surface that should show this bundle. */
+  catalog: BundleCatalog;
+  /** Optional URL from squadapp.json. */
+  homepage?: string;
 }
 
 export interface BuiltinBundleWarning {
@@ -90,61 +105,113 @@ async function scan(): Promise<{ entries: BuiltinBundleEntry[]; bundleMap: Map<s
   const bundleMap = new Map<string, SquadboardBundle>();
   const warnings: BuiltinBundleWarning[] = [];
 
-  let slugs: string[];
-  try {
-    const dirents = await readdir(BUNDLES_DIR, { withFileTypes: true });
-    slugs = dirents.filter((d) => d.isDirectory()).map((d) => d.name);
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    throw new Error(`Cannot read bundles directory at ${BUNDLES_DIR}: ${msg}`);
-  }
+  const roots: Array<{ dir: string; catalog: BundleCatalog; required: boolean }> = [
+    { dir: BUNDLES_DIR, catalog: 'template', required: true },
+    { dir: SQUADBOARD_APPS_DIR, catalog: 'squadboard-app', required: false },
+  ];
 
-  for (const slug of slugs) {
-    const manifestPath = join(BUNDLES_DIR, slug, 'squad-bundle.json');
+  for (const root of roots) {
+    let slugs: string[];
     try {
-      const raw = await readFile(manifestPath, 'utf-8');
-      const bundle = JSON.parse(raw) as SquadboardBundle;
-      validateBundleManifest(slug, bundle);
-
-      // Try to read squadapp.json for enriched metadata (tags, kind).
-      // Non-critical: missing or malformed squadapp.json is silently ignored.
-      let tags: string[] = [];
-      let kind = 'project-template';
-      try {
-        const squadAppRaw = await readFile(join(BUNDLES_DIR, slug, 'squadapp.json'), 'utf-8');
-        const squadApp = JSON.parse(squadAppRaw) as Record<string, unknown>;
-        if (Array.isArray(squadApp['tags'])) {
-          tags = (squadApp['tags'] as unknown[]).filter((t): t is string => typeof t === 'string');
-        }
-        if (typeof squadApp['kind'] === 'string') {
-          kind = squadApp['kind'];
-        }
-      } catch {
-        // squadapp.json absent or malformed — use defaults
-      }
-
-      entries.push({
-        bundleId: bundle.manifest.bundleId,
-        name: bundle.manifest.name,
-        description: bundle.manifest.description,
-        icon: bundle.project?.icon,
-        version: bundle.manifest.version,
-        dir: join(BUNDLES_DIR, slug),
-        tags,
-        kind,
-      });
-      bundleMap.set(bundle.manifest.bundleId, bundle);
+      const dirents = await readdir(root.dir, { withFileTypes: true });
+      slugs = dirents.filter((d) => d.isDirectory()).map((d) => d.name);
     } catch (err) {
+      if (!root.required) continue;
       const msg = err instanceof Error ? err.message : String(err);
-      warnings.push({ slug, message: msg });
-      console.warn(`[builtin-bundles] Skipping bundle "${slug}": ${msg}`);
+      throw new Error(`Cannot read bundles directory at ${root.dir}: ${msg}`);
+    }
+
+    for (const slug of slugs) {
+      const manifestPath = join(root.dir, slug, 'squad-bundle.json');
+      try {
+        const raw = await readFile(manifestPath, 'utf-8');
+        const bundle = JSON.parse(raw) as SquadboardBundle;
+        validateBundleManifest(slug, bundle);
+
+        // Try to read squadapp.json for enriched metadata (tags, kind).
+        // Non-critical: missing or malformed squadapp.json is silently ignored.
+        let tags: string[] = [];
+        let kind = root.catalog === 'squadboard-app' ? 'squadboard-app' : 'project-template';
+        let displayName: string | undefined;
+        let homepage: string | undefined;
+        try {
+          const squadAppRaw = await readFile(join(root.dir, slug, 'squadapp.json'), 'utf-8');
+          const squadApp = JSON.parse(squadAppRaw) as Record<string, unknown>;
+          if (Array.isArray(squadApp['tags'])) {
+            tags = (squadApp['tags'] as unknown[]).filter((t): t is string => typeof t === 'string');
+          }
+          if (typeof squadApp['kind'] === 'string') {
+            kind = squadApp['kind'];
+          }
+          if (typeof squadApp['displayName'] === 'string') {
+            displayName = squadApp['displayName'];
+          }
+          if (typeof squadApp['homepage'] === 'string') {
+            homepage = squadApp['homepage'];
+          }
+        } catch {
+          // squadapp.json absent or malformed — use defaults
+        }
+
+        const catalog: BundleCatalog = root.catalog === 'squadboard-app' || kind === 'squadboard-app'
+          ? 'squadboard-app'
+          : 'template';
+
+        entries.push({
+          bundleId: bundle.manifest.bundleId,
+          name: displayName ?? bundle.manifest.name,
+          description: bundle.manifest.description,
+          icon: bundle.project?.icon,
+          version: bundle.manifest.version,
+          dir: join(root.dir, slug),
+          tags,
+          kind,
+          catalog,
+          homepage,
+        });
+        if (!bundleMap.has(bundle.manifest.bundleId)) {
+          bundleMap.set(bundle.manifest.bundleId, bundle);
+        }
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        warnings.push({ slug, message: msg });
+        console.warn(`[builtin-bundles] Skipping bundle "${slug}": ${msg}`);
+      }
     }
   }
 
-  // Sort by bundleId for deterministic ordering
-  entries.sort((a, b) => a.bundleId.localeCompare(b.bundleId));
+  const seen = new Set<string>();
+  const uniqueEntries: BuiltinBundleEntry[] = [];
+  for (const entry of entries) {
+    if (seen.has(entry.bundleId)) {
+      warnings.push({
+        slug: entry.bundleId,
+        message: `Duplicate bundleId "${entry.bundleId}" skipped`,
+      });
+      continue;
+    }
+    seen.add(entry.bundleId);
+    uniqueEntries.push(entry);
+  }
 
-  return { entries, bundleMap, warnings };
+  // Sort by bundleId for deterministic ordering
+  uniqueEntries.sort((a, b) => a.bundleId.localeCompare(b.bundleId));
+
+  return { entries: uniqueEntries, bundleMap, warnings };
+}
+
+export async function getBuiltinProjectTemplateBundles(): Promise<BuiltinBundleEntry[]> {
+  const bundles = await getBuiltinBundles();
+  return bundles.filter((entry) =>
+    entry.catalog === 'template'
+    && entry.kind === 'project-template'
+    && VISIBLE_PROJECT_TEMPLATE_IDS.has(entry.bundleId),
+  );
+}
+
+export async function getBuiltinSquadboardApps(): Promise<BuiltinBundleEntry[]> {
+  const bundles = await getBuiltinBundles();
+  return bundles.filter((entry) => entry.catalog === 'squadboard-app');
 }
 
 /**

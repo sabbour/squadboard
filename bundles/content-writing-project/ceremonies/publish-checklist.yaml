@@ -1,0 +1,8 @@
+name: Publish Checklist
+steps:
+  - type: agent_run
+    label: Prepare publish notes
+    agent: Editor
+    prompt: |
+      Prepare the piece for publication: final title, short summary, target channel, publish checklist, and any unresolved risks.
+    timeout: 15m

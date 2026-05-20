@@ -1,0 +1,271 @@
+{
+  "$schema": "https://squadboard.dev/schemas/squadapp/v1/squadapp.json",
+  "schemaVersion": 1,
+  "appId": "feature-kanban",
+  "version": "1.0.0",
+  "name": "Feature Kanban",
+  "displayName": "Feature Kanban",
+  "description": "Product/PM feature workflow for customer research, PRDs, prototypes, naming, release notes, documentation, and launch readiness.",
+  "kind": "project-template",
+  "author": "Squadboard team",
+  "license": "MIT",
+  "homepage": "https://github.com/sabbour/squadboard",
+  "tags": [
+    "feature",
+    "product-management",
+    "research",
+    "prototype",
+    "documentation"
+  ],
+  "requires": {
+    "squadboard": ">=0.1.0"
+  },
+  "project": {
+    "name": "Feature Kanban",
+    "description": "Track product feature work from customer signal through PRD, prototype, documentation, launch readiness, and done.",
+    "icon": "🧭"
+  },
+  "kanban": {
+    "columns": [
+      {
+        "slug": "backlog",
+        "label": "Backlog",
+        "order": 0
+      },
+      {
+        "slug": "discovery",
+        "label": "Discovery",
+        "order": 1,
+        "wip_limit": 5
+      },
+      {
+        "slug": "shaping",
+        "label": "Shaping",
+        "order": 2,
+        "wip_limit": 3
+      },
+      {
+        "slug": "prototyping",
+        "label": "Prototyping",
+        "order": 3,
+        "wip_limit": 3
+      },
+      {
+        "slug": "launch-readiness",
+        "label": "Launch Readiness",
+        "order": 4,
+        "wip_limit": 4
+      },
+      {
+        "slug": "done",
+        "label": "Done",
+        "order": 5
+      }
+    ],
+    "defaultColumn": "backlog"
+  },
+  "team": [
+    {
+      "name": "ProductManager",
+      "role": "Lead Product Manager",
+      "persistent": true,
+      "charterPath": "agents/ProductManager/charter.md"
+    },
+    {
+      "name": "ProductResearcher",
+      "role": "Customer Researcher",
+      "persistent": true,
+      "charterPath": "agents/ProductResearcher/charter.md"
+    },
+    {
+      "name": "PrototypeDesigner",
+      "role": "Prototype Designer",
+      "persistent": true,
+      "charterPath": "agents/PrototypeDesigner/charter.md"
+    },
+    {
+      "name": "DocsWriter",
+      "role": "Feature Documentation Writer",
+      "persistent": true,
+      "charterPath": "agents/DocsWriter/charter.md"
+    },
+    {
+      "name": "QualityReviewer",
+      "role": "Quality Reviewer",
+      "persistent": true,
+      "charterPath": "agents/QualityReviewer/charter.md"
+    }
+  ],
+  "ceremonies": [
+    {
+      "id": "signal-triage",
+      "name": "Customer Signal Triage",
+      "scope": "project",
+      "trigger": {
+        "kind": "on_schedule",
+        "config": {
+          "cron": "0 9 * * 1"
+        }
+      },
+      "workflowPath": "ceremonies/signal-triage.yaml"
+    },
+    {
+      "id": "feature-shaping-review",
+      "name": "Feature Shaping Review",
+      "scope": "project",
+      "trigger": {
+        "kind": "manual"
+      },
+      "workflowPath": "ceremonies/feature-shaping-review.yaml"
+    },
+    {
+      "id": "launch-readiness-review",
+      "name": "Launch Readiness Review",
+      "scope": "project",
+      "trigger": {
+        "kind": "manual"
+      },
+      "workflowPath": "ceremonies/launch-readiness-review.yaml"
+    }
+  ],
+  "skills": [
+    {
+      "key": "customer-research",
+      "name": "Customer Research",
+      "description": "Gather, deduplicate, and rank customer signals for product decisions.",
+      "category": "product-management"
+    },
+    {
+      "key": "prd-writing",
+      "name": "PRD Writing",
+      "description": "Write concise PRDs with testable requirements, metrics, risks, and rollout plans.",
+      "category": "product-management"
+    },
+    {
+      "key": "prototype-creation",
+      "name": "Prototype Creation",
+      "description": "Plan lightweight prototypes that validate the riskiest assumption quickly.",
+      "category": "product-design"
+    },
+    {
+      "key": "feature-naming",
+      "name": "Feature Naming",
+      "description": "Generate clear, reusable, customer-facing feature names.",
+      "category": "product-management"
+    },
+    {
+      "key": "feature-disclosure",
+      "name": "Feature Disclosure",
+      "description": "Write concise release notes, changelog entries, and feature announcements.",
+      "category": "documentation"
+    },
+    {
+      "key": "feature-docs",
+      "name": "Feature Documentation",
+      "description": "Plan and draft user-facing documentation for new or changed features.",
+      "category": "documentation"
+    }
+  ],
+  "routing": [
+    {
+      "label": "feature",
+      "agent": "ProductManager"
+    },
+    {
+      "label": "customer-signal",
+      "agent": "ProductResearcher"
+    },
+    {
+      "label": "research",
+      "agent": "ProductResearcher"
+    },
+    {
+      "label": "prototype",
+      "agent": "PrototypeDesigner"
+    },
+    {
+      "label": "docs",
+      "agent": "DocsWriter"
+    },
+    {
+      "label": "release-note",
+      "agent": "DocsWriter"
+    },
+    {
+      "label": "validation",
+      "agent": "QualityReviewer"
+    }
+  ],
+  "seedIssues": [
+    {
+      "title": "[SIGNAL] Trial users abandon onboarding after the import step",
+      "body": "Recent feedback suggests new users understand the value proposition but get stuck when asked to import existing data. Gather examples, identify the confusing step, and recommend one product change that would reduce drop-off.",
+      "labels": [
+        "customer-signal",
+        "research"
+      ],
+      "column": "discovery"
+    },
+    {
+      "title": "[FEATURE] Guided first-run checklist for new workspaces",
+      "body": "Create a PRD for a lightweight first-run checklist that helps new teams invite collaborators, add their first item, and run their first review. Include success metrics and non-goals.",
+      "labels": [
+        "feature",
+        "prd"
+      ],
+      "column": "shaping"
+    },
+    {
+      "title": "[PROTOTYPE] Compare two approaches for bulk item editing",
+      "body": "Prototype two flows for selecting multiple items, changing status, and applying labels. Capture the riskiest usability questions and the minimum artifact needed for a decision.",
+      "labels": [
+        "prototype",
+        "feature"
+      ],
+      "column": "prototyping"
+    },
+    {
+      "title": "[DOCS] Draft release note for saved filters",
+      "body": "Write a short release note that explains the customer value of saved filters, what is new, prerequisites or limitations, and a getting-started link placeholder.",
+      "labels": [
+        "docs",
+        "release-note"
+      ],
+      "column": "launch-readiness"
+    },
+    {
+      "title": "[VALIDATION] Define launch metrics for notification preferences",
+      "body": "Identify activation, adoption, retention, and quality metrics for a notification-preferences launch. Include instrumentation gaps and a ship/hold recommendation template.",
+      "labels": [
+        "validation",
+        "feature"
+      ],
+      "column": "launch-readiness"
+    }
+  ],
+  "artifacts": {
+    "agents": [
+      "agents/ProductManager/charter.md",
+      "agents/ProductResearcher/charter.md",
+      "agents/PrototypeDesigner/charter.md",
+      "agents/DocsWriter/charter.md",
+      "agents/QualityReviewer/charter.md"
+    ],
+    "ceremonies": [
+      "ceremonies/signal-triage.yaml",
+      "ceremonies/feature-shaping-review.yaml",
+      "ceremonies/launch-readiness-review.yaml"
+    ],
+    "skills": [
+      "skills/customer-research/SKILL.md",
+      "skills/prd-writing/SKILL.md",
+      "skills/prototype-creation/SKILL.md",
+      "skills/feature-naming/SKILL.md",
+      "skills/feature-disclosure/SKILL.md",
+      "skills/feature-docs/SKILL.md"
+    ],
+    "seedIssues": [
+      "issues/seed.json"
+    ]
+  }
+}

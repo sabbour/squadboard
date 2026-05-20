@@ -1,0 +1,16 @@
+name: Draft Review
+steps:
+  - type: agent_run
+    label: Review the draft
+    agent: Editor
+    prompt: |
+      Review this draft for audience fit, structure, clarity, factual claims, and next action.
+      Use the `tone-check` skill and return no more than five prioritized edits.
+    timeout: 20m
+
+  - type: agent_run
+    label: Revise the draft
+    agent: Writer
+    prompt: |
+      Apply the editor's prioritized notes. Keep the revision focused and explain any note you chose not to apply.
+    timeout: 30m

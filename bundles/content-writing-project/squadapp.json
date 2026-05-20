@@ -2,10 +2,10 @@
   "$schema": "https://squadboard.dev/schemas/squadapp/v1/squadapp.json",
   "schemaVersion": 1,
   "appId": "content-writing-project",
-  "version": "1.0.0",
-  "name": "Content Writing Project",
-  "displayName": "Content Writing Project",
-  "description": "Non-technical content pipeline: pitches / outlines / drafting / review / published kanban. Team: editor, two writers, reviewer. Ceremonies: outline review, draft review, publish.",
+  "version": "1.1.0",
+  "name": "Content Creation",
+  "displayName": "Content Creation",
+  "description": "Lightweight content workflow for ideas, drafting, review, and publishing with one writer and one editor.",
   "kind": "project-template",
   "author": "Squadboard team",
   "license": "MIT",
@@ -19,82 +19,53 @@
     "squadboard": ">=0.1.0"
   },
   "project": {
-    "name": "Content Writing Project",
-    "description": "A content pipeline for articles, posts, scripts, or any long-form writing.",
+    "name": "Content Creation",
+    "description": "A lightweight pipeline for articles, posts, scripts, newsletters, or announcements.",
     "icon": "✍️"
   },
   "kanban": {
     "columns": [
       {
-        "slug": "pitches",
-        "label": "Pitches",
+        "slug": "ideas",
+        "label": "Ideas",
         "order": 0
-      },
-      {
-        "slug": "outlines",
-        "label": "Outlines",
-        "order": 1
       },
       {
         "slug": "drafting",
         "label": "Drafting",
-        "order": 2,
-        "wip_limit": 4
+        "order": 1,
+        "wip_limit": 3
       },
       {
         "slug": "review",
         "label": "Review",
-        "order": 3
+        "order": 2
       },
       {
         "slug": "published",
         "label": "Published",
-        "order": 4
+        "order": 3
       }
     ],
-    "defaultColumn": "pitches"
+    "defaultColumn": "ideas"
   },
   "team": [
     {
+      "name": "Writer",
+      "role": "Writer",
+      "persistent": true,
+      "charterPath": "agents/Writer/charter.md"
+    },
+    {
       "name": "Editor",
-      "role": "Editor-in-Chief",
+      "role": "Editor",
       "persistent": true,
       "charterPath": "agents/Editor/charter.md"
-    },
-    {
-      "name": "Writer1",
-      "role": "Writer",
-      "persistent": true,
-      "charterPath": "agents/Writer1/charter.md"
-    },
-    {
-      "name": "Writer2",
-      "role": "Writer",
-      "persistent": true,
-      "charterPath": "agents/Writer2/charter.md"
-    },
-    {
-      "name": "Reviewer",
-      "role": "Content Reviewer",
-      "persistent": true,
-      "charterPath": "agents/Reviewer/charter.md"
     }
   ],
   "ceremonies": [
     {
-      "id": "simple-review",
-      "name": "Outline Review",
-      "scope": "task",
-      "trigger": {
-        "kind": "on_issue_entry",
-        "config": {
-          "column": "outlines"
-        }
-      },
-      "workflowPath": "ceremonies/simple-review.yaml"
-    },
-    {
-      "id": "bug-fix",
+      "id": "draft-review",
       "name": "Draft Review",
       "scope": "task",
       "trigger": {
@@ -103,47 +74,48 @@
           "column": "review"
         }
       },
-      "workflowPath": "ceremonies/bug-fix.yaml"
+      "workflowPath": "ceremonies/draft-review.yaml"
     },
     {
-      "id": "spike",
-      "name": "Publish",
+      "id": "publish-checklist",
+      "name": "Publish Checklist",
       "scope": "task",
       "trigger": {
         "kind": "manual"
       },
-      "workflowPath": "ceremonies/spike.yaml"
+      "workflowPath": "ceremonies/publish-checklist.yaml"
     }
   ],
   "skills": [
     {
       "key": "tone-check",
       "name": "Tone Check",
-      "description": "Audience-fit assessment: formal vs conversational, technical depth calibration, reading level awareness.",
+      "description": "A lightweight audience, clarity, and readability check for content drafts.",
       "category": "content"
     }
   ],
   "routing": [
     {
-      "label": "pitch",
-      "agent": "Editor"
+      "label": "idea",
+      "agent": "Writer"
     },
     {
       "label": "draft",
-      "agent": "Reviewer"
+      "agent": "Writer"
+    },
+    {
+      "label": "review",
+      "agent": "Editor"
     }
   ],
   "artifacts": {
     "agents": [
-      "agents/Editor/charter.md",
-      "agents/Writer1/charter.md",
-      "agents/Writer2/charter.md",
-      "agents/Reviewer/charter.md"
+      "agents/Writer/charter.md",
+      "agents/Editor/charter.md"
     ],
     "ceremonies": [
-      "ceremonies/simple-review.yaml",
-      "ceremonies/bug-fix.yaml",
-      "ceremonies/spike.yaml"
+      "ceremonies/draft-review.yaml",
+      "ceremonies/publish-checklist.yaml"
     ],
     "skills": [
       "skills/tone-check/SKILL.md"

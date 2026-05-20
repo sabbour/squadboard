@@ -1,0 +1,17 @@
+name: Customer Signal Triage
+steps:
+  - type: agent_run
+    label: Gather and rank customer signals
+    agent: ProductResearcher
+    prompt: |
+      Use the `customer-research` skill to gather recent customer signals relevant to the features in Backlog and Discovery.
+      Output a ranked list with source, customer problem, frequency, severity, confidence, and suggested backlog action.
+    timeout: 45m
+
+  - type: agent_run
+    label: Convert signals into product actions
+    agent: ProductManager
+    prompt: |
+      Review the signal summary. For each top signal, decide whether to merge into an existing feature, create a new feature card, or reject it as noise.
+      Add a one-line customer outcome, priority, owner, and next column for each accepted item.
+    timeout: 30m

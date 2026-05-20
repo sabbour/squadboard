@@ -210,3 +210,23 @@ Additive to existing `squadboard.sdk-sync-ownership.v1` contract. Does not chang
 - Added `packages/server/src/sdk/copilot-agent-projection.ts` as a pure `.github/agents/squad.agent.md` projection descriptor/renderer. It declares generated artifacts as client instructions only, not Squad state authority.
 - Regression coverage now pins both start orders: Squadboard-first with missing Copilot projection, and CLI/Copilot-first filesystem authority connected to Squadboard.
 - Validation: `pnpm --filter @sabbour/squadboard test -- sync-ownership --run` and `pnpm --filter @sabbour/squadboard run build` both pass.
+
+---
+
+## 2026-05-20T02:23:00.895-07:00 — Squadboard Apps install-as-project contract
+
+- Contract name: `squadboard.apps-install-as-project.v1`.
+- Squadboard Apps are domain-specific bundle packages surfaced through `/api/templates/squadboard-apps`; generic repeatable starters remain Project Templates through `/api/templates/builtin-projects`.
+- Installing a Squadboard App creates a normal project. There is no separate Apps installed registry or installed-state action on the Apps surface.
+- GitHub installs clone into repo-local ignored scratch space, validate any present `squadapp.json` has `kind: "squadboard-app"`, then apply the bundle through the existing bundle loader without patching the SDK.
+- Public examples were renamed to Squad-domain packages (`squad-doc-review`, `squad-issues-router`) for eventual `@sabbour/squadboard-apps` publication. AKS examples live outside the scanned `squadboard-apps/` catalog in `private-squadboard-apps/` until ownership/publication safety is decided.
+- Squad Issues Router now declares `squadboard.github-issue-intake.v1`: scheduled intake for `bradygaster/squad`, cursored by `project.githubSyncLastAt`, deduped by `githubIssueNumber`/`githubNodeId`, targeting `triage`. Runtime dependency remains with Hockney's reusable scheduled GitHub issue intake primitive; the app bundle is the contract source.
+- Squad Doc Review now declares `squadboard.doc-review-intake.v1`: weekly scheduled and manual doc review triggers for `bradygaster/squad`, cursored/deduped by repo + path + blob/commit SHA + review profile, with explicit queued-doc intake. The default final action creates/updates Squadboard issues grouped by doc path with findings, severity, owner recommendation, and suggested patch/PR checklist; docs are not auto-edited by default. Remaining runtime dependencies: reusable doc review intake, selected-doc manual run context payloads, and persisted review-issue upsert action.
+
+---
+
+## 2026-05-20T04:16:33.702-07:00 — Feature Kanban generalization
+
+- Curated visible built-in Project Templates to exactly Content Creation, Open Source, Research Spike, and Feature Kanban; hidden defaults remain on disk but are not selectable.
+- Generalized the old AKS Feature Kanban into `feature-kanban` with product/PM agents, reusable PM skills, agent-run ceremonies, and no AKS/Azure/Kubernetes/internal-tool dependencies.
+- Content Creation should stay intentionally small: one Writer, one Editor, four obvious columns, and two lightweight ceremonies.

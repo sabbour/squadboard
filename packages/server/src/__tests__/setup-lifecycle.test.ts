@@ -14,6 +14,7 @@ vi.mock('../services/formulator.js', () => ({
 
 import { resetBuiltinBundleCache } from '../services/builtin-bundles.js';
 import {
+  assertSafeSquadScaffoldTarget,
   buildCastingRegistry,
   buildTeamMarkdown,
   normalizeSquadPath,
@@ -26,6 +27,7 @@ import {
 const fixtureRoot = fileURLToPath(
   new URL('../../.squad/test-runs/setup-lifecycle/', import.meta.url),
 );
+const packagesRoot = fileURLToPath(new URL('../../../', import.meta.url));
 
 async function pathExists(targetPath: string): Promise<boolean> {
   return fs.access(targetPath).then(() => true, () => false);
@@ -109,12 +111,24 @@ describe('setup lifecycle foundations', () => {
     }
   });
 
+  it('refuses user-driven scaffolds directly under the monorepo packages directory', () => {
+    expect(() => assertSafeSquadScaffoldTarget(path.join(packagesRoot, 'accidental-app'))).toThrow(/packages\/ directory/);
+  });
+
+  it('allows the isolated E2E workspace under packages/e2e', () => {
+    const e2eProjectRoot = path.join(packagesRoot, 'e2e', '.e2e-workspaces', 'e2e-project');
+    expect(assertSafeSquadScaffoldTarget(e2eProjectRoot)).toBe(path.join(e2eProjectRoot, '.squad'));
+  });
+
   it('keeps deterministic bundle matching available as a safe fallback', () => {
     expect(selectDeterministicBundle('Rust cargo CLI package for developers')).toMatchObject({
-      bundleId: 'library-or-sdk-project',
+      bundleId: 'open-source-project',
     });
-    expect(selectDeterministicBundle('incident runbook for kubernetes alerts')).toMatchObject({
-      bundleId: 'ops-runbook-project',
+    expect(selectDeterministicBundle('Draft a launch PRD and prototype')).toMatchObject({
+      bundleId: 'feature-kanban',
+    });
+    expect(selectDeterministicBundle('Newsletter article for a product launch')).toMatchObject({
+      bundleId: 'content-writing-project',
     });
   });
 
@@ -143,7 +157,7 @@ describe('setup lifecycle foundations', () => {
 
     const suggestion = await suggestProjectSetup('Build an npm SDK with release notes');
 
-    expect(suggestion.bundleId).toBe('library-or-sdk-project');
+    expect(suggestion.bundleId).toBe('open-source-project');
     expect(suggestion.source).toBe('deterministic-fallback');
     expect(suggestion.matchedKeywords).toContain('npm');
   });
@@ -152,7 +166,7 @@ describe('setup lifecycle foundations', () => {
     const suggestion = await suggestProjectSetup('QA regression testing campaign', { useLlm: false });
 
     expect(runFormulatorMock).not.toHaveBeenCalled();
-    expect(suggestion.bundleId).toBe('bug-bash-project');
+    expect(suggestion.bundleId).toBe('feature-kanban');
     expect(suggestion.source).toBe('deterministic');
   });
 });
