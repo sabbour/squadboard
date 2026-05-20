@@ -11,6 +11,56 @@
 
 ---
 
+## W31 Wave 6 — Full Documentation Scrub
+
+**Date:** 2026-05-20T14:07:58.434-07:00  
+**Status:** Completed ✅
+
+### Task
+
+Full scrub of all remaining docs pages not touched in Wave 5 to apply Paperclip quality standard: concise language, clear one-job focus, no internal notes, proper cross-linking.
+
+### Deliverables
+
+1. **Updated getting-started pages** with prominent links to conceptual pages:
+   - `getting-started/index.mdx` — Added early links to "What is Squadboard?" and "Key Concepts"
+   - `getting-started/learning-path.md` — Added preamble directing new users to what-is-squadboard + key-concepts first
+   - `getting-started/quickstart.mdx` — Added "New here?" call-out at top linking to conceptual pages
+   - `getting-started/installation.md` — Added "Next steps" section
+
+2. **Fixed how-to guide relative links**:
+   - Corrected relative paths in all three how-to guides to resolve correctly in Docusaurus
+   - All build errors fixed; docs build passes
+
+3. **Deleted roadmap-gaps.md**:
+   - File contained internal roadmap speculation ("Future areas")
+   - Not linked in sidebars.ts (already orphaned)
+   - Content was aspirational, not user-facing
+
+4. **Quality verification**:
+   - Ran full docs build to verify no broken links
+   - All pages follow Paperclip standard: one job, no preamble, concise, cross-linked
+   - No TODO/WIP/planned language in user-facing content
+
+### Metrics
+
+- **Files changed:** 9 (7 edits, 1 deletion)
+- **Relative path fixes:** 5 broken links corrected
+- **Internal roadmap deleted:** 1 file removed
+- **Build status:** ✅ Passes with no broken links
+- **Commit:** 4b53b9ff8
+
+### Learnings
+
+1. **Relative path complexity** — Docusaurus relative links are tricky with subdirectories. Files in `user-guide/how-to/` need `../../` to reach docs root.
+2. **Roadmap docs don't belong in user site** — Internal "future areas" break the Paperclip principle of "write what's true now".
+3. **Most docs already good** — Wave 5 foundation was strong. Full scrub required only targeted fixes.
+4. **Cross-linking is about user journey** — Early "What is this?" questions answered before "How do I?".
+
+---
+
+## Latest Activity
+
 ## W31 Wave 5 — Paperclip-Quality Docs Pass
 
 **Date:** 2026-05-20T14:01:32.848-07:00  
