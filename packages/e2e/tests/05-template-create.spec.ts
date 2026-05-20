@@ -12,8 +12,9 @@
  * spec asserts the contract end-to-end using a template seeded via the API.
  */
 import { test, expect, request } from '@playwright/test'
+import { API_BASE, createE2eProjectParent, workspacePath } from './fixtures.ts'
 
-const API = 'http://localhost:3000'
+const API = API_BASE
 
 async function seedSourceProjectAndTemplate(): Promise<{
   templateId: string
@@ -23,13 +24,11 @@ async function seedSourceProjectAndTemplate(): Promise<{
 
   // 1. Create a source project we can save as a template.
   const stamp = Date.now()
-  const parentPath = `/tmp/squadboard-tpl-src-${stamp}`
   const projectName = `tpl-src-${stamp}`
+  const parentPath = await createE2eProjectParent(projectName)
 
   // The test runner needs the parent dir to actually exist on disk before the
-  // server will accept it. Use Node's fs/promises via the NodeJS process.
-  const fs = await import('node:fs/promises')
-  await fs.mkdir(parentPath, { recursive: true })
+  // server will accept it.
 
   const createRes = await ctx.post('/api/squad/create', {
     data: { parentPath, projectName },
@@ -81,7 +80,7 @@ test.describe('Wave 10 B1 — Create project from template', () => {
 
     // Override name + provide a target squadPath.
     const newName = `tpl-dest-${Date.now()}`
-    const squadPath = `/tmp/squadboard-tpl-dest-${Date.now()}/.squad`
+    const squadPath = workspacePath(newName, '.squad')
     // The Project name input is first; the squadPath input is second.
     const inputs = page.locator('input[type="text"]')
     await inputs.nth(0).fill(newName)

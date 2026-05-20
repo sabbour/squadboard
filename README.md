@@ -321,15 +321,16 @@ squadboard start --squad-storage fs
 
 1. **Create in Squadboard UI** — Click "New Project" → project is created in PostgreSQL mode.
 2. **Squadboard bootstraps** — Seeds team roster, ceremonies defaults (Simple Review, Bug Fix, RFC, Spike, Pair Programming), routing rules, and agent files.
-3. **Open in Copilot CLI** — Configure MCP (see "MCP Integration" above). Copilot CLI connects to Squadboard's MCP broker and shares the same Squad state.
-4. **Write code, run ceremonies** — Teams use both surfaces interchangeably. All changes sync through the central database.
+3. **Repair client projections** — Settings → **Team Sync** shows missing ceremony defaults and missing `.github/agents/squad.agent.md` with one-click repair actions.
+4. **Open in Copilot CLI** — Configure MCP (see "MCP Integration" above). Copilot CLI uses the generated Squad agent file plus Squadboard's MCP/API broker to share the same Squad state.
+5. **Write code, run ceremonies** — Teams use both surfaces interchangeably. There is one active authority and no implicit background two-way mirror.
 
 #### Path 2: CLI-First
 
 1. **Start with CLI/Copilot** — Use `squad.agent.md` and the Squad CLI as normal. `.squad/` files are created locally on your machine.
-2. **Add Squadboard later** — Clone the repo into Squadboard. The web UI detects the existing `.squad/` directory and offers to import it into PostgreSQL mode.
-3. **Choose your mode** — Keep in filesystem mode (read-only Squadboard mirror), or upgrade to PostgreSQL mode (full sync, shared state).
-4. **Open in Copilot CLI** — Configure MCP to use Squadboard's broker. Now both surfaces use the same authoritative state.
+2. **Add Squadboard later** — Register or initialize the repo in Squadboard. The sync status endpoint reports whether filesystem or PostgreSQL storage is the active authority.
+3. **Choose your mode** — Keep filesystem mode, where `.squad/` is the live authority, or use PostgreSQL mode, where clients write through Squadboard's MCP/API broker.
+4. **Open in Copilot CLI** — Use the generated `.github/agents/squad.agent.md` projection. Now both surfaces point at the same authoritative state.
 
 #### Checking Sync Health and Repairing
 
@@ -350,20 +351,20 @@ Returns a detailed report:
 ```bash
 curl -X POST http://localhost:3000/api/projects/{projectId}/squad-sync/repair \
   -H "Content-Type: application/json" \
-  -d '{"action": "regenerate_github_agent"}'
+  -d '{"actions": ["seed-ceremony-defaults", "generate-github-agent"], "dryRun": false}'
 ```
 
 Repair actions include:
-- `regenerate_github_agent` — Recreate `.github/agents/squad.agent.md` from authoritative state
-- `sync_squad_to_fs` — Refresh `.squad/` files from database
-- `seed_ceremony_defaults` — Ensure ceremony index is present and populated
+- `seed-ceremony-defaults` — Replace an empty/default-only `.squad/ceremonies.md` with seeded ceremony defaults
+- `generate-github-agent` — Recreate `.github/agents/squad.agent.md` for Copilot CLI/VS Code
+- `project-squad-to-fs` — Explicitly project database-backed Squad state to `.squad/` files when PostgreSQL is authoritative
 
-**UI Sync Panel (coming in Wave 20):**
-Project Settings → **Team Sync** will show:
+**UI Sync Panel:**
+Project Settings → **Team Sync** shows:
 - Active storage mode and authority
 - Bootstrap health and drift status
 - One-click repair buttons per issue
-- Last sync timestamp
+- Required and recommended projection artifacts
 
 #### Why This Matters
 
@@ -373,6 +374,17 @@ Before cross-surface sync, teams faced a choice:
 - Juggle both but risk data loss on mode switch
 
 Now: **choose your starting point, both surfaces stay in sync, no data loss.**
+
+### Test Coverage Inventory
+
+Run the automated suite with `pnpm test:e2e`. The Playwright config starts the Squadboard API and Vite client through `webServer`; tests no longer assume a backend is already running.
+
+| Layer | Command | Coverage |
+| --- | --- | --- |
+| Server Vitest | `pnpm --filter @sabbour/squadboard exec vitest run src/sdk/sync-ownership.test.ts src/__tests__/squad-sync-authority.test.ts src/__tests__/squad-sync-route.test.ts src/__tests__/squad-sync-status-route.test.ts` | Storage authority, bootstrap artifacts, repair actions, status/repair route envelopes, filesystem-authoritative safety. |
+| Client Vitest | `pnpm --filter @sabbour/squadboard-client test -- src/components/settings/__tests__/SquadSyncStatusPanel.test.tsx` | Settings → Team Sync normalization, labels, repair buttons, and unavailable status handling. |
+| Playwright E2E | `pnpm test:e2e` | Full-stack launch, onboarding, kanban smoke paths, navigation, agents, templates, WebSocket connectivity, team portability, consult send guards, disabled-agent guards, loading pattern, cast team, jump-into-session, docs scenarios, Team Sync status/repair/projection paths, and deterministic Copilot CLI command-runner coverage. |
+| Live gated E2E | `SQUADBOARD_E2E_LIVE_COPILOT=1 pnpm test:e2e -- 13-copilot-cli-launch.spec.ts` | Launches a real authenticated Copilot CLI from a repaired test project and asks Squad. This is opt-in because CI may not have Copilot CLI auth/network access. |
 
 ### Build for Production
 

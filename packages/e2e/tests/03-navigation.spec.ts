@@ -87,7 +87,7 @@ test.describe('Navigation smoke tests', () => {
   test('Unknown route redirects to ProjectPicker', async ({ page }) => {
     await page.goto('/this-does-not-exist')
     await page.waitForURL('/', { timeout: 5_000 })
-    await expect(page.getByRole('heading', { name: 'Projects' })).toBeVisible()
+    await expect(page.getByRole('heading', { name: 'Projects', exact: true })).toBeVisible()
   })
 
   test('Side navigation links are all present', async ({ page }) => {

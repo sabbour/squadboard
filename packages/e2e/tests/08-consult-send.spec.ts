@@ -17,15 +17,14 @@
  * Consult internals) plus the happy path.
  */
 import { test, expect, request } from '@playwright/test'
+import { API_BASE, createE2eProjectParent } from './fixtures.ts'
 
-const API = 'http://localhost:3000'
+const API = API_BASE
 
 async function createProjectViaApi(stamp: number, label: string): Promise<string> {
   const ctx = await request.newContext({ baseURL: API })
-  const parentPath = `/tmp/squadboard-consult-${label}-${stamp}`
   const projectName = `consult-${label}-${stamp}`
-  const fs = await import('node:fs/promises')
-  await fs.mkdir(parentPath, { recursive: true })
+  const parentPath = await createE2eProjectParent(projectName)
 
   const res = await ctx.post('/api/squad/create', {
     data: { parentPath, projectName },

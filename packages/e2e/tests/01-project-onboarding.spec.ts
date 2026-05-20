@@ -7,13 +7,14 @@
  * These are the first tests that must pass before any other suite runs.
  */
 import { test, expect } from '@playwright/test'
+import { createE2eProjectParent } from './fixtures.ts'
 
 test.describe('Demo 1 — Project onboarding', () => {
   test('ProjectPicker page loads with "Add Project" button', async ({ page }) => {
     await page.goto('/')
 
     // Heading
-    await expect(page.getByRole('heading', { name: 'Projects' })).toBeVisible()
+    await expect(page.getByRole('heading', { name: 'Projects', exact: true })).toBeVisible()
 
     // Primary CTA must always be reachable
     await expect(page.getByRole('button', { name: 'Add Project' })).toBeVisible()
@@ -61,7 +62,7 @@ test.describe('Demo 1 — Project onboarding', () => {
     await page.getByRole('button', { name: 'Create' }).click()
 
     const projectName = `e2e-test-${Date.now()}`
-    const parentPath = `/tmp/squadboard-e2e-${Date.now()}`
+    const parentPath = await createE2eProjectParent(projectName)
 
     await page.getByPlaceholder('/absolute/path/to/parent').fill(parentPath)
     await page.getByPlaceholder('my-new-project').fill(projectName)
@@ -88,7 +89,7 @@ test.describe('Demo 1 — Project onboarding', () => {
     await page.getByRole('button', { name: 'Create' }).click()
 
     const projectName = `e2e-nav-${Date.now()}`
-    await page.getByPlaceholder('/absolute/path/to/parent').fill(`/tmp/e2e-nav-${Date.now()}`)
+    await page.getByPlaceholder('/absolute/path/to/parent').fill(await createE2eProjectParent(projectName))
     await page.getByPlaceholder('my-new-project').fill(projectName)
     await page.getByRole('button', { name: 'Create project' }).click()
     await page.waitForURL(/\/projects\/[^/]+\/board/, { timeout: 15_000 })

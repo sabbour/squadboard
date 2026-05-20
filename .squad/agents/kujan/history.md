@@ -178,3 +178,11 @@ Release/docs invariants flagged:
 - `.github/workflows/` still only contains Squad triage/heartbeat/label workflows; no docs-build or npm-package-build release-readiness workflow is present yet. Treat CI release automation as pending Hockney output.
 
 No Hockney/Redfoot-owned source or docs files were edited by QA; only this history entry and the validation decision drop were added.
+
+### 2026-05-19T22:30:55.553-07:00 — Cross-surface sync Playwright gate
+
+Added Playwright coverage that launches the backend and client through `webServer`, then exercises Team Sync status, Settings panel rendering, ceremony-default repair, `.github/agents/squad.agent.md` generation, and a filesystem-authoritative CLI/Copilot-first registration path. The live Copilot CLI ask-Squad path is gated by `SQUADBOARD_E2E_LIVE_COPILOT=1`; default CI gets deterministic command-runner coverage without pretending a real authenticated Copilot run happened.
+
+Validation passed: `pnpm --filter @sabbour/squadboard-e2e test -- --list tests/00-full-stack-launch.spec.ts tests/12-squad-sync.spec.ts tests/13-copilot-cli-launch.spec.ts` and `SQUADBOARD_E2E_REUSE_SERVER=0 SQUADBOARD_E2E_API_BASE=http://127.0.0.1:3104 SQUADBOARD_E2E_BASE_URL=http://127.0.0.1:5178 pnpm --filter @sabbour/squadboard-e2e test -- tests/00-full-stack-launch.spec.ts tests/12-squad-sync.spec.ts tests/13-copilot-cli-launch.spec.ts` (7 passed, 1 live Copilot gate skipped).
+
+Failure mode now covered: Squadboard E2E cannot silently pass while the backend is absent, Team Sync status is stale, ceremony defaults are empty, the Copilot projection is missing, or filesystem-mode CLI-first authority regresses.

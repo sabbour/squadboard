@@ -8,6 +8,39 @@ import type { Page } from '@playwright/test'
 import { request } from '@playwright/test'
 
 export const API_BASE = process.env.SQUADBOARD_E2E_API_BASE ?? 'http://localhost:3000'
+const runningFromE2ePackage = process.cwd().endsWith('/packages/e2e')
+const defaultE2eRoot = runningFromE2ePackage ? process.cwd() : `${process.cwd()}/packages/e2e`
+export const E2E_WORKSPACE_ROOT = process.env.SQUADBOARD_E2E_WORKSPACE_ROOT
+  ?? `${defaultE2eRoot}/.e2e-workspaces`
+
+export interface CreatedProjectViaApi {
+  projectId: string
+  projectName: string
+  parentPath: string
+  projectPath: string
+  squadPath: string
+}
+
+function safeSegment(input: string): string {
+  const cleaned = input.toLowerCase().replace(/[^a-z0-9._-]+/g, '-').replace(/^-+|-+$/g, '')
+  return cleaned || 'project'
+}
+
+export async function createE2eProjectParent(label = 'project'): Promise<string> {
+  const { randomUUID } = await import('node:crypto')
+  const fs = await import('node:fs/promises')
+  const path = await import('node:path')
+  const parentPath = path.join(
+    E2E_WORKSPACE_ROOT,
+    `${safeSegment(label)}-${Date.now()}-${randomUUID().slice(0, 8)}`,
+  )
+  await fs.mkdir(parentPath, { recursive: true })
+  return parentPath
+}
+
+export function workspacePath(...segments: string[]): string {
+  return [E2E_WORKSPACE_ROOT, ...segments.map(safeSegment)].join('/')
+}
 
 /**
  * Create a new project directly via the REST API.
@@ -16,12 +49,12 @@ export const API_BASE = process.env.SQUADBOARD_E2E_API_BASE ?? 'http://localhost
  * Fluent-UI controlled inputs are unreliable with Playwright's fill().
  * Returns the project ID.
  */
-export async function createProjectViaApi(name: string): Promise<string> {
-  const ctx = await request.newContext({ baseURL: API_BASE })
-  const stamp = Date.now()
-  const parentPath = `/tmp/squadboard-e2e-api-${stamp}`
-  const fs = await import('node:fs/promises')
-  await fs.mkdir(parentPath, { recursive: true })
+export async function createProjectViaApiDetails(
+  name: string,
+  apiBase = API_BASE,
+): Promise<CreatedProjectViaApi> {
+  const ctx = await request.newContext({ baseURL: apiBase })
+  const parentPath = await createE2eProjectParent(name)
 
   const res = await ctx.post('/api/squad/create', {
     data: { parentPath, projectName: name },
@@ -34,7 +67,18 @@ export async function createProjectViaApi(name: string): Promise<string> {
     throw new Error(`createProjectViaApi: unexpected response: ${JSON.stringify(env)}`)
   }
   await ctx.dispose()
-  return env.data.projectId
+  const projectPath = `${parentPath}/${name}`
+  return {
+    projectId: env.data.projectId,
+    projectName: name,
+    parentPath,
+    projectPath,
+    squadPath: `${projectPath}/.squad`,
+  }
+}
+
+export async function createProjectViaApi(name: string): Promise<string> {
+  return (await createProjectViaApiDetails(name)).projectId
 }
 
 export async function createIssueViaApi(
@@ -93,8 +137,9 @@ export async function createInboxItemViaApi(input: {
 /**
  * Create a new project via the "Create new" tab on the ProjectPicker.
  *
- * Uses a synthetic parentPath under /tmp so the backend can scaffold
- * a fresh .squad/ directory without touching the real workspace.
+ * Uses a synthetic parentPath under packages/e2e/.e2e-workspaces so the
+ * backend can scaffold a fresh .squad/ directory without touching the real
+ * workspace.
  * Returns the project ID extracted from the resulting URL.
  */
 export async function createProject(page: Page, name: string): Promise<string> {
@@ -112,8 +157,8 @@ export async function createProject(page: Page, name: string): Promise<string> {
   // Switch to the "Create new" tab (use exact: false to avoid ambiguity with "Create from template")
   await page.getByRole('button', { name: 'Create new' }).click()
 
-  // Fill in parent directory (a unique temp path per test run)
-  const parentPath = `/tmp/squadboard-e2e-${Date.now()}`
+  // Fill in parent directory (a unique repo-local path per test run)
+  const parentPath = await createE2eProjectParent(name)
   await page.getByPlaceholder('/absolute/path/to/parent').fill(parentPath)
 
   // Fill in project name

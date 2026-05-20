@@ -23,8 +23,9 @@
  * This spec exercises the server contract end-to-end via the REST API.
  */
 import { test, expect, request } from '@playwright/test'
+import { API_BASE, createE2eProjectParent } from './fixtures.ts'
 
-const API = 'http://localhost:3000'
+const API = API_BASE
 
 interface AgentRow {
   id: string
@@ -35,10 +36,8 @@ interface AgentRow {
 
 async function createProjectViaApi(stamp: number): Promise<string> {
   const ctx = await request.newContext({ baseURL: API })
-  const parentPath = `/tmp/squadboard-b9-${stamp}`
   const projectName = `b9-${stamp}`
-  const fs = await import('node:fs/promises')
-  await fs.mkdir(parentPath, { recursive: true })
+  const parentPath = await createE2eProjectParent(projectName)
 
   const res = await ctx.post('/api/squad/create', {
     data: { parentPath, projectName },

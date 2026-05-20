@@ -142,7 +142,7 @@ test.describe.serial('Docs scenario screenshots', () => {
   test('captures project entry points', async ({ page }) => {
     await prepareDocsPage(page)
     await page.goto('/')
-    await expect(page.getByRole('heading', { name: 'Projects' })).toBeVisible()
+    await expect(page.getByRole('heading', { name: 'Projects', exact: true })).toBeVisible()
     await expect(page.getByText(projectName).first()).toBeVisible({ timeout: 10_000 })
     await docsScreenshot(page, 'spark-01-projects.png')
 
