@@ -17,12 +17,12 @@
  * Items already covered by a pending/running run are skipped (idempotent).
  * Items with no active agents in their project are skipped with a warning.
  *
- * Runs every 10 s.
+ * Runs every 30 s by default.
  */
 import type { Sweep, SweepResult } from '../heartbeat.js';
 import { getDb, schema } from '../../db/index.js';
 import { eq, and, sql, asc, inArray, gte } from 'drizzle-orm';
-import { resolveRouteTier2 } from '../router.js';
+import { logRoutingDecision, resolveRouteTier2 } from '../router.js';
 import {
   applyDeterministicPrefilters,
   buildCoordinatorInput,
@@ -34,6 +34,7 @@ import {
 import { isCoordinatorDispatchEnabled } from '../../config/coordinator-env.js';
 import { persistCoordinatorDecision } from '../../services/coordinator-decision-log.js';
 import { persistCoordinatorRoutingDecision } from '../../services/coordinator-routing-log.js';
+import { emitSignal } from '../../services/ceremony-signal-emitter.js';
 import type { CoordinatorDecision, CoordinatorCallMeta } from '../../coordinator/types.js';
 
 /** Minimum number of recent failures before a (issue, agent) tuple is blocked. */
@@ -46,12 +47,93 @@ function isParentComplete(row: { parentStatus: string; parentArchived?: number |
   return ['done', 'completed', 'cancelled'].includes(row.parentStatus.toLowerCase());
 }
 
+async function logPickupRoutingDecision(input: {
+  projectId: string;
+  issueId: string;
+  tier: 1 | 2 | 3 | null;
+  resolvedAgent: string | null;
+  matchedRule: string | null;
+  score?: number | null;
+  reasoning: string | null;
+}): Promise<void> {
+  try {
+    await logRoutingDecision({
+      projectId: input.projectId,
+      issueId: input.issueId,
+      tier: input.tier,
+      resolvedAgent: input.resolvedAgent,
+      matchedRule: input.matchedRule,
+      score: input.score ?? null,
+      reasoning: input.reasoning,
+      specifierRunId: null,
+    });
+  } catch (err) {
+    console.warn(`[sweep:pickup-ready] failed to log routing decision for issue ${input.issueId}:`, err);
+  }
+}
+
+async function markWorkflowRunsCompleted(workflowRunIds: string[]): Promise<void> {
+  if (workflowRunIds.length === 0) return;
+  const db = getDb();
+  const now = new Date();
+  await db
+    .update(schema.stepRuns)
+    .set({ status: 'completed', updatedAt: now })
+    .where(inArray(schema.stepRuns.workflowRunId, workflowRunIds));
+  await db
+    .update(schema.workflowRuns)
+    .set({ status: 'completed', updatedAt: now })
+    .where(inArray(schema.workflowRuns.id, workflowRunIds));
+}
+
+async function recordWorkPickupWorkflowRun(input: {
+  projectId: string;
+  issueId: string;
+  issueTitle: string;
+  issueStatus: string;
+  issueRunId: string;
+  agentId: string;
+  agentName: string | null;
+  routingTier: 1 | 2 | 3 | null;
+  routingScore: number | null;
+  matchedRule: string | null;
+}): Promise<void> {
+  try {
+    const result = await emitSignal({
+      projectId: input.projectId,
+      signalName: 'board.ready',
+      anchorIssueId: input.issueId,
+      contextPayload: {
+        issueId: input.issueId,
+        issueTitle: input.issueTitle,
+        issueStatus: input.issueStatus,
+        issueRunId: input.issueRunId,
+        agentId: input.agentId,
+        agentName: input.agentName,
+        routingTier: input.routingTier,
+        routingScore: input.routingScore,
+        matchedRule: input.matchedRule,
+      },
+    });
+
+    await markWorkflowRunsCompleted(result.workflowRunIds);
+
+    if (result.errors > 0) {
+      console.warn(
+        `[sweep:pickup-ready] board.ready signal for issue ${input.issueId} had ${result.errors} error(s)`,
+      );
+    }
+  } catch (err) {
+    console.warn(`[sweep:pickup-ready] failed to record Work Pickup workflow run for issue ${input.issueId}:`, err);
+  }
+}
+
 export const pickupReadySweep: Sweep = {
   id: 'pickup-ready',
   label: 'Ready pickup',
   description: 'Finds Ready cards without active runs, routes them, and queues an agent run.',
   scope: 'project',
-  intervalMs: 10_000,
+  intervalMs: 30_000,
   enabled: true,
 
   async run(): Promise<SweepResult> {
@@ -242,8 +324,12 @@ export const pickupReadySweep: Sweep = {
         for (const issue of projectIssues) {
           try {
             let targetAgentId: string | null = null;
+            let targetAgentName: string | null = null;
             let routingTier: 1 | 2 | 3 | null = null;
+            let routingScore: number | null = null;
             let routingReasoning: string | null = null;
+            let matchedRule: string | null = null;
+            let decisionLogged = false;
             // MC-10: captured when coordinator dispatches, for persistence after insert.
             let capturedCoordinatorDecision: CoordinatorDecision | null = null;
             let capturedCoordinatorMeta: CoordinatorCallMeta | null = null;
@@ -312,8 +398,12 @@ export const pickupReadySweep: Sweep = {
                 const resolvedId = agentByName.get(deterministicDecision.agent);
                 if (resolvedId) {
                   targetAgentId = resolvedId;
+                  targetAgentName = deterministicDecision.agent;
                   routingTier = 1;
+                  routingScore = deterministicDecision.confidence;
                   routingReasoning = deterministicDecision.rationale;
+                  matchedRule = 'coordinator:deterministic-prefilter';
+                  decisionLogged = true;
                   capturedCoordinatorDecision = deterministicDecision;
                   capturedCoordinatorMeta = buildDeterministicCoordinatorMeta(coordinatorInput);
                 }
@@ -356,8 +446,19 @@ export const pickupReadySweep: Sweep = {
                   const resolvedId = agentByName.get(decision.agent);
                   if (resolvedId) {
                     targetAgentId = resolvedId;
+                    targetAgentName = decision.agent;
                     routingTier = 1;
+                    routingScore = decision.confidence;
                     routingReasoning = decision.rationale ?? 'coordinator dispatch';
+                    matchedRule = 'coordinator:llm';
+                    await persistCoordinatorRoutingDecision({
+                      projectId,
+                      issueId: issue.id,
+                      decision,
+                      matchedRule,
+                      db,
+                    });
+                    decisionLogged = true;
                     capturedCoordinatorDecision = decision;
                     capturedCoordinatorMeta = result.meta;
                   } else {
@@ -408,14 +509,17 @@ export const pickupReadySweep: Sweep = {
 
               if (tier2 && tier2.score > 0) {
                 targetAgentId = tier2.agentId;
+                targetAgentName = tier2.agentName;
                 routingTier = 2;
+                routingScore = tier2.score;
                 routingReasoning = tier2.reasoning;
+                matchedRule = 'keyword-score';
               } else {
                 // ----------------------------------------------------------------
                 // Tier 3: least-loaded fallback.
                 // ----------------------------------------------------------------
                 const [leastLoaded] = await db
-                  .select({ id: agents.id })
+                  .select({ id: agents.id, name: agents.name })
                   .from(agents)
                   .where(and(eq(agents.projectId, projectId), eq(agents.status, 'active')))
                   .orderBy(
@@ -432,8 +536,10 @@ export const pickupReadySweep: Sweep = {
 
                 if (leastLoaded) {
                   targetAgentId = leastLoaded.id;
+                  targetAgentName = leastLoaded.name;
                   routingTier = 3;
                   routingReasoning = 'pickup-ready: least-loaded fallback';
+                  matchedRule = 'pickup-ready:least-loaded-fallback';
                 }
               }
             }
@@ -465,12 +571,40 @@ export const pickupReadySweep: Sweep = {
               status: 'pending',
               output: '[auto-dispatched by pickup-ready sweep]',
               routingTier,
+              routingScore: routingScore != null ? String(routingScore) : null,
               routingReasoning,
             }).returning({ id: issueRuns.id });
+
+            if (!decisionLogged) {
+              await logPickupRoutingDecision({
+                projectId,
+                issueId: issue.id,
+                tier: routingTier,
+                resolvedAgent: targetAgentName,
+                matchedRule,
+                score: routingScore,
+                reasoning: routingReasoning,
+              });
+            }
 
             // MC-10: persist coordinator decision on the newly-created run.
             if (insertedRun && capturedCoordinatorDecision && capturedCoordinatorMeta) {
               await persistCoordinatorDecision(insertedRun.id, capturedCoordinatorDecision, capturedCoordinatorMeta);
+            }
+
+            if (insertedRun) {
+              await recordWorkPickupWorkflowRun({
+                projectId,
+                issueId: issue.id,
+                issueTitle: issue.title,
+                issueStatus: issue.status,
+                issueRunId: insertedRun.id,
+                agentId: targetAgentId,
+                agentName: targetAgentName,
+                routingTier,
+                routingScore,
+                matchedRule,
+              });
             }
 
             acted += 1;

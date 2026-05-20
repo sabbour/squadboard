@@ -4,7 +4,7 @@
  * Parses the `simple` workflow YAML format into a WorkflowDefinition.
  * Uses js-yaml for parsing; performs structural validation on top.
  *
- * Supported step types: route | agent_run | approve | fan_out | handoff
+ * Supported step types: route | agent_run | approve | fan_out | handoff | notify
  * Invariant 1: agent_run is the only step that does LLM work.
  */
 
@@ -86,7 +86,13 @@ export interface HandoffStep extends BaseStep {
   message?: string;    // optional context for the receiving agent
 }
 
-export type WorkflowStep = RouteStep | AgentRunStep | ApproveStep | FanOutStep | HandoffStep;
+export interface NotifyStep extends BaseStep {
+  type: 'notify';
+  target?: string;
+  message?: string;
+}
+
+export type WorkflowStep = RouteStep | AgentRunStep | ApproveStep | FanOutStep | HandoffStep | NotifyStep;
 
 export interface WorkflowDefinition {
   name: string;
@@ -99,7 +105,59 @@ export interface WorkflowDefinition {
 // Validation
 // ---------------------------------------------------------------------------
 
-const VALID_STEP_TYPES = new Set(['route', 'agent_run', 'approve', 'fan_out', 'handoff']);
+const VALID_STEP_TYPES = new Set(['route', 'agent_run', 'approve', 'fan_out', 'handoff', 'notify']);
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function canonicalKindToStepType(kind: string): WorkflowStep['type'] | string {
+  switch (kind) {
+    case 'agent-task':
+    case 'agent-run':
+      return 'agent_run';
+    case 'peer-review':
+      return 'approve';
+    case 'fan-out':
+      return 'fan_out';
+    default:
+      return kind;
+  }
+}
+
+function normalizeStepShape(step: unknown): unknown {
+  if (!isRecord(step)) return step;
+  const normalized: Record<string, unknown> = { ...step };
+  if (normalized['type'] === undefined && typeof normalized['kind'] === 'string') {
+    normalized['type'] = canonicalKindToStepType(normalized['kind']);
+  }
+  if (Array.isArray(normalized['steps'])) {
+    normalized['steps'] = normalized['steps'].map((child) => normalizeStepShape(child));
+  }
+  return normalized;
+}
+
+function normalizeWorkflowDocument(doc: Record<string, unknown>): Record<string, unknown> {
+  if (doc['apiVersion'] === 'squad.io/v1' && doc['kind'] === 'Ceremony' && isRecord(doc['spec'])) {
+    const metadata = isRecord(doc['metadata']) ? doc['metadata'] : {};
+    const spec = doc['spec'];
+    return {
+      name: metadata['displayName'] ?? metadata['name'],
+      description: metadata['description'],
+      output_schema: spec['output_schema'] ?? doc['output_schema'],
+      steps: Array.isArray(spec['steps'])
+        ? spec['steps'].map((step) => normalizeStepShape(step))
+        : spec['steps'],
+    };
+  }
+
+  return {
+    ...doc,
+    steps: Array.isArray(doc['steps'])
+      ? doc['steps'].map((step) => normalizeStepShape(step))
+      : doc['steps'],
+  };
+}
 
 function validateStepShape(step: unknown, index: number): string[] {
   const errs: string[] = [];
@@ -109,7 +167,7 @@ function validateStepShape(step: unknown, index: number): string[] {
   }
   const s = step as Record<string, unknown>;
   if (!s['type'] || !VALID_STEP_TYPES.has(s['type'] as string)) {
-    errs.push(`step[${index}]: 'type' must be one of route | agent_run | approve | fan_out | handoff`);
+    errs.push(`step[${index}]: 'type' must be one of route | agent_run | approve | fan_out | handoff | notify`);
     return errs;
   }
   if (s['type'] === 'agent_run' && s['agent'] !== undefined && typeof s['agent'] !== 'string') {
@@ -215,7 +273,7 @@ export function validateWorkflowYaml(yamlContent: string): { valid: boolean; err
     return { valid: false, errors: ['Workflow definition must be a YAML object'] };
   }
 
-  const doc = parsed as Record<string, unknown>;
+  const doc = normalizeWorkflowDocument(parsed as Record<string, unknown>);
 
   if (!doc['name'] || typeof doc['name'] !== 'string') {
     errors.push("'name' is required and must be a string");
@@ -244,7 +302,7 @@ export async function parseWorkflowYaml(yamlContent: string): Promise<WorkflowDe
     throw new Error(`Invalid workflow YAML: ${errors.join('; ')}`);
   }
 
-  const doc = yaml.load(yamlContent) as Record<string, unknown>;
+  const doc = normalizeWorkflowDocument(yaml.load(yamlContent) as Record<string, unknown>);
 
   const steps: WorkflowStep[] = (doc['steps'] as Array<Record<string, unknown>>).map((s) =>
     parseStepRaw(s),
@@ -290,6 +348,15 @@ function parseStepRaw(s: Record<string, unknown>): WorkflowStep {
       to: String(s['to']),
       message: s['message'] !== undefined ? String(s['message']) : undefined,
     } satisfies HandoffStep;
+  }
+
+  if (type === 'notify') {
+    return {
+      type: 'notify',
+      label: s['label'] !== undefined ? String(s['label']) : undefined,
+      target: s['target'] !== undefined ? String(s['target']) : undefined,
+      message: s['message'] !== undefined ? String(s['message']) : undefined,
+    } satisfies NotifyStep;
   }
 
   if (type === 'approve') {

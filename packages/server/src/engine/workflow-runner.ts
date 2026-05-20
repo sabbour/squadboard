@@ -18,7 +18,7 @@ import { eq, and, sql } from 'drizzle-orm';
 import { getDb, schema } from '../db/index.js';
 import { resolveRoute } from './router.js';
 import { parseWorkflowYaml } from '../services/workflow-parser.js';
-import type { WorkflowStep, FanOutStep, HandoffStep } from '../services/workflow-parser.js';
+import type { WorkflowStep, FanOutStep, HandoffStep, NotifyStep } from '../services/workflow-parser.js';
 import {
   createPeerReviewRuns,
   collectReviewDecisions,
@@ -75,6 +75,8 @@ export type TriggerSource = {
   action?: string;
   deliveryId?: string;
   projectId?: string;
+  /** Optional source-specific run context, e.g. selected docs for manual ceremonies. */
+  context?: Record<string, unknown>;
 };
 
 export async function createWorkflowRun(
@@ -232,7 +234,7 @@ export async function advanceWorkflowRun(workflowRunId: string): Promise<void> {
       break;
 
     case 'agent_run':
-      await handleAgentRunStep(wfRun, currentStep);
+      await handleAgentRunStep(wfRun, currentStep, stepDef as WorkflowStep | undefined);
       break;
 
     case 'approve':
@@ -245,6 +247,10 @@ export async function advanceWorkflowRun(workflowRunId: string): Promise<void> {
 
     case 'handoff':
       await handleHandoffStep(wfRun, currentStep, stepDef as HandoffStep | undefined);
+      break;
+
+    case 'notify':
+      await handleNotifyStep(wfRun, currentStep, stepDef as NotifyStep | undefined);
       break;
 
     default:
@@ -353,9 +359,10 @@ async function handleRouteStep(
 async function handleAgentRunStep(
   wfRun: typeof schema.workflowRuns.$inferSelect,
   stepRun: typeof schema.stepRuns.$inferSelect,
+  stepDef: WorkflowStep | undefined,
 ): Promise<void> {
   const db = getDb();
-  const { stepRuns, issueRuns } = schema;
+  const { stepRuns, issueRuns, issues, agents } = schema;
 
   if (stepRun.status === 'completed') {
     await advanceToNextStep(wfRun.id, wfRun.currentStepIndex ?? 0);
@@ -390,8 +397,56 @@ async function handleAgentRunStep(
         `[workflow-runner] fan-out child agent_run: created issue_run ${newRun.id} ` +
         `for workflow_run ${wfRun.id}`,
       );
+    } else if (stepDef?.type === 'agent_run' && stepDef.agent) {
+      const [issue] = await db
+        .select({ projectId: issues.projectId })
+        .from(issues)
+        .where(eq(issues.id, wfRun.issueId))
+        .limit(1);
+      if (!issue) {
+        console.error(`[workflow-runner] agent_run step: issue ${wfRun.issueId} not found`);
+        return;
+      }
+
+      const [agent] = await db
+        .select()
+        .from(agents)
+        .where(and(eq(agents.projectId, issue.projectId), eq(agents.name, stepDef.agent)))
+        .limit(1);
+      if (!agent) {
+        console.warn(`[workflow-runner] agent_run step: agent '${stepDef.agent}' not found`);
+        return;
+      }
+
+      const [newRun] = await db
+        .insert(issueRuns)
+        .values({
+          issueId: wfRun.issueId,
+          agentId: agent.id,
+          kind: 'agent_run',
+          status: 'pending',
+          inputContext: stepDef.prompt
+            ? `## Workflow step: ${stepDef.label ?? `Step ${stepRun.stepIndex + 1}`}\n\n${stepDef.prompt}`
+            : null,
+        })
+        .returning({ id: issueRuns.id });
+
+      await db
+        .update(stepRuns)
+        .set({ issueRunId: newRun.id, status: 'running', updatedAt: new Date() })
+        .where(eq(stepRuns.id, stepRun.id));
+
+      await db
+        .update(schema.workflowRuns)
+        .set({ status: 'running', updatedAt: new Date() })
+        .where(eq(schema.workflowRuns.id, wfRun.id));
+
+      console.log(
+        `[workflow-runner] agent_run step: created issue_run ${newRun.id} ` +
+        `for agent ${agent.name} in workflow_run ${wfRun.id}`,
+      );
     }
-    // No issueRunId and no resolvedAgentId — wait for route step to create one
+    // No issueRunId and no resolvedAgentId/explicit agent — wait for route step to create one
     return;
   }
 
@@ -890,6 +945,28 @@ async function handleHandoffStep(
     `[workflow-runner] handoff step ${stepRun.stepIndex} → agent '${stepDef.to}' ` +
     `(issue_run ${newRun.id}); workflow advancing`,
   );
+
+  await advanceToNextStep(wfRun.id, wfRun.currentStepIndex ?? 0);
+}
+
+async function handleNotifyStep(
+  wfRun: typeof schema.workflowRuns.$inferSelect,
+  stepRun: typeof schema.stepRuns.$inferSelect,
+  stepDef: NotifyStep | undefined,
+): Promise<void> {
+  const db = getDb();
+  const { stepRuns } = schema;
+
+  if (stepRun.status !== 'completed') {
+    await db
+      .update(stepRuns)
+      .set({
+        status: 'completed',
+        output: stepDef ? JSON.stringify({ target: stepDef.target ?? null, message: stepDef.message ?? null }) : null,
+        updatedAt: new Date(),
+      })
+      .where(eq(stepRuns.id, stepRun.id));
+  }
 
   await advanceToNextStep(wfRun.id, wfRun.currentStepIndex ?? 0);
 }

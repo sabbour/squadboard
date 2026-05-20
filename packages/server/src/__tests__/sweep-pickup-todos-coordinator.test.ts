@@ -26,14 +26,19 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 const mockInsertValues = vi.fn();
 const mockInsertReturning = vi.fn();
 const mockInsert = vi.fn();
+const mockUpdate = vi.fn();
+const mockUpdateSet = vi.fn();
+const mockUpdateWhere = vi.fn();
 const mockSelect = vi.fn();
-const mockDb = { select: mockSelect, insert: mockInsert };
+const mockDb = { select: mockSelect, insert: mockInsert, update: mockUpdate };
 
 vi.mock('../db/index.js', () => ({
   getDb: () => mockDb,
   schema: {
     issues:    { __table: 'issues', id: 'issues.id', status: 'issues.status', archived: 'issues.archived' },
     issueRuns: { __table: 'issue_runs', id: 'issue_runs.id', issueId: 'issue_runs.issue_id', agentId: 'issue_runs.agent_id', status: 'issue_runs.status', createdAt: 'issue_runs.created_at', startedAt: 'issue_runs.started_at', completedAt: 'issue_runs.completed_at' },
+    workflowRuns: { __table: 'workflow_runs', id: 'workflow_runs.id', status: 'workflow_runs.status', updatedAt: 'workflow_runs.updated_at' },
+    stepRuns: { __table: 'step_runs', workflowRunId: 'step_runs.workflow_run_id', status: 'step_runs.status', updatedAt: 'step_runs.updated_at' },
     agents:    { __table: 'agents', id: 'agents.id', projectId: 'agents.project_id', status: 'agents.status', name: 'agents.name', role: 'agents.role', charterContent: 'agents.charter_content', charterHash: 'agents.charter_hash' },
     projects:  { __table: 'projects', id: 'projects.id', name: 'projects.name', description: 'projects.description' },
     issueLabels: { issueId: 'issue_labels.issue_id', labelId: 'issue_labels.label_id' },
@@ -47,6 +52,7 @@ vi.mock('../db/index.js', () => ({
 const mockResolveRouteTier2 = vi.fn();
 vi.mock('../engine/router.js', () => ({
   resolveRouteTier2: (...args: unknown[]) => mockResolveRouteTier2(...args),
+  logRoutingDecision: vi.fn().mockResolvedValue(undefined),
 }));
 
 const mockDispatchViaCoordinator = vi.fn();
@@ -115,6 +121,11 @@ vi.mock('../services/coordinator-decision-log.js', () => ({
 }));
 vi.mock('../services/coordinator-routing-log.js', () => ({
   persistCoordinatorRoutingDecision: vi.fn().mockResolvedValue(undefined),
+}));
+
+const mockEmitSignal = vi.fn();
+vi.mock('../services/ceremony-signal-emitter.js', () => ({
+  emitSignal: (...args: unknown[]) => mockEmitSignal(...args),
 }));
 
 vi.mock('drizzle-orm', () => ({
@@ -259,6 +270,10 @@ beforeEach(() => {
   mockInsertReturning.mockResolvedValue([{ id: 'new-run-id' }]);
   mockInsertValues.mockReturnValue({ returning: mockInsertReturning });
   mockInsert.mockReturnValue({ values: mockInsertValues });
+  mockUpdateWhere.mockResolvedValue([]);
+  mockUpdateSet.mockReturnValue({ where: mockUpdateWhere });
+  mockUpdate.mockReturnValue({ set: mockUpdateSet });
+  mockEmitSignal.mockResolvedValue({ fired: 0, skipped: 0, errors: 0, workflowRunIds: [] });
 });
 
 // ---------------------------------------------------------------------------
@@ -297,6 +312,45 @@ describe('pickup-ready sweep — coordinator dispatch (W29 MC-7)', () => {
     );
     // Tier-2 keyword scoring should NOT have been called
     expect(mockResolveRouteTier2).not.toHaveBeenCalled();
+  });
+
+  it('records the Work Pickup board.ready workflow run without changing the queued agent run', async () => {
+    setupStandardMocks();
+    mockEmitSignal.mockResolvedValue({
+      fired: 1,
+      skipped: 0,
+      errors: 0,
+      workflowRunIds: ['22222222-2222-2222-2222-222222222222'],
+    });
+    mockDispatchViaCoordinator.mockResolvedValue(
+      makeDispatchResult({ kind: 'dispatch', agent: 'verbal', rationale: 'best match for login', confidence: 0.92 }),
+    );
+
+    const result = await pickupReadySweep.run();
+
+    expect(result.acted).toBe(1);
+    expect(mockInsertValues).toHaveBeenCalledWith(
+      expect.objectContaining({
+        issueId: ISSUE_1.id,
+        agentId: AGENT_VERBAL.id,
+        kind: 'agent_run',
+        status: 'pending',
+      }),
+    );
+    expect(mockEmitSignal).toHaveBeenCalledWith(expect.objectContaining({
+      projectId: ISSUE_1.projectId,
+      signalName: 'board.ready',
+      anchorIssueId: ISSUE_1.id,
+      contextPayload: expect.objectContaining({
+        issueId: ISSUE_1.id,
+        issueRunId: 'new-run-id',
+        agentId: AGENT_VERBAL.id,
+        agentName: 'verbal',
+        routingTier: 1,
+      }),
+    }));
+    expect(mockUpdate).toHaveBeenCalledTimes(2);
+    expect(mockUpdateSet).toHaveBeenCalledWith(expect.objectContaining({ status: 'completed' }));
   });
 
   // -----------------------------------------------------------------------

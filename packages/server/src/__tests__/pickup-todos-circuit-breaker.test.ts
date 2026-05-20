@@ -142,6 +142,11 @@ vi.mock('../db/index.js', () => {
 
 vi.mock('../engine/router.js', () => ({
   resolveRouteTier2: vi.fn(async () => mockTier2Result),
+  logRoutingDecision: vi.fn().mockResolvedValue(undefined),
+}));
+
+vi.mock('../services/ceremony-signal-emitter.js', () => ({
+  emitSignal: vi.fn().mockResolvedValue({ fired: 0, skipped: 0, errors: 0, workflowRunIds: [] }),
 }));
 
 vi.mock('drizzle-orm', () => {
