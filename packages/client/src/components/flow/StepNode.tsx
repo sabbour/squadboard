@@ -21,6 +21,8 @@ import {
   Branch20Regular,
   Handshake20Regular,
   Attach20Regular,
+  ArrowClockwise20Regular,
+  CalendarClock20Regular,
   Send20Regular,
 } from '@fluentui/react-icons'
 import { type FlowStepRun } from '../../api/flow.ts'
@@ -41,6 +43,10 @@ function getKindIcon(kind: string): React.ReactNode {
     case 'fan_out':   return <Branch20Regular />
     case 'handoff':   return <Handshake20Regular />
     case 'notify':    return <Send20Regular />
+    case 'scheduler': return <CalendarClock20Regular />
+    case 'dispatch':  return <Send20Regular />
+    case 'recovery':  return <ArrowClockwise20Regular />
+    case 'terminal':  return <CheckmarkCircle20Regular />
     default:          return null
   }
 }
@@ -52,6 +58,10 @@ const KIND_LABEL: Record<string, string> = {
   fan_out: 'Fan-out',
   handoff: 'Handoff',
   notify: 'Notify',
+  scheduler: 'Scheduler',
+  dispatch: 'Dispatch',
+  recovery: 'Recovery',
+  terminal: 'Result',
 }
 
 export function statusColors(status: string, kind: string): {
@@ -74,6 +84,10 @@ export function statusColors(status: string, kind: string): {
   switch (status) {
     case 'pending':
       return { border: '#48515a', badgeBg: 'rgba(125, 133, 144, 0.2)', badgeFg: '#9da7b3', label: 'Pending', pulse: false }
+    case 'planned':
+      return { border: '#48515a', badgeBg: 'rgba(125, 133, 144, 0.2)', badgeFg: '#9da7b3', label: 'Planned', pulse: false }
+    case 'attempted':
+      return { border: '#d29922', badgeBg: 'rgba(210, 153, 34, 0.18)', badgeFg: '#d29922', label: 'Attempted', pulse: false }
     case 'running':
       return { border: '#388bfd', badgeBg: 'rgba(56, 139, 253, 0.2)', badgeFg: '#58a6ff', label: 'Running', pulse: true }
     case 'splitting':
@@ -87,6 +101,8 @@ export function statusColors(status: string, kind: string): {
       }
     case 'completed':
       return { border: '#3fb950', badgeBg: 'rgba(63, 185, 80, 0.18)', badgeFg: '#3fb950', label: 'Completed', pulse: false }
+    case 'recovered':
+      return { border: '#58a6ff', badgeBg: 'rgba(56, 139, 253, 0.18)', badgeFg: '#58a6ff', label: 'Recovered', pulse: false }
     case 'failed':
       return { border: '#f85149', badgeBg: 'rgba(248, 81, 73, 0.2)', badgeFg: '#ff7b72', label: 'Failed', pulse: false }
     case 'cancelled':
@@ -182,6 +198,22 @@ export default function StepNode({ data }: { data: StepNodeData }) {
           >
             {step.agentName ?? '—'}
             {step.agentRole ? <span style={{ color: tokens.colorNeutralForeground3 }}> · {step.agentRole}</span> : null}
+          </div>
+        )}
+        {step.outputSummary && (
+          <div
+            style={{
+              fontSize: 11,
+              color: tokens.colorNeutralForeground2,
+              overflow: 'hidden',
+              display: '-webkit-box',
+              WebkitLineClamp: 2,
+              WebkitBoxOrient: 'vertical',
+              lineHeight: 1.25,
+            }}
+            title={step.outputSummary}
+          >
+            {step.outputSummary}
           </div>
         )}
         {step.deliverables.length > 0 && (
