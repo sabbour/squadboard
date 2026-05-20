@@ -7428,3 +7428,3504 @@ After Verbal's WIP (uncommitted; includes `pickup-todos.ts` new sweep + 3 new la
 **Implementation (Kujan):** Added `packages/server/src/__tests__/pglite-issue-runs-claim.test.ts`. Coverage: in-memory PGlite, bootstrapped schema plus forward migration SQL, one `issue_runs` row with dependent FK rows, then the exact ready-workflow claim update to `running`. Focused test passed.
 
 **Files involved:** `packages/server/src/db/index.ts`, `packages/server/src/db/pglite.ts`, `packages/server/src/__tests__/pglite-issue-run-events-catalog-repair.test.ts`, `packages/server/src/__tests__/pglite-issue-runs-claim.test.ts`, `docs/bugs/bug-2026-05-19-pglite-ready-workflow-step-sweep-fails-updating-issue-runs.md`
+
+# Entry from bug-2026-05-20-ceremony-editor-crashes-because-useblocker-requires-a-data-router.md
+
+# Bug Reported: Ceremony editor crashes because useBlocker requires a data router
+
+**Bug ID:** bug-2026-05-20-ceremony-editor-crashes-because-useblocker-requires-a-data-router
+**Severity:** 🟠 high
+**Component:** frontend
+**Assigned to:** Keyser
+**Report:** docs/bugs/bug-2026-05-20-ceremony-editor-crashes-because-useblocker-requires-a-data-router.md
+
+
+# Entry from bug-2026-05-20-copilot-cli-work-does-not-sync-back-to-squadboard.md
+
+# Bug Reported: Copilot CLI work does not sync back to Squadboard
+
+**Bug ID:** bug-2026-05-20-copilot-cli-work-does-not-sync-back-to-squadboard
+**Severity:** 🔴 critical
+**Component:** mcp
+**Assigned to:** Kobayashi
+**Report:** docs/bugs/bug-2026-05-20-copilot-cli-work-does-not-sync-back-to-squadboard.md
+
+
+# Entry from bug-2026-05-20-pglite-schema-bootstrap-hits-cache-lookup-failure-on-issues-status-migration.md
+
+# Bug Reported: PGlite schema bootstrap hits cache lookup failure on issues.status migration
+
+**Bug ID:** bug-2026-05-20-pglite-schema-bootstrap-hits-cache-lookup-failure-on-issues-status-migration
+**Severity:** 🟠 high
+**Component:** database
+**Assigned to:** Hockney
+**Report:** docs/bugs/bug-2026-05-20-pglite-schema-bootstrap-hits-cache-lookup-failure-on-issues-status-migration.md
+
+
+# Entry from bug-2026-05-20-squad-sync-status-can-mislabel-cli-first-projects-as-postgresql-backed-and-fully-ready.md
+
+# Bug Reported: Squad Sync status can mislabel CLI-first projects as PostgreSQL-backed and fully ready
+
+**Bug ID:** bug-2026-05-20-squad-sync-status-can-mislabel-cli-first-projects-as-postgresql-backed-and-fully-ready
+**Severity:** 🟠 high
+**Component:** sdk
+**Assigned to:** Kobayashi
+**Report:** docs/bugs/bug-2026-05-20-squad-sync-status-can-mislabel-cli-first-projects-as-postgresql-backed-and-fully-ready.md
+
+
+# Entry from bug-2026-05-20-squad-sync-status-page-exposes-implementation-plumbing-instead-of-cross-client-guidance.md
+
+# Bug Reported: Squad Sync status page exposes implementation plumbing instead of cross-client guidance
+
+**Bug ID:** bug-2026-05-20-squad-sync-status-page-exposes-implementation-plumbing-instead-of-cross-client-guidance
+**Severity:** 🟠 high
+**Component:** ui
+**Assigned to:** Keyser
+**Report:** docs/bugs/bug-2026-05-20-squad-sync-status-page-exposes-implementation-plumbing-instead-of-cross-client-guidance.md
+
+
+# Entry from bug-2026-05-20-sync-status-export-preview-is-noisy-and-the-no-mirror-warning-is-confusing.md
+
+# Bug Reported: Sync status export preview is noisy and the no-mirror warning is confusing
+
+**Bug ID:** bug-2026-05-20-sync-status-export-preview-is-noisy-and-the-no-mirror-warning-is-confusing
+**Severity:** 🟠 high
+**Component:** ui
+**Assigned to:** Keyser
+**Report:** docs/bugs/bug-2026-05-20-sync-status-export-preview-is-noisy-and-the-no-mirror-warning-is-confusing.md
+
+
+# Entry from copilot-directive-commit-next-chance-20260520T041633Z.md
+
+### 2026-05-20T04:16:33.702-07:00: User directive
+**By:** Ahmed Sabbour (via Copilot)
+**What:** Commit completed work at the next safe opportunity, and make queued work tracking visible instead of leaving it implicit.
+**Why:** User concern — the worktree has many uncommitted changes and queued items are hard to reason about.
+
+
+# Entry from copilot-directive-feature-kanban-not-aks-20260520T041633Z.md
+
+### 2026-05-20T04:16:33.702-07:00: User directive
+**By:** Ahmed Sabbour (via Copilot)
+**What:** Feature Kanban must not be AKS-specific or internal. Remove AKS-specific/internal references while keeping generic PM capabilities such as PRD writing, naming, feature disclosure, customer signal gathering, prototype creation, and feature docs.
+**Why:** User correction — the built-in project type must be reusable for general product feature teams, not an AKS PM workflow.
+
+
+# Entry from feat-2026-05-20-live-run-monitoring-console.md
+
+# New Feature Added: Live run monitoring console
+
+**Feature ID:** feat-2026-05-20-live-run-monitoring-console
+**Date:** 2026-05-20
+**Spec:** docs/features/feat-2026-05-20-live-run-monitoring-console.md
+
+
+# Entry from fenster-live-run-viewer.md
+
+# Decision: Live Run Viewer UX Redesign
+
+**Date:** 2026-05-20  
+**Author:** Fenster  
+**Status:** APPROVED FOR IMPLEMENTATION
+
+---
+
+## Problem
+
+The current run viewer (screenshot evidence) has critical UX issues:
+
+1. **Redundant hierarchy** — outer row shows agent + status, expanded panel repeats them
+2. **UUID noise** — raw run paths like `/tmp/squadboard-run-fc1b4c6f...` are meaningless
+3. **Recovery events invisible** — `[recovered: server restarted]` is just green text, easily missed
+4. **No temporal context** — no elapsed time, no relative timestamps on events
+5. **Status badge chaos** — "Failed" appears twice with inconsistent styling
+6. **Live runs feel static** — "In Progress" badge without any motion/pulse
+
+---
+
+## UX Spec for Keyser
+
+### Layout: Three Zones
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│ HEADER BAR                                                      │
+│  [Agent Avatar] Agent Name  ● Running  0m 42s       $0.0012    │
+│                              ↑ pulse dot                        │
+├─────────────────────────────────────────────────────────────────┤
+│ METRICS STRIP (collapsed by default, expand on click)           │
+│  Turns: 3  │  In: 1.2k tokens  │  Out: 340 tokens  │  Model: …  │
+├─────────────────────────────────────────────────────────────────┤
+│ EVENT STREAM (flex: 1, scrollable)                              │
+│                                                                 │
+│  07:12:03  ▶ Run started — kujan                                │
+│  07:12:05  🔧 Called bash                                       │
+│  07:12:08  ⚡ Turn 1 (assistant)                                 │
+│  07:13:15  ⚠️ RECOVERED: server restarted ← highlighted card    │
+│  07:14:22  ✕ Run failed: process exited 1                       │
+│                                                                 │
+│                                        [earlier events ↑]       │
+├─────────────────────────────────────────────────────────────────┤
+│ STEER BAR (sticky bottom, only when status=live)                │
+│  [ Send a message to the agent...              ] [Send]         │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+### Hierarchy Rules
+
+| Element | Typography | Notes |
+|---------|-----------|-------|
+| Agent name | `Subtitle2` (16px semibold) | Primary identifier |
+| Run ID | `Caption1` mono, truncated 8 chars | Secondary, not prominent |
+| Status badge | Fluent `Badge` | Single source of truth |
+| Elapsed time | `Caption1` tabular-nums | Live-ticking when running |
+| Cost | `Caption1` | Right-aligned |
+| Event summary | `Body1` | One line per event |
+| Event timestamp | `Caption1` mono | HH:MM:SS, left column |
+
+### Labels (Plain English)
+
+| Old | New |
+|-----|-----|
+| `/tmp/squadboard-run-...` | (hide entirely — run ID in header is enough) |
+| `[auto-dispatched by pickup-ready sweep]` | "Auto-started by scheduler" |
+| `[recovered: server restarted]` | "⚠️ Recovered after restart" |
+| `issue.run.tool_call` | "Called {toolName}" |
+| `issue.run.turn` | "Turn {n}" |
+
+### State Treatments
+
+| State | Header Badge | Stream Area | Steer Bar |
+|-------|--------------|-------------|-----------|
+| **Loading** | `Spinner` + "Loading" | Centered spinner | Hidden |
+| **Empty** (no events yet) | Badge: "Pending" | "Waiting for first event…" | Hidden |
+| **Running** | Badge: "Running" `success` + pulse | Event stream, auto-scroll | Visible, enabled |
+| **Reconnecting** | Badge: "Reconnecting" `warning` | MessageBar warning | Visible, disabled |
+| **Completed** | Badge: "Completed" `subtle` | Static stream | Hidden |
+| **Failed** | Badge: "Failed" `danger` | Static stream, error highlighted | Hidden |
+
+### Recovery Events — Special Card
+
+Recovery events (`issue.run.steered`, server restarts) get a highlighted treatment:
+
+```tsx
+<MessageBar intent="warning" style={{ margin: '8px 0' }}>
+  <MessageBarBody>
+    ⚠️ Recovered after restart — the run continued automatically
+  </MessageBarBody>
+</MessageBar>
+```
+
+This breaks the monotony of the event stream and draws attention to non-obvious state transitions.
+
+### Minimal Metrics (Collapsed Strip)
+
+Show in a single horizontal strip below header (not a grid):
+
+- **Turns:** {n}
+- **Input tokens:** {n}
+- **Output tokens:** {n}
+- **Cost:** ${n.nnnn}
+
+Model name shown in header next to agent name if available.
+
+### Streamed Log Lines
+
+For raw log output (the green terminal text in RunOutputPanel), use:
+
+- `fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace'`
+- `fontSize: 12px`
+- `lineHeight: 1.6`
+- `color: tokens.colorPaletteGreenForeground2` for stdout
+- `color: tokens.colorPaletteRedForeground1` for stderr/errors
+- Auto-scroll to bottom on new lines
+- "X earlier lines hidden" link at top if virtualized
+
+### Interaction Notes
+
+1. **Click event row** → expand to show raw JSON payload (existing behavior, keep it)
+2. **Steer input** → Enter sends, Shift+Enter for newline
+3. **Elapsed time** → ticks every 1s while `status === 'live'`
+4. **Badge pulse** → CSS animation `@keyframes pulse { 0%,100% { opacity:1 } 50% { opacity:0.6 } }` on the dot before "Running"
+
+---
+
+## What NOT to Build (Scope Limits)
+
+- No log search/filter (future)
+- No event type toggles (future)
+- No multi-run comparison (future)
+- No cost breakdown by tool (future)
+
+---
+
+## Files to Modify
+
+1. `packages/client/src/components/runs/LiveRunViewer.tsx` — main rewrite
+2. `packages/client/src/components/runs/RunOutputPanel.tsx` — align styling if used elsewhere
+3. `packages/client/src/hooks/useRunStream.ts` — no changes needed
+
+---
+
+## Acceptance Checklist
+
+- [ ] Single status badge in header (no duplication)
+- [ ] Elapsed time ticks while running
+- [ ] Recovery/steered events render as MessageBar warnings
+- [ ] Steer bar hidden when run not live
+- [ ] Event timestamps in HH:MM:SS mono
+- [ ] Raw run UUID hidden from UI (only 8-char suffix in header)
+- [ ] "Auto-started by scheduler" replaces sweep jargon
+- [ ] Loading state shows centered spinner
+- [ ] Empty state shows "Waiting for first event…"
+- [ ] Metrics strip is single row, not grid
+
+
+# Entry from fenster-ux-plan.md
+
+# UX Plan Slice — Card Heights, App Install/Create, Curated Provenance, Ceremony Navigation, Docs Structure
+
+> **Author:** Fenster (UX Designer)  
+> **Date:** 2026-05-20  
+> **Status:** UX Plan — ready for review  
+> **Scope:** `ui-crash-layout-plan` todo
+
+---
+
+## 1. Card Height Normalization — Same Initial Height
+
+### Current State
+
+Cards across surfaces (`ProjectCard`, `AgentCard`, `IssueCard`, `DeliverableCard`) have **variable heights** driven by content (badges, descriptions, meta-rows). This creates visual jitter when content varies per card.
+
+### Recommendation
+
+**A. Fixed minimum height with content overflow handling**
+
+| Surface | Fixed Min Height | Overflow Strategy |
+|---------|-----------------|-------------------|
+| `ProjectCard` | 120px | Squad path and date already truncate via `textOverflow: ellipsis` — no change needed |
+| `AgentCard` | 110px | Role + model badges wrap; add `minHeight: 110px` and `alignContent: start` |
+| `IssueCard` | Auto (keep as-is) | Issue cards are draggable; variable height is acceptable for board context |
+| `DeliverableCard` | 80px collapsed | Already uses accordion expansion — collapsed state should be fixed height |
+
+**B. Grid layout with `grid-auto-rows: 1fr`**
+
+Where cards live in grids (e.g., Agents page, ProjectPicker), change the CSS grid from auto to `grid-auto-rows: 1fr` so all cards in a row share the tallest card's height. This is the Fluent2-native approach.
+
+### Acceptance Criteria
+
+- [ ] `AgentCard` has `minHeight: 110px` and `alignContent: start` applied
+- [ ] ProjectPicker grid uses `grid-auto-rows: 1fr` so project cards align
+- [ ] Agents page grid uses `grid-auto-rows: 1fr` so agent cards align
+- [ ] Visual regression test verifies no content is clipped
+
+---
+
+## 2. Squad Apps — Install/Create Entry Point
+
+### Current State
+
+- **Templates page** exists for project/team/workflow templates
+- **No UI surface** exists for installing Squad Apps (the `.squadapp` bundles)
+- User cannot browse, install, or create Squad Apps from the UI
+
+### Recommendation
+
+**A. Add "Apps" section to Settings sidebar**
+
+Place the Squad App surface under **Settings → Apps** (alongside Review Policy, Team, MCP Servers). This groups all project-level configuration in one place.
+
+**B. Apps page layout**
+
+```
+┌──────────────────────────────────────────────────────────────┐
+│ PageHeader: "Apps" — eyebrow: project name                   │
+│ Description: "Install packaged bundles or create your own."  │
+│ Actions: [Browse Gallery] [Create App from Project]          │
+├──────────────────────────────────────────────────────────────┤
+│ INSTALLED APPS                                               │
+│ ┌──────────────┐ ┌──────────────┐ ┌──────────────┐          │
+│ │ AppCard      │ │ AppCard      │ │ AppCard      │          │
+│ │ name, ver    │ │ name, ver    │ │ name, ver    │          │
+│ │ origin badge │ │ origin badge │ │ origin badge │          │
+│ └──────────────┘ └──────────────┘ └──────────────┘          │
+│                                                              │
+│ CURATED GALLERY (when Browse Gallery clicked)                │
+│ Dialog showing available Squad Apps from /bundles/           │
+└──────────────────────────────────────────────────────────────┘
+```
+
+**C. Entry points**
+
+| Entry | Action |
+|-------|--------|
+| Settings → Apps | View installed, browse gallery |
+| Project creation dialog | "Start from Squad App" option alongside blank project |
+| Conjure (Cmd+K) | Intent "create project" → optionally select Squad App |
+
+### Acceptance Criteria
+
+- [ ] Settings sidebar has "Apps" nav item with `Apps20Regular` icon
+- [ ] Apps page shows installed Squad Apps with version, origin, and update status
+- [ ] Browse Gallery dialog lists available apps from `bundles/` with Clone/Install button
+- [ ] Create App dialog exports current project as `.squadapp` bundle
+
+---
+
+## 3. Curated Skills — Provenance Clarity
+
+### Current State
+
+The Skills page already has a `SourceBadge` component that shows:
+- **Built-in catalog** (blue badge) for `source: 'curated'`
+- **Cloned from \<key\>** (blue badge) when `curatedKey` exists
+
+### Gap
+
+"Built-in catalog" is ambiguous — users don't know if it's from Squadboard core, a Squad App, or a third-party library.
+
+### Recommendation
+
+**A. Three-tier provenance labels**
+
+| Source | Badge Label | Tooltip |
+|--------|-------------|---------|
+| `curated` | **Bundled** | "Ships with Squadboard core" |
+| `squadapp` | **From \<app name\>** | "Installed via Squad App: \<app name\>" |
+| `imported` | **Imported** | "Loaded from SKILL.md file" |
+| `project` | **Project** | "Created in this project" |
+| `custom` | **Custom** | "Authored manually" |
+
+**B. Visual distinction**
+
+- Bundled: brand background (`tokens.colorBrandBackground2`)
+- From Squad App: purple background (new semantic color for apps)
+- Imported/Project/Custom: neutral backgrounds (existing)
+
+**C. Data requirement**
+
+Add `sourceAppId` and `sourceAppName` fields to the Skill model so the UI can display "From \<app name\>" instead of generic "curated".
+
+### Acceptance Criteria
+
+- [ ] Skill source badges differentiate between Squadboard-bundled and Squad-App-sourced skills
+- [ ] Tooltip on badge explains provenance in plain language
+- [ ] Skill model includes `sourceAppId` / `sourceAppName` (backend change)
+
+---
+
+## 4. Ceremony Detail — Click Navigation Behavior
+
+### Current State
+
+CeremonyList uses `DataGridRow onClick={() => navigate(...)}` to navigate to `CeremonyEditor`. Clicking any cell navigates — there's no preview/expand behavior.
+
+### Gap
+
+Users expect a detail panel (like `CardDetail` for issues) or at least a way to preview ceremony metadata before committing to full-page navigation.
+
+### Recommendation
+
+**A. Preview drawer pattern (preferred)**
+
+On row click, open a `DrawerOverlay` (Fluent2) from the right showing:
+- Ceremony name, kind badge, trigger badge, origin badge
+- Last run summary (timestamp, status)
+- Quick actions: Edit, Run Now, Duplicate, Delete
+
+User clicks **Edit** button in drawer to navigate to full editor.
+
+**B. Hover preview (alternative)**
+
+Show a `Tooltip` with richer content (name + trigger + last run) on row hover. Click still navigates directly.
+
+**Recommendation:** Go with (A) for consistency with IssueCard → CardDetail pattern.
+
+### Acceptance Criteria
+
+- [ ] Clicking a ceremony row opens a preview drawer, not the full editor
+- [ ] Drawer shows name, badges (kind, trigger, scope, origin), last run, and quick actions
+- [ ] "Edit" button in drawer navigates to `/projects/{id}/ceremonies/{ceremonyId}`
+- [ ] Keyboard shortcut (Enter on focused row) also opens drawer
+
+---
+
+## 5. Docs Structure — Usable, Non-Repetitive
+
+### Current State
+
+`docs/README.md` provides a table linking to:
+- `prd.md`, `features.md`, `concepts/*`, `ceremonies/*`, `setup/*`, `demos/*`
+
+The docs-site (`packages/docs-site/`) is Docusaurus-based but not yet integrated with the navigation structure.
+
+### Gaps
+
+1. **Repetition:** `concepts/squad-apps-and-templates.md` duplicates much of `squadapp-spec.md`
+2. **Dead links:** Some concept pages reference nonexistent API endpoints
+3. **No in-app docs nav:** Users can't browse docs from the Squadboard UI
+
+### Recommendation
+
+**A. Consolidate Squad Apps docs**
+
+- Keep `squadapp-spec.md` as the authoritative spec
+- Refactor `concepts/squad-apps-and-templates.md` to be a summary with deep links to the spec (no duplication)
+
+**B. Add "Help" surface to Squadboard UI**
+
+Add a **Help** panel (triggered from the top bar or a `?` icon) that surfaces key docs inline:
+- Getting Started
+- Ceremonies
+- Squad Apps
+- Review Policy
+
+Use iframes or embedded markdown rendering to show relevant doc sections without leaving the app.
+
+**C. Docs-site sidebar consistency**
+
+Ensure `packages/docs-site/` sidebar matches `docs/README.md` structure so users get the same navigation in both contexts.
+
+### Acceptance Criteria
+
+- [ ] `concepts/squad-apps-and-templates.md` is refactored to summary + links (no content duplication)
+- [ ] Dead links in docs are fixed or removed
+- [ ] Top bar has a Help button (`Question20Regular` icon) that opens contextual help panel
+- [ ] Docs-site sidebar structure mirrors `docs/README.md` hierarchy
+
+---
+
+## Summary Matrix
+
+| Area | Change | Priority | Owner |
+|------|--------|----------|-------|
+| Card heights | Add `minHeight` + `grid-auto-rows: 1fr` | P1 | Frontend |
+| Squad App UI | New Settings → Apps page | P1 | Frontend + Backend |
+| Curated provenance | Three-tier badges + `sourceAppId` | P2 | Frontend + Backend |
+| Ceremony nav | Preview drawer on row click | P2 | Frontend |
+| Docs structure | Consolidate, add Help panel | P3 | Docs + Frontend |
+
+---
+
+## Open Questions
+
+1. **Card heights:** Should IssueCard also get a fixed min-height, or is variable height acceptable for board UX?
+2. **Squad App install:** Should the install flow be wizard-based (multi-step) or single-dialog?
+3. **Ceremony preview:** Should the drawer be full-height or medium (400px)?
+
+---
+
+*Fenster — riddles aside, this is where the gaps are.*
+
+
+# Entry from hockney-core-ceremonies.md
+
+# Hockney — Core ceremony metadata
+
+**Date:** 2026-05-20
+**Status:** Accepted
+
+## Decision
+
+Work Pickup and Scribe Close-Out are canonical core ceremonies. Their `core` classification lives in built-in `.workflow.yaml` metadata as both `category: core` and `tags: [core]`.
+
+## Rationale
+
+The YAML files are the durable built-in ceremony source of truth. Seeding copies that metadata into `triggerConfig` so project ceremony lists can expose `category` and `tags` without a schema migration; list/export paths fall back to canonical built-in metadata for older seeded rows.
+
+## Validation
+
+- `pnpm --filter @sabbour/squadboard test -- --run src/__tests__/ceremonies-built-in.test.ts src/__tests__/ceremony-yaml-import.test.ts src/__tests__/ceremony-yaml-export.test.ts src/__tests__/ceremony-roundtrip-fidelity.test.ts src/__tests__/workflow-parser-canonical.test.ts`
+- `pnpm --filter @sabbour/squadboard exec tsc --noEmit`
+- `pnpm --filter @sabbour/squadboard-client typecheck`
+
+
+# Entry from hockney-deep-review-backend.md
+
+# Deep Backend Security & Bug Review — Hockney
+
+**Date:** 2026-05-20  
+**Reviewer:** Hockney (Backend / Workflow Engine Dev)  
+**Scope:** `packages/server/src` — all routes, middleware, engine, DB, realtime, daemon, GitHub integration
+
+---
+
+## Security Issues
+
+### S1 — SQL Injection via `sql.raw()` in sweeper (CRITICAL)
+- **File:** `engine/sweeper.ts:93`
+- **Description:** `sweepExpiredStepLeases()` builds a raw SQL array from step IDs using string interpolation: `sql.raw(\`ARRAY[${ids.map(id => \`'${id}'\`).join(',')}]::uuid[]\`)`. Although the IDs originate from a prior SELECT, a corrupted or adversarial DB row with a crafted `id` value could inject arbitrary SQL. This is the only `sql.raw()` in the hot path that splices external data.
+- **Severity:** Critical
+- **Remediation:** Use Drizzle's parameterized `inArray()` operator or `sql.join()` with `sql\`${id}\`` placeholders instead of `sql.raw()`.
+
+### S2 — SQL Injection in migration script (HIGH)
+- **File:** `scripts/migrate-from-legacy-pg.ts:389`
+- **Description:** `tableName` and `colNames` are interpolated directly into a raw query string: `SELECT ${colNames} FROM ${tableName}`. Values originate from `pg_catalog` metadata, so exploitation requires a compromised source DB — but the script runs with full DB privileges.
+- **Severity:** High
+- **Remediation:** Quote identifiers with `pg-format` or use `"${tableName}"` quoting at minimum.
+
+### S3 — Auth bypass when `SQUADBOARD_AUTH_TOKEN` unset (HIGH)
+- **File:** `middleware/auth.ts:24-28`
+- **Description:** When `SQUADBOARD_AUTH_TOKEN` is not set, the middleware is a no-op — all routes are public. This is intentional for local dogfood but dangerous if the server is accidentally exposed to a network without the env var set.
+- **Severity:** High (context-dependent — critical if deployed without env var)
+- **Remediation:** Log a prominent startup warning when `SQUADBOARD_AUTH_TOKEN` is unset. Consider requiring it in production mode (`NODE_ENV=production`).
+
+### S4 — WebSocket has no authentication (HIGH)
+- **File:** `realtime/ws-server.ts:205-273`
+- **Description:** WebSocket upgrade accepts any connection and assigns a random userId. The `__global__` subscription channel exposes all realtime events to any connected client with no auth check.
+- **Severity:** High
+- **Remediation:** Validate the bearer token on WS upgrade (`req.headers.authorization`) and reject unauthenticated connections.
+
+### S5 — System/admin routes have no authorization (HIGH)
+- **File:** `routes/system.ts:42-452`
+- **Description:** Endpoints for backup, restore, dedupe, GitHub auth configuration are reachable by any authenticated caller. No admin/role check exists.
+- **Severity:** High
+- **Remediation:** Add an admin-role or separate admin-token gate to system routes.
+
+### S6 — No cross-project authorization (IDOR) on most routes (HIGH)
+- **Files:** `routes/projects.ts`, `routes/issues.ts`, `routes/inbox.ts`, `routes/review-policies.ts`, `routes/analytics.ts`, `routes/column-meta.ts`
+- **Description:** Any caller with a valid token can access/modify any project's resources by supplying an arbitrary `projectId`. No per-project ownership or scoping check exists.
+- **Severity:** High
+- **Remediation:** Introduce project-scoping middleware that validates the caller's access to the requested project.
+
+### S7 — GitHub API calls have no request timeout (HIGH)
+- **File:** `github/client.ts:227-261`
+- **Description:** All GitHub HTTP requests use `fetch()` with no `AbortController` or timeout. A hung GitHub endpoint can pin a worker indefinitely.
+- **Severity:** High
+- **Remediation:** Wrap all `fetch()` calls with `AbortSignal.timeout(30_000)`.
+
+### S8 — No rate limiting on any API endpoint (MEDIUM)
+- **File:** `index.ts` (route registration section)
+- **Description:** No rate-limiting middleware is mounted. All endpoints are brute-forceable.
+- **Severity:** Medium
+- **Remediation:** Add `express-rate-limit` or equivalent at the router level.
+
+### S9 — No CORS policy configured (MEDIUM)
+- **File:** `index.ts`
+- **Description:** No `cors()` middleware is configured. Browser clients from any origin can make requests.
+- **Severity:** Medium
+- **Remediation:** Mount `cors()` with an explicit allowlist of trusted origins.
+
+### S10 — Hardcoded DB credentials in deprecated file (MEDIUM)
+- **File:** `db/.deprecated/postgres.ts:9-10`
+- **Description:** Hardcoded username/password in the deprecated Postgres connection file. Still present in repo.
+- **Severity:** Medium
+- **Remediation:** Remove the deprecated file or redact credentials.
+
+### S11 — `REINDEX INDEX ${relname}` uses identifier interpolation (LOW)
+- **File:** `db/index.ts:405`
+- **Description:** While `relname` is validated against a static allowlist, the pattern of interpolating identifiers into raw SQL is fragile.
+- **Severity:** Low
+- **Remediation:** Add a comment asserting the allowlist invariant, or use `pg-format`'s `%I` identifier quoting.
+
+---
+
+## Bugs
+
+### B1 — Heartbeat keeps lease alive for wedged workers (HIGH)
+- **File:** `engine/stepper.ts:135-151`
+- **Description:** The heartbeat `setInterval` runs independently of `executeAgentRun()`. If the SDK bridge call hangs (e.g., waiting on a subprocess), the heartbeat keeps extending `lease_expires_at` indefinitely. The sweeper will never reclaim the run because the lease never expires. A stuck worker holds the issue_run forever.
+- **Severity:** High
+- **Remediation:** Add a per-run hard timeout (e.g., 30 min). Clear the heartbeat interval and let the lease expire if the timeout fires.
+
+### B2 — Sweeper step reclaim is non-atomic (MEDIUM)
+- **File:** `engine/sweeper.ts:62-119`
+- **Description:** `sweepExpiredStepLeases()` does `SELECT` then separate `UPDATE` statements without a transaction or `FOR UPDATE SKIP LOCKED`. Concurrent sweeper ticks can read the same expired rows and double-retry or double-fail them.
+- **Severity:** Medium
+- **Remediation:** Wrap in a single `UPDATE ... RETURNING` or use `FOR UPDATE SKIP LOCKED` in the SELECT.
+
+### B3 — Sweeper has no grace window on lease expiry (MEDIUM)
+- **File:** `engine/sweeper.ts:20-22`
+- **Description:** `sweepExpiredLeases()` uses `lease_expires_at < NOW()`. A heartbeat arriving 1ms late (due to event loop jitter) causes the sweeper to reclaim a perfectly healthy run.
+- **Severity:** Medium
+- **Remediation:** Add a grace buffer: `lease_expires_at < NOW() - INTERVAL '10 seconds'`.
+
+### B4 — Heartbeat sweep `setInterval` has no overlap protection (MEDIUM)
+- **File:** `engine/heartbeat.ts:194-196`
+- **Description:** `_schedule()` uses `setInterval(async () => { await this._runSweep(state) }, ...)`. If a sweep iteration takes longer than the interval, the next tick fires before the previous completes, causing concurrent side effects.
+- **Severity:** Medium
+- **Remediation:** Use `setTimeout` + reschedule pattern, or add an `isRunning` guard.
+
+### B5 — Migrations are not transactional (HIGH)
+- **File:** `db/migrations.ts:188-287`
+- **Description:** Migrations and rollbacks execute SQL statements one-by-one without wrapping them in a transaction. A partial failure leaves the schema in an inconsistent state with no automatic rollback.
+- **Severity:** High
+- **Remediation:** Wrap each migration file's statements in `BEGIN`/`COMMIT` (or use Drizzle's migration runner which does this).
+
+### B6 — Fan-out ROLLBACK is not guarded (MEDIUM)
+- **File:** `engine/fan-out.ts:313-315`
+- **Description:** In the `catch` block, `client.query('ROLLBACK')` is called without its own try/catch. If the connection is already broken, ROLLBACK throws, masking the original error and potentially leaking the client connection.
+- **Severity:** Medium
+- **Remediation:** Guard ROLLBACK: `await client.query('ROLLBACK').catch(() => {})`.
+
+### B7 — Daemon signal handlers call `process.exit()` synchronously (MEDIUM)
+- **File:** `daemon/index.ts:345-347`
+- **Description:** SIGINT/SIGTERM call `stopDaemon(); process.exit(0)` synchronously. `stopDaemon()` likely has async cleanup that won't finish before `exit()`.
+- **Severity:** Medium
+- **Remediation:** `await stopDaemon()` before exiting, or use a shutdown promise chain.
+
+### B8 — Server shutdown doesn't force-close WS/HTTP connections (MEDIUM)
+- **File:** `index.ts:405-463`
+- **Description:** Graceful shutdown waits on `server.close()` but never forces idle/open sockets to close. Long-lived WS connections will prevent shutdown until the OS timeout.
+- **Severity:** Medium
+- **Remediation:** Track open sockets and `destroy()` them after a grace period.
+
+### B9 — Input validation gaps across routes (MEDIUM)
+- **Files:** `routes/inbox.ts`, `routes/consult.ts`, `routes/labels.ts`, `routes/cast.ts`, `routes/column-meta.ts`
+- **Description:** `limit`/`offset` are parsed with `Number()` but never validated (can be NaN, negative, or extremely large). Body fields like `name`, `color`, `body` have no length limits.
+- **Severity:** Medium
+- **Remediation:** Add Zod schemas or manual validation for all user-supplied parameters.
+
+### B10 — TOCTOU race in secret-key file creation (MEDIUM)
+- **File:** `services/secret-key.ts:48-65`
+- **Description:** Key file is checked with `readFile` then written with `writeFile`. Two concurrent first-access calls can each generate different keys, with the second overwriting the first.
+- **Severity:** Medium
+- **Remediation:** Use `writeFile` with `O_CREAT | O_EXCL` flag (or `fs.open` with `'wx'` mode) for atomic create-if-not-exists.
+
+---
+
+## Dead Code
+
+### D1 — Deprecated Postgres implementation
+- **File:** `db/.deprecated/postgres.ts` (entire file, 128 lines)
+- **What:** Legacy embedded-Postgres implementation replaced by PGlite. Still in source tree with hardcoded credentials.
+
+### D2 — `resolveWorkspace()` unreferenced
+- **File:** `engine/workspace.ts:144-151`
+- **What:** Thin wrapper function with no callers in the engine tree.
+
+### D3 — `_resetHeartbeatConfigCache()` test-only helper
+- **File:** `engine/heartbeat-config.ts:65-67`
+- **What:** Exported test helper. Not technically dead, but pollutes the production API surface.
+
+### D4 — `connectedClients()` unused export
+- **File:** `realtime/ws-server.ts:281-283`
+- **What:** Exported function with no callers.
+
+### D5 — Review policies stub route
+- **File:** `routes/review-policies.ts:336-343`
+- **What:** `/default/board/:boardId` always returns 400 — placeholder that was never implemented.
+
+### D6 — `executeAgentRunStub()` in bridge
+- **File:** `sdk/bridge.ts:364-376`
+- **What:** Test/local-hacking stub, unused in production flow.
+
+---
+
+## Missing Error Handling
+
+### E1 — DB pool has no retry/backoff on connection failure
+- **File:** `db/index.ts:45-50, 98-115`
+- **What:** External Postgres pool is created with default settings. No connect timeout, pool limits, or retry logic. A transient DB outage will cascade into unhandled errors.
+
+### E2 — Startup sequence has no per-step rollback
+- **File:** `index.ts:103-239`
+- **What:** Startup runs many sequential `await`s (PGlite init, migrations, seeding, heartbeat). If step N fails, steps 1..N-1 are not cleaned up.
+
+### E3 — `refreshInstallationToken()` doesn't guard malformed responses
+- **File:** `github/client.ts:170-200`
+- **What:** Assumes valid JSON body from GitHub. A 502/empty response will throw an uncaught parse error.
+
+### E4 — `decrypt()` doesn't validate key/IV/tag sizes
+- **File:** `services/secret-key.ts:91-97`
+- **What:** Malformed hex or wrong buffer sizes will throw uncaught crypto errors.
+
+### E5 — Daemon subprocess startup has no try/catch
+- **File:** `daemon/process.ts:12-14`
+- **What:** Bare `startDaemon()` call at top level. A sync exception during startup will crash the subprocess before any logging or cleanup.
+
+### E6 — Ceremony/push flows lack timeouts on helper calls
+- **File:** `daemon/index.ts:229-268`
+- **What:** Imported worker helpers (ceremony execution, git push) can hang indefinitely with no timeout or AbortController.
+
+---
+
+## Top 5 Priority Fixes
+
+| Rank | ID | Issue | Severity | Ease | Rationale |
+|------|-----|-------|----------|------|-----------|
+| 1 | S1 | SQL injection via `sql.raw()` in sweeper | Critical | Easy (swap to `inArray()`) | Only raw SQL splice of external data in hot path. 5-line fix. |
+| 2 | B1 | Heartbeat keeps wedged workers alive forever | High | Medium (add hard timeout) | A single stuck SDK call can hold an issue_run forever, blocking the agent. Requires adding a timeout + clearing the heartbeat. |
+| 3 | B5 | Migrations are not transactional | High | Easy (wrap in BEGIN/COMMIT) | Partial migration failure can corrupt the schema. Well-understood fix. |
+| 4 | S7 | GitHub API calls have no timeout | High | Easy (add AbortSignal.timeout) | A hung GitHub endpoint blocks the event loop / worker indefinitely. One-line fix per call site. |
+| 5 | B3+B2 | Sweeper race conditions (no grace window + non-atomic step reclaim) | Medium | Medium | The sweeper can kill healthy runs (B3) and double-retry expired steps (B2). Both fixable with straightforward SQL changes. |
+
+---
+
+## Summary Statistics
+
+| Category | Count | Critical | High | Medium | Low |
+|----------|-------|----------|------|--------|-----|
+| Security | 11 | 1 | 5 | 4 | 1 |
+| Bugs | 10 | 0 | 2 | 8 | 0 |
+| Dead Code | 6 | — | — | — | — |
+| Missing Error Handling | 6 | — | — | — | — |
+| **Total** | **33** | **1** | **7** | **12** | **1** |
+
+
+# Entry from hockney-delete-json-failure.md
+
+# Decision: DELETE /api/projects/:id must return JSON on all error paths
+
+**Date:** 2026-05-19T23:37:54.700-07:00  
+**Author:** Hockney  
+**Status:** Implemented
+
+## Context
+
+The DELETE project endpoint was returning `text/html` (HTTP 500) on PGlite stale-OID errors, causing the client to fail with `"expected JSON but got text/html"`. The error message in the UI was `could not open relation with OID 66346`.
+
+## Decisions
+
+### 1. All DB calls in DELETE handler must be individually try/caught
+- The lookup phase (`db.select`) and the mutation phase (`db.delete` settings + projects) are wrapped in separate try/catch blocks.
+- Lookup failure → `res.status(500).json({ ok: false, error: "Database error during project lookup: <msg>" })`.
+- Mutation failure → `res.status(500).json({ ok: false, error: "Database error during project deletion: <msg>" })`.
+- Rationale: these failures must never leave the client without a parseable JSON body; the stale-OID family of PGlite errors can affect any table at any time.
+
+### 2. A global JSON error handler is required in index.ts
+- Registered as a 4-arg Express middleware `(err, req, res, next)` after all API routes and before the SPA fallback.
+- Catches any async error that slips past route-level try/catch (Express v5 automatically forwards async rejections).
+- Returns `{ error: message }` JSON with the original HTTP status if set, or 500 as fallback.
+- This is a universal safety net, not a substitute for per-route handling.
+
+### 3. Safety contract is unchanged
+- Metadata-only delete is the default; `deleteFolder: true` requires explicit opt-in.
+- All folder safety guards (root, home, cwd ancestor, non-absolute, missing disk path, no .squad subdir) fire before any mutation.
+- Tests must mock filesystem I/O only; no real project folders are touched in tests.
+
+## Files Changed
+- `packages/server/src/routes/projects.ts`
+- `packages/server/src/index.ts`
+- `packages/server/src/__tests__/delete-project.test.ts`
+
+---
+
+## Addendum: Root-cause fix — withPgliteOidRetry
+
+**Date:** 2026-05-19T23:37:54.700-07:00
+
+The previous error-shaping fix was insufficient. The delete still failed because the stale OID error was the actual failure, not just an unformatted one.
+
+**Root cause:** PGlite's extended query protocol (used by all parameterised Drizzle queries) caches prepared statement plans. When a migration cycle drops and recreates a table, the new relation has a fresh `pg_class` OID. An older cached plan still holds the previous OID. The next query fails with `could not open relation with OID NNNNN`.
+
+**Fix:** `withPgliteOidRetry<T>(fn: () => Promise<T>): Promise<T>` exported from `db/index.ts`.
+- On OID error in PGlite mode: calls `DEALLOCATE ALL` (clears all prepared-statement caches) then retries `fn()` exactly once.
+- External Postgres re-throws immediately (external PG invalidates its own relcache).
+- The retry is bounded to exactly one attempt. If the retry also fails, the error propagates.
+- The DELETE handler wraps both the lookup and mutation phases in this wrapper.
+
+**Regression coverage:** 22 tests pass (16 route-level + 6 focused utility tests against in-memory PGlite). The focused test verifies `DEALLOCATE ALL` cleared `pg_prepared_statements` before the retry.
+
+
+# Entry from hockney-logs-heartbeat-diagnostics.md
+
+# Hockney decision — heartbeat diagnostics safety
+
+**Date:** 2026-05-20T02:23:00.895-07:00  
+**Author:** Hockney  
+**Status:** Proposed
+
+## Decision
+
+Heartbeat defaults are slowed at both coded-default and `heartbeat.config.json` layers, while `stuck-issue-runs` remains protected: config cannot disable it and cannot stretch it beyond 45 seconds.
+
+The log monitor is event-driven from heartbeat sweep events. Its only automatic mutation is disabling allowlisted non-critical diagnostics sweeps (`ralph-monitor`, `log-monitor`) after repeated failures. Core workflow, lease, pickup, ceremony, sync, and presence sweeps emit advisory diagnostics only.
+
+Backend fatal/error logs are JSON records with event, source, severity, timestamp, message, stack, and context so server failures are machine-searchable without exposing broad internals in API responses.
+
+Follow-up fold-in:
+- The `[CLI subprocess] ExperimentalWarning: SQLite is an experimental feature` line comes from the Copilot CLI child process launched by `@github/copilot-sdk`, not Squadboard's PGlite/Postgres layer. Squadboard now sets `NODE_OPTIONS=--disable-warning=ExperimentalWarning` only for inherited child-process environments, with an opt-out for debugging.
+- Now's compact Sweep Activity is seeded from the same heartbeat snapshot as the Heartbeat page and no longer hides registered sweeps such as `pickup-ready`, `ralph-monitor`, and `log-monitor`.
+- Project diagnostics now include a Squad Sync projection check that summarizes authority, missing artifacts, and repair actions.
+- User-driven project scaffolds are blocked from direct creation under the monorepo `packages/` tree, while the intentional `packages/e2e/.e2e-workspaces` scratch area remains allowed.
+- Existing direct package `.squad` folders are also excluded from discovery/self-registration/project listing. `packages/server/.squad` is treated as internal state, stale self-registration rows are corrected to the repo-root `.squad`, and charter backfill now reads each agent's stored/project charter path while aggregating missing-charter summaries.
+
+## Rationale
+
+Lease recovery must not depend on in-memory state or optimistic operators. A noisy monitor may quiet optional diagnostics, but it must never disable the rows and sweeps that preserve workflow liveness.
+
+
+# Entry from hockney-logs-heartbeat-plan.md
+
+# Hockney — Logs / Heartbeat / Agent-Sync Plan
+**Date:** 2026-05-20T00:55:40-07:00
+**Author:** Hockney (Backend / Workflow Engine Dev)
+**Task:** logs-heartbeat-plan
+
+---
+
+## 1. Current State — What I Found
+
+### 1.1 Process Handlers (`process-handlers.ts`, `index.ts`)
+- `formatUnhandledRejection`, `formatUncaughtException`, `gracefulTeardown` are pure functions (testable, W30 M3). Good.
+- `index.ts` registers them on `process.on('unhandledRejection' / 'uncaughtException')`.
+- Both paths: log the formatted string, stop heartbeat, attempt CHECKPOINT, force-exit after 5 s.
+- **Gap:** No structured log fields — messages are free-form strings into `console.error`. A monitoring system has no reliable anchor to parse severity, sweep ID, or run ID from them.
+- **Gap:** No log-level gate. `LOG_LEVEL=debug` only affects one branch in `heartbeat._runSweep`. Everything else is unconditional `console.log/warn/error`.
+
+### 1.2 Heartbeat Cadence
+Coded defaults vs. effective `heartbeat.config.json` overrides:
+
+| Sweep                | Coded default | Active override | Notes |
+|----------------------|---------------|-----------------|-------|
+| `ready-workflow-steps` | 5 s         | 5 s             | No change |
+| `ceremonies-due`     | 5 s           | 15 s            | Good |
+| `pickup-ready`       | 10 s          | 15 s            | Good |
+| `stuck-issue-runs`   | 30 s          | 30 s            | Lease TTL is 90 s, so 30 s is fine |
+| `stale-presence`     | 30 s          | 60 s            | Good |
+| `idle-live-sessions` | 60 s          | 120 s           | Good |
+| `github-sync-overdue`| 60 s          | 120 s           | Good |
+
+**Concern:** `ready-workflow-steps` and `ceremonies-due` fire every 5–15 s. During dev when DB is idle this is pure noise on the WS timeline. The `ralph-monitor` sweep (not in config.json) defaults to 30 s — no override was ever applied.
+**Recommendation:** Add `ralph-monitor` to `heartbeat.config.json` and raise `ready-workflow-steps` to 15 s for dev. The `stuck-issue-runs` 30 s cadence is correctly matched to the 90 s lease TTL and must stay ≤ 45 s (half of TTL).
+
+### 1.3 Sweeper Safety Model (for auto-fix boundary)
+- `issue_runs` lease TTL: 90 s (`lease_expires_at < NOW()`). Sweeper resets to `pending`.
+- Orphan window: 120 s with no heartbeat. Sweeper marks `failed`.
+- `step_runs`: same lease pattern; retry_count vs. max_retries controls retry vs. final fail.
+- All sweeper mutations are `UPDATE ... WHERE status = 'running' AND ...` — safe atomic SQL.
+- No sweeper touches file-system state or external APIs. All side-effects are DB-only.
+
+### 1.4 agent-sync `_alumni` Bug (root cause)
+
+**The directory structure:**
+```
+.squad/agents/
+  _alumni/          ← sub-folder of retired agents — NOT an agent itself
+    fry/
+      history.md
+  fenster/
+  hockney/
+  ...
+```
+
+**What `listAgentDirs` does today:**
+```typescript
+const dirents = await fs.readdir(agentsDir, { withFileTypes: true });
+return {
+  names: new Set(dirents.filter((d) => d.isDirectory()).map((d) => d.name)),
+  reliableForRetirement: true,
+};
+```
+`_alumni` passes the `isDirectory()` filter and enters `presentNames`. It is then treated as an agent name.
+
+**The resulting noise on every sync / file-watch event (two warnings per cycle):**
+1. SDK path: `sdkAgents.get('_alumni').charter()` throws a `NotFoundError` (the SDK can't find a charter for a directory-of-directories). Logs:
+   ```
+   [agent-sync] SDK charter() failed for '_alumni', falling back to fs: NotFoundError: ...
+   ```
+2. FS fallback: `fs.readFile('.squad/agents/_alumni/charter.md')` → `ENOENT`. Logs:
+   ```
+   [agent-sync] Could not read charter.md for '_alumni'; leaving DB status unchanged: ENOENT ...
+   ```
+`parseCharterContent` is never reached (null guard exits early), so no crash — but the double warn fires on every chokidar change and every route-triggered `syncAgentsFromDisk`.
+
+**Fix:** In `listAgentDirs`, filter out directory names that start with `_` (underscore-prefix convention for non-agent sub-folders). `_alumni` is explicitly a retirement archive, not an agent.
+
+---
+
+## 2. Log Monitor Architecture
+
+### 2.1 Scope and Principle
+The log monitor is **not** a general-purpose log parser. It is a typed, in-process error registry that:
+- Captures structured error signals from sweeps, sweeper calls, and process handlers.
+- Maps those signals to a bounded set of **safe, idempotent repair actions**.
+- Exposes state via `GET /api/diagnostics/log-monitor` for the UI and operational queries.
+- Does **not** shell out, patch files, or modify any schema. Repairs are DB-only or restart-advisory.
+
+### 2.2 Architecture
+
+```
+eventBus
+  ├─ heartbeat.sweep.error → LogMonitor.ingest(sweepId, errorMsg)
+  ├─ (new) engine.error    → LogMonitor.ingest('engine', errorMsg)
+  └─ (new) agent-sync.warn → LogMonitor.ingest('agent-sync', errorMsg)
+
+LogMonitor
+  ├─ ingest(source, msg, context?)
+  │    → classify(msg) → ErrorClass | null
+  │    → if class has autoFix boundary → enqueue(fix, context)
+  ├─ drain()  — called by a new light sweep, runs queued safe repairs
+  └─ getState() → { errors[], pendingFixes[], appliedFixes[] }
+
+GET /api/diagnostics/log-monitor
+  → LogMonitor.getState()
+```
+
+### 2.3 Error Classes and Auto-Fix Boundaries
+
+| Error Class | Detection Pattern | Safe Auto-Fix | Rationale |
+|---|---|---|---|
+| `pglite-oid-stale` | `/could not open relation with OID/i` | `DEALLOCATE ALL` then retry (already in `withPgliteOidRetry`) — log to monitor, no new action needed | Already handled at call site; monitor just surfaces the event |
+| `stale-run-reclaim` | `sweepExpiredLeases` or `sweepOrphanedRuns` acted > 0 | None needed — sweeper IS the fix | Log count, alert if rate > threshold |
+| `step-retry-exhausted` | `step_run ${id} exhausted retries` | None — human must inspect the workflow | Surface in monitor as advisory |
+| `agent-sync-charter-warn` | `[agent-sync] Could not read charter.md` | None — non-fatal warn; monitor counts and suppresses duplicate log after N identical occurrences in 60 s | Rate-limiter on noisy logs |
+| `sweep-consecutive-fail` | Same sweep throws ≥ 3 times in a 5-min window | Disable the sweep via `heartbeat.setSweepEnabled(id, false)` — log advisory | Safe: sweep registry supports this; sweeper will restart on next boot or manual enable |
+| `orphan-heartbeat` | `sweepOrphanedRuns` acted > 0 | None — sweeper marks failed; monitor counts events | Threshold alert if > 5 in 10 min |
+
+**Out of scope for auto-fix** (document explicitly):
+- `CHECKPOINT` failures in graceful teardown — advisory only, requires human.
+- Migration errors at boot — advisory, `squadboard migrate` is the tool.
+- Any file-system mutation — never auto-fix in the monitor layer.
+- Any DB schema change — never.
+- Any external API call — never.
+
+### 2.4 Concrete Log Message Standards
+
+Sweeps should use structured one-liners. Convention (already partially followed):
+
+```
+[sweep:<id>] <action>=<count> [<detail>] (<durationMs>ms)
+[sweep:<id>] <sub-task> failed: <msg>
+[agent-sync] skipped underscore-directory '_alumni' (not an agent)
+[agent-sync] re-synced: +<added> ~<updated> -<removed>
+[log-monitor] classified <class> from <source>: <short-msg>
+[log-monitor] autofix applied: <class> → <action> for <context>
+[log-monitor] advisory: <class> threshold crossed (<count> in <window>)
+[heartbeat] <sweepId> — acted=<n> errors=<n> (<ms>ms) [<details>]
+[heartbeat] sweep <sweepId> threw: <msg>
+[squadboard] restart-pickup: recovered <n> stale run(s): <ids>
+[squadboard] shutdown.graceful signal=<sig> duration=<ms>ms
+[squadboard] shutdown.error signal=<sig> duration=<ms>ms
+```
+
+**Log level gates to add:**
+- `acted == 0 && errors == 0` → suppress to `debug` (already in heartbeat, extend to sweeper callsites)
+- `LOG_LEVEL=debug` env var → emit all; omitting → only `acted > 0 || errors > 0` lines appear.
+
+---
+
+## 3. Implementation Plan
+
+### 3.1 `_alumni` Fix (highest priority, trivial)
+**File:** `packages/server/src/services/agent-sync.ts` — `listAgentDirs()`
+
+```typescript
+// Before: filter(d => d.isDirectory())
+// After:
+names: new Set(
+  dirents
+    .filter((d) => d.isDirectory() && !d.name.startsWith('_'))
+    .map((d) => d.name)
+),
+```
+
+**Tests to add/update** (`__tests__/agent-sync-safety.test.ts` or new `agent-sync-alumni.test.ts`):
+- `_alumni` directory present → not included in sync, no warning logged
+- `_private` directory → also skipped (general underscore convention)
+- `fenster` directory → still included (no underscore)
+- Retirement logic: agent in DB but only in `_alumni` on disk → remains active (not retired, because `_alumni` is invisible to sync)
+
+### 3.2 Heartbeat Cadence Updates
+**File:** `packages/server/heartbeat.config.json`
+
+Proposed changes:
+```json
+{
+  "sweeps": {
+    "ready-workflow-steps": { "intervalMs": 15000, "enabled": true },
+    "ceremonies-due":       { "intervalMs": 30000, "enabled": true },
+    "pickup-ready":         { "intervalMs": 30000, "enabled": true },
+    "stuck-issue-runs":     { "intervalMs": 30000, "enabled": true },
+    "stale-presence":       { "intervalMs": 60000, "enabled": true },
+    "idle-live-sessions":   { "intervalMs": 120000, "enabled": true },
+    "github-sync-overdue":  { "intervalMs": 120000, "enabled": true },
+    "ralph-monitor":        { "intervalMs": 60000, "enabled": true }
+  }
+}
+```
+
+**Safety constraint:** `stuck-issue-runs` must remain ≤ 45 s (half of the 90 s lease TTL). 30 s is already correct and should not change.
+
+**Tests to update:** `heartbeat-config.test.ts` — add case for `ralph-monitor` override.
+
+### 3.3 Log Monitor Service (new)
+**New file:** `packages/server/src/services/log-monitor.ts`
+
+```typescript
+export interface LogEvent {
+  source: string;       // 'agent-sync' | 'sweep:<id>' | 'engine'
+  errorClass: ErrorClass;
+  message: string;
+  context?: Record<string, string | number>;
+  timestamp: Date;
+}
+
+export interface AppliedFix {
+  errorClass: ErrorClass;
+  action: string;
+  appliedAt: Date;
+  context?: Record<string, string | number>;
+}
+
+export class LogMonitor {
+  ingest(source: string, msg: string, context?: Record<string, string | number>): void
+  drain(): Promise<void>  // called by a new 'log-monitor' sweep at 60 s
+  getState(): { events: LogEvent[], pendingFixes: ..., appliedFixes: AppliedFix[] }
+  resetForTest(): void  // test-only
+}
+
+export const logMonitor = new LogMonitor();
+```
+
+**New sweep:** `packages/server/src/engine/sweeps/log-monitor-drain.ts`
+```typescript
+export const logMonitorDrainSweep: Sweep = {
+  id: 'log-monitor',
+  label: 'Log monitor',
+  description: 'Drains queued safe repairs identified by the log monitor.',
+  scope: 'system',
+  intervalMs: 60_000,
+  enabled: true,
+  async run() { ... }
+};
+```
+
+Register in `index.ts` after existing sweeps.
+
+**Tests:** `__tests__/log-monitor.test.ts`
+- Classify OID error → `pglite-oid-stale` class, no enqueued fix (already handled elsewhere)
+- Classify sweep repeated-failure → `sweep-consecutive-fail` class, enqueued disable action
+- `drain()` with queued disable → calls `heartbeat.setSweepEnabled(id, false)`
+- Rate-limiter: same agent-sync warn 5 times in 60 s → suppressed after 3
+- `getState()` returns all events and applied fixes
+
+### 3.4 Improved Process Handler Logging
+**File:** `packages/server/src/process-handlers.ts`
+
+Add structured prefix to formatted messages:
+```typescript
+// Current:
+return `[squadboard] unhandledRejection at ${timestamp}\n${reasonStr}`;
+
+// Proposed:
+return `[squadboard] unhandledRejection source=process timestamp=${timestamp} severity=fatal\n${reasonStr}`;
+```
+
+Also update `gracefulTeardown` to emit `console.log('[squadboard] teardown.start')` and `console.log('[squadboard] teardown.done duration=<ms>ms')` so log tailing can see the state machine without reading the full stack trace.
+
+**Tests:** update `process-handlers.test.ts` to assert the new field anchors are present.
+
+### 3.5 Operational Commands
+
+```bash
+# Check current effective sweep cadences
+curl -s localhost:3000/api/heartbeat/config | jq '.sweeps[] | {id, intervalMs, enabled}'
+
+# Manually trigger a single sweep
+curl -s -X POST localhost:3000/api/heartbeat/tick -H 'Content-Type: application/json' -d '{"sweepId":"stuck-issue-runs"}'
+
+# Disable a noisy sweep temporarily (survives until restart)
+curl -s -X PATCH localhost:3000/api/heartbeat/sweeps/ralph-monitor -H 'Content-Type: application/json' -d '{"enabled":false}'
+
+# Check log monitor state (once implemented)
+curl -s localhost:3000/api/diagnostics/log-monitor | jq '{events: .events[-5:], pendingFixes, appliedFixes}'
+
+# Tail server logs and watch for meaningful lines only
+tail -f .server-dev.log | grep -E '\[(heartbeat|sweep|agent-sync|log-monitor|squadboard)\].*acted=[^0]|error|warn|advisory'
+
+# Force re-run all sweeps
+curl -s -X POST localhost:3000/api/heartbeat/tick
+
+# Check if _alumni noise is gone after fix (should produce no agent-sync warnings)
+grep "_alumni" .server-dev.log
+```
+
+---
+
+## 4. Acceptance Criteria
+
+| # | Criterion |
+|---|-----------|
+| 1 | `_alumni` directory never appears in sync warnings. No `[agent-sync] Could not read charter.md for '_alumni'` in logs. |
+| 2 | `_alumni/fry` (a real retired agent) is not retired by the sweeper (it is invisible to sync — correct, fry is genuinely retired and has no DB row). |
+| 3 | Any underscore-prefixed top-level entry under `.squad/agents/` is silently skipped by sync. Test covers `_alumni`, `_private`, `_archive`. |
+| 4 | `heartbeat.config.json` has `ralph-monitor` override; `ready-workflow-steps` and `ceremonies-due` are ≥ 15 s in dev. |
+| 5 | Log monitor classifies and surfaces `pglite-oid-stale` and `sweep-consecutive-fail` events. |
+| 6 | Consecutive sweep failure (≥ 3 throws in 5 min) triggers `setSweepEnabled(id, false)` and logs `[log-monitor] autofix applied: sweep-consecutive-fail → disable <id>`. |
+| 7 | `process-handlers.ts` formatted strings include `source=process timestamp=<iso> severity=fatal` anchors. |
+| 8 | Existing tests: `agent-sync-safety.test.ts`, `heartbeat-config.test.ts`, `process-handlers.test.ts` all pass. |
+| 9 | New tests: `agent-sync-alumni.test.ts`, `log-monitor.test.ts` ≥ 10 cases each, all green. |
+| 10 | `GET /api/diagnostics/log-monitor` returns `{ events, pendingFixes, appliedFixes }` with correct schema. |
+
+---
+
+## 5. Files Touched
+
+| File | Change |
+|------|--------|
+| `packages/server/src/services/agent-sync.ts` | Filter underscore dirs in `listAgentDirs` |
+| `packages/server/src/__tests__/agent-sync-alumni.test.ts` | New test file |
+| `packages/server/heartbeat.config.json` | Add `ralph-monitor`, raise `ready-workflow-steps` + `ceremonies-due` |
+| `packages/server/src/services/log-monitor.ts` | New log monitor service |
+| `packages/server/src/engine/sweeps/log-monitor-drain.ts` | New sweep |
+| `packages/server/src/index.ts` | Register `logMonitorDrainSweep`; wire `logMonitor.ingest` to eventBus |
+| `packages/server/src/process-handlers.ts` | Add structured field anchors |
+| `packages/server/src/__tests__/process-handlers.test.ts` | Update assertions |
+| `packages/server/src/__tests__/log-monitor.test.ts` | New test file |
+| `packages/server/src/routes/diagnostics.ts` | Add `GET /api/diagnostics/log-monitor` endpoint |
+
+---
+
+## 6. What I Am NOT Recommending
+
+- **No auto-restart of sweeps that crash repeatedly** — disabling is the safe boundary. A human must re-enable, because repeated crashes indicate a code bug, not transient failures.
+- **No file-system auto-repair from the log monitor** — the squad-sync repair routes are the right surface for that.
+- **No schema migration from the log monitor** — always out of bounds.
+- **No external process spawning** — monitor is strictly in-process.
+- **No hot-reload of heartbeat.config.json** — config is read once at boot; Brady restarts to apply changes. This is already documented.
+
+
+# Entry from hockney-squad-sync-api-repair-boundary.md
+
+### 2026-05-19T21:58:16.699-07:00: Squad sync API repair boundary
+**By:** Hockney
+**What:** The backend sync surface is explicit status/repair only. `/api/projects/:projectId/squad-sync/status` reports authority, projection health, drift, and available repairs. `/repair`, `/project-squad-to-fs`, and `/generate-github-agent` run idempotent repairs without overwriting divergent files.
+**Why:** Cross-surface Squadboard and CLI/Copilot interoperability needs a shared status/repair authority without implying an unsafe continuous two-way filesystem mirror.
+**Guardrail:** DB-backed projects remain `squad_storage` authoritative; filesystem projects remain filesystem authoritative. Repair actions skip with typed reasons for manual-only guidance, filesystem authority, missing roots, symlinks, custom ceremonies, or divergent target content.
+
+
+# Entry from hockney-work-pickup-metrics.md
+
+# Hockney — Work Pickup metrics path
+
+**Date:** 2026-05-20T05:12:42.195-07:00  
+**Status:** Implemented
+
+## Decision
+
+Ready pickup continues to create the real `issue_runs` row directly, preserving the current agent assignment path. After that durable insert succeeds, the sweep emits the built-in `board.ready` agent-signal and marks the spawned Work Pickup `workflow_runs` / `step_runs` completed so Workflow Health records the pickup without letting the ceremony engine spawn a duplicate agent run.
+
+## Parser compatibility
+
+The engine workflow parser now unwraps canonical `apiVersion: squad.io/v1` ceremony YAML and maps canonical step `kind` values used by built-ins (`agent-task`, `notify`, etc.) to executable legacy step types.
+
+
+# Entry from keyser-deep-review-frontend.md
+
+# Deep Frontend Code Review — Keyser
+
+**Date:** 2026-05-20T10:58:25-07:00  
+**Author:** Keyser (Frontend Dev)  
+**Scope:** `packages/client/src/` — all components, pages, hooks, utils, API layer, realtime modules
+
+---
+
+## Dead Code
+
+| # | File:Line | What | Confidence |
+|---|-----------|------|------------|
+| D1 | `pages/LiveSession.tsx` (entire file) | Page component never imported or routed in `App.tsx` | High |
+| D2 | `pages/StarterDetail.tsx` (entire file) | Page component never imported or routed in `App.tsx` | High |
+| D3 | `components/ChatBubble.tsx:218` | `useMemo(() => debouncedText, [debouncedText])` — identity memo, no transformation; `rendered` is a pointless alias for `debouncedText` | High |
+| D4 | `components/ChatBubble.tsx:318` | `ChatBubbleIdentity.avatar` prop — defined in interface but never read/rendered in the component | Medium |
+| D5 | `api/sessions.ts:184` | `useMemo(() => entries, [entries])` — redundant identity memo, returns the same reference | High |
+| D6 | `pages/Consult.tsx:471-473` | `sendMut` created then immediately `void`-ed — unused mutation result | Medium |
+
+---
+
+## Bugs
+
+| # | File:Line | Description | Severity |
+|---|-----------|-------------|----------|
+| B1 | `realtime/usePresence.ts:60-68` | **Timer leak on unmount.** `debounceTimer` ref is never cleared in a useEffect cleanup. If component unmounts during the 200ms window, timer fires and calls `wsClient.sendPresence()` on a stale context. | **High** |
+| B2 | `pages/Agents.tsx:344` | **setTimeout without cleanup.** `setTimeout(() => setSavedTemplatePath(null), 6000)` — no ref/cleanup; can set state after unmount. | Medium |
+| B3 | `pages/CeremonyEditor.tsx:324,499,523` | **3× setTimeout without cleanup.** State-reset timers (3s/2.5s) not tracked in refs; same unmount risk. | Medium |
+| B4 | `pages/Settings.tsx:201,340` | **2× setTimeout without cleanup.** `setSaved(false)` after 2.5s with no ref cleanup. | Medium |
+| B5 | `components/inbox/CaptureModal.tsx:147` | **setTimeout focus without cleanup.** 50ms focus timer not cleaned on unmount. | Low |
+| B6 | `components/issues/MarkdownBodyEditor.tsx:40` | **setTimeout without cleanup.** `setErrorMsg(null)` after 5s, no ref. | Low |
+| B7 | `components/settings/ReviewPolicySection.tsx:94` | **setTimeout without cleanup.** `setSavedAt(null)` after 2.5s, no ref. | Low |
+| B8 | `components/settings/SystemBackupSection.tsx:329,334` | **2× setTimeout without cleanup.** Toast/error clear timers (7s/8s). | Low |
+| B9 | `components/settings/McpConfigPanel.tsx:37` | **setTimeout without cleanup.** `setCopied(false)` after 2s. | Low |
+| B10 | `components/ChatBubble.tsx:153` | **setTimeout without cleanup.** `CopyCodeButton` copy-confirmation timer (2s). | Low |
+| B11 | `api/client.ts:43,46` | **`null as unknown as T` type assertion.** `apiFetch` returns `null` cast to `T` for 204/empty responses — callers expecting a real `T` will crash on property access. | **High** |
+| B12 | `realtime/useRealtimeBoard.ts:29,39` | **Unsafe type assertion on WS payload.** `payload.issue as unknown as Issue` — no runtime validation; malformed server data silently flows into React state. | Medium |
+| B13 | `components/board/CardDetail.tsx:534,556,575,589` | **4× `issue as unknown as { version?: number }`.** Repeated unsafe cast to access `version` — indicates the `Issue` type definition is missing the `version` field. | Medium |
+| B14 | `api/consult.ts:340,345,369,392,419` | **5× unsafe type assertions** in SSE stream handler (`as string`, `as ConsultStreamEntry['payload']`, `as never`). Unvalidated server event data cast directly into typed state. | Medium |
+| B15 | `services/ceremony-graph.ts:797,823,829,976,992` | **Multiple `as unknown[]` casts** on YAML-parsed data without runtime shape validation. | Medium |
+| B16 | `components/inbox/CaptureModal.tsx:46-49` | **`window as unknown as { __squadboardCaptureWarned }` global mutation** — brittle pattern that bypasses type system. | Low |
+| B17 | `pages/StarterDetail.tsx:279-295,354` | **`key={i}` / `key={j}` index-based keys** in routing rules, tokens, and warnings lists. Can cause stale state on reorder. | Medium |
+| B18 | `pages/Dashboard.tsx:161` | **`key={i}` index-based key** in dashboard list. | Low |
+| B19 | `pages/McpServers.tsx:431` | **`key={i}` index-based key.** | Low |
+| B20 | `pages/CeremonyEditor.tsx:917,1288` | **`key={i}` index-based keys.** | Low |
+| B21 | `components/board/KanbanBoard.tsx:82` | **`key={i}` index-based key** on KanbanColumn — can cause column state bleed on reorder. | Medium |
+| B22 | `components/ChatBubble.tsx:108` | **`key={i}` index-based key** on markdown segments. | Low |
+| B23 | `components/reviews/PolicyExplainer.tsx:124`, `ReviewPanel.tsx:93` | **`key={i}` index-based keys** in review lists. | Low |
+| B24 | `components/consult/ContextPanel.tsx:173,190` | **`key={i}` index-based keys.** | Low |
+| B25 | `api/consult.ts:343-346`, `api/sessions.ts:162` | **O(n) array copy on every stream event** (`[...prev, entry]`). For long sessions with frequent events, this becomes quadratic. | Medium |
+
+---
+
+## Security Issues
+
+| # | File:Line | Description | Severity |
+|---|-----------|-------------|----------|
+| S1 | `components/GitHubActivityFeed.tsx:196` | **Unvalidated external URL in `href`.** `item.link` from API rendered directly as `<Link href={item.link}>`. If API data is poisoned (e.g., `javascript:` protocol), this is an XSS vector. | **High** |
+| S2 | `pages/StarterDetail.tsx:125` | **Unvalidated `href={meta.htmlUrl}`.** Same risk — external URL from API data. | **High** |
+| S3 | `components/board/IssueCard.tsx:86` | **Unvalidated PR/CI URLs in `href`.** `pr.url` and `ci.url` used directly. | Medium |
+| S4 | `components/board/CardDetail.tsx:347` | **Unvalidated attachment URL in `href`.** `att.url` from API. | Medium |
+| S5 | `components/deliverables/kinds/LinksDeliverable.tsx:27` | **Unvalidated URL in `href`.** `l.url` from API. | Medium |
+| S6 | `components/issues/IssueBodyMarkdown.tsx:81` | **User-controlled URL in markdown `href`.** Rendered via ReactMarkdown — should be filtered to `https?://` only. | Medium |
+| S7 | `realtime/ws-client.ts:5-7` | **Unvalidated WS endpoint.** `VITE_API_URL` converted to WS URL with no protocol/host validation. Malicious env value → arbitrary WebSocket target. | Medium |
+| S8 | `api/client.ts:8` | **Raw server response body in `console.error`.** Can leak sensitive server internals into browser devtools logs. | Low |
+| S9 | `components/conjure/ConjureModal.tsx:351` | **Draft data in `sessionStorage`.** Issue draft + intent stashed unencrypted. Low risk — sessionStorage is same-origin and tab-scoped. | Low |
+
+---
+
+## Performance Issues
+
+| # | File:Line | Description |
+|---|-----------|-------------|
+| P1 | `App.tsx:1-30` | **No code splitting.** All 26 page components are synchronously imported. Zero `React.lazy()` usage. Every route's code is in the initial bundle. The largest pages (CeremonyEditor 1789 LOC, Consult 1330 LOC, ProjectPicker 1202 LOC) should be lazy-loaded. |
+| P2 | Entire codebase | **Zero `React.memo()` usage.** No component in the entire client is wrapped in `React.memo`. High-frequency re-render targets like `IssueCard`, `KanbanColumn`, `ChatBubble`, `RunStatusBadge` should be memoized. |
+| P3 | `api/consult.ts:343-346`, `api/sessions.ts:162` | **Quadratic array growth** on stream events. Each SSE/WS event copies the entire entries array. Should use `useRef` + periodic state flush, or a bounded ring buffer. |
+| P4 | `components/runs/RunOutputPanel.tsx:490-493` | **`scrollIntoView` on every timeline change.** Heavy component (841 LOC) re-renders on every stream event. |
+| P5 | `pages/CeremonyEditor.tsx` (1789 LOC) | **Monolith component.** Should be split into sub-components to isolate re-renders. |
+
+---
+
+## Missing Documentation
+
+| # | What's Missing |
+|---|---------------|
+| MD1 | **Client package README is minimal** (31 lines). No architecture overview, development setup, component inventory, state management guide, or API layer docs. |
+| MD2 | **No JSDoc on any API hook** (`api/*.ts`). All `useQuery`/`useMutation` hooks lack param descriptions, return type docs, or usage examples. |
+| MD3 | **No JSDoc on utility functions** (`utils/dates.ts`, `utils/ceremonyRoutes.ts`, `utils/ceremony-roundtrip.ts`, `utils/skill-provenance.ts`). |
+| MD4 | **No prop documentation on complex components.** `CardDetail`, `KanbanBoard`, `ConjureModal`, `CeremonyEditor`, `SquadSyncStatusPanel` — all have 10+ props/state variables with no JSDoc or inline docs. |
+| MD5 | **No architecture decision records** for frontend patterns (state management approach, realtime sync strategy, error boundary placement). |
+| MD6 | **`ceremony-graph.ts` (1000+ LOC service)** — no module-level doc, no function-level JSDoc. Complex YAML parsing logic with zero inline documentation. |
+
+---
+
+## Top 5 Priority Fixes
+
+| Priority | Issue | Why |
+|----------|-------|-----|
+| **1** | **P1: Add code splitting** (`React.lazy` + `Suspense` for all page routes in `App.tsx`) | Immediate bundle size win. 26 pages loaded synchronously is the single biggest perf bottleneck. Every user pays for every page. |
+| **2** | **S1+S2: Validate external URLs** (add `isValidHttpUrl()` guard before rendering any API-sourced `href`) | XSS/phishing risk. Any poisoned API response can inject `javascript:` URLs. Fix with a 5-line utility. |
+| **3** | **B1: Fix `usePresence` timer leak** (add `useEffect` cleanup that clears `debounceTimer.current`) | Active timer survives unmount → stale WS call → potential crash or state corruption on a dead component. |
+| **4** | **B11: Fix `null as unknown as T` in `apiFetch`** (return `null` with proper type `T | null`, or throw on unexpected empty) | Silent null propagation. Every caller that doesn't check for null will crash at runtime on property access. |
+| **5** | **D1+D2: Remove dead pages** (`LiveSession.tsx`, `StarterDetail.tsx`) | Dead code confuses contributors and inflates bundle. These are never routed or imported. Clean removal. |
+
+---
+
+*Review conducted by Keyser — 2026-05-20. All file:line references are relative to `packages/client/src/`.*
+
+
+# Entry from keyser-delete-error-ux.md
+
+# Decision: delete-error-ux — 2026-05-19T23:37:54.700-07:00
+
+**Author:** Keyser  
+**Status:** Done
+
+## What changed
+
+Two-layer defence against raw server responses reaching the UI during project delete:
+
+1. **`packages/client/src/api/client.ts`** — `nonJsonErrorMessage()` helper replaces the old "First 200 chars: …" pattern with a clean, status-code-aware message. Raw body now goes to `console.error` only.
+
+2. **`packages/client/src/pages/Settings.tsx`** — `sanitizeApiError()` strips HTML tags from any error message before `setError()` is called. Belt-and-suspenders for any future path that might leak markup.
+
+## Rule going forward
+
+- `apiFetch` must NEVER include raw response bodies in `Error.message`.
+- All non-JSON error bodies → `console.error` + clean human message.
+- Structured JSON `{ error: "..." }` responses → surface verbatim (unchanged).
+
+## Tests
+
+`packages/client/src/api/__tests__/apiFetch.errors.test.ts` — 7 focused tests. All green, typecheck clean.
+
+
+# Entry from keyser-project-index-persistence.md
+
+# Keyser decision — project index persistence
+
+**Date:** 2026-05-20T02:23:00.895-07:00  
+**Author:** Keyser  
+**Status:** Implemented
+
+## Decision
+
+Persist the Projects index search text, test-workspace filter, and sort order in browser-local `squadboard:prefs` via `useUserPrefs`. Do not persist selected project IDs.
+
+Dashboard's Squad Sync tile now deep-links to `Settings?section=sync`, and Settings accepts the `section` query param for direct linking.
+
+Repair CTAs in Settings run `dryRun: true` and are labeled as previews.
+
+## Why
+
+This keeps personal UI state local to the browser, avoids server-side leakage, preserves bulk selection as ephemeral state, and makes Squad Sync actions/navigation safer and clearer.
+
+
+# Entry from keyser-sync-export-ux.md
+
+# Sync export UX decision
+
+Date: 2026-05-20T04:16:33.702-07:00  
+Owner: Keyser
+
+## Decision
+
+- DB-backed projects with no live filesystem mirror should read as **Ready through Squadboard**, not as a bridge/configuration warning.
+- Preview Export is an explicit filesystem handoff. Dry-run previews should list meaningful changes only; unchanged / already-up-to-date file rows should be hidden behind a compact count.
+
+## Rationale
+
+Users need to know what to do next, not which provider/env-var path exists internally. The UI should make the safe path obvious: continue through Squadboard, or export `.squad` files only when handing off to filesystem-based tools.
+
+
+# Entry from keyser-ui-crash-layout-plan.md
+
+# UI Crash & Layout Fix Plan — keyser-ui-crash-layout-plan
+
+**Author:** Keyser (Frontend Dev)  
+**Date:** 2026-05-20  
+**Status:** Plan — pending implementation
+
+---
+
+## Scope
+
+Five user-reported issues:
+1. Screenshot/agent cards should have same initial height
+2. Clicking the agent charter tab crashes
+3. Clicking a ceremony row crashes
+4. Curated skills provenance is unclear
+5. Settings pages have had crashes
+
+---
+
+## Issue 1: Card height inconsistency
+
+### Observed
+Agent cards in the grid render at different heights when cards in the same row have different numbers of badges (origin badge only vs origin + model badge). ProjectCards on the project picker have the same problem — shorter project names make shorter cards alongside taller ones.
+
+### Root cause
+`AgentCard` renders a `<button>` as the direct CSS grid item. CSS Grid's default `align-items: stretch` should equalise row heights, but Fluent UI's reset CSS and the button's intrinsic sizing resist it. No explicit `height: '100%'` or `alignSelf: 'stretch'` is declared, so the button shrinks to content height instead of filling its grid cell. Same issue in `ProjectCard`'s `makeStyles.card` — no `height: '100%'`.
+
+### Files to change
+| File | Change |
+|------|--------|
+| `packages/client/src/components/agents/AgentCard.tsx` | Add `height: '100%'`, `alignSelf: 'stretch'` to the root `<button>` style |
+| `packages/client/src/components/agents/AgentGrid.tsx` | Add `alignItems: 'stretch'` to `gridStyle` explicitly |
+| `packages/client/src/components/ProjectCard.tsx` | Add `height: '100%'` to `makeStyles.card` |
+
+### Acceptance criteria
+- All cards in a grid row have the same rendered height (verify visually and with `getBoundingClientRect` in a Playwright test)
+- Content remains top-aligned inside each card; no layout distortion
+
+---
+
+## Issue 2: Agent charter tab crash
+
+### Observed
+Clicking the "charter" tab on an agent detail panel crashes or produces a blank state with no recovery.
+
+### Root causes
+
+**2a — No error boundary (P1):**
+`AgentDetailPanel` renders tab body content directly inside a plain `<div>` with no `try/catch` or React error boundary. Any render-time throw inside `CharterEditor` or `AgentCapabilities` propagates to the root and unmounts the page.
+
+**2b — `AgentCapabilities` → `McpSection` null crash (P0):**
+```tsx
+// AgentCapabilities.tsx — McpSection
+secondary={`${s.transport} • ${s.headers.length} header…`}
+```
+`s.headers` is typed as `string[]` but if the DB record has `NULL` in the `headers` column, the server may return `null` rather than `[]`. Accessing `.length` on `null` throws `TypeError: Cannot read properties of null`. This crashes during render of the "capabilities" tab — but because the tab state persists across re-renders, it may also appear when switching back to "charter" (the error boundary is absent so the whole panel is unmounted).
+
+**2c — `CharterEditor` has no error state (P2):**
+When the charter file is missing from disk, the server returns `404 { ok: false, error: "Charter file not found on disk" }`. `apiFetch` throws; React Query sets `isError: true`. `CharterEditor` checks only `isLoading`, never `isError`, so it silently renders an empty textarea with no message. Users don't know whether the editor is empty because the charter is blank or because the fetch failed.
+
+### Files to change
+| File | Change |
+|------|--------|
+| `packages/client/src/components/agents/AgentDetailPanel.tsx` | Add `AgentTabErrorBoundary` class component wrapping the tab body `<div style={{ flex: 1, overflowY: 'auto'... }}>` |
+| `packages/client/src/components/agents/AgentCapabilities.tsx` | `McpSection`: change `s.headers.length` → `(s.headers ?? []).length` |
+| `packages/client/src/components/agents/CharterEditor.tsx` | Destructure `isError` from `useAgentCharter`; render a human-readable inline error banner when `isError` is true |
+
+### `AgentTabErrorBoundary` pattern
+Match the existing `RoutingErrorBoundary` in `Agents.tsx` (class component with `getDerivedStateFromError`, inline retry button).
+
+### Acceptance criteria
+- Clicking "charter" tab on an agent with a missing charter file shows "Charter file not found — the .md file may have been moved or deleted." (inline, not a crash)
+- Clicking "capabilities" tab with a null-headers MCP server shows the ErrorBoundary fallback ("Agent tab error: [message] — Retry") instead of a white screen
+- `tsc --noEmit` clean after changes
+
+---
+
+## Issue 3: Clicking a ceremony crashes
+
+### Observed
+Clicking a ceremony row in the ceremony list navigates to `/projects/:id/ceremonies/:ceremonyId`; the app goes blank (full render crash).
+
+### Root causes
+
+**3a — Rules of Hooks violation (P0):**
+```tsx
+// CeremonyEditor.tsx line ~215
+export default function CeremonyEditor() {
+  const { id: projectId, ceremonyId } = useParams()   // hook 1
+  ...
+  const navigate = useNavigate()                       // hook 2
+  const [searchParams] = useSearchParams()             // hook 3
+
+  if (!projectId) return <Navigate to="/" replace />  // ← EARLY RETURN
+
+  const { data: builtinTemplates } = useCeremonyTemplates() // hook 4
+  const { data: detail, isLoading } = useCeremony(...)      // hook 5
+  // ... 20+ more hooks after the early return
+}
+```
+React's rule: hooks must be called unconditionally. The early guard return at line ~215 sits between hooks 1–3 and hooks 4–25. If React ever re-renders the component with differing hook counts (e.g. during HMR, Strict Mode double-invoke, or a route reload), it throws "Rendered fewer hooks than expected" and unmounts the page.
+
+**3b — No error boundary (P1):**
+`CeremonyEditor` is 1,728 lines with complex state initialisation, YAML parsing, React Flow rendering, and API mutations. Any unguarded property access during render (e.g., inside `VisualCanvas` which imports `@xyflow/react`) crashes the whole page with no recovery.
+
+**3c — `editorSnapshot` undefined access risk (P2):**
+If `detail.ceremony.triggerConfig` is `null` (not `undefined`), `detail.ceremony.triggerConfig ?? {}` handles it correctly. But `detail.activeVersion` being `null` is guarded by `detail.activeVersion?.yamlContent`. This path is covered.
+
+### Files to change
+| File | Change |
+|------|--------|
+| `packages/client/src/pages/CeremonyEditor.tsx` | Extract `CeremonyEditorInner` (all current code) and wrap in `CeremonyEditorGuard` that reads params, does the `!projectId` check, then renders `<CeremonyEditorInner>`. This moves the guard before any hooks. |
+| `packages/client/src/pages/CeremonyEditor.tsx` | Add `CeremonyEditorErrorBoundary` class component (same pattern as `RoutingErrorBoundary`); export wraps `<CeremonyEditorErrorBoundary><CeremonyEditorGuard /></CeremonyEditorErrorBoundary>` |
+
+No changes needed to `App.tsx` — the error boundary lives inside the page component.
+
+### Acceptance criteria
+- Clicking any ceremony row navigates to the editor without a blank screen
+- If the ceremony YAML is corrupt, the editor loads with steps empty and a visible "Could not parse ceremony steps" warning (already in the `catch` block — confirm it surfaces to the UI, not just console)
+- Adding an error boundary means crashes inside the editor show "Ceremony editor encountered an error — [message] — Back to ceremonies" rather than a white screen
+
+---
+
+## Issue 4: Curated skills provenance unclear
+
+### Observed
+Users browsing "Browse curated" in the Skills page cannot preview what the skill actually does (its `promptAddendum`) before cloning. They only see name, category, and description. After cloning, there is no visual reminder in the capability row inside `AgentCapabilities` that a skill came from the curated library.
+
+### Root causes
+
+**4a — `CuratedDialog` hides `promptAddendum` (P2):**
+The `CuratedDialog` renders `c.name`, `c.category`, and `c.description` for each curated skill but the `c.promptAddendum` field is not exposed at all. The user must clone first, then open the skill row to see the prompt.
+
+**4b — No provenance in `AgentCapabilities` skill rows (P3):**
+`CapabilityRow` in `AgentCapabilities.tsx` renders skills with `primary=s.name`, `secondary=s.category`, `tertiary=s.description`. The `s.source` field (which distinguishes `curated` / `imported` / `project` / `custom`) is not passed to `CapabilityRow`.
+
+### Files to change
+| File | Change |
+|------|--------|
+| `packages/client/src/pages/Skills.tsx` — `CuratedDialog` | Inside each curated skill row, add a `<details><summary>Preview prompt addendum</summary><pre>{c.promptAddendum}</pre></details>` block so users can expand and read the injected prompt before cloning |
+| `packages/client/src/components/agents/AgentCapabilities.tsx` — `SkillsSection` | Pass `badge={<SourceBadge source={s.source} />}` to `CapabilityRow` for each assigned skill. Import a light `SourceBadge` (copy the existing one from `Skills.tsx` or extract to a shared component) |
+
+### Acceptance criteria
+- "Browse curated" dialog: each skill row has an expandable "Preview prompt addendum" section
+- Agent capabilities panel: each skill row shows a small provenance badge (Built-in catalog / Imported / Project / Custom)
+
+---
+
+## Issue 5: Settings page crashes
+
+### Observed
+Navigating to certain Settings sections (reported as intermittent) causes the page to go blank.
+
+### Root causes
+
+**5a — No error isolation between sections (P1):**
+`Settings.tsx` renders all sections in one component tree without error boundaries. If any sub-component (`SquadSyncStatusPanel`, `ReviewPolicySection`, `SystemBackupSection`, `McpConfigPanel`) throws during render, the entire settings page unmounts.
+
+**5b — `SquadSyncStatusPanel` normalisation risk (P2):**
+`normalizeStatus()` inside `SquadSyncStatusPanel` deeply accesses `status.governance.files`, `status.compatibility`, `status.drift`, and `status.repair.actions`. If the `/squad-sync/status` API returns a partial response (e.g., when the `.squad/` directory is newly created and some checks haven't run), any missing nested property would throw. The current code uses optional chaining (`?.`) on some fields but not consistently.
+
+**5c — `SquadSyncStatus` has many optional fields all typed as optional (`?:`):**
+The TypeScript type marks every field optional, but the component renders them as if they're present. Accessing e.g. `status.governance!.files.map(...)` without guarding would throw when `governance` is `undefined`.
+
+### Files to change
+| File | Change |
+|------|--------|
+| `packages/client/src/pages/Settings.tsx` | Add `SettingsSectionErrorBoundary` class component. Wrap each `{activeSection === 'X' && <Component />}` block in `<SettingsSectionErrorBoundary key={activeSection}>`. The boundary's fallback shows section name + error message + "Reload section" retry button |
+| `packages/client/src/components/settings/SquadSyncStatusPanel.tsx` | Audit every property access inside `normalizeStatus()`; replace any unguarded `status.X.Y` with `status.X?.Y ?? defaultValue`; add an explicit check for the whole `status` being undefined and return a "not yet available" placeholder |
+
+### Acceptance criteria
+- Navigating to "Team Sync" section when the backend hasn't yet populated the sync status shows "Sync status unavailable — [reason]" rather than a crash
+- Navigating to "Review policy" section when the project has no review policy configured shows the section in its default/empty state
+- If any section throws a render error, the sidebar nav and other sections remain functional (only the crashing section shows the error fallback)
+
+---
+
+## Playwright / test coverage
+
+### Gaps to fill
+| Test file | New cases to add |
+|-----------|-----------------|
+| `04-agents.spec.ts` | Open agent detail panel → click "charter" tab → verify editor textarea is visible (or error banner if charter missing) |
+| `04-agents.spec.ts` | Open agent detail panel → click "capabilities" tab → verify no crash with zero assignments |
+| New: `14-ceremonies-editor.spec.ts` | Click a ceremony row from the list → verify CeremonyEditor mounts with the ceremony name in the header |
+| New: `14-ceremonies-editor.spec.ts` | Navigate to ceremonies/new → verify editor renders with default "New Ceremony" name |
+| New: `15-settings-sections.spec.ts` | Navigate through each Settings section → verify none crashes (no "Failed to load" text visible, section header visible) |
+| New: `15-settings-sections.spec.ts` | Settings → Team Sync → verify panel renders (loading or content, not blank) |
+
+### Unit test gaps
+| File | Gap |
+|------|-----|
+| `AgentCapabilities` | Add test: McpSection with `headers: null` should not throw; should render "0 headers" gracefully |
+| `CharterEditor` | Add test: when `useAgentCharter` returns `isError: true`, renders error banner text |
+
+---
+
+## Implementation order (recommended for Hockney/implementer)
+
+1. **P0 fixes first** (crash blockers):
+   - `AgentCapabilities.tsx`: null-guard `s.headers` (5-minute fix)
+   - `CeremonyEditor.tsx`: extract `CeremonyEditorGuard` wrapper to fix hooks violation (30-minute refactor)
+
+2. **Error boundaries** (crash containment):
+   - `AgentDetailPanel.tsx`: `AgentTabErrorBoundary`
+   - `CeremonyEditor.tsx`: `CeremonyEditorErrorBoundary`
+   - `Settings.tsx`: `SettingsSectionErrorBoundary`
+
+3. **UX fixes**:
+   - `CharterEditor.tsx`: isError banner
+   - `SquadSyncStatusPanel.tsx`: null-guard normalizeStatus
+   - `CuratedDialog`: prompt addendum preview
+   - `AgentCapabilities`: provenance badge on skills
+
+4. **Layout**:
+   - `AgentCard.tsx` + `AgentGrid.tsx` + `ProjectCard.tsx`: height equalisation
+
+5. **Tests**: new Playwright specs after all above land
+
+---
+
+## Notes for implementer
+
+- Follow the `RoutingErrorBoundary` pattern in `Agents.tsx` for all new error boundaries (class component, `getDerivedStateFromError`, inline Retry button).
+- Do not use `window.onerror` or global catches — React error boundaries are the right tool here.
+- Run `pnpm -F client tsc --noEmit` and `pnpm -F client build` after each change to confirm zero type errors.
+- The curated skills `CuratedSkill` type may not currently include `promptAddendum` — check `api/skills.ts` and add it to the type if absent.
+
+
+# Entry from keyser-ui-crash-safeguards.md
+
+# Keyser decision — UI crash safeguards
+
+**Date:** 2026-05-20T02:23:00.895-07:00  
+**Author:** Keyser  
+**Status:** Implemented
+
+## Decision
+
+Frontend agent panels treat underscore-prefixed `.squad/agents/*` folders as internal read-only entries, even if stale metadata reaches the client. Charter and capabilities tabs are hidden for those rows.
+
+Skill provenance labels distinguish cloned curated skills from immutable catalog starters: installed rows show `Curated clone`; the browse modal shows `Curated starter`.
+
+## Why
+
+This prevents legacy `_alumni` rows from opening writable charter UI and makes curated skill origin clear wherever skills are displayed.
+
+
+# Entry from kobayashi-deep-review-sdk.md
+
+# Kobayashi — Deep SDK Bridge & Integration Review
+
+**Date:** 2026-05-20T10:58:25-07:00
+**Author:** Kobayashi (Squad SDK Integrator)
+**Status:** Filed — findings require triage
+
+---
+
+## 1. SDK Contract Issues
+
+### 1.1 HookPipeline `globalPipeline` is never registered at server startup
+- **File:** `packages/server/src/sdk/hook-pipeline.ts:59–63`
+- **Severity:** HIGH
+- **Description:** `registerOutputValidationHook(globalPipeline)` is exported but **never called** anywhere in the startup path. A grep for `globalPipeline` and `registerOutputValidation` outside hook-pipeline.ts and tests returns zero results. This means the output-schema-validator hook is defined but never wired — all Invariant 4 schema validation runs exclusively through `recordRunCompletion()` in `output-validator.ts` called by the stepper. The HookPipeline exists but is dead infrastructure.
+- **Contract:** The SDK's `HookPipeline` contract requires **manual attachment** — `registerOutputValidationHook` must be called once at startup. This is the documented "common bug: auto-attach assumed but manual required."
+- **Fix:** Either (a) call `registerOutputValidationHook(globalPipeline)` in server init, or (b) delete the global pipeline singleton and the registration function — Hockney's `recordRunCompletion()` already implements Invariant 4 without the pipeline.
+
+### 1.2 `engine_emit_final_output` MCP tool does not exist
+- **File:** (missing)
+- **Severity:** MEDIUM
+- **Description:** Per Kobayashi's charter, `engine_emit_final_output` is a listed MCP tool. However, a repo-wide grep finds zero references. This tool was on the Demo 14 roadmap but was never implemented. The structured-output fallback in `bridge.ts:124-143` (`parseStructuredOutput`) is the only final-output extraction path.
+- **Impact:** No MCP tool validates final JSON output payload — agents emit raw text and the bridge's regex fallback extracts JSON.
+
+### 1.3 CharterCompiler does not read identity/now.md or identity/wisdom.md at compile time
+- **File:** `packages/server/src/sdk/spawn-prompt.ts:120-123`
+- **Severity:** MEDIUM
+- **Description:** The spawn prompt **instructs agents to read** `.squad/identity/wisdom.md` and `.squad/identity/now.md` at runtime ("If exists, read it"). But the CharterCompiler / spawn-prompt builder does NOT actually read or inline these files into the system prompt. The agent must discover and read them via tool calls. This means:
+  - Identity context is not guaranteed to be present at session start
+  - If the agent lacks filesystem tools (possible in future sandboxed configurations), wisdom/now context is silently lost
+- **Contract:** Per charter, CharterCompiler should read `charter.md + identity/now.md + identity/wisdom.md + decisions/*.md`. Currently only charter.md content is inlined.
+
+### 1.4 CostTracker created after BudgetGuard check — correct, but not wired to EventBus
+- **File:** `packages/server/src/sdk/bridge.ts:208-209`
+- **Severity:** LOW
+- **Description:** `CostTracker` is instantiated in the `executeAgentRun` function body, which is correct — it records costs AFTER the session. However, per the charter, `CostTracker.wireToEventBus(bus)` should be called to forward usage events. Our `CostTracker` class has no `wireToEventBus` method at all. Usage events are captured via the `onEvent` callback chain in `squad-client.ts` and manually forwarded to `tracker.recordCost()` after `sendAndWait` completes. This means **streaming cost events are not emitted** — only the final aggregate is persisted.
+- **Impact:** Real-time cost dashboards see cost only at run completion, not incrementally during long runs.
+
+### 1.5 Duplicate pricing tables between cost-tracker.ts and pricing.ts
+- **File:** `packages/server/src/sdk/cost-tracker.ts:14-59` and `packages/server/src/sdk/pricing.ts:23-61`
+- **Severity:** MEDIUM
+- **Description:** Two independent `MODEL_PRICING` tables exist with slightly different key formats and structures. `cost-tracker.ts` uses `{ inputPerM, outputPerM }` keys; `pricing.ts` uses `{ input, output }`. Both are hand-maintained. The cost-tracker's `getPricing()` does prefix matching; pricing.ts does exact-match only. A model known to one table but not the other will get different fallback costs.
+- **Fix:** cost-tracker.ts should delegate to pricing.ts's `estimateCost()` instead of maintaining its own table.
+
+### 1.6 fan-out-adapter casts dependencies as `unknown`
+- **File:** `packages/server/src/sdk/fan-out-adapter.ts:412`
+- **Severity:** LOW
+- **Description:** `buildDependencies()` returns `as unknown as FanOutDependencies`, casting through `unknown`. This bypasses compile-time checking that the adapter satisfies the SDK's `FanOutDependencies` contract. If the SDK adds a required field, the adapter will fail at runtime with no compile error.
+
+---
+
+## 2. Dead Code
+
+### 2.1 HookPipeline `globalPipeline` singleton — never consumed
+- **File:** `packages/server/src/sdk/hook-pipeline.ts:59`
+- **What:** Exported singleton `globalPipeline` is imported nowhere outside the file and test files.
+
+### 2.2 `parseStructuredOutput` in bridge.ts — always optional, never schema-validated
+- **File:** `packages/server/src/sdk/bridge.ts:124-143`
+- **What:** The function parses JSON from agent output and spreads it into the `issue.run.finish` event payload. But no downstream consumer validates the structured output against a schema. The `structuredOutput` and `structuredOutputSource` fields are emitted into the event but never read by any handler, route, or service.
+
+### 2.3 OutputStreamer WS push path never activated
+- **File:** `packages/server/src/sdk/output-streamer.ts:34`
+- **What:** `OutputStreamer` only pushes WS events when `projectId` is provided. The sole call site (`bridge.ts:207`) constructs it as `new OutputStreamer(input.issueRunId, db)` — without projectId. So the `emitRunEvent('run.output', ...)` path in OutputStreamer is dead code for all bridge-initiated runs.
+
+### 2.4 Quadruplicated `pickString` / `pickNumber` helper functions
+- **File:** `bridge.ts:105`, `squad-client.ts:78,92`, `squad-stream.ts:60,74`, `consult-stream.ts:66,80`
+- **What:** Four independent copies of the same recursive object traversal helpers. Not dead per se, but a maintenance hazard — a fix in one won't propagate.
+
+### 2.5 `taggedName` suppression hack in fan-out-adapter error path
+- **File:** `packages/server/src/sdk/fan-out-adapter.ts:210-211`
+- **What:** `...(taggedName ? {} : {})` — a no-op spread solely to suppress an unused-variable lint warning. Should be prefixed with `_` or properly used.
+
+---
+
+## 3. Session Lifecycle Bugs
+
+### 3.1 `session.dispose()` is always called on crash — ✅ CORRECT
+- **File:** `packages/server/src/sdk/bridge.ts:351-356`
+- **Assessment:** The `finally` block calls `session.dispose()` and catches errors from it. This is correct. The session is created BEFORE the try block (line 228), ensuring dispose is always reachable.
+
+### 3.2 activeIssueSessions.register() silently overwrites — potential leak
+- **File:** `packages/server/src/engine/active-issue-sessions.ts:55-57`
+- **Severity:** MEDIUM
+- **Description:** `register()` overwrites any existing entry without calling `dispose()` on the old session. The JSDoc says "Overwrites any existing entry (run restart semantics — dispose old session before re-registering to avoid leaks)" but the disposal is **caller responsibility**, not enforced by the registry. If a caller forgets to dispose before re-registering, the old SDK client connection leaks.
+- **Fix:** The register function should `await existing?.dispose()` before overwriting, or at minimum log a warning.
+
+### 3.3 fan-out-adapter creates one SquadClient per child but only disconnects inside sendMessage
+- **File:** `packages/server/src/sdk/fan-out-adapter.ts:358-399`
+- **Severity:** HIGH
+- **Description:** In `buildDependencies().createSession`, a new `SquadClient` is created per child. The disconnect happens inside `sendMessage`'s finally block (line 397). But if `sendMessage` is **never called** (e.g., spawnParallel succeeds at creating the session but the SDK decides not to send a message immediately), the client leaks. There is no outer finally or timeout that would clean up the client.
+- **Fix:** Add a `setTimeout` safety net or track clients in the `makeMinimalSessionPool()` shutdown handler.
+
+### 3.4 Live sessions not cleaned up on unhandled rejection in `sendPrompt`
+- **File:** `packages/server/src/sdk/squad-stream.ts:479-483`
+- **Severity:** LOW
+- **Description:** `startLiveSession` fires `sendPrompt` as fire-and-forget with a `.catch()` that calls `running.close('failed')`. This is correct for the first prompt. However, if `sendPromptToSession()` (line 488) throws from a subsequent user turn, the error propagates to the route handler — but the session stays in the `runningSessions` map and the SDK client remains connected. The route layer would need to explicitly close the session on failure.
+
+### 3.5 No timeout on `client.sendAndWait()` in squad-client.ts
+- **File:** `packages/server/src/sdk/squad-client.ts:231`
+- **Severity:** MEDIUM
+- **Description:** `sendAndWait` has no timeout. If the LLM provider hangs or the SDK session stalls, the worker thread is blocked indefinitely. The heartbeat sweeper may eventually reclaim the run at the step_run level, but the SquadClient and its network connection will leak.
+- **Fix:** Wrap in `Promise.race` with a configurable timeout (e.g., 300s default).
+
+---
+
+## 4. Security Issues
+
+### 4.1 System prompts are NOT sanitized — charter.md content injected raw
+- **File:** `packages/server/src/sdk/bridge.ts:242` and `squad-client.ts:120-122`
+- **Severity:** HIGH
+- **Description:** Charter content read from disk is passed directly into `systemMessage.content` with zero sanitization. A malicious or compromised `.squad/agents/<name>/charter.md` file could contain prompt injection payloads (e.g., "Ignore all previous instructions…"). Since Squadboard allows project creation from templates and bundles, a malicious bundle could ship a poisoned charter.
+- **Mitigation consideration:** Prompt injection defense is hard to solve generically, but at minimum charter content should be wrapped in clear boundary markers (`<charter>...</charter>`) so the model can distinguish system instructions from injected content.
+
+### 4.2 No project isolation in fan-out-adapter's minimal EventBus/SessionPool
+- **File:** `packages/server/src/sdk/fan-out-adapter.ts:439-486`
+- **Severity:** LOW
+- **Description:** The `makeMinimalEventBus` and `makeMinimalSessionPool` adapters are scoped to a single `spawnFanOutChildren` invocation's `childByTag` map. There is no cross-project contamination risk here because each call constructs its own adapter instances. ✅ This is correctly isolated.
+
+### 4.3 `parseStructuredOutput` writes unvalidated JSON to the event bus
+- **File:** `packages/server/src/sdk/bridge.ts:316`
+- **Severity:** MEDIUM
+- **Description:** The `structuredOutput` field in the `issue.run.finish` event is raw parsed JSON — no schema validation, no sanitization. If a downstream consumer trusts this field and writes it to DB or renders it in UI without escaping, it's a potential stored XSS or data injection vector.
+- **Fix:** Either validate against the workflow step's declared JSON schema before emitting, or mark the field as untrusted in the type system.
+
+### 4.4 GitHub token fallback chain uses env vars without validation
+- **File:** `packages/server/src/sdk/squad-client.ts:130-131`
+- **Severity:** LOW
+- **Description:** `GITHUB_TOKEN ?? SQUADBOARD_GITHUB_TOKEN` — if both are set, the first wins. No validation that the token has the required scopes. A misconfigured env could produce cryptic SDK errors.
+
+---
+
+## 5. Missing Documentation
+
+### 5.1 No JSDoc on `executeAgentRun` parameters
+- **File:** `packages/server/src/sdk/bridge.ts:205`
+- **Description:** The core bridge entry point has a one-line comment but no JSDoc describing the contract, error behavior, or return shape.
+
+### 5.2 No JSDoc on `createAgentSession`
+- **File:** `packages/server/src/sdk/squad-client.ts:119`
+- **Description:** The function that wraps SquadClient.createSession has no doc. The `SessionOptions` and `SessionResult` interfaces have some field docs but the function itself is undocumented.
+
+### 5.3 No error codes for SDK failures
+- **Description:** When `createAgentSession` fails, the error message is a raw SDK string. There is no Squadboard-specific error code system (e.g., `SQUAD_SDK_SESSION_CREATE_FAILED`, `SQUAD_SDK_SEND_TIMEOUT`). This makes programmatic error handling by callers impossible.
+
+### 5.4 `extractOutput` return shape undocumented
+- **File:** `packages/server/src/sdk/squad-client.ts:55-72`
+- **Description:** The function handles 6+ different SDK response shapes but has no doc explaining which shapes are expected from which SDK versions.
+
+### 5.5 CostTracker accumulation semantics not documented
+- **File:** `packages/server/src/sdk/cost-tracker.ts:130`
+- **Description:** `accumulate()` uses raw SQL `COALESCE + addition` but doesn't document thread-safety or whether concurrent calls produce correct results (they do — SQL atomicity — but this should be stated).
+
+---
+
+## Top 5 Priority Fixes
+
+| # | Issue | Severity | File | Effort |
+|---|-------|----------|------|--------|
+| 1 | **HookPipeline never registered** — either wire it at startup or delete it. Dead infrastructure creates confusion about which validation path is canonical. | HIGH | hook-pipeline.ts | 30 min |
+| 2 | **fan-out-adapter SquadClient leak** — client not disconnected if sendMessage never called. Add timeout or cleanup. | HIGH | fan-out-adapter.ts:358-399 | 1 hr |
+| 3 | **Duplicate pricing tables** — cost-tracker.ts and pricing.ts maintain independent MODEL_PRICING. Consolidate to single source. | MEDIUM | cost-tracker.ts, pricing.ts | 1 hr |
+| 4 | **No timeout on sendAndWait** — indefinite hang possible. Add Promise.race with configurable timeout. | MEDIUM | squad-client.ts:231 | 30 min |
+| 5 | **CharterCompiler doesn't inline identity files** — wisdom.md and now.md are instruction-only, not compiled into the prompt. Either inline them or accept the trade-off explicitly. | MEDIUM | spawn-prompt.ts | 1 hr |
+
+---
+
+## Observations (not bugs)
+
+- The `OutputStreamer` in bridge.ts is constructed without `projectId`, so it never emits WS events. The `RunningIssueSessionImpl` handles all WS eventing for bridge runs, making OutputStreamer's WS path redundant for this use case.
+- The quadruplicated `pickString`/`pickNumber` helpers should be extracted to a shared `packages/server/src/sdk/helpers.ts` module.
+- The `squad-config-loader.ts` sandboxed VM evaluation is well-designed security-wise (timeout, no globals, fake require). No issues found.
+- Session lifecycle in `squad-stream.ts` and `issue-stream.ts` is solid — dispose patterns are correct and idempotent.
+
+
+# Entry from kobayashi-feature-kanban-generalized.md
+
+# Kobayashi — Feature Kanban generalized
+
+- **Date:** 2026-05-20T04:16:33.702-07:00
+- **Status:** Proposed implementation contract
+- **Owner:** Kobayashi
+
+## Decision
+
+The visible built-in Project Template catalog is curated to four selectable project types: Content Creation, Open Source, Research Spike, and Feature Kanban.
+
+Feature Kanban replaces the old domain-specific feature app with a generic product/PM workflow. Its canonical id is `feature-kanban`, and it must not carry AKS, Azure, Kubernetes, Microsoft-internal, or internal-tool assumptions.
+
+## Rationale
+
+Users need a lightweight set of broadly useful project starters. Feature Kanban should support customer research, PRD creation, prototype creation, feature naming, release-note/disclosure writing, and feature documentation without binding the workflow to any single product domain.
+
+## Implementation contract
+
+- Keep generalized skills bundled with Feature Kanban so they are reusable and installable with the template.
+- Wire ceremonies and agent-run prompts to invoke those skills by key.
+- Do not include provider-specific tools or MCP servers in Feature Kanban.
+- Keep Content Creation intentionally short and obvious.
+
+
+# Entry from kobayashi-squad-apps-plan.md
+
+# Kobayashi Decision — Squad Apps Plan
+
+**Date:** 2026-05-20T00:55:40.290-07:00  
+**Author:** Kobayashi (Squad SDK Integrator)  
+**Status:** Proposed  
+**Requested by:** Ahmed Sabbour  
+
+---
+
+## Context
+
+Ahmed asked three related questions:
+1. How does a user install a Squad app from the UI, and is anything built that can be used today?
+2. Where should install live in the UI?
+3. Can we create two Squad apps?
+
+And a fourth implicit thread: **clarify the actual sync ownership/contract between Squadboard and CLI/Copilot surfaces.**
+
+---
+
+## 1. Current Install Capability — What's Built
+
+### ✅ Fully operational (no implementation needed)
+
+| Layer | What exists |
+|---|---|
+| **Backend** | `GET /api/templates/builtin-projects` → scans `bundles/` lazily, validates, returns list. `POST /api/templates/builtin-projects/:id/apply` → applies bundle, creates `.squad/` dir, writes project to DB. |
+| **Client hooks** | `useBuiltinProjectTemplates()` + `useApplyBuiltinProjectTemplate()` in `packages/client/src/api/templates.ts` |
+| **Install UI** | `CreateFromTemplateModal` inside `ProjectPicker.tsx` — "Create from template" button on the Projects landing page opens it. Shows "Built-in" bundles and saved user templates in one dialog. |
+| **Bundle scanner** | `packages/server/src/services/builtin-bundles.ts` — lazy scan, in-process cache, warns on invalid bundles |
+| **Apply pipeline** | `packages/server/src/services/bundle-loader.ts` + `setup-lifecycle.ts` — creates `.squad/` directory structure, writes project/team/ceremonies/workflows/skills, creates DB record |
+| **Existing bundles** | 7 built-in apps: `aks-feature-kanban`, `bug-bash-project`, `content-writing-project`, `default-software-project`, `library-or-sdk-project`, `ops-runbook-project`, `research-spike` |
+
+**A user can already install a Squad app today** via: Projects page → "Create from template" → select a Built-in → fill Name + squadPath → Create.
+
+### ❌ What's missing (not yet built)
+
+| Gap | Description | Roadmap target |
+|---|---|---|
+| No dedicated Squad Apps gallery page | Install is buried in a modal, not a first-class browsable surface | F4 |
+| No install from URL/tarball | Spec (F5) defines git URL + `.squadapp.tar.gz` drag-drop but UI doesn't expose it | F5 |
+| No install into an existing project | Current apply always creates a new project | F5 |
+| No marketplace browse | F6 planned but not started | F6 |
+
+---
+
+## 2. Where Install Should Live in the UI
+
+**Decision: Add a dedicated `/apps` route and global nav item — do not expand the ProjectPicker modal further.**
+
+Rationale:
+- The current "Create from template" modal conflates Squad Apps (portable, versioned, marketplace-ready) with user-saved project snapshots. The UX will diverge as the install surface grows (URL install, tarball drop, marketplace search).
+- A first-class `/apps` page matches the product vocabulary: Squad Apps are a distinct unit, not just "templates."
+- The existing modal can remain for the common case (pick a built-in, enter name+path, go) but should link to the new apps page for browsing.
+
+**Proposed layout:**
+```
+/apps                            ← new global page, reachable from sidebar
+  ├── Browse tab                 ← card grid of all built-in bundles (uses existing hooks)
+  ├── Install from URL tab       ← git URL or .squadapp.tar.gz drop zone (F5)
+  └── Installed tab              ← apps that have been applied (links to their projects)
+```
+
+The "Create from template" modal on ProjectPicker becomes a shortcut that pre-selects the Browse tab.
+
+---
+
+## 3. Sync Ownership/Contract — Clarification
+
+### Source of truth is determined at project creation time
+
+| Start surface | Authority mode | Who owns writes |
+|---|---|---|
+| **Squadboard-first** | `squad_storage` (postgresql) | Squadboard DB is authoritative. CLI/Copilot reads/writes through the MCP API broker. Filesystem `.squad/` is a *projection* generated on demand. |
+| **CLI/Copilot-first** | `filesystem` | Filesystem `.squad/` is authoritative. Squadboard imports once when registered, then both surfaces read/write the filesystem. |
+
+### What the Squad SDK owns vs what Squadboard owns
+
+| Responsibility | Owner |
+|---|---|
+| `sync-ownership.ts` contract (authority modes, artifact specs, repair semantics) | **Kobayashi** (already implemented, `packages/server/src/sdk/sync-ownership.ts`) |
+| Backend sync API routes (`/api/projects/:id/squad-sync/...`) | **Hockney** (wave 20+ pending) |
+| Sync status UI panel | **Keyser + Fenster** (wave 20+ pending) |
+| Source-of-truth decision logic | **McManus** (architecture, locked) |
+| Filesystem projection generation (`.github/agents/squad.agent.md`, etc.) | **Kobayashi + Hockney** |
+| Ceremony default seeding | **Hockney** (ceremony invariant: must always be seeded, not empty) |
+
+### What the Squad SDK does NOT own
+
+- Continuous live mirroring between surfaces — **there is no two-way real-time sync.**
+- Automatic conflict resolution — **projections are generated on demand, repair is user-triggered or scheduled.**
+- CLI/Copilot native state — **CLI/Copilot reads filesystem directly; Squadboard uses MCP broker or filesystem depending on mode.**
+
+### Key invariant for Squad apps
+
+When a Squad App is applied (installed), it creates a new project. The project's authority mode is determined by the storage provider configured for that Squadboard instance (`postgresql` by default = `squad_storage` authority). The resulting `.squad/` directory is the filesystem projection of the app's content. Both surfaces can work immediately after install.
+
+---
+
+## 4. First Two Squad App Bundles to Create
+
+### App 1: `open-source-project`
+
+**Rationale:** The current bundle set covers software/AKS/bug-bash/content but has nothing for open-source maintainers, which is a common Squad user profile.
+
+**What it includes:**
+- Kanban: Triage / Needs Info / In Review / Accepted / Done (matches OSS issue lifecycle)
+- Team: Maintainer, Contributor Guide, Release Manager, Security Reviewer, Docs Writer
+- Ceremonies: Issue triage, PR review, release checklist, CVE response workflow
+- Routing rules: by GitHub labels (`bug`, `enhancement`, `docs`, `security`, `good-first-issue`)
+- Seed issues: "Set up CONTRIBUTING.md", "Configure release automation", "Write security policy"
+
+### App 2: `ai-agent-project`
+
+**Rationale:** Squareboard is itself built for agent-heavy workflows. Teams building AI agent frameworks or SDKs have no bundle tailored to their work — ironic gap given the repo's purpose.
+
+**What it includes:**
+- Kanban: Backlog / Design / Implementation / Testing / Shipped
+- Team: Architect, SDK Engineer, Integration Engineer, Test Engineer, Docs Writer
+- Ceremonies: Design review, API compatibility check, benchmark run, SDK release checklist
+- Routing rules: by label (`sdk`, `integration`, `benchmark`, `breaking-change`, `docs`)
+- Seed issues: "Define tool calling contract", "Write getting-started guide", "Add benchmark baseline"
+
+---
+
+## 5. Acceptance Criteria
+
+### Install capability (existing, verify works end-to-end)
+- [ ] User navigates to Projects → "Create from template" → sees both built-in apps and saved templates
+- [ ] Selecting a built-in, entering name + squadPath, and clicking Create: produces a new project with correct `.squad/` structure and DB record
+- [ ] All 7 existing bundles parse and apply without warnings
+
+### New Squad Apps page (to be implemented)
+- [ ] Route `/apps` exists and is reachable from global nav
+- [ ] Browse tab renders all bundles from `GET /api/templates/builtin-projects`
+- [ ] Each card shows name, description, icon, version
+- [ ] Clicking a card opens an apply dialog (name + squadPath) and routes to the new project on success
+
+### Two new bundles (to be authored)
+- [ ] `bundles/open-source-project/squad-bundle.json` valid and passes builtin-bundles scanner
+- [ ] `bundles/ai-agent-project/squad-bundle.json` valid and passes builtin-bundles scanner
+- [ ] Both appear in the built-in templates list
+
+### Sync contract (existing contract — clarify in docs)
+- [ ] `sync-ownership.ts` is the single SDK contract for authority modes — no parallel ad-hoc authority checks
+- [ ] Backend API endpoints (`squad-sync.ts` routes) are the only write path for Squadboard-authority projects
+- [ ] CLI/Copilot surfaces write through MCP broker (Squadboard-first projects) or directly to filesystem (CLI-first projects) — never both
+- [ ] A new project created from a Squad App gets its authority mode set at creation time and never changes without an explicit mode migration
+
+---
+
+## Storage/Sync Ownership Summary
+
+```
+Squadboard-first project:
+  authority = squad_storage
+  Squadboard writes → postgresql (DB)
+  CLI/Copilot reads/writes → via MCP API broker → DB
+  .squad/ on disk = projection, generated on demand
+
+CLI/Copilot-first project:
+  authority = filesystem
+  .squad/ on disk = authoritative
+  Squadboard imports once → reads/writes filesystem
+  No DB-only state; everything persists to disk
+
+Squad App install always starts a new project.
+Authority mode = storage provider of the Squadboard instance (postgresql default).
+```
+
+**Not the Squad SDK's job:** live mirroring, conflict resolution, automatic propagation. The SDK defines the contract; repair is explicit and user-triggered.
+
+
+# Entry from kujan-deep-review-tests.md
+
+# Kujan — Deep Test Coverage & Quality Review
+
+**Date:** 2026-05-20T10:58:25-07:00
+**Author:** Kujan (Tester / QA)
+**Status:** Finding
+
+---
+
+## 1. Existing Test Coverage
+
+### Server unit tests (121 files in `packages/server/src/__tests__/`)
+
+| Area | Test Files | Verdict |
+|------|-----------|---------|
+| Coordinator (dispatch, batch, cache, context, hash, preamble, sanitize, schemas, types, env, prefilters, LLM client, parity, decision-log, input-builder) | 17 files | **Well-covered** |
+| Ceremonies (built-in, list, YAML import/export/canonicalize/schema-filters, signal-emitter, origin, audit, roundtrip, runs-route, no-manual-closeout) | 14 files | **Well-covered** |
+| Idempotency (capture, cross-project, distinct-keys, MCP, no-key) | 5 files | **Covered** for happy-path; race conditions missing |
+| Charter (parser, compiler, identity, backfill, content-migration) | 5 files | **Covered** |
+| Middleware (auth, csrf) | 2 files | **Covered** but shallow |
+| Cost calculations (cost, rate-drift, cached-input-tokens) | 3 files | **Covered** |
+| Squad sync (authority, route, status-route, diagnostics) | 4 files | **Covered** |
+| PostgreSQL storage provider | 1 file | **Covered** |
+| Workflow parser | 1 file | **Covered** |
+| Stepper (review-promotion) | 1 file | **Partially covered** — only review promotion path |
+| Heartbeat (config, w27-triad, triage) | 3 files | **Partially covered** — config + service events only |
+| Sweeper / pickup | 2 files | **Partially covered** — pickup-ready sweep + coordinator pickup |
+| SSE stream | 1 file | **Covered** |
+| WebSocket heartbeat | 1 file | **Covered** — ping/pong only |
+| Process handlers / graceful shutdown | 2 files | **Covered** |
+| PGlite OID retry / migration safety | 3 files | **Covered** |
+
+### Client unit tests (7 files)
+
+| Area | Test Files | Verdict |
+|------|-----------|---------|
+| API fetch errors | 1 file | Covered |
+| Consult transport fallback | 1 file | Covered |
+| Agent origin | 1 file | Covered |
+| useRunStream hook | 1 file | Covered |
+| Ceremony roundtrip | 1 file | Covered |
+| Skill provenance | 1 file | Covered |
+| Vite proxy WS | 1 file | Covered |
+
+### E2E tests (18 files in `packages/e2e/tests/`)
+
+Playwright-based, covering: full-stack launch, project onboarding, kanban board, navigation, agents, templates, WS connection, team portability, consult, disabled agents, loading patterns, cast-team, live sessions, squad sync (2 files), Copilot CLI, apps install, ceremony activation, MCP, docs scenarios.
+
+### SDK tests (1 file)
+
+`packages/squadboard-sdk/src/scribe/__tests__/step-8.test.ts`
+
+---
+
+## 2. Critical Coverage Gaps (ranked by risk)
+
+### 🔴 P0 — Engine core loops (ZERO direct test coverage)
+
+| Source File | Functions | Risk |
+|------------|-----------|------|
+| `engine/dispatcher.ts` | `start`, `stop`, `scheduleTick`, `tick` | Dispatcher ordering, error isolation, jitter. If dispatcher crashes, entire engine stops. |
+| `engine/stepper.ts` | `claimAndRun`, `runWorker` | Atomic claim via `FOR UPDATE SKIP LOCKED`, heartbeat timer, workspace failure, event emission. Only review-promotion tested. |
+| `engine/sweeper.ts` | `sweepExpiredLeases`, `sweepOrphanedRuns`, `sweepExpiredStepLeases`, `sweepOrphanedWorkflowRuns` | Lease expiry reclaim, orphan detection, retry-count vs max-retries logic. **No test at all.** |
+| `engine/workflow-runner.ts` | `createWorkflowRun`, `advanceWorkflowRun`, `tickWorkflowAdvancement` | Step progression, fan-out completion, quorum advance, handoff, finalization. **No test at all.** |
+| `engine/fan-out.ts` | `resolveTargets`, `materializeFanOut`, `checkFanOutCompletion` | 6-row atomic transaction, concurrent claim bailout, child materialization, fail-fast vs continue. **No test at all.** |
+| `engine/peer-reviewer.ts` | `createPeerReviewRuns`, `collectReviewDecisions`, `shouldBlock`, `isQuorumMet` | Quorum logic, blocking policies, feedback injection. **No test at all.** |
+| `engine/router.ts` | `resolveRoute`, `resolveRouteTier2`, `resolveRouteTier3` | Tier-1/2/3 routing resolution, keyword refresh, routed run creation. Only indirect coverage. |
+
+### 🔴 P0 — Sweeps (6 of 8 have ZERO direct tests)
+
+| Sweep File | What It Does | Tested? |
+|-----------|-------------|---------|
+| `sweeps/pickup-ready.ts` | Claim ready issue runs | ✅ Partial |
+| `sweeps/ready-workflow-steps.ts` | Advance workflow steps | ❌ |
+| `sweeps/stuck-issue-runs.ts` | Reap stuck runs | ❌ |
+| `sweeps/stale-presence.ts` | Clean stale presence | ❌ |
+| `sweeps/idle-live-sessions.ts` | Reclaim idle sessions | ❌ |
+| `sweeps/github-sync-overdue.ts` | Retry GitHub sync | ❌ |
+| `sweeps/ceremonies-due.ts` | Fire due ceremonies | ❌ |
+| `sweeps/log-monitor-drain.ts` | Drain log buffer | ❌ |
+
+### 🟡 P1 — Partial coverage gaps
+
+| Area | Gap |
+|------|-----|
+| Stepper `claimAndRun` | Atomic claim, two-worker race, workspace failure, heartbeat timer not tested |
+| Heartbeat engine class | `start/stop/tick/setSweepEnabled/getStatus` not tested (only config + service events) |
+| Output validator | `validateAgentOutput()` not directly tested — schema parse success/fail, AJV validation, fallback |
+| Idempotency | Concurrent duplicate-insert race not tested; key collision across entity types not tested |
+| Auth middleware | JWT/signature validation not tested (middleware is bearer-string equality only — **architectural concern**: no JWT at all?) |
+| CSRF middleware | PUT/PATCH/DELETE not tested; malformed Origin not tested |
+| WS reconnect | Server-side `resubscribe` branch + `lastSeq` cursor not tested |
+| Workspace lifecycle | `resolveWorkspace`, `cleanupWorkspace`, git worktree paths not tested (only worktree-lifecycle.test.ts covers some) |
+
+---
+
+## 3. Missing Durability Tests
+
+| Scenario | What Should Happen | Current Coverage |
+|----------|--------------------|-----------------|
+| **Kill mid-run → restart** | Expired lease → sweeper reclaims → stepper re-picks | ❌ No integration test |
+| **Lease expiry + dead heartbeat → reap** | `sweepExpiredLeases` detects TTL > 90s, marks `failed`, increments retry | ❌ No test |
+| **Two workers race FOR UPDATE SKIP LOCKED** | Exactly one wins claim; loser gets zero rows | ❌ No test |
+| **Fan-out parent completes before children** | Parent stays in `waiting_children`; `checkFanOutCompletion` only finalizes when all children done | ❌ No test |
+| **Budget exceeded mid-run** | Run marked `budget_exceeded`, no further LLM calls, workflow step fails gracefully | ❌ No test |
+| **Retry exhaustion** | After `max_attempts` failures, `on_exhausted.goto` fires or step permanently fails | ❌ No test |
+| **Crash during fan-out materialization** | Partial children → restart → detect incomplete fan-out → re-materialize or fail | ❌ No test |
+| **Concurrent workflow advancement** | Two ticks advance same workflow → only one succeeds (row lock) | ❌ No test |
+
+---
+
+## 4. Flaky Test Risks
+
+| File | Pattern | Risk |
+|------|---------|------|
+| `e2e/tests/12-squad-sync.spec.ts` | `setTimeout(500)`, `setTimeout(5000)`, `Date.now()` polling | High — timing-dependent sync waits |
+| `e2e/tests/10-loading-pattern.spec.ts` | `setTimeout` polling | Medium — UI timing |
+| `e2e/tests/13-copilot-cli-launch.spec.ts` | `setTimeout(...)` | Medium — process spawn timing |
+| `server/__tests__/coordinator-integration.test.ts` | `new Promise(r => setTimeout(r, ...))` in mocked LLM | Low — artificial delay in mock |
+| `client/hooks/__tests__/useRunStream.test.ts` | `setTimeout(..., 50)` in mock fetch | Low — short artificial delay |
+| `server/__tests__/process-handlers.test.ts` | `setTimeout` with fake timers | Low — properly isolated with vi.useFakeTimers |
+| `server/__tests__/pglite-issue-run-events-catalog-repair.test.ts` | Persistent `dataDir` PGlite | Medium — could interfere if parallel |
+
+---
+
+## 5. Test Infrastructure Issues
+
+### 🔴 CI does NOT run tests
+
+`.github/workflows/ci.yml` only runs:
+1. `pnpm run npm:build` (package build)
+2. `pnpm run npm:publish:dry-run` (publish validation)
+3. `pnpm run docs:build` (docs build)
+
+**No `vitest` execution. No E2E execution. No test database setup.**
+
+Tests exist only as a local development safety net. Any PR can merge with broken tests.
+
+### 🟡 No server test job in CI
+
+Need a CI job that:
+1. Installs deps
+2. Runs `vitest run` in `packages/server`
+3. Optionally runs client tests
+4. Reports coverage
+
+### 🟡 No E2E in CI
+
+E2E tests require Playwright + running server. Need:
+1. Server start
+2. Playwright install
+3. E2E test execution
+4. Artifact upload on failure
+
+### ✅ Test isolation is good (where tests exist)
+
+PGlite-backed integration tests create fresh DB per test with proper `beforeEach`/`afterEach` cleanup.
+
+---
+
+## 6. Top 5 Priority Test Cases to Write
+
+### 1. `sweeper-lease-expiry.test.ts` — Lease reap under dead heartbeat
+**Invariant:** When a worker dies (no heartbeat for >90s), `sweepExpiredLeases` reclaims the run and increments retry count. If retry count >= max_retries, run is permanently failed.
+```
+describe('sweepExpiredLeases')
+  it('reclaims run with expired lease (TTL > 90s)')
+  it('increments retry_count on reclaim')
+  it('permanently fails run when retry_count >= max_retries')
+  it('does not reclaim run with active heartbeat')
+  it('handles concurrent sweep + heartbeat renewal')
+```
+
+### 2. `fan-out-atomicity.test.ts` — 6-row transaction integrity
+**Invariant:** `materializeFanOut` creates all child workflow runs + issue runs + parent update in one transaction. Partial failure rolls back everything.
+```
+describe('materializeFanOut')
+  it('creates all children atomically — all or nothing')
+  it('bails out if parent already in splitting state (concurrent claim)')
+  it('correctly inherits parent variables to children')
+  it('checkFanOutCompletion only finalizes when ALL children done')
+  it('parent stays waiting_children until last child completes')
+```
+
+### 3. `stepper-claim-race.test.ts` — FOR UPDATE SKIP LOCKED correctness
+**Invariant:** When two workers call `claimAndRun` simultaneously, exactly one claims the row. The loser gets zero rows and exits cleanly.
+```
+describe('claimAndRun race condition')
+  it('exactly one of two concurrent claimers wins')
+  it('loser receives zero rows and does not error')
+  it('winner transitions run to running status')
+  it('claimed run has valid lease timestamp')
+```
+
+### 4. `workflow-runner-advancement.test.ts` — Step progression through all types
+**Invariant:** `advanceWorkflowRun` correctly transitions through each step type (route, agent_run, fan_out, wait_event, wait_timer, branch, retry_wrap, github_pr, etc.) and handles terminal states.
+```
+describe('advanceWorkflowRun')
+  it('advances from route step to next step on completion')
+  it('advances through fan_out → waiting_children → completion')
+  it('handles wait_timer expiry correctly')
+  it('handles wait_event receipt correctly')
+  it('stops on budget_exceeded')
+  it('handles retry_wrap exhaustion → on_exhausted.goto')
+```
+
+### 5. `ci-vitest-job` — Add test execution to CI
+**Invariant:** No PR merges without passing unit tests.
+```yaml
+# .github/workflows/ci.yml addition
+  test:
+    name: Unit tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 20, cache: pnpm }
+      - run: pnpm install --frozen-lockfile
+      - run: cd packages/server && pnpm test -- --run
+```
+
+---
+
+## Summary Metrics
+
+| Metric | Value |
+|--------|-------|
+| Server source files | 240 |
+| Server test files | 121 |
+| Estimated line coverage | ~40% (coordinator/ceremonies well-covered; engine core uncovered) |
+| Engine core files with ZERO tests | 7 of 9 |
+| Sweep files with ZERO tests | 6 of 8 |
+| Durability scenarios covered | 0 of 8 |
+| CI runs tests | ❌ No |
+| E2E in CI | ❌ No |
+| Contract tests (SDK schema pinning) | 1 file only |
+
+
+# Entry from kujan-delete-regression.md
+
+# Decision: delete-regression — stale-OID recovery contract (v2)
+
+**Date:** 2026-05-19T23:37:54.700-07:00
+**Author:** Kujan
+**Status:** Done
+
+## Context
+
+Bug report: "Can't delete" — modal showed `could not open relation with OID 66346` embedded in raw HTML.
+
+First round of QA tests (now superseded) only proved JSON error formatting. The root cause is the MUTATION path: `db.delete(settings)` hitting a stale prepared-statement plan, with no retry.
+
+## What's implemented
+
+| Component | Status |
+|---|---|
+| `withPgliteOidRetry` in `db/index.ts` | ✅ Present — catches OID, `DEALLOCATE ALL`, retries once |
+| SELECT wrapped in `withPgliteOidRetry` | ✅ |
+| Mutation (settings+projects delete) wrapped | ✅ |
+| Global Express JSON error handler | ✅ |
+| `apiFetch` non-JSON message sanitization | ✅ |
+| `sanitizeApiError` in Settings.tsx | ✅ |
+
+## Coverage map (28 tests, all green)
+
+| File | Tests | What it proves |
+|---|---|---|
+| `pglite-oid-retry.test.ts` | 6 | wrapper unit: retry, non-retry, DEALLOCATE, external-PG pass-through |
+| `delete-project.test.ts` | 16 | happy paths, safety guards, OID error formatting, SELECT recovery (test 14) |
+| `delete-project-db-error.test.ts` | 6 | **MUTATION recovery → 200**, projects.delete exhaustion, non-OID non-retry |
+
+## Critical missing test that this fills
+
+Test 14 in `delete-project.test.ts` proves SELECT OID → retry → 200.
+No prior test proved MUTATION OID → retry → 200.
+`delete-project-db-error.test.ts` test 1 fills that gap.
+
+## Rules going forward
+
+1. Both phases of DELETE (select AND mutation) must remain wrapped in `withPgliteOidRetry`.
+2. `withPgliteOidRetry` retries OID errors only — never non-OID errors.
+3. Any PR touching `DELETE /:id` or `withPgliteOidRetry` must pass all three test files.
+4. Never delete real filesystem paths in tests — all fs/os mocked.
+
+
+# Entry from kujan-sync-e2e-plan.md
+
+# Kujan — sync-e2e-plan decision
+
+**Date:** 2026-05-20T00:55:40.290-07:00
+**Author:** Kujan
+**Status:** Proposed — pending Ahmed Sabbour review
+
+---
+
+## Context
+
+Task: produce a concrete E2E test plan for full bidirectional sync coverage —
+Squadboard→CLI/Copilot and CLI/Copilot→Squadboard — including Playwright specs,
+Squadboard launch, real Copilot CLI invocation, scenario activation, agent
+spawning, ceremonies, Squad App installation, and all critical paths.
+
+Repo inspected: `/home/asabbour/GitWSL/squadboard`
+Relevant files read: `packages/e2e/tests/*.spec.ts`, `packages/e2e/tests/fixtures.ts`,
+`packages/e2e/playwright.config.ts`, `packages/server/src/routes/squad-sync.ts`,
+`docs/features/feat-2026-05-20-cross-surface-squad-state-authority-and-sync.md`,
+`.squad/agents/kujan/history.md`, `.squad/decisions.md`.
+
+---
+
+## What Exists Today
+
+### Playwright E2E (packages/e2e/tests/)
+
+| Spec | Invariant | Status |
+|------|-----------|--------|
+| `00-full-stack-launch.spec.ts` | Playwright-owned server launch: API health + ProjectPicker live | ✅ passing |
+| `01-project-onboarding.spec.ts` | Project creation flows (UI + API) | ✅ passing |
+| `02-kanban-board.spec.ts` | Board render and CRUD | ✅ passing |
+| `03-navigation.spec.ts` | Route navigation | ✅ passing |
+| `04-agents.spec.ts` | Agents page | ✅ passing |
+| `05-template-create.spec.ts` | Create project from user-saved template | ✅ passing |
+| `06-ws-connected.spec.ts` | WS handshake → badge "Connected" in 5s | ✅ passing |
+| `07-team-portability.spec.ts` | Export → import round-trip for agents | ✅ passing |
+| `08-consult-send.spec.ts` | Consult send: size cap + inline error | ✅ passing |
+| `09-disabled-agent.spec.ts` | Issue run against disabled/retired agent → 422 | ✅ passing |
+| `10-cast-team.spec.ts` | Cast-a-Team modal full flow | ✅ passing |
+| `10-loading-pattern.spec.ts` | Loading pattern | ✅ passing |
+| `11-jump-into-session.spec.ts` | LiveRunViewer route renders; Watch button; Steer bar | ✅ passing |
+| `12-squad-sync.spec.ts` | 5 cross-surface sync tests (see below) | ✅ passing |
+| `13-copilot-cli-launch.spec.ts` | Deterministic runner + live-gate | ✅ passing |
+| `docs-scenarios.spec.ts` | 5 Spark scenario screenshot groups | ✅ passing |
+
+### 12-squad-sync.spec.ts — Current Coverage
+
+1. Squadboard-first project → missing `copilotAgentMd` → warning + repair action reported
+2. Settings → Team Sync panel renders with real API status evidence (Playwright UI test)
+3. Empty `ceremonies.md` → `seed-ceremony-defaults` repair → file seeded with Design Review + Retrospective
+4. `generate-github-agent` → dry-run is non-mutating → real repair creates `.github/agents/squad.agent.md`
+5. CLI/Copilot-first repo registered via `POST /api/squad/register` → filesystem authority, bootstrap ready, no drift
+
+### 13-copilot-cli-launch.spec.ts — Current Coverage
+
+- Deterministic fake-runner: proves projection generation, cwd, Squad agent and prompt wiring without real Copilot
+- Live gate (opt-in): `SQUADBOARD_E2E_LIVE_COPILOT=1` — spawns real `copilot` binary, asserts non-empty response
+
+### Key ENV vars already wired (playwright.config.ts)
+
+```
+SQUADBOARD_E2E_BASE_URL             Vite dev server (default: http://localhost:5173)
+SQUADBOARD_E2E_API_BASE             API server (default: http://localhost:3000)
+SQUADBOARD_E2E_REUSE_SERVER         Reuse existing server if up (default: yes, no on CI)
+SQUADBOARD_E2E_SKIP_WEBSERVER       Skip Playwright webServer block entirely
+SQUADBOARD_E2E_SQUAD_STORAGE_PROVIDER  'fs' or 'postgresql'
+SQUADBOARD_E2E_LIVE_COPILOT         '1' to enable real Copilot CLI (live gate)
+SQUADBOARD_E2E_COPILOT_COMMAND      Binary name (default: 'copilot')
+SQUADBOARD_E2E_COPILOT_ARGS_JSON    Override args JSON (replaces default arg list)
+SQUADBOARD_E2E_COPILOT_TIMEOUT_MS   Timeout for live invocation (default: 60 000 ms)
+SQUADBOARD_E2E_COPILOT_PROMPT       Prompt for live gate (default: team-sync summary)
+SQUADBOARD_E2E_WORKSPACE_ROOT       Parent for ephemeral workspaces (.e2e-workspaces)
+```
+
+---
+
+## Confirmed Gaps
+
+### Gap A — Squad App installation (built-in bundles) E2E
+
+`POST /api/templates/builtin-projects/:bundleId/apply` is unit-tested at the route
+layer but has **zero Playwright E2E coverage**. Users who install a `default-software-project`
+bundle expect agents, ceremonies, seed issues, and kanban columns to materialise. No
+test follows that path end-to-end, let alone the continuation into Copilot CLI.
+
+### Gap B — Ceremony activation end-to-end
+
+`docs-scenarios.spec.ts` creates a ceremony via API but never activates it. No E2E
+test covers `POST /api/projects/:id/ceremonies/:cid/runs`. The ceremony step → agent
+dispatch path is entirely untested at E2E level.
+
+### Gap C — Drift detection after filesystem mutation
+
+12-squad-sync.spec.ts proves the initial state is correct but never simulates a
+post-generate filesystem mutation and re-checks `drift.detected`. A user who edits
+`.squad/team.md` after projection should see drift; this is not proven E2E.
+
+### Gap D — MCP bridge: Copilot CLI → Squadboard board state
+
+The critical path "ask Copilot CLI something that causes it to read board state via
+the Squadboard MCP server" is completely absent. This is the `CLI→Squadboard` live
+integration proof. It requires a real Copilot CLI + MCP configuration so it must be
+live-gated, but the test scaffolding and the deterministic stub must still exist.
+
+### Gap E — Real Copilot live gate verifies Squad context, not just exit code
+
+Spec 13 live gate asserts `exitCode === 0` and non-empty combined output. It does
+**not** assert that Squad actually read `.squad/` context (team.md, routing, decisions).
+A Squad agent that returns "I don't know" still passes. The live gate needs a prompt
+designed to produce a response that can only be correct if Squad read the context.
+
+### Gap F — postgresql-mode sync coverage
+
+All sync E2E tests that run a fresh isolated server use `dev:fs` (filesystem storage).
+The default `dev:postgresql` (embedded PGlite) path is covered only by the Playwright
+webServer launch (which uses whatever `SQUADBOARD_E2E_SQUAD_STORAGE_PROVIDER` resolves
+to at run time). A dedicated spec that launches a postgresql-mode server and exercises
+the same sync status/repair paths as the fs-mode server is missing.
+
+---
+
+## Recommended New E2E Specs
+
+### spec 14 — `14-squad-app-install.spec.ts`
+
+**Invariant:** Installing a built-in Squad App bundle materialises a fully configured
+project that is immediately usable from both Squadboard and Copilot CLI.
+
+**Tests:**
+1. `What does the system do when the default-software-project bundle is applied? Agents, ceremonies, seed issues, and columns appear in the board.`
+   - `POST /api/templates/builtin-projects/default-software-project/apply` with a fresh parent path
+   - Assert: `GET /api/projects/:id/agents` returns ≥1 agent
+   - Assert: `GET /api/projects/:id/ceremonies` returns ≥1 ceremony
+   - Assert: Playwright board renders with agents and at least one kanban column
+2. `What does the system do when a bundle-installed project generates its CLI projection? .github/agents/squad.agent.md reflects bundle agent names.`
+   - Call `POST .../squad-sync/generate-github-agent { dryRun: false }`
+   - Read the generated file; assert it contains agent name(s) from the bundle manifest
+3. `What does the system do when Copilot CLI opens a bundle-installed project? Deterministic runner proves cwd, projection, and prompt wiring.`
+   - Fake runner (same pattern as spec 13 test 1)
+   - Assert runner was invoked with the bundle project's `projectPath` as `cwd`
+
+**Files involved:**
+- `packages/e2e/tests/14-squad-app-install.spec.ts` (new)
+- `packages/e2e/tests/fixtures.ts` — add `installBuiltinBundle(projectId, bundleId)` helper
+
+**Backend routes required:**
+- `POST /api/templates/builtin-projects/:bundleId/apply` — must already exist (confirmed in routes/templates.ts)
+
+---
+
+### spec 15 — `15-ceremony-activation.spec.ts`
+
+**Invariant:** A manually activated ceremony creates a ceremony run, advances through its
+routing step, and the run appears in the UI without crashing.
+
+**Tests:**
+1. `What does the system do when a ceremony is manually activated? A ceremony run row is created and its initial step is dispatched.`
+   - Create project + ceremony via API
+   - `POST /api/projects/:id/ceremonies/:cid/runs`
+   - Assert: response `status === 'running'` or `'pending'`; run ID in body
+2. `What does the system do when the ceremony UI page is opened after activation? The run is listed.`
+   - Playwright: navigate to `/projects/:id/ceremonies`
+   - Assert: ceremony name visible and a run indicator present
+
+**Files involved:**
+- `packages/e2e/tests/15-ceremony-activation.spec.ts` (new)
+- `packages/e2e/tests/fixtures.ts` — add `createAndActivateCeremony(projectId, yamlContent)` helper
+
+**Backend routes required:**
+- `POST /api/projects/:id/ceremonies/:cid/runs` — existence to be confirmed with Hockney
+
+---
+
+### spec 16 — `16-mcp-cli-to-squadboard.spec.ts`
+
+**Invariant:** Copilot CLI can read Squadboard board state through the MCP bridge; the
+MCP server returns live project data, not a stub.
+
+**Tests:**
+1. `What does the deterministic runner prove about MCP configuration? The MCP server URL, project context, and command are wired before any live invocation.`
+   - Fake runner: capture invocation, assert MCP server env/arg is present in the args
+   - No real Copilot or MCP I/O
+2. `What happens when a live Copilot CLI reads board state via Squadboard MCP? It returns issue data that only comes from a live Squadboard instance.` [LIVE GATE]
+   - `test.skip(process.env.SQUADBOARD_E2E_LIVE_COPILOT !== '1', 'Live gate: set SQUADBOARD_E2E_LIVE_COPILOT=1 ...')`
+   - Create project with a uniquely-titled issue via API
+   - Launch Copilot CLI with `--mcp-config` pointing to the Squadboard MCP endpoint
+   - Prompt: "List all issues in the {projectName} project using the squadboard MCP tool."
+   - Assert: CLI output contains the unique issue title (proves real MCP read, not hallucination)
+
+**New ENV vars needed:**
+```
+SQUADBOARD_E2E_COPILOT_MCP_CONFIG   Path to MCP config JSON for the live gate
+```
+
+**Files involved:**
+- `packages/e2e/tests/16-mcp-cli-to-squadboard.spec.ts` (new)
+- `packages/e2e/tests/fixtures.ts` — add `writeMcpConfig(apiBase, projectId)` helper that generates a Copilot-compatible MCP config JSON
+
+---
+
+### spec 12 additions — drift detection (add to existing `12-squad-sync.spec.ts`)
+
+**New test 6:**
+`What does the system do when .squad/team.md is modified after the Copilot projection is generated? Drift is detected on the next status call.`
+- Generate copilotAgentMd for a Squadboard-first project
+- Verify `drift.detected === false`
+- Overwrite `.squad/team.md` with different content from the test
+- Call status again
+- Assert `drift.detected === true` OR `drift.level !== 'ready'` (depending on what the backend tracks)
+
+**Note:** This requires knowing whether the backend computes drift from filesystem
+checksums or from DB metadata. If Hockney's implementation doesn't track content
+checksums yet, this test should be written as a **failing test that names the
+missing contract** and left in `test.skip()` until Hockney ships checksum tracking.
+
+---
+
+### spec 13 additions — Squad context validation (add to existing `13-copilot-cli-launch.spec.ts`)
+
+**New test 3 (live gate):**
+`What happens when the live Copilot CLI asks Squad about routing? The response confirms Squad read .squad/routing.md, not a generic answer.`
+- Create a project with a distinctive routing rule in `.squad/routing.md`
+  (e.g. "All security issues route to Scribe.")
+- Generate the `.github/agents/squad.agent.md` projection
+- Ask Copilot CLI: "Who should security issues be routed to, according to the routing file?"
+- Assert: response contains "Scribe" (or whatever the distinctive value is)
+- `test.skip(process.env.SQUADBOARD_E2E_LIVE_COPILOT !== '1', ...)`
+
+---
+
+## Fixture Additions Needed
+
+All additions go into `packages/e2e/tests/fixtures.ts`:
+
+```typescript
+// Install a built-in bundle into an existing project
+export async function installBuiltinBundle(projectId: string, bundleId: string): Promise<void>
+
+// Create and activate a ceremony, returning the ceremony run ID
+export async function createAndActivateCeremony(
+  projectId: string,
+  yamlContent: string,
+  apiBase?: string
+): Promise<{ ceremonyId: string; runId: string }>
+
+// Write a Copilot-compatible MCP config file for the live gate
+export async function writeMcpConfig(
+  apiBase: string,
+  configPath: string
+): Promise<void>
+```
+
+---
+
+## Commands to Run the Relevant Specs
+
+```bash
+# Run all cross-surface sync + Copilot CLI specs (no live Copilot required)
+cd packages/e2e && pnpm test -- tests/12-squad-sync.spec.ts tests/13-copilot-cli-launch.spec.ts
+
+# Run with a fresh server (no reuse) on explicit ports
+SQUADBOARD_E2E_REUSE_SERVER=0 \
+SQUADBOARD_E2E_API_BASE=http://127.0.0.1:3104 \
+SQUADBOARD_E2E_BASE_URL=http://127.0.0.1:5178 \
+  pnpm --filter @sabbour/squadboard-e2e test -- tests/12-squad-sync.spec.ts tests/13-copilot-cli-launch.spec.ts
+
+# Run with filesystem storage provider
+SQUADBOARD_E2E_SQUAD_STORAGE_PROVIDER=fs \
+  pnpm --filter @sabbour/squadboard-e2e test -- tests/12-squad-sync.spec.ts
+
+# Run with live Copilot CLI (requires authenticated copilot binary on PATH)
+SQUADBOARD_E2E_LIVE_COPILOT=1 \
+  pnpm --filter @sabbour/squadboard-e2e test -- tests/13-copilot-cli-launch.spec.ts
+
+# Run everything
+cd packages/e2e && pnpm test
+```
+
+---
+
+## Safety Constraints
+
+1. **Never delete `/home/asabbour/GitWSL/squadboard` or any parent directory.** This
+   is the source repo. All E2E tests must write only to ephemeral workspaces under
+   `packages/e2e/.e2e-workspaces/` via `createE2eProjectParent()`.
+2. `launchFilesystemSquadboardServer()` already creates a fresh `HOME` under `.e2e-workspaces`
+   and destroys it in `stop()`. Any new spec that spawns its own server must follow the
+   same pattern.
+3. All ephemeral server processes must be stopped in `afterAll` or in the `finally` block
+   of the test body. Use `try/finally`, not just `afterAll`, for processes started inside
+   individual tests.
+4. No test may assume any persistent Squadboard state created by a previous test run.
+   Each spec must be fully self-contained via `beforeAll` + `afterAll`.
+5. The `MCP config` written for spec 16 must use a path inside `.e2e-workspaces`, never
+   in the repo root or the user's real `~/.config`.
+
+---
+
+## Acceptance Criteria
+
+The plan is complete when:
+- [ ] All existing 14 specs + `docs-scenarios.spec.ts` continue to pass green
+- [ ] `14-squad-app-install.spec.ts` exists, covers 3 tests, passes against a running Squadboard
+- [ ] `15-ceremony-activation.spec.ts` exists, covers 2 tests, passes (pending Hockney ceremony run route confirmation)
+- [ ] `16-mcp-cli-to-squadboard.spec.ts` exists with deterministic stub (test 1 passes in CI) + live gate skeleton (test 2 skipped in CI)
+- [ ] `12-squad-sync.spec.ts` has drift-detection test (test 6), either passing or explicitly `test.skip()`-named pending backend checksum tracking
+- [ ] `13-copilot-cli-launch.spec.ts` has Squad-context validation test (test 3), live-gated
+- [ ] `fixtures.ts` exports `installBuiltinBundle`, `createAndActivateCeremony`, `writeMcpConfig`
+- [ ] `SQUADBOARD_E2E_COPILOT_MCP_CONFIG` is documented in `packages/e2e/README.md` (or in the playwright.config.ts header comment)
+
+---
+
+## What Is NOT In Scope Here
+
+- Durability/crash-recovery durability tests — those belong to Demo 7/15 milestones
+- Performance benchmarking — Hockney owns the perf rig
+- Visual regression — Fenster owns visual judgment
+- Production code changes — Kujan writes tests only
+
+---
+
+## Todo Status
+
+This file is the deliverable for `sync-e2e-plan`. Implementation of the specs
+above is separate work that Kujan will own in the next wave.
+
+
+# Entry from kujan-sync-e2e.md
+
+# Kujan decision — Cross-surface sync E2E gates
+
+**Date:** 2026-05-19T22:30:55.553-07:00
+**Author:** Kujan
+**Status:** Proposed QA gate
+
+## Decision
+
+Playwright E2E must own full-stack Squadboard startup through `webServer` for sync coverage: backend health and Vite client readiness are both launch gates. Cross-surface sync tests cover default Squadboard status/repair paths plus an isolated filesystem-mode server for CLI/Copilot-first authority.
+
+The real Copilot CLI ask-Squad path is a live, opt-in gate only. CI gets deterministic command-runner coverage and generated projection assertions, but it must not report a live Copilot pass unless `SQUADBOARD_E2E_LIVE_COPILOT=1` is set with an authenticated CLI.
+
+## Why
+
+A missing backend, stale Team Sync panel, missing `.github/agents/squad.agent.md`, or placeholder ceremonies are customer-visible cross-surface failures. Live Copilot auth is environment-dependent, so fake green live coverage would be worse than no coverage.
+
+## Validation
+
+- `pnpm --filter @sabbour/squadboard-e2e test -- --list tests/00-full-stack-launch.spec.ts tests/12-squad-sync.spec.ts tests/13-copilot-cli-launch.spec.ts`
+- `SQUADBOARD_E2E_REUSE_SERVER=0 SQUADBOARD_E2E_API_BASE=http://127.0.0.1:3104 SQUADBOARD_E2E_BASE_URL=http://127.0.0.1:5178 pnpm --filter @sabbour/squadboard-e2e test -- tests/00-full-stack-launch.spec.ts tests/12-squad-sync.spec.ts tests/13-copilot-cli-launch.spec.ts`
+
+
+# Entry from kujan-sync-export-ux.md
+
+# Kujan — Sync export UX regression gate
+
+**Date:** 2026-05-20T04:16:33.702-07:00  
+**Status:** Rejected until focused regressions pass  
+**Owner for production revision:** Keyser
+
+## Decision
+
+Do not ship the current sync status export UX until `SquadSyncStatusPanel.test.tsx` passes the two new regressions:
+
+1. The no-live-filesystem-mirror warning must avoid provider/env-var/internal broker jargon and expose clear user-facing actions.
+2. An unchanged/up-to-date Preview Export dry run must summarize the no-op and must not dump every unchanged `.squad` path or raw `already_up_to_date` status.
+
+## Evidence
+
+Focused command run:
+
+```bash
+pnpm --filter @sabbour/squadboard-client test -- --run src/components/settings/__tests__/SquadSyncStatusPanel.test.tsx
+```
+
+Result: 2 failed, 5 passed. The failing assertions reproduce the bug report: the panel still renders `SQUADBOARD_SQUAD_STORAGE_PROVIDER`, MCP/API broker wording, explicit-bridge copy, and the Preview Export modal still lists unchanged paths with raw `already_up_to_date`.
+
+
+# Entry from mcmanus-deep-review-architecture.md
+
+# McManus — Deep Architecture & Dead Code Review
+
+**Date:** 2026-05-20T10:58:00-07:00
+**Author:** McManus (Lead Architect)
+**Status:** Complete — findings for team action
+
+---
+
+## 1. Dead Code
+
+| # | File | What | Confidence |
+|---|------|------|------------|
+| D1 | `server/src/engine/dispatcher.ts` | Entire file deprecated — replaced by `heartbeat.ts` (Phase 3). Still imported but never called. | **High** |
+| D2 | `server/src/sdk/hook-pipeline.ts` | Orphaned hook system. Output validation runs via `services/output-validator.ts` + `engine/stepper.ts`. Zero consumers. | **High** |
+| D3 | `server/src/services/irl-gallery.ts` | Unused IRL gallery fetch from GitHub (`bradygaster/Squad-IRL`). Superseded by bundled starters. | **High** |
+| D4 | `server/src/services/irl-mapper.ts` | Companion to irl-gallery. Also violates layering: imports from `routes/ceremonies.ts`. | **High** |
+| D5 | `server/src/services/templates/workflow-template.ts` | Orphaned workflow template service — no imports outside itself. | **High** |
+| D6 | `server/src/services/user-paths.ts` | Path-browsing utility with zero importers. | **High** |
+| D7 | `server/src/services/starter-ceremony-loader.ts` | Runtime-dead ceremony loader. Only tested, never called from route or service code. | **High** |
+| D8 | `server/src/data/starters/*/\*.workflow.yaml` | Bundled YAML assets reachable only via the dead starter-ceremony-loader. | **High** |
+| D9 | `server/src/services/starter-projects.ts` | Unused exports: `getStarterManifest`, `_resetStarterCacheForTests`. | **High** |
+| D10 | `server/src/scripts/seed-wave10-backlog.ts` | One-off dogfood script not wired to CLI/runtime. | **Medium** |
+| D11 | `server/src/scripts/smoke-loop-mcp.ts` | Manual smoke test, not wired to CLI/runtime. | **Medium** |
+| D12 | `client/src/api/workflows.ts` | Marked DEPRECATED Phase 10 shim. | **High** |
+| D13 | `client/src/api/ralph-monitor.ts` | API module with zero consumers in the client. | **Medium** |
+| D14 | `client/src/realtime/useOptimisticIssue.ts` | Hook exported but never imported anywhere. | **Medium** |
+| D15 | `client/src/components/inbox/CaptureFab.tsx` | Deprecated component, zero importers. | **Low** |
+| D16 | `server/src/db/.deprecated/postgres.ts` | Deprecated but still referenced by legacy migration script — acceptable for now. | **Low** |
+| D17 | `server/src/sdk/cost-tracker.ts:78` | TODO for cache-write cost, unfixed for multiple releases. | **Low** |
+
+---
+
+## 2. Architecture Issues
+
+| # | Severity | Description |
+|---|----------|-------------|
+| A1 | **High** | **Electron `main` entry mismatch.** `package.json` declares `"main": "out/main/index.js"` but build config targets `dist/`. Runtime will fail on `electron .`. |
+| A2 | **High** | **Electron renderer is a health-check stub**, not the real client. Claims to embed `@sabbour/squadboard-client` but renderer imports zero client code. |
+| A3 | **High** | **`irl-mapper.ts` imports from route layer.** Service imports `runTranslateForNarrative` from `routes/ceremonies.ts`. This reverses the dependency direction (service → route). |
+| A4 | **Medium** | **CLI is tightly coupled to server internals.** Hardcodes path to `packages/server/dist/index.js`, port 3000, and detects ready state by parsing log output. |
+| A5 | **Medium** | **Electron IPC allowlist duplicated.** `ipc-channels.ts` defines `IPC_CHANNELS` and `preload/index.ts` maintains a separate `ALLOWED_CHANNELS` with the same strings — drift risk. |
+| A6 | **Medium** | **Duplicate SIGINT/SIGTERM handlers.** PGlite exits directly while `index.ts` also runs graceful shutdown; cleanup order undefined. |
+| A7 | **Medium** | **Graceful shutdown never closes WS server/clients.** `server.close()` runs but upgraded WebSocket connections remain open. |
+| A8 | **Low** | **SDK public surface broader than consumption.** Scribe primitives exported but only used internally/tests. Not harmful but signals surface-area creep. |
+
+---
+
+## 3. Security Gaps
+
+| # | Severity | Category | Description | Impact |
+|---|----------|----------|-------------|--------|
+| S1 | **High** | auth | **WebSocket endpoint bypasses auth/CSRF entirely.** Attached to raw `httpServer`, assigns `randomUUID()` identity. Anyone can connect, subscribe to any channel, and spoof presence. | Unauthenticated real-time data access, presence spoofing. |
+| S2 | **High** | race-condition | **PGlite singleton has no init/restart mutex.** Concurrent close/reopen can produce stale handles. | Data loss, torn restarts, integrity failures. |
+| S3 | **High** | race-condition | **Sweeper lease reclaim is read-then-write without rechecking status.** Can reset a completed step to `pending`. | Duplicate work, workflow corruption. |
+| S4 | **High** | race-condition | **Workflow runner advancement is non-atomic.** Child creation, step completion, rewinds, and index advancement happen across multiple statements with no transaction. | Duplicate child runs, double-advance, inconsistent state. |
+| S5 | **High** | secrets | **SDK bundle schema allows plaintext MCP env secrets** in portable artifacts (`env?: Record<string, string>`). No redaction, encryption, or documentation warning. | Secret leakage in exported/shared bundles. |
+| S6 | **Medium** | auth | **Auth is opt-in and single-token.** If `SQUADBOARD_AUTH_TOKEN` is unset, every HTTP route is public. If set, all callers share one bearer token with full access. | No per-user authorization; accidental open deployment. |
+| S7 | **Medium** | validation | **No schema validation on project creation.** `req.body` cast-then-falsy-checked in `routes/projects.ts`. | Malformed payloads reach filesystem/init code. |
+| S8 | **Medium** | path-traversal | **Starter materialization accepts caller-supplied absolute path.** With weak auth, scaffolding can write to arbitrary locations. | File-system write to unintended directories. |
+| S9 | **Medium** | secrets | **Secret-key write trusts DB project paths without realpath/symlink/containment checks.** | `.secret-key` redirected outside project workspace. |
+| S10 | **Medium** | secrets | **Hardcoded legacy DB credentials** (`squadboard`/`squadboard`) in deprecated migration path. | Source-exposed credential for leftover instances. |
+| S11 | **Medium** | security | **Hardcoded `http://localhost:3000`** fallbacks in client API modules (`runs.ts`, `git.ts`, `RunOutputPanel`). | Mixed-content / wrong-origin in non-local deployments. |
+
+---
+
+## 4. Missing Documentation
+
+| # | What's Missing | Impact |
+|---|----------------|--------|
+| M1 | **No README** for `packages/squadboard-sdk/`. Published npm package with zero consumer guidance. | High — third-party consumers have no entry point. |
+| M2 | **No README** for `packages/cli/`. Published npm package; usage only in embedded help string. | Medium — `npx` users see no guidance. |
+| M3 | **No README** for `packages/server/`. Primary runtime package. | Medium — contributors/ops have no entry point. |
+| M4 | **Client README** is skeletal — no route map, API conventions, realtime model, or auth/security notes. | Low — internal package, but slows onboarding. |
+| M5 | **SDK scribe primitives** (`step-8-health-report.ts`) export public types (`BacklogSnapshot`, `SpawnLineageEntry`, etc.) with no JSDoc. | Low — SDK expansion risk. |
+| M6 | **No API-level JSDoc** across most server route/service files. | Low — mitigated by good naming but hurts discoverability. |
+
+---
+
+## 5. Top 5 Recommendations (Prioritized)
+
+### R1. Fix WebSocket auth bypass (S1) — **Critical**
+Wire WS upgrade through Express middleware so `SQUADBOARD_AUTH_TOKEN` is enforced. Add origin checking. This is the single largest attack surface.
+
+### R2. Add transactions / CAS to workflow runner + sweeper (S3, S4) — **Critical**
+Wrap step completion + child creation in a DB transaction. Add a `WHERE status = 'pending'` guard to sweeper updates. Without this, concurrent workers corrupt workflow state.
+
+### R3. Delete dead code in server (D1–D11) — **High**
+Remove `dispatcher.ts`, `hook-pipeline.ts`, `irl-gallery.ts`, `irl-mapper.ts`, `workflow-template.ts`, `user-paths.ts`, `starter-ceremony-loader.ts`, and the dead workflow YAMLs. This is ~1500 lines of confusion and maintenance drag.
+
+### R4. Fix Electron package (A1, A2) — **High**
+Align `main` entry to build output directory. Replace the health-check stub renderer with the real client embed. Until then, `electron:dev` ships a broken app.
+
+### R5. Add input validation + path containment (S7, S8, S9) — **Medium**
+Add Zod schemas to project creation and starter materialization. Constrain starter `projectPath` to an allowed root. Add realpath/containment checks in `secret-key.ts`.
+
+---
+
+## Scope & Method
+
+- 467 TypeScript files scanned (250 non-test production source files)
+- Server, client, SDK, CLI, Electron packages all audited
+- Cross-referenced every module import graph via repo-wide grep
+- Verified findings against existing test suites (middleware-auth, middleware-csrf, process-handlers: 31/31 passed)
+- TypeScript builds verified for client, SDK, electron, CLI — all passed
+
+**Next:** Team should triage R1–R5 into sprint backlog. D-category items are safe to delete in a single cleanup PR with no functional impact.
+
+
+# Entry from mcmanus-release-security-plan.md
+
+# Decision: Release & Security Plan for Initial GitHub Push
+
+**Date:** 2026-05-20  
+**By:** McManus (Lead Architect)  
+**Status:** Proposed  
+**Scope:** Pre-push blockers, security findings, publish readiness
+
+---
+
+## 1. Release Readiness — Push to GitHub
+
+### BLOCKERS (must fix before push)
+
+| # | Issue | Severity | Fix |
+|---|-------|----------|-----|
+| B1 | **No git remote configured** | Critical | `gh repo create sabbour/squadboard --private --source=. --push` (start private, open later) |
+| B2 | **Git history contains 449 MB of committed `node_modules/` and `dist/` blobs** (152 MB copilot binary, 27 MB embedded-postgres libs, 22 MB vite cache) | Critical | Run `git filter-repo --invert-paths --path node_modules/ --path packages/server/dist/ --path packages/client/node_modules/` OR use BFG Repo Cleaner before first push. Without this, clone is >400 MB. |
+| B3 | **No LICENSE file** | High | MIT is declared in all `package.json` files but no root `LICENSE` file exists. Add standard MIT text with `© 2026 Ahmed Sabbour`. npm publish will warn without it. |
+
+### Pre-push checklist (after blockers resolved)
+
+```bash
+# Validate builds
+pnpm install --frozen-lockfile
+pnpm run npm:build
+pnpm run npm:publish:dry-run
+
+# Verify no secrets in tracked files
+git ls-files | xargs grep -l "PRIVATE_KEY\|sk-\|ghp_\|Bearer [A-Za-z0-9]" 2>/dev/null
+
+# Verify .gitignore coverage
+git status --short  # should show no untracked sensitive files
+
+# Validate CI config parses
+act --list  # or: gh act -l (if act installed)
+```
+
+### npm Publish Readiness
+
+| Package | Version | Private | Publish-ready |
+|---------|---------|---------|---------------|
+| `@sabbour/squadboard-sdk` | 0.1.0-prealpha.0 | No | ✅ (`files`, `exports`, `publishConfig` correct) |
+| `@sabbour/squadboard-cli` | 0.1.0-prealpha.0 | No | ✅ (`bin`, `files`, `publishConfig` correct) |
+| `@sabbour/squadboard` (server MCP) | 0.1.0-prealpha.0 | No | ✅ (`files`, `publishConfig` correct) |
+| Monorepo root | 0.1.0-prealpha.0 | Yes (private) | N/A — not published |
+
+---
+
+## 2. Security Review Findings
+
+### HIGH
+
+| # | Finding | Location | Risk |
+|---|---------|----------|------|
+| S1 | **Error messages leak internal details to HTTP clients** | `routes/projects.ts:280,322,330` + 74 `console.error` lines in routes | 500 responses include raw `err.message` which can expose DB schema, file paths, PGlite internals. Should sanitize to generic message + log detail server-side only. |
+| S2 | **Auth is no-op by default** | `middleware/auth.ts` | Acceptable for local-first pre-alpha, but any hosted deployment MUST set `SQUADBOARD_AUTH_TOKEN`. Document this prominently in README deploy section. |
+| S3 | **No CORS middleware** | `index.ts` — no `cors()` call found | Local-only is fine. If ever exposed on a network, browser requests from other origins are unprotected. Add `cors({ origin: ... })` before any hosted deployment. |
+
+### MEDIUM
+
+| # | Finding | Location | Risk |
+|---|---------|----------|------|
+| S4 | **Folder deletion is powerful but well-guarded** | `routes/projects.ts:150-219` | Guards are excellent (refuse root, home, cwd, ancestors, require `.squad` dir presence). No path traversal via `..` — uses `path.resolve()`. ✅ Pass. One gap: symlink targets are not resolved — a symlink at a "safe" path could point to an unsafe target. Low likelihood but worth a `fs.realpath()` check. |
+| S5 | **PGlite OID retry fallback exposes raw SQL bypass** | `routes/projects.ts:222-249` | `deleteProjectMetadataWithPgliteTriggerBypass` uses direct `pool.query` with parameterized queries — no injection risk, but bypasses ORM-level constraints. Acceptable PGlite workaround; add comment explaining risk. |
+| S6 | **No rate limiting on any endpoint** | Server-wide | Fine for local single-user. Flag for hosted multi-tenant. |
+| S7 | **Hardcoded `localhost:3000`** in CLI tools | `cli/backup.ts`, `cli/dedupe-cards.ts`, `scripts/verify-migration.ts` | Not a security risk per se, but prevents configurable deployments. Low priority. |
+
+### LOW
+
+| # | Finding | Location | Risk |
+|---|---------|----------|------|
+| S8 | Secret-key module is sound | `services/secret-key.ts` | AES-256-GCM, proper IV generation, `.squad/.secret-key` gitignored. ✅ |
+| S9 | SQL queries are parameterized | `services/ralph-monitor.ts`, `services/issues.ts`, etc. | All use `$1` placeholders. No concatenation. ✅ |
+| S10 | Branch name and comment body sanitization exists | `services/github-git-ops.ts` | Null bytes and ANSI stripped. ✅ |
+| S11 | Attachment filenames sanitized | `services/issue-attachments.ts:69` | ✅ |
+
+### Dead Code / Quality Notes
+
+| # | Item | Action |
+|---|------|--------|
+| Q1 | `packages/server/src/db/.deprecated/postgres.ts` | Remove before publish — dead code with hardcoded local credentials |
+| Q2 | `packages/squadboard/` (coordinator-fragment) | Marked `private: true` and DEPRECATED in description. Harmless but confusing — consider removing from workspace. |
+| Q3 | `.server-dev.log`, `.verify.log`, `.srv-verify.log` in repo root | Gitignored but present on disk — delete from working tree before screenshots/demos. |
+
+---
+
+## 3. Top 3 Fix Priorities (ordered)
+
+1. **Clean git history** (B2) — Without this, the repo is un-pushable at 449 MB. Run `git filter-repo` to strip `node_modules/` and `dist/` from all commits.
+
+2. **Add LICENSE file** (B3) — One-liner fix. Required for open-source credibility and npm publish compliance.
+
+3. **Sanitize error responses** (S1) — Replace `err.message` in HTTP 500 bodies with a generic string; keep detail in server logs. The existing `api-error-sanitization` skill (`.squad/skills/`) suggests this was already identified — execute it.
+
+---
+
+## 4. Recommended Push Sequence
+
+```
+1. git filter-repo --invert-paths --path node_modules/ --path "packages/server/dist/" --path "packages/client/node_modules/"
+2. Add LICENSE (MIT)
+3. Verify: pnpm run npm:build && pnpm run npm:publish:dry-run
+4. gh repo create sabbour/squadboard --private --source=. --remote=origin --push
+5. gh repo edit sabbour/squadboard --visibility public   # when ready
+6. Tag: git tag v0.1.0-prealpha.0 && git push --tags
+7. Publish: pnpm run npm:publish (remove --dry-run)
+```
+
+---
+
+## Decision
+
+- Start with **private** GitHub repo; flip to public after confirming no secrets in cleaned history.
+- Do NOT publish to npm until git history is clean and LICENSE exists.
+- Error sanitization is the first code change after push (non-blocking for initial private push).
+- Symlink resolution in folder-delete guard is a follow-up (S4) — not blocking.
+
+
+# Entry from mcmanus-squad-doc-review-contract.md
+
+# Squad Doc Review contract
+
+**By:** McManus
+**Status:** Product contract recorded; backend/platform work still required.
+
+## Decision
+
+Squad Doc Review should have two triggers:
+
+1. A scheduled review, weekly by default and configurable per project.
+2. Manual **Run now**, with optional context for selected docs, changed docs, or the configured source.
+
+Manual firing must be a reusable platform capability for all ceremonies, not an app-specific button or endpoint.
+
+## Final action
+
+The default final action is to create or update Squadboard review findings/issues grouped by doc path. Each finding needs suggested fixes, severity, owner recommendation, source revision, and review profile.
+
+The app must not auto-edit docs by default. Optional future PR drafting is a separate explicit action after human approval.
+
+## App-specific config
+
+Squad Doc Review owns:
+
+- repo and docs globs
+- cadence/timezone
+- stale threshold
+- review rubric/profile
+- triage labels/stages
+- final-action policy
+
+The platform owns:
+
+- scheduled execution
+- manual Run now with typed context
+- changed/stale doc enumeration and cursor storage
+- dedupe by repo/path/blob-or-commit/profile
+- creating/updating review findings/issues
+
+## Acceptance criteria for implementation
+
+- Installing the app persists the doc-review config into durable project/runtime state.
+- Installing the scheduled ceremony creates or offers to create a `ceremony_schedules` row from the configured weekly cron.
+- `POST /ceremonies/:id/run` accepts reusable context, not just `anchorIssueId`.
+- The workflow runner or a platform tool can enumerate changed/stale docs and return a deduped candidate batch.
+- The final action persists grouped review issues and never edits docs unless a future explicit PR-drafting action is selected.
+
+
+# Entry from mcmanus-squad-issues-router-contract.md
+
+# Squad Issues Router contract
+
+**By:** McManus
+**Status:** Product contract recorded; backend work still required.
+
+## Decision
+
+Squad Issues Router is a GitHub issue intake and triage app for `bradygaster/squad`, not a documentation review app.
+
+The app should keep the board small: `Triage`, `Needs Info`, and `Done`. Maintainer escalation, docs routing, good-first-issue suitability, and duplicate risk belong in triage output and labels/routing, not separate default columns.
+
+## Reusable primitive
+
+The required reusable primitive is `squadboard.github-issue-intake.v1`:
+
+1. Fetch GitHub issues incrementally from a configured owner/repo/query.
+2. Exclude pull requests.
+3. Use a durable cursor, initially `projects.github_sync_last_at`.
+4. Dedupe/upsert by `github_issue_number` and `github_node_id`.
+5. Route new or changed issues into the configured target column.
+6. Trigger the configured triage ceremony for changed cards.
+
+## App-specific config
+
+Squad Issues Router config is only:
+
+- source repo: `bradygaster/squad`
+- state/query: open issues
+- cadence: every 6 hours
+- target column: `triage`
+- triage ceremony: `squad-issue-triage`
+- agents/routing copy specific to Squad maintainers
+
+## Blockers
+
+- `project.settings.githubIssueIntake` in the bundle is contract metadata today; the installer does not persist it as durable project runtime state.
+- `on_schedule` ceremonies installed from bundles do not create `ceremony_schedules` rows automatically.
+- The current workflow runner has no first-class step that fetches GitHub issues, writes deduped cards, updates the cursor, and returns the changed batch.
+
+Until those blockers are fixed, app copy must describe a declared contract/operating model, not claim automatic scheduled import works.
+
+
+# Entry from mcmanus-squad-sync-authority.md
+
+# McManus decision — Squad Sync project authority evidence
+
+## Decision
+
+Squad Sync status must use project-level authority before process-wide storage defaults. New projects can persist `projects.storage_provider_mode`; legacy rows are inferred from evidence:
+
+1. Explicit project mode wins.
+2. Existing `squad_storage` rows mean PostgreSQL authority.
+3. Existing `.squad/` files with no imported DB rows mean filesystem authority.
+4. Process defaults are only fallback evidence, not proof of project authority.
+
+## Rationale
+
+CLI/Copilot-first projects should not appear PostgreSQL-backed just because Squadboard is running with a PostgreSQL/PGlite-capable runtime. Database authority requires project metadata or imported DB state.
+
+## Follow-on product decisions
+
+- Project diagnostics should include Squad Sync health/authority, but only in project-scoped diagnostics. Global diagnostics should not guess a project authority.
+- There is no continuous sync toggle in this wave. PostgreSQL authority operates through the generated agent file plus Squadboard MCP/API broker; filesystem projection is an explicit manual export.
+- Squad Sync repair UI is preview-first. Buttons should say `Preview Repair` / `Preview Export`, run dry-run only, and list proposed file changes before any future apply-confirmation flow can mutate state.
+
+
+# Entry from mcmanus-work-pickup-metrics.md
+
+# McManus Decision — Work Pickup Metrics Contract
+
+Date: 2026-05-20
+Owner: McManus
+
+## Decision
+
+Ready pickup must record two distinct artifacts when it dispatches a card:
+
+1. exactly one queued `issue_run` for the selected project agent; and
+2. exactly one completed Work Pickup `workflow_run` spawned through the real `board.ready` agent-signal ceremony and therefore visible to `/api/projects/:id/analytics/workflows`.
+
+The Work Pickup workflow run is a health/ceremony accounting artifact. It must be completed immediately by pickup recording and must not be advanced by the workflow runner into additional agent `issue_runs`.
+
+## Why
+
+Agent leaderboard and Workflow Health must agree on pickup activity without double-counting work. Mocking `emitSignal` is insufficient; the regression gate is the real DB + Work Pickup workflow + analytics route path.
+
+## Regression
+
+`packages/server/src/__tests__/pickup-ready-workflow-analytics.integration.test.ts` seeds a real PGlite project with the built-in Work Pickup YAML, runs `pickupReadySweep.run()`, and asserts:
+
+- one pending agent `issue_run`;
+- one completed Work Pickup `workflow_run` with completed step runs;
+- Work Pickup workflow analytics reports `runsTotal=1`, `completedRuns=1`;
+- agent analytics reports one run, proving no duplicate agent run was created.
+
+
+# Entry from redfoot-deep-review-docs.md
+
+# Documentation Gaps Audit — Redfoot Deep Review
+
+**Date:** 2026-05-20  
+**Author:** Redfoot (DevRel / Docs)  
+**Scope:** Full-repo documentation audit
+
+---
+
+## 1. README Status
+
+### Root README ✅ Strong
+- **612 lines**, covers: what it is, who it's for, install, first run, CLI reference, MCP integration, GitHub sync (PAT + App), cross-surface sync, test coverage inventory.
+- Badges present: license (MIT), Node.js ≥20, self-hosted, pre-alpha status.
+- Install commands match `package.json` (`pnpm install`, Node ≥20, pnpm ≥8).
+- First-run section has a "60-second click-through" walkthrough.
+- Code examples are plentiful and appear correct.
+
+**Missing from root README:**
+- **npm version badge** — packages publish to `@sabbour/squadboard-*` on npm but no `npm version` shield exists.
+- **CI status badge** — `.github/workflows/ci.yml` exists but no CI badge in README.
+- **Contributing section** — no `CONTRIBUTING.md` linked or inline guidance.
+- **Table of contents** — at 612 lines, the README would benefit from a ToC.
+
+### CHANGELOG.md ✅ Exists
+- Follows Keep a Changelog format. Has `[Unreleased]` and `Wave 10` sections. Thorough.
+
+### Package-Level READMEs
+
+| Package | README | Quality |
+|---------|--------|---------|
+| `packages/client` | ✅ Exists | Good — loading patterns, dev commands |
+| `packages/electron` | ✅ Exists | Good — architecture, running, build prereqs |
+| `packages/server/src/mcp/` | ✅ Exists | Good — transport table, 11 tools documented |
+| `packages/cli` | ❌ **MISSING** | Critical gap — this is the published `@sabbour/squadboard-cli` |
+| `packages/server` | ❌ **MISSING** | Critical gap — the core `@sabbour/squadboard` package |
+| `packages/squadboard` | ❌ **MISSING** | coordinator-fragment package, no README |
+| `packages/squadboard-sdk` | ❌ **MISSING** | Published `@sabbour/squadboard-sdk`, no README |
+| `packages/e2e` | ❌ **MISSING** | Test package, lower priority |
+| `packages/docs-site` | (is the docs site itself) | N/A |
+
+**4 of 6 publishable/major packages have no README.**
+
+---
+
+## 2. Getting Started Gaps
+
+### Can a new dev clone-and-run from README alone?
+
+**Mostly yes**, with caveats:
+- Prerequisites section covers Node ≥20 and pnpm ≥8. ✅
+- `pnpm install` → `npm start` → open browser. ✅
+- PGlite auto-manages DB. ✅
+
+**Gaps:**
+- No mention of **Git** as a prerequisite (implicit but worth stating).
+- No mention of required **disk space** or **OS compatibility** beyond "macOS, Windows, Linux (including linux/arm64)."
+- The docs-site Getting Started section has 4 tutorials, a quickstart, installation page, and learning path — good coverage.
+- **No `.env.example`** file or env var reference table in the README. The README mentions `DATABASE_URL`, `SQUADBOARD_DEFAULT_PROJECT_ID`, `SQUADBOARD_SQUAD_STORAGE_PROVIDER`, `COORDINATOR_DISPATCH_ENABLED` in scattered places but there's no single reference.
+
+---
+
+## 3. API Documentation Gaps
+
+### REST Endpoints
+- **129 route handlers** across **41 route files**.
+- **No OpenAPI/Swagger spec** exists. No `openapi.yaml`, no auto-generated docs.
+- The README documents GitHub sync endpoints inline (PUT/GET for `/api/projects/:id/github`).
+- The README documents squad-sync endpoints (`/api/projects/:id/squad-sync/status`, `/repair`).
+- **The vast majority of the 129 endpoints are undocumented** outside the source code. No complete endpoint list exists anywhere.
+
+### MCP Tools
+- **Well documented** in `packages/server/src/mcp/README.md` — 11 core tools + GitHub run tools with JSON-RPC examples.
+- Also documented in docs-site `user-guide/mcp.mdx`.
+- ✅ This is the best-documented API surface.
+
+### WebSocket Protocol
+- **Partially documented** in source code (`ws-server.ts` has a thorough header comment listing all message types).
+- **Not documented in any user-facing doc.** No docs-site page, no README section describing the WS protocol envelope format `{ type, payload }`, client→server messages, or server→client events.
+
+### CLI Commands
+- CLI has a `USAGE` string in source with `squadboard init`, `squadboard mcp`, and flags.
+- README covers `squadboard init`, `squadboard mcp`, `squadboard start --squad-storage`, `squadboard init --write-mcp-config`.
+- **No dedicated CLI reference page** in docs-site. CLI is documented inline in README only.
+
+---
+
+## 4. Workflow YAML Cookbook
+
+### Ceremony/Workflow Docs ✅ Good
+- `docs/ceremonies/` has 5 files: README, authoring, lifecycle, triggers, yaml-reference.
+- `yaml-reference.md` is a thorough schema reference (apiVersion, kind, metadata, spec fields).
+- 7 built-in `.workflow.yaml` files exist under `packages/server/src/ceremonies/built-in/`.
+- Additional starter workflows in `packages/server/src/data/starters/`.
+
+**Gaps:**
+- **No standalone "cookbook" page** in docs-site with copy-paste recipes for common scenarios (e.g., "simple PR review", "triage → assign → review", "fan-out to 3 agents").
+- The `docs/ceremonies/` content is **not surfaced in the docs-site** — it lives only in the `docs/` directory, not under `packages/docs-site/docs/`. The docs-site has `user-guide/ceremonies-workflows.md` but that's a separate page, not a duplication of the reference content.
+
+---
+
+## 5. Missing Code-Level Docs
+
+### SDK (`packages/squadboard-sdk`)
+- 54 exports, 78 JSDoc blocks → **~1.4 JSDoc per export** — reasonable coverage. Most types have descriptions.
+
+### Server Services
+- 366 exported symbols, 233 JSDoc blocks → **~64% coverage**. The 36% gap is concentrated in utility functions and internal helpers.
+
+### Server Routes
+- 93 JSDoc blocks across 41 route files → **~2.3 per file**. Route-level documentation is sparse; most handlers lack per-endpoint doc comments.
+
+### Areas with weak JSDoc:
+- Route handlers (the 129 handlers are mostly undocumented)
+- Internal coordinator logic
+- Realtime/WebSocket module (4 files, minimal inline docs beyond the header)
+
+---
+
+## 6. Docs Site Assessment
+
+### Structure ✅ Comprehensive
+- **41 pages** across: Getting Started (6), User Guide (15), Features (8), Developer Guide (3), Reference (3), plus intro.
+- Docusaurus with Mermaid support.
+- Architecture page with sequence diagrams.
+- Tutorials are sequential and well-structured.
+
+### Gaps
+- **No REST API reference page** — the Reference section only has FAQ + Troubleshooting.
+- **No CLI reference page** in docs-site.
+- **No WebSocket protocol page**.
+- **No env var reference page**.
+- **Ceremony YAML reference** lives in `docs/ceremonies/` but not mirrored in docs-site.
+- Troubleshooting page is **thin** — only 4 items. Needs expansion.
+- **No search** configured (Docusaurus supports Algolia DocSearch but it's not set up).
+- Docs-site link from README points to raw file path `packages/docs-site/docs/` (works on GitHub but not ideal — should point to deployed URL if one exists).
+
+---
+
+## 7. Top 5 Documentation Priorities (ranked by user impact)
+
+### P1: Package READMEs for published packages
+**Impact:** Anyone who `npm install @sabbour/squadboard-sdk` or `@sabbour/squadboard-cli` lands on an npm page with no README. This is the first-impression surface for new users.  
+**Packages:** cli, server, squadboard-sdk (3 published packages, 0 READMEs)  
+**Effort:** Medium (half-day each)
+
+### P2: REST API endpoint reference
+**Impact:** 129 route handlers with no consolidated documentation. Any developer building on the API has to read source code.  
+**Action:** Generate an endpoint table (method, path, description, auth) or adopt OpenAPI.  
+**Effort:** Large (2-3 days for a complete reference)
+
+### P3: Environment variable reference
+**Impact:** Scattered env var mentions across README and docs-site. No single page lists all config knobs (`DATABASE_URL`, `SQUADBOARD_DEFAULT_PROJECT_ID`, `SQUADBOARD_SQUAD_STORAGE_PROVIDER`, `COORDINATOR_DISPATCH_ENABLED`, port settings, etc.).  
+**Action:** Create a Configuration Reference page in docs-site.  
+**Effort:** Small (half-day)
+
+### P4: WebSocket protocol documentation
+**Impact:** Real-time features are core to the product. The WS protocol is only documented in a source-code comment. Any client integration needs this.  
+**Action:** Surface the `ws-server.ts` protocol spec as a docs-site reference page.  
+**Effort:** Small (half-day)
+
+### P5: CI badge + npm version badges + Contributing guide
+**Impact:** Open-source credibility signals. CI badge shows build health, npm badges show latest version, Contributing guide welcomes contributors.  
+**Action:** Add 2 badges to README, create CONTRIBUTING.md.  
+**Effort:** Small (2 hours)
+
+---
+
+## Summary Scorecard
+
+| Area | Score | Notes |
+|------|-------|-------|
+| Root README | ⭐⭐⭐⭐ | Thorough but needs ToC, badges, contributing |
+| Package READMEs | ⭐⭐ | 2 of 8 packages have READMEs; 3 published packages lack them |
+| Getting Started | ⭐⭐⭐⭐ | Docs-site tutorials + README walkthrough cover the happy path |
+| API Docs | ⭐ | MCP tools documented; 129 REST endpoints undocumented |
+| Ceremony/YAML Docs | ⭐⭐⭐⭐ | Strong reference in docs/ceremonies/; needs docs-site surfacing |
+| Code-Level Docs | ⭐⭐⭐ | SDK well-covered; routes and services partially covered |
+| Docs Site | ⭐⭐⭐ | Good structure, missing reference pages (API, CLI, WS, env vars) |
+| CHANGELOG | ⭐⭐⭐⭐⭐ | Thorough, follows Keep a Changelog |
+
+
+# Entry from redfoot-docs-review-plan.md
+
+# DECISION: Docs Overhaul Strategy — Three-Tier Architecture
+**Captured by:** Redfoot (DevRel/Docs)  
+**Date:** 2026-05-20T00:55:40Z  
+**Status:** Ready for review; awaiting Ahmed approval to proceed with Phase 1  
+**Related:** Task `docs-review-plan`
+
+---
+
+## Problem Statement
+
+Docs are practically unusable. Users report three specific pain points:
+1. **No guidance on creating and publishing Squad Apps** (where to start, how to test, publish flow)
+2. **E2E testing is invisible** (no user-facing guide; test suite exists but undocumented)
+3. **GitHub publishing workflows unclear** (multiple docs scattered, no clear checklist)
+
+**Root cause:** Three-tier docs setup is fragmented (README + internal `/docs/` + public Docusaurus), with no clear entry point or navigation between tiers.
+
+---
+
+## Solution: Three-Tier Information Architecture
+
+### Tier 1: README.md (Project Root)
+**Audience:** GitHub landing page visitors, CI integrations  
+**Purpose:** Universal hub; answer "where do I start?"  
+**Changes:**
+- Add "Typical Workflows" section with 3 quick links:
+  - Getting Started (for new installs)
+  - Create Squad App (for app builders)
+  - Publishing a Release (for maintainers)
+- Keep pre-alpha warning, prerequisites, installation steps
+- Add link to live docs site
+
+### Tier 2: Docusaurus Site (`packages/docs-site/docs/`)
+**Audience:** Users inside the app, web browsers  
+**Purpose:** Task-driven guided learning  
+**Changes:**
+- Reorganize getting-started with decision tree (3-path hub: Setup, Create, Test, Release)
+- Add `guides/` folder with 4 new guides:
+  - `create-squad-app.mdx` — Template → customize → test → export → publish
+  - `publish-and-release.mdx` — Checklist + pre-flight validation
+  - `testing-e2e.mdx` — How to run/write/debug tests
+  - `push-to-github.mdx` — Orchestrate existing GitHub docs
+- Upgrade quickstart with 4+ screenshots (board, agents, card, ceremony)
+- Add troubleshooting guide (diagnostic flowchart)
+
+### Tier 3: Internal Docs (`docs/`)
+**Audience:** Builders, architects, maintainers  
+**Purpose:** Architecture, decisions, specs  
+**Status:** Well-curated; make discoverable via Docusaurus link
+
+---
+
+## Deliverables (Phased)
+
+### Phase 1: HIGH PRIORITY (1 day)
+| File | Change | Owner | Time |
+|------|--------|-------|------|
+| `README.md` | Add workflow section + 3 links | Redfoot | 20 min |
+| `docs-site/getting-started/index.mdx` | Add hub/decision tree | Redfoot | 30 min |
+| `docs-site/getting-started/quickstart.mdx` | Add 4 screenshots | Fenster | 1 hr |
+| `docs-site/guides/create-squad-app.mdx` | **NEW** guide | Redfoot | 2 hrs |
+| `docs-site/guides/publish-and-release.mdx` | **NEW** guide | Redfoot | 2 hrs |
+| `docs-site/guides/testing-e2e.mdx` | **NEW** guide | Redfoot | 2.5 hrs |
+
+**Blockers:** Fenster for screenshots (external dependency)
+
+### Phase 2: MEDIUM PRIORITY (1 day, next iteration)
+- `guides/push-to-github.mdx` — Link + extend GitHub docs (1 hr)
+- `guides/troubleshooting-setup.mdx` — Diagnostic flowchart (2 hrs)
+- `docs/README.md` — Add discoverability link (30 min)
+- `developer-guide/` — Explain docs architecture (1 hr)
+
+### Phase 3: ONGOING
+- Screenshot audit & refresh (Fenster)
+- Tutorial visual flow upgrades
+- Link cross-references
+- Release notes template
+
+---
+
+## Acceptance Criteria
+
+**When does Phase 1 land?**
+- [ ] README loads with 3-path workflow section (no dead links)
+- [ ] Getting-started hub displays decision tree (which path do you want?)
+- [ ] Quickstart now has 4+ step-by-step screenshots
+- [ ] Three new guides exist and are linkable from hub:
+  - `create-squad-app.mdx`: includes 4+ runnable commands, example outputs
+  - `publish-and-release.mdx`: includes pre-flight checklist + dry-run example
+  - `testing-e2e.mdx`: includes run/write/debug examples
+- [ ] Docusaurus builds with no warnings; all internal links valid
+- [ ] User can complete: Install → Create App → Test Locally → Publish (with copy-paste CLI commands)
+
+**Success snapshot:**
+- User lands on GitHub, sees README, clicks "Create Squad App" → lands in guide with 5 runnable steps
+- User opens getting-started, sees 3-path decision tree, picks "I want to test my changes" → finds E2E guide
+- User wants to publish → finds release checklist with pre-flight validation
+
+---
+
+## Design Principles Locked
+
+1. **Tier 1/2/3 separation is canonical.** All team docs follow this pattern going forward.
+2. **README is the universal hub.** All other tiers link upward; users never get lost.
+3. **Show before tell.** New guides must include runnable commands + example output before explaining.
+4. **E2E and publishing are user-facing.** Not internal-only; make discoverable and approachable.
+5. **Terminology locked:** pre-alpha, ceremonies, Squad App vs. Template, cross-surface sync authority (from Wave 19).
+
+---
+
+## Open Questions for Steering
+
+1. **Screenshot hosting?** `/assets/` or `packages/docs-site/static/img/`?
+2. **E2E test coverage baseline?** Which workflows must E2E definitely cover before publishing?
+3. **Release cadence?** When is the first npm publish? (After Demo 15, or earlier?)
+4. **Squad App marketplace?** Assume GitHub Releases + npm, or also marketplace registry?
+
+---
+
+## Next Steps
+
+1. **Ahmed reviews:** Confirm Tier 1/2/3 approach, timeline, acceptance criteria.
+2. **Fenster coordinates:** Screenshot needs & timeline (1 hr effort).
+3. **Redfoot implements Phase 1:** Start with README + hub (30 min), then guides (6.5 hrs).
+4. **Kujan validates:** E2E guide accuracy against actual test suite.
+5. **Quinn merges:** Once Docusaurus builds cleanly and all links verified.
+
+
+
+# Entry from verbal-deep-review-websocket.md
+
+# Verbal — Deep WebSocket & Real-time Code Review
+
+**Date:** 2026-05-20  
+**Author:** Verbal  
+**Status:** Review findings  
+**Scope:** All WS server, client, EventEmitter fan-out, presence, live-output, SSE stream, useRunStream, useRealtimeBoard, usePresence
+
+---
+
+## Security Issues
+
+### S-1: No authentication on WebSocket upgrade (CRITICAL)
+**File:** `packages/server/src/realtime/ws-server.ts:213-216`  
+**Severity:** 🔴 Critical  
+**Description:** The WS server accepts ANY connection with no authentication. There is no JWT validation, no cookie check, no `verifyClient` callback on the `WebSocketServer` constructor. The `_req: IncomingMessage` parameter is received but completely ignored — no headers are inspected. Any network-reachable client can connect, subscribe to any project, and receive all real-time events (issue content, run output, session transcripts, presence data).  
+**PRD Gap:** The PRD specifies "project-scoped JWT subscriptions" but no JWT is implemented.
+
+### S-2: No project access control on subscribe (CRITICAL)
+**File:** `packages/server/src/realtime/ws-server.ts:121-131`  
+**Severity:** 🔴 Critical  
+**Description:** When a client sends `{ type: 'subscribe', projectId: '<any-uuid>' }`, the server subscribes them unconditionally. There is zero server-side validation that the client has access to that project. A malicious client can subscribe to every project by iterating UUIDs.
+
+### S-3: `__global__` subscription is unrestricted (HIGH)
+**File:** `packages/server/src/realtime/ws-server.ts:124-128`  
+**Severity:** 🟠 High  
+**Description:** Any client can subscribe to `__global__` and receive every event from every project. This is intended for the /now ops view but has no admin/operator gate.
+
+### S-4: No origin validation on WS upgrade (MEDIUM)
+**File:** `packages/server/src/realtime/ws-server.ts:213`  
+**Severity:** 🟡 Medium  
+**Description:** The WebSocketServer has no `verifyClient` that checks the `Origin` header. In a deployment with cookie-based auth, this would enable CSWSH (Cross-Site WebSocket Hijacking). Currently moot because there's no auth at all (S-1), but must be addressed when auth is added.
+
+### S-5: No message size limit (MEDIUM)
+**File:** `packages/server/src/realtime/ws-server.ts:213`  
+**Severity:** 🟡 Medium  
+**Description:** The `WebSocketServer` constructor does not set `maxPayload`. The `ws` library default is 100 MiB. A malicious client could send a 100 MiB JSON payload, causing the server to buffer and parse it, enabling DoS via memory pressure.
+
+### S-6: Arbitrary message handling without input validation (MEDIUM)
+**File:** `packages/server/src/realtime/ws-server.ts:108-171`  
+**Severity:** 🟡 Medium  
+**Description:** `handleMessage` trusts `msg.payload.projectId` directly — no UUID format validation, no sanitization. While the current code only uses it as a Map key (safe), passing unsanitized strings to `presence.ts` functions could become dangerous if those functions later interact with DB or filesystem.
+
+### S-7: Client can send `resubscribe` to replay consult events for any session (HIGH)
+**File:** `packages/server/src/realtime/ws-server.ts:152-165`  
+**Severity:** 🟠 High  
+**Description:** The `resubscribe` handler replays buffered consult events for any `sessionId` derived from the `projectId` field. No access check. A client can enumerate session IDs and replay all consult transcripts.
+
+---
+
+## Reliability Issues
+
+### R-1: `_flowHeartbeatLastEmit` map never evicted (MEDIUM)
+**File:** `packages/server/src/realtime/event-bus.ts:265`  
+**Severity:** 🟡 Medium  
+**Description:** The throttle map for `flow.instance.heartbeat` grows monotonically — entries are added per `instanceId` but never removed. Over a long-running server with thousands of runs, this becomes a memory leak. Comment says "O(active_instances)" but that's wrong — entries from finished instances persist.
+
+### R-2: SSE buffer maps never cleaned per session (MEDIUM)
+**File:** `packages/server/src/sdk/sse-stream.ts:36-37`  
+**Severity:** 🟡 Medium  
+**Description:** `buffers` and `seqCounters` maps grow per-session and are never cleaned up after a consult session completes. The `_resetBuffers()` function exists but is test-only. Over time, stale session buffers accumulate memory.
+
+### R-3: EventEmitter `'event'` has two listeners by default (LOW)
+**File:** `packages/server/src/realtime/ws-server.ts:255` + `packages/server/src/sdk/sse-stream.ts:57`  
+**Severity:** 🟢 Low  
+**Description:** Both `ws-server.ts` (`eventBus.on('event', onBusEvent)`) and `sse-stream.ts` (`eventBus.on('event', ...)`) subscribe to the `'event'` channel. The `setMaxListeners(512)` covers this, but each additional SSE subscriber or service adds to the count. Currently safe but worth monitoring.
+
+### R-4: No backpressure on WS send (MEDIUM)
+**File:** `packages/server/src/realtime/ws-server.ts:57-60`  
+**Severity:** 🟡 Medium  
+**Description:** The `send()` function fires-and-forgets via `ws.send(JSON.stringify(...))` with no check on the WS send buffer. If a client is slow to consume (e.g., mobile on poor connectivity), the Node.js WS send buffer grows unbounded until the connection is terminated by the 15s ping/pong (at best). During high-throughput bursts (many `run.output` chunks), this can cause significant memory pressure per slow client.
+
+### R-5: Server crash mid-broadcast loses all in-flight events (MEDIUM)
+**File:** `packages/server/src/realtime/event-bus.ts` (entire)  
+**Severity:** 🟡 Medium  
+**Description:** The EventEmitter is purely in-memory with no durable event log. If the server process crashes, all events between the last DB write and the crash are lost. Clients reconnecting after a crash have no cursor to resume from (the `resubscribe` handler only works for consult sessions, and only from the in-memory buffer which is also lost).
+
+### R-6: Reconnect cursor only works for consult events (HIGH)
+**File:** `packages/server/src/realtime/ws-server.ts:152-165`  
+**Severity:** 🟠 High  
+**Description:** The `resubscribe` message with `lastSeq` only replays buffered consult events (checked via `projectId.startsWith('consult:')`). For regular project events (issue.created, run.output, etc.), there is NO reconnect cursor. The PRD specifies `since-id` reconnect for all event types, but it's only implemented for consult sessions. Regular board clients that disconnect and reconnect miss all events during the gap.
+
+---
+
+## Dead Code
+
+### D-1: `run.failed` and `run.cancelled` — client subscribes, server never emits
+**File:** `packages/client/src/realtime/ws-client.ts:23-24`, `packages/client/src/realtime/useRealtimeBoard.ts:114-115`  
+**Description:** The client `WsEventMap` defines `run.failed` and `run.cancelled` event types, and `useRealtimeBoard` subscribes to both. But the server `RunEventType` union only contains `run.started | run.output | run.completed`. The server never emits `run.failed` or `run.cancelled`. These handlers are dead code.
+
+### D-2: `presence.snapshot` — client subscribes, server never emits
+**File:** `packages/client/src/realtime/ws-client.ts:31`, `packages/client/src/realtime/useRealtimeBoard.ts:117`, `packages/client/src/realtime/usePresence.ts:46`  
+**Description:** Both `useRealtimeBoard` and `usePresence` register handlers for `presence.snapshot`, but the server never emits this event type. It's not in the `PresenceEventType` union. The snapshot is expected from the REST endpoint only — the WS handler is dead code.
+
+### D-3: `presence.updated` — client subscribes, server emits `presence.moved`
+**File:** `packages/client/src/realtime/ws-client.ts:30`, `packages/client/src/realtime/useRealtimeBoard.ts:120`  
+**Description:** The client subscribes to `presence.updated` but the server emits `presence.moved`. These are different event names. The `presence.updated` handler never fires — it's dead code. This is a **name mismatch bug** (see B-2).
+
+### D-4: `assistant.thinking.start` / `assistant.thinking.stop` — typed but never emitted
+**File:** `packages/client/src/realtime/ws-client.ts:69-70`  
+**Description:** These event types are defined in `WsEventMap` but are not in the server's `BusEventType` union and no server code emits them. Dead type definitions.
+
+### D-5: `subscribeGlobal` method — defined but never called
+**File:** `packages/server/src/realtime/event-bus.ts:343-346`  
+**Description:** `EventBus.subscribeGlobal()` is defined but the WS server uses `eventBus.on('event', onBusEvent)` directly. The method is unused.
+
+---
+
+## Bugs
+
+### B-1: Client sends `type: 'presence'` but server expects `type: 'presence.cursor'` (BUG)
+**File:** `packages/client/src/realtime/ws-client.ts:173` → `packages/server/src/realtime/ws-server.ts:144`  
+**Description:** The client's `sendPresence()` sends `{ type: 'presence', issueId }` but the server's `handleMessage` only handles `type: 'presence.cursor'`. The server's `default` case returns an error `Unknown message type: presence`. **Cursor presence tracking is completely broken** — no user's cursor position is ever broadcast to other clients.  
+Additionally, the client doesn't include `projectId` in the payload, which `presence.cursor` requires.
+
+### B-2: Client listens for `presence.updated` but server emits `presence.moved` (BUG)
+**File:** `packages/client/src/realtime/ws-client.ts:30` vs `packages/server/src/realtime/event-bus.ts:27`  
+**Description:** Event name mismatch. Server emits `presence.moved`, client listens for `presence.updated`. Even if B-1 were fixed (so the server actually emits presence events), the client would never receive cursor updates due to the wrong event name.
+
+### B-3: Race condition between HTTP fetch and WS subscription in usePresence (LOW)
+**File:** `packages/client/src/realtime/usePresence.ts:14-19` + `22-57`  
+**Description:** `usePresence` fires an HTTP GET for the initial presence list AND separately relies on WS events. Between the HTTP response and the WS subscription being active, presence join/leave events can be missed. The two effects are independent — there's no synchronization between "got HTTP snapshot" and "WS is subscribed and receiving".
+
+### B-4: useRunStream catch-up doesn't deduplicate with optimistic WS events (LOW)
+**File:** `packages/client/src/hooks/useRunStream.ts:446-461`  
+**Description:** On WS reconnect, `fetchEvents(lastSeqRef.current)` is called. While this fetch is in-flight, WS events continue arriving. The `mergeEventRows` function deduplicates by `(eventType, seq)` composite key, which handles it correctly. However, if the HTTP response is slow and many WS events arrive first, the merge allocates a large intermediate array. Not a correctness bug but a minor efficiency concern.
+
+---
+
+## Missing Documentation
+
+### DOC-1: No WS protocol specification document
+**Description:** The WS protocol (message types, payload shapes, error codes) is documented only in code comments at the top of `ws-server.ts` (20 lines). There is no standalone protocol spec. The client `WsEventMap` type is the de facto reference but it's not discoverable by non-TypeScript clients.
+
+### DOC-2: Reconnect protocol is undocumented
+**Description:** The `resubscribe` message with `lastSeq` cursor is not documented anywhere except inline code. The limitation that it only works for consult sessions is not documented. The PRD mentions `since-id` reconnect but the implementation diverges significantly.
+
+### DOC-3: No error code reference
+**Description:** WS error messages are freeform strings (`"subscribe requires projectId"`, `"Unknown message type: ..."`, `"Invalid JSON"`). There is no error code enum or reference document.
+
+### DOC-4: `__global__` subscription is undocumented
+**Description:** The `__global__` magic room for ops views is documented only in code comments, not in any API reference.
+
+### DOC-5: Heartbeat (ping/pong) behavior is undocumented
+**Description:** The 15s ping/pong cycle and client termination on missed pong are documented in code and a test file but not in any user/operator-facing docs.
+
+---
+
+## Top 5 Priority Fixes
+
+| Priority | ID | Title | Rationale |
+|---|---|---|---|
+| **P0** | S-1 + S-2 | Add JWT auth on WS upgrade + project access validation | Any client can read all data from all projects. This is the single largest security gap in the system. |
+| **P0** | B-1 + B-2 | Fix client presence message type mismatch (`presence` → `presence.cursor`) + event name mismatch (`presence.updated` → `presence.moved`) | Cursor presence is 100% broken. Two-line fix with high user-visible impact. |
+| **P1** | R-6 | Implement since-id reconnect cursor for project events (not just consult) | Regular board clients lose all events on disconnect. The PRD mandates this. Use `event_log` table or in-memory ring buffer per project. |
+| **P1** | S-5 + R-4 | Add `maxPayload` to WS server + backpressure handling | DoS vector via oversized messages; memory pressure from slow clients. |
+| **P2** | D-1 + D-2 + D-4 | Clean up dead event types (run.failed/cancelled, presence.snapshot, assistant.thinking) | Misleading code that confuses developers about what the system actually does. |
+
+---
+
+## Summary
+
+The WebSocket layer is architecturally sound — the EventEmitter fan-out pattern, room-based routing, and dual-write to DB+WS are clean. However, the layer has **zero authentication**, two **completely broken** presence features (B-1, B-2), **no reconnect cursor** for regular project events (R-6), and several dead event types that suggest the client and server drifted apart over time. The security issues (S-1, S-2, S-7) must be fixed before any multi-tenant or public deployment.
+
