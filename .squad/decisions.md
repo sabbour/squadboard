@@ -1,3 +1,58 @@
+## 2026-05-20T14:07:58Z — Wave 5: Paperclip-Quality Docs Pass (Redfoot)
+
+# Decision: Comprehensive Documentation Quality Pass
+
+**Date:** 2026-05-20T14:01:32Z  
+**Owner:** Redfoot
+**Status:** ✅ IMPLEMENTED
+
+## Problem
+
+New users landing on `docs/intro.md` bounce due to:
+- Table-heavy introduction that doesn't explain what Squadboard is
+- Undefined key concepts (Ready column, agent run, ceremony, storage provider)
+- No task-oriented how-to guides for common actions
+- Missing migration path for Squad CLI users
+- Flat sidebar navigation
+
+## Solution
+
+Executed comprehensive documentation quality pass modeled after Paperclip's docs standard:
+
+1. **Rewrite `docs/intro.md`** — Hero copy with 5-card grid, removed tables
+2. **Add `docs/getting-started/what-is-squadboard.md`** — 90-second explainer
+3. **Add `docs/getting-started/key-concepts.md`** — Define 10 core terms
+4. **Add 3 how-to guides** in `docs/user-guide/how-to/`:
+   - move-card-to-ready.md (trigger agent run)
+   - find-why-run-failed.md (debug a failed run)
+   - add-squadboard-to-squad-project.md (migration path)
+5. **Update `sidebars.ts`** — Tiered navigation (Learn → Reference)
+
+## Quality Bar Applied
+
+- One job, one audience, one outcome per page
+- Paragraphs max 4 sentences
+- Code blocks for every command
+- Related page links at bottom
+- No preambles like "this document explains..."
+- Honest, direct, no hype (Paperclip style)
+
+## Deliverables
+
+**Commit:** 6a8e99115
+- 7 files changed
+- 323 insertions across 420+ total lines
+- All files task-focused, under 150 lines each
+- Sidebar nav now: Getting Started → Product Guide (Understand → Operate → How-to → Operations)
+
+## Next Steps
+
+- Monitor bounce rate on intro.md
+- Gather new-user feedback: "Did you understand what Squadboard is?"
+- Potential follow-up: video walkthroughs of 3 most common tasks
+
+---
+
 ## 2026-05-20T14:00:00Z — Wave 4 Decisions (Merged from Inbox)
 
 # Decision: Squad→Squadboard Onboarding Guide & Docs Index
