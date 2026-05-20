@@ -234,7 +234,6 @@ async function markFailed(
       updatedAt: now,
     })
     .where(eq(schema.issueRuns.id, issueRunId));
-  await syncRunIssueColumn(db, issueRunId, 'review');
 }
 
 async function syncRunIssueColumn(
