@@ -266,13 +266,13 @@ export function normalizeSquadSyncStatus(status: SquadSyncStatus): NormalizedSta
   const driftTitle = driftDetected
     ? 'Drift detected'
     : requiredGaps.length > 0 || recommendedGaps.length > 0
-      ? 'Projection gaps found'
-      : 'No projection gaps reported'
+      ? 'Sync files need attention'
+      : 'Sync files up to date'
   const driftMessage = status.drift?.message
     ?? status.drift?.summary
     ?? (requiredGaps.length > 0 || recommendedGaps.length > 0
-      ? `${requiredGaps.length} required and ${recommendedGaps.length} recommended artifact gaps are reported. Drift hashes are not exposed yet.`
-      : 'Required artifacts are present. Drift hashes are not exposed yet.')
+      ? `${requiredGaps.length} required and ${recommendedGaps.length} optional .squad files need attention.`
+      : 'All required .squad files are present.')
 
   const hasEvidence = artifacts.length > 0 || Boolean(status.summary)
   const needsNonBlockingRepair = driftDetected || recommendedGaps.length > 0
@@ -735,128 +735,150 @@ export function SquadSyncStatusPanel({ projectId }: SquadSyncStatusPanelProps) {
           maxWidth: 980,
         }}
       >
-      <div style={{ ...cardStyle, display: 'flex', flexDirection: 'column', gap: '12px' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap' }}>
-          <StatusPill tone={status.compatibilityTone}>{status.compatibilityTitle}</StatusPill>
-          <Button
-            appearance="secondary"
-            icon={statusQuery.isFetching ? <Spinner size="tiny" /> : <ArrowSync20Regular />}
-            disabled={statusQuery.isFetching}
-            onClick={() => void statusQuery.refetch()}
-          >
-            Refresh
-          </Button>
-        </div>
-        <Body1 style={{ display: 'block' }}>{status.compatibilityMessage}</Body1>
-        {(status.checkedAt || status.contractVersion) && (
-          <Caption1 style={{ color: tokens.colorNeutralForeground3 }}>
-            {status.checkedAt ? `Checked ${status.checkedAt}. ` : ''}
-            {status.contractVersion ? `Contract ${status.contractVersion}.` : ''}
-          </Caption1>
-        )}
-      </div>
+        <div
+          data-testid="squad-sync-primary"
+          style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}
+        >
+          <div style={{ ...cardStyle, display: 'flex', flexDirection: 'column', gap: '12px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap' }}>
+              <StatusPill tone={status.compatibilityTone}>{status.compatibilityTitle}</StatusPill>
+              <Button
+                appearance="secondary"
+                icon={statusQuery.isFetching ? <Spinner size="tiny" /> : <ArrowSync20Regular />}
+                disabled={statusQuery.isFetching}
+                onClick={() => void statusQuery.refetch()}
+              >
+                Refresh
+              </Button>
+            </div>
+            <Body1 style={{ display: 'block' }}>{status.compatibilityMessage}</Body1>
+            {(status.checkedAt || status.contractVersion) && (
+              <Caption1 style={{ color: tokens.colorNeutralForeground3 }}>
+                {status.checkedAt ? `Checked ${status.checkedAt}. ` : ''}
+                {status.contractVersion ? `Contract ${status.contractVersion}.` : ''}
+              </Caption1>
+            )}
+          </div>
 
-      <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
-        <FactCard label="Source of truth" value={status.sourceOfTruth} />
-        <FactCard label="Storage mode" value={status.storageMode} detail={status.storageDetail} />
-        <FactCard label="Ceremonies" value={status.ceremoniesTitle} detail={status.ceremoniesMessage} />
-      </div>
+          <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
+            <FactCard label="Lives in" value={status.sourceOfTruth} />
+            <FactCard label="Storage mode" value={status.storageMode} detail={status.storageDetail} />
+            <FactCard label="Ceremonies" value={status.ceremoniesTitle} detail={status.ceremoniesMessage} />
+          </div>
 
-      <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
-        <ArtifactList
-          title="Required artifacts"
-          artifacts={status.requiredArtifacts}
-          empty="No required artifacts reported by the endpoint."
-        />
-        <ArtifactList
-          title="Recommended client artifacts"
-          artifacts={status.recommendedArtifacts}
-          empty="No recommended client artifacts reported by the endpoint."
-        />
-      </div>
+          <div style={{ ...cardStyle, display: 'flex', flexDirection: 'column', gap: '12px' }}>
+            <Subtitle2 as="h3" style={{ display: 'block', marginBottom: '4px' }}>
+              {requiredRepairActions.length > 0
+                ? 'Repair needed'
+                : manualExportActions.length > 0
+                  ? 'Sync to CLI/Copilot'
+                  : 'Sync status'}
+            </Subtitle2>
+            {requiredRepairActions.length === 0 && manualExportActions.length > 0 && (
+              <Caption1 style={{ display: 'block', color: tokens.colorNeutralForeground3, marginBottom: '6px' }}>
+                Use Preview Export only when you want CLI/Copilot file-based tools to receive a .squad handoff. It does not turn on automatic two-way sync.
+              </Caption1>
+            )}
+            {status.repairActions.length > 0 && (
+              <Caption1 style={{ display: 'block', color: tokens.colorNeutralForeground3, marginBottom: '10px' }}>
+                Previews are safe: Preview Repair or Preview Export runs a dry run and opens a modal showing proposed file changes before anything is written.
+              </Caption1>
+            )}
+            {status.repairActions.length === 0 ? (
+              <Caption1 style={{ color: tokens.colorNeutralForeground3 }}>
+                No sync actions needed right now.
+              </Caption1>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                {[...requiredRepairActions, ...manualExportActions].map((action) => {
+                  const disabledReason = action.disabledReason
+                    ?? (!status.dryRunSupported
+                      ? 'Preview is not available for this backend response yet.'
+                      : undefined)
+                    ?? (!status.repairAvailable
+                      ? status.repairDisabledReason ?? 'Automatic repair is not available for this status.'
+                      : undefined)
+                  return (
+                    <div
+                      key={action.id}
+                      style={{
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        gap: '12px',
+                        alignItems: 'center',
+                        flexWrap: 'wrap',
+                      }}
+                    >
+                      <div style={{ minWidth: 0, flex: '1 1 320px' }}>
+                        <Body1 style={{ display: 'block', fontWeight: tokens.fontWeightSemibold }}>
+                          {action.label}
+                        </Body1>
+                        <Caption1 style={{ display: 'block', color: tokens.colorNeutralForeground3 }}>
+                          {disabledReason ?? action.reason}
+                        </Caption1>
+                      </div>
+                      <Button
+                        appearance="secondary"
+                        icon={isPreviewPending ? <Spinner size="tiny" /> : <Wrench20Regular />}
+                        disabled={isPreviewPending || Boolean(disabledReason)}
+                        data-testid={`repair-action-${action.id}`}
+                        onClick={() => void handlePreviewRepair(action)}
+                      >
+                        {isPreviewPending ? 'Previewing…' : action.required ? 'Preview Repair' : 'Preview Export'}
+                      </Button>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
 
-      <div style={{ ...cardStyle, display: 'flex', flexDirection: 'column', gap: '12px' }}>
-        <div style={{ display: 'flex', alignItems: 'flex-start', gap: '10px' }}>
-          <ToneIcon tone={status.driftTone} />
-          <div>
-            <Subtitle2 as="h3" style={{ display: 'block' }}>{status.driftTitle}</Subtitle2>
-            <Caption1 style={{ display: 'block', color: tokens.colorNeutralForeground3, marginTop: '4px' }}>
-              {status.driftMessage}
-            </Caption1>
+            {applyMessage && (
+              <Caption1 style={{ color: tokens.colorPaletteGreenForeground1 }}>{applyMessage}</Caption1>
+            )}
+            {applyError && (
+              <Caption1 style={{ color: tokens.colorPaletteRedForeground1 }}>{applyError}</Caption1>
+            )}
           </div>
         </div>
 
-        <div style={{ borderTop: '1px solid var(--border)', paddingTop: '12px' }}>
-          <Subtitle2 as="h3" style={{ display: 'block', marginBottom: '8px' }}>
-            {requiredRepairActions.length > 0 ? 'Repair actions' : 'Manual export actions'}
-          </Subtitle2>
-          {requiredRepairActions.length === 0 && manualExportActions.length > 0 && (
-            <Caption1 style={{ display: 'block', color: tokens.colorNeutralForeground3, marginBottom: '10px' }}>
-              Use Preview Export only when you want CLI/Copilot file-based tools to receive a .squad handoff. It does not turn on automatic two-way sync.
-            </Caption1>
-          )}
-          {status.repairActions.length > 0 && (
-            <Caption1 style={{ display: 'block', color: tokens.colorNeutralForeground3, marginBottom: '10px' }}>
-              Previews are safe: Preview Repair or Preview Export runs a dry run and opens a modal showing proposed file changes before anything is written.
-            </Caption1>
-          )}
-          {status.repairActions.length === 0 ? (
-            <Caption1 style={{ color: tokens.colorNeutralForeground3 }}>
-              No repair actions reported. Refresh after backend sync routes are available.
-            </Caption1>
-          ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-              {[...requiredRepairActions, ...manualExportActions].map((action) => {
-                const disabledReason = action.disabledReason
-                  ?? (!status.dryRunSupported
-                    ? 'Preview is not available for this backend response yet.'
-                    : undefined)
-                  ?? (!status.repairAvailable
-                    ? status.repairDisabledReason ?? 'Automatic repair is not available for this status.'
-                    : undefined)
-                return (
-                  <div
-                    key={action.id}
-                    style={{
-                      display: 'flex',
-                      justifyContent: 'space-between',
-                      gap: '12px',
-                      alignItems: 'center',
-                      flexWrap: 'wrap',
-                    }}
-                  >
-                    <div style={{ minWidth: 0, flex: '1 1 320px' }}>
-                      <Body1 style={{ display: 'block', fontWeight: tokens.fontWeightSemibold }}>
-                        {action.label}
-                      </Body1>
-                      <Caption1 style={{ display: 'block', color: tokens.colorNeutralForeground3 }}>
-                        {disabledReason ?? action.reason}
-                      </Caption1>
-                    </div>
-                    <Button
-                      appearance="secondary"
-                      icon={isPreviewPending ? <Spinner size="tiny" /> : <Wrench20Regular />}
-                      disabled={isPreviewPending || Boolean(disabledReason)}
-                      data-testid={`repair-action-${action.id}`}
-                      onClick={() => void handlePreviewRepair(action)}
-                    >
-                      {isPreviewPending ? 'Previewing…' : action.required ? 'Preview Repair' : 'Preview Export'}
-                    </Button>
-                  </div>
-                )
-              })}
+        <details>
+          <summary
+            style={{
+              cursor: 'pointer',
+              color: tokens.colorNeutralForeground3,
+              fontSize: '12px',
+              userSelect: 'none',
+            }}
+          >
+            Diagnostics
+          </summary>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginTop: '12px' }}>
+            <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
+              <ArtifactList
+                title="Required .squad files"
+                artifacts={status.requiredArtifacts}
+                empty="No required files reported."
+              />
+              <ArtifactList
+                title="Optional client files"
+                artifacts={status.recommendedArtifacts}
+                empty="No optional client files reported."
+              />
             </div>
-          )}
-        </div>
-
-        {applyMessage && (
-          <Caption1 style={{ color: tokens.colorPaletteGreenForeground1 }}>{applyMessage}</Caption1>
-        )}
-        {applyError && (
-          <Caption1 style={{ color: tokens.colorPaletteRedForeground1 }}>{applyError}</Caption1>
-        )}
+            <div style={{ ...cardStyle, display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              <div style={{ display: 'flex', alignItems: 'flex-start', gap: '10px' }}>
+                <ToneIcon tone={status.driftTone} />
+                <div>
+                  <Subtitle2 as="h3" style={{ display: 'block' }}>{status.driftTitle}</Subtitle2>
+                  <Caption1 style={{ display: 'block', color: tokens.colorNeutralForeground3, marginTop: '4px' }}>
+                    {status.driftMessage}
+                  </Caption1>
+                </div>
+              </div>
+            </div>
+          </div>
+        </details>
       </div>
-    </div>
     </>
   )
 }

@@ -425,4 +425,31 @@ describe('SquadSyncStatusPanel', () => {
     expect(screen.getByText('Status endpoint unavailable')).toBeInTheDocument()
     expect(screen.getByText(/Cross-client compatibility cannot be verified yet/)).toBeInTheDocument()
   })
+
+  it('primary view does not expose implementation jargon', () => {
+    render(<SquadSyncStatusPanel projectId="project-1" />)
+    const primary = screen.getByTestId('squad-sync-primary')
+    expect(primary).not.toHaveTextContent(/projection gaps/i)
+    expect(primary).not.toHaveTextContent(/Repair actions/i)
+    expect(primary).not.toHaveTextContent(/Manual export actions/i)
+    expect(primary).not.toHaveTextContent(/source of truth/i)
+    expect(primary).not.toHaveTextContent(/Drift hashes/i)
+    expect(primary).not.toHaveTextContent(/artifact gaps/i)
+  })
+
+  it('primary view answers the three cross-client questions', () => {
+    apiMock.statusQuery.data = serverStatus({
+      authority: databaseAuthorityWithoutMirror(),
+      repair: manualExportRepair(),
+    })
+    render(<SquadSyncStatusPanel projectId="project-1" />)
+    const primary = screen.getByTestId('squad-sync-primary')
+    // Q1: Where does this project live?
+    expect(primary).toHaveTextContent(/Lives in/i)
+    // Q2: Can CLI/Copilot continue?
+    expect(primary).toHaveTextContent(/CLI\/Copilot/i)
+    // Q3: What to do next?
+    expect(primary).toHaveTextContent(/Sync to CLI\/Copilot|Preview Export/i)
+    expect(screen.getByRole('button', { name: 'Preview Export' })).toBeInTheDocument()
+  })
 })
