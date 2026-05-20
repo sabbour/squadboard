@@ -1,8 +1,8 @@
 /**
  * components/flow/StepNode.tsx — generic step-run node renderer for the DAG.
  *
- * Custom React Flow node component used for all five step kinds
- * (route, agent_run, approve, fan_out, handoff). Visual differences:
+ * Custom React Flow node component used for workflow step kinds
+ * (route, agent_run, approve, fan_out, handoff, notify). Visual differences:
  *  - subtle accent colour and an icon glyph per kind
  *  - status-driven border + status badge (pending/running/completed/failed/...)
  *  - optional pulse animation while running
@@ -21,6 +21,7 @@ import {
   Branch20Regular,
   Handshake20Regular,
   Attach20Regular,
+  Send20Regular,
 } from '@fluentui/react-icons'
 import { type FlowStepRun } from '../../api/flow.ts'
 
@@ -39,6 +40,7 @@ function getKindIcon(kind: string): React.ReactNode {
     case 'approve':   return <CheckmarkCircle20Regular />
     case 'fan_out':   return <Branch20Regular />
     case 'handoff':   return <Handshake20Regular />
+    case 'notify':    return <Send20Regular />
     default:          return null
   }
 }
@@ -49,6 +51,7 @@ const KIND_LABEL: Record<string, string> = {
   approve: 'Approve',
   fan_out: 'Fan-out',
   handoff: 'Handoff',
+  notify: 'Notify',
 }
 
 export function statusColors(status: string, kind: string): {

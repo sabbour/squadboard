@@ -17,6 +17,7 @@
  */
 import { and, desc, eq, inArray, isNull, sql } from 'drizzle-orm';
 import { getDb, schema } from '../db/index.js';
+import type { IssueRun } from '../db/schema.js';
 import { parseWorkflowYaml, type WorkflowStep } from './workflow-parser.js';
 
 // ---------------------------------------------------------------------------
@@ -148,6 +149,67 @@ function toIso(value: Date | string | null | undefined): string | null {
   return null;
 }
 
+const WORK_PICKUP_OUTPUT_MARKER = '[auto-dispatched by pickup-ready sweep]';
+const WORK_PICKUP_SIGNAL_EVENT = 'agent-signal:board.ready';
+
+type FlowAgentRow = {
+  id: string;
+  name: string;
+  role: string | null;
+};
+
+interface WorkflowVersionInfo {
+  versionId: string;
+  workflowName: string;
+  workflowSlug: string;
+  yaml: string;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function parseJsonRecord(value: string): Record<string, unknown> | null {
+  try {
+    const parsed = JSON.parse(value);
+    return isRecord(parsed) ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+function triggerSourceRecord(triggerSource: unknown): Record<string, unknown> | null {
+  if (typeof triggerSource === 'string') return parseJsonRecord(triggerSource);
+  return isRecord(triggerSource) ? triggerSource : null;
+}
+
+function extractWorkPickupIssueRunId(triggerSource: unknown): string | null {
+  const source = triggerSourceRecord(triggerSource);
+  if (!source || source['eventType'] !== WORK_PICKUP_SIGNAL_EVENT) return null;
+
+  const detail = source['detail'];
+  const context = typeof detail === 'string'
+    ? parseJsonRecord(detail)
+    : isRecord(detail)
+      ? detail
+      : null;
+  const issueRunId = context?.['issueRunId'];
+  return typeof issueRunId === 'string' && issueRunId.length > 0 ? issueRunId : null;
+}
+
+function isAutoWorkPickupRun(run: Pick<IssueRun, 'output'>): boolean {
+  return typeof run.output === 'string' && run.output.includes(WORK_PICKUP_OUTPUT_MARKER);
+}
+
+function workPickupStepLabel(stepIndex: number, fallback: string): string {
+  switch (stepIndex) {
+    case 0: return 'Confirm ready card';
+    case 1: return 'Choose worker';
+    case 2: return 'Start work';
+    default: return fallback;
+  }
+}
+
 function deriveStepLabel(stepType: string, definitionStep?: WorkflowStep): string {
   const label = definitionStep?.label;
   if (label && typeof label === 'string') return label;
@@ -166,6 +228,91 @@ function reviewStateFor(stepType: string, decision: string | null): FlowStepRun[
   if (decision === 'approve')          return 'approved';
   if (decision === 'request_changes')  return 'changes_requested';
   return 'pending';
+}
+
+function buildIssueRunNode(
+  ir: IssueRun,
+  agent: FlowAgentRow | undefined,
+  stepIndex: number,
+  deliverables: FlowDeliverable[],
+): FlowStepRun {
+  return {
+    id: ir.id,
+    stepIndex,
+    kind: ir.kind ?? 'agent_run',
+    label: deriveStepLabel(ir.kind ?? 'agent_run'),
+    status: ir.status,
+    startedAt: toIso(ir.startedAt),
+    completedAt: toIso(ir.completedAt),
+    agentName: agent?.name ?? null,
+    agentRole: agent?.role ?? null,
+    parentStepRunId: null,
+    childIds: [],
+    outputSummary: summarise(ir.errorMessage) ?? summarise(ir.output),
+    reviewState: null,
+    deliverables,
+  };
+}
+
+function buildSyntheticWorkPickupNodes(
+  ir: IssueRun,
+  agent: FlowAgentRow | undefined,
+  startIndex: number,
+): FlowStepRun[] {
+  const ts = toIso(ir.createdAt);
+  const routingSummary = summarise(ir.routingReasoning)
+    ?? `Selected ${agent?.name ?? 'the next available agent'} for this Ready card.`;
+
+  return [
+    {
+      id: `work-pickup:${ir.id}:confirm-ready`,
+      stepIndex: startIndex,
+      kind: 'route',
+      label: 'Confirm ready card',
+      status: 'completed',
+      startedAt: ts,
+      completedAt: ts,
+      agentName: null,
+      agentRole: null,
+      parentStepRunId: null,
+      childIds: [],
+      outputSummary: 'Ready card detected by the pickup sweep.',
+      reviewState: null,
+      deliverables: [],
+    },
+    {
+      id: `work-pickup:${ir.id}:choose-agent`,
+      stepIndex: startIndex + 1,
+      kind: 'agent_run',
+      label: 'Choose worker',
+      status: 'completed',
+      startedAt: ts,
+      completedAt: ts,
+      agentName: 'Coordinator',
+      agentRole: 'Routing',
+      parentStepRunId: null,
+      childIds: [],
+      outputSummary: routingSummary,
+      reviewState: null,
+      deliverables: [],
+    },
+    {
+      id: `work-pickup:${ir.id}:start-work`,
+      stepIndex: startIndex + 2,
+      kind: 'notify',
+      label: 'Start work',
+      status: 'completed',
+      startedAt: ts,
+      completedAt: ts,
+      agentName: agent?.name ?? null,
+      agentRole: agent?.role ?? null,
+      parentStepRunId: null,
+      childIds: [],
+      outputSummary: `Queued ${agent?.name ?? 'the selected agent'} to work this issue.`,
+      reviewState: null,
+      deliverables: [],
+    },
+  ];
 }
 
 // ---------------------------------------------------------------------------
@@ -229,6 +376,30 @@ export async function getIssueFlow(projectId: string, issueId: string): Promise<
     .orderBy(schema.workflowRuns.createdAt);
 
   const wfRunIds = wfRuns.map((r) => r.id);
+  const workflowRunById = new Map(wfRuns.map((r) => [r.id, r] as const));
+  const workflowVersionIds = Array.from(
+    new Set(wfRuns.map((r) => r.workflowVersionId).filter((id): id is string => Boolean(id))),
+  );
+  const workflowVersionRows: WorkflowVersionInfo[] = workflowVersionIds.length > 0
+    ? await db
+        .select({
+          versionId: schema.workflowVersions.id,
+          workflowName: schema.workflows.name,
+          workflowSlug: schema.workflows.slug,
+          yaml: schema.workflowVersions.yamlContent,
+        })
+        .from(schema.workflowVersions)
+        .innerJoin(schema.workflows, eq(schema.workflowVersions.workflowId, schema.workflows.id))
+        .where(inArray(schema.workflowVersions.id, workflowVersionIds))
+    : [];
+  const workflowInfoByVersionId = new Map(
+    workflowVersionRows.map((row) => [row.versionId, row] as const),
+  );
+  const firstRootWorkflowRun = wfRuns.find((run) => !run.parentWorkflowRunId && run.workflowVersionId);
+  if (!workflowVersion && firstRootWorkflowRun?.workflowVersionId) {
+    const info = workflowInfoByVersionId.get(firstRootWorkflowRun.workflowVersionId);
+    if (info) workflowVersion = { id: info.versionId, name: info.workflowName };
+  }
 
   // 4. Step runs across all workflow runs for this issue
   const stepRunRows = wfRunIds.length > 0
@@ -238,6 +409,24 @@ export async function getIssueFlow(projectId: string, issueId: string): Promise<
         .where(inArray(schema.stepRuns.workflowRunId, wfRunIds))
         .orderBy(schema.stepRuns.workflowRunId, schema.stepRuns.stepIndex)
     : [];
+  const definitionStepsByWorkflowRunId = new Map<string, WorkflowStep[]>();
+  for (const wr of wfRuns) {
+    if (wr.parentWorkflowRunId) continue;
+    if (wr.workflowVersionId === iw?.versionId) {
+      definitionStepsByWorkflowRunId.set(wr.id, definitionSteps);
+      continue;
+    }
+    const yaml = wr.workflowVersionId
+      ? workflowInfoByVersionId.get(wr.workflowVersionId)?.yaml
+      : null;
+    if (!yaml) continue;
+    try {
+      const def = await parseWorkflowYaml(yaml);
+      definitionStepsByWorkflowRunId.set(wr.id, def.steps);
+    } catch {
+      definitionStepsByWorkflowRunId.set(wr.id, []);
+    }
+  }
 
   // 5. Issue runs (for agentName/role + bare runs when no workflow)
   const issueRunRows = await db
@@ -375,30 +564,28 @@ export async function getIssueFlow(projectId: string, issueId: string): Promise<
   const stepRuns: FlowStepRun[] = [];
 
   if (stepRunRows.length === 0) {
-    // No workflow attached → derive nodes from issue_runs themselves.
-    for (let i = 0; i < issueRunRows.length; i++) {
-      const ir = issueRunRows[i];
+    // No workflow rows → derive nodes from issue_runs themselves. For default
+    // pickup-ready runs, include the implicit Work Pickup plan before the
+    // actual agent run so failures don't collapse to a single red node.
+    let previousNodeId: string | null = null;
+    let stepIndex = 0;
+    for (const ir of issueRunRows) {
       const agent = agentById.get(ir.agentId);
-      stepRuns.push({
-        id: ir.id,
-        stepIndex: i,
-        kind: ir.kind ?? 'agent_run',
-        label: deriveStepLabel(ir.kind ?? 'agent_run'),
-        status: ir.status,
-        startedAt: toIso(ir.startedAt),
-        completedAt: toIso(ir.completedAt),
-        agentName: agent?.name ?? null,
-        agentRole: agent?.role ?? null,
-        parentStepRunId: null,
-        childIds: [],
-        outputSummary: summarise(ir.output),
-        reviewState: null,
-        deliverables: deliverablesByRun.get(ir.id) ?? [],
-      });
-      // Sequential edges between bare issue_runs
-      if (i > 0) {
-        edges.push({ from: issueRunRows[i - 1].id, to: ir.id, kind: 'sequence' });
+      if (isAutoWorkPickupRun(ir)) {
+        const plannedNodes = buildSyntheticWorkPickupNodes(ir, agent, stepIndex);
+        for (const node of plannedNodes) {
+          if (previousNodeId) edges.push({ from: previousNodeId, to: node.id, kind: 'sequence' });
+          stepRuns.push(node);
+          previousNodeId = node.id;
+          stepIndex++;
+        }
       }
+
+      const node = buildIssueRunNode(ir, agent, stepIndex, deliverablesByRun.get(ir.id) ?? []);
+      if (previousNodeId) edges.push({ from: previousNodeId, to: node.id, kind: 'sequence' });
+      stepRuns.push(node);
+      previousNodeId = node.id;
+      stepIndex++;
     }
   } else {
     // Workflow case → step_run is the canonical node.
@@ -417,6 +604,14 @@ export async function getIssueFlow(projectId: string, issueId: string): Promise<
 
     // Lookup issue_run → its agent for each step (via stepRuns.issueRunId)
     const issueRunById = new Map(issueRunRows.map((r) => [r.id, r] as const));
+    const representedIssueRunIds = new Set(
+      stepRunRows.map((s) => s.issueRunId).filter((id): id is string => Boolean(id)),
+    );
+    const workPickupWorkflowRunByIssueRunId = new Map<string, string>();
+    for (const wr of wfRuns) {
+      const issueRunIdForPickup = extractWorkPickupIssueRunId(wr.triggerSource);
+      if (issueRunIdForPickup) workPickupWorkflowRunByIssueRunId.set(issueRunIdForPickup, wr.id);
+    }
 
     for (const sr of stepRunRows) {
       // Find a related issue_run for agent attribution
@@ -431,15 +626,41 @@ export async function getIssueFlow(projectId: string, issueId: string): Promise<
         }
       }
       // Find the matching definition step (only for the root workflow run)
-      const isRootWfRun = wfRuns.find((w) => w.id === sr.workflowRunId)?.parentWorkflowRunId == null;
-      const defStep = isRootWfRun ? definitionSteps[sr.stepIndex] : undefined;
+      const wfRun = workflowRunById.get(sr.workflowRunId);
+      const isRootWfRun = wfRun?.parentWorkflowRunId == null;
+      const defStepsForRun = isRootWfRun
+        ? definitionStepsByWorkflowRunId.get(sr.workflowRunId) ?? definitionSteps
+        : undefined;
+      const defStep = defStepsForRun?.[sr.stepIndex];
+      const workflowInfo = wfRun?.workflowVersionId
+        ? workflowInfoByVersionId.get(wfRun.workflowVersionId)
+        : undefined;
+      const workPickupIssueRunId = workflowInfo?.workflowSlug === 'work-pickup'
+        ? extractWorkPickupIssueRunId(wfRun?.triggerSource)
+        : null;
+      const workPickupIssueRun = workPickupIssueRunId
+        ? issueRunById.get(workPickupIssueRunId)
+        : undefined;
+      if (workflowInfo?.workflowSlug === 'work-pickup' && !agentName) {
+        if (sr.stepIndex === 1) {
+          agentName = 'Coordinator';
+          agentRole = 'Routing';
+        } else if (sr.stepIndex === 2 && workPickupIssueRun) {
+          const agent = agentById.get(workPickupIssueRun.agentId);
+          agentName = agent?.name ?? null;
+          agentRole = agent?.role ?? null;
+        }
+      }
 
       const parentStepRunId = parentStepIdByChildWfRun.get(sr.workflowRunId) ?? null;
+      const fallbackLabel = deriveStepLabel(sr.stepType, defStep);
       const node: FlowStepRun = {
         id: sr.id,
         stepIndex: sr.stepIndex,
         kind: sr.stepType,
-        label: deriveStepLabel(sr.stepType, defStep),
+        label: workflowInfo?.workflowSlug === 'work-pickup'
+          ? workPickupStepLabel(sr.stepIndex, fallbackLabel)
+          : fallbackLabel,
         status: sr.status,
         startedAt: null,            // step_runs lacks dedicated startedAt; fall back to created/updated
         completedAt: null,
@@ -457,6 +678,31 @@ export async function getIssueFlow(projectId: string, issueId: string): Promise<
         node.completedAt = toIso(sr.updatedAt);
       }
       stepRuns.push(node);
+    }
+
+    const appendedIssueRunIds = new Set<string>();
+    const appendIssueRunNode = (ir: IssueRun, fromNodeId: string | null): void => {
+      const agent = agentById.get(ir.agentId);
+      const node = buildIssueRunNode(ir, agent, stepRuns.length, deliverablesByRun.get(ir.id) ?? []);
+      stepRuns.push(node);
+      appendedIssueRunIds.add(ir.id);
+      if (fromNodeId) edges.push({ from: fromNodeId, to: node.id, kind: 'sequence' });
+    };
+
+    for (const [issueRunId, workflowRunId] of workPickupWorkflowRunByIssueRunId) {
+      if (representedIssueRunIds.has(issueRunId)) continue;
+      const ir = issueRunById.get(issueRunId);
+      if (!ir) continue;
+      const workflowSteps = stepsByWfRun.get(workflowRunId) ?? [];
+      appendIssueRunNode(ir, workflowSteps[workflowSteps.length - 1]?.id ?? null);
+    }
+
+    // If an older deployment produced the pickup marker but no signal-linked
+    // workflow_run, still surface the actual failed/running agent run.
+    for (const ir of issueRunRows) {
+      if (representedIssueRunIds.has(ir.id) || appendedIssueRunIds.has(ir.id)) continue;
+      if (!isAutoWorkPickupRun(ir)) continue;
+      appendIssueRunNode(ir, stepRuns[stepRuns.length - 1]?.id ?? null);
     }
   }
 
