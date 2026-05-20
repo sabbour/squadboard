@@ -1,5 +1,5 @@
-import { sql } from 'drizzle-orm';
-import type { DrizzleDb } from '../db/index.js';
+import { inArray, sql } from 'drizzle-orm';
+import { schema, type DrizzleDb } from '../db/index.js';
 
 /**
  * Reclaim issue_runs whose lease has expired (process crashed mid-run).
@@ -82,16 +82,16 @@ export async function sweepExpiredStepLeases(db: DrizzleDb): Promise<number> {
   // Retryable: reset to pending with incremented retry_count
   if (retryable.length > 0) {
     const ids = retryable.map((r) => r.id);
-    await db.execute(sql`
-      UPDATE step_runs
-      SET
-        status           = 'pending',
-        retry_count      = retry_count + 1,
-        lease_expires_at = NULL,
-        heartbeat_at     = NULL,
-        updated_at       = NOW()
-      WHERE id = ANY(${sql.raw(`ARRAY[${ids.map((id) => `'${id}'`).join(',')}]::uuid[]`)})
-    `);
+    await db
+      .update(schema.stepRuns)
+      .set({
+        status: 'pending',
+        retryCount: sql`${schema.stepRuns.retryCount} + 1`,
+        leaseExpiresAt: null,
+        heartbeatAt: null,
+        updatedAt: new Date(),
+      })
+      .where(inArray(schema.stepRuns.id, ids));
     console.log(`[sweeper] retried ${retryable.length} step_run(s) (lease expired)`);
   }
 
