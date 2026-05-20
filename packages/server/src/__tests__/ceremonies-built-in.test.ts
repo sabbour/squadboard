@@ -4,7 +4,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { BUILT_IN_CEREMONIES } from '../ceremonies/built-in/index.js';
+import { BUILT_IN_CEREMONIES, getBuiltInCeremonyMetadata } from '../ceremonies/built-in/index.js';
 import { parseWorkflowYaml } from '../ceremonies/yaml-canonicalize.js';
 
 describe('BUILT_IN_CEREMONIES', () => {
@@ -35,6 +35,20 @@ describe('BUILT_IN_CEREMONIES', () => {
     for (const ceremony of BUILT_IN_CEREMONIES) {
       const parsed = parseWorkflowYaml(ceremony.yamlContent);
       expect(parsed.metadata.name).toBe(ceremony.name);
+    }
+  });
+
+  it('Work Pickup and Scribe Close-Out carry the core classification', () => {
+    for (const name of ['work-pickup', 'scribe-close-out']) {
+      const entry = BUILT_IN_CEREMONIES.find((c) => c.name === name)!;
+      expect(entry).toBeDefined();
+      expect(entry.category).toBe('core');
+      expect(entry.tags).toContain('core');
+
+      const parsed = parseWorkflowYaml(entry.yamlContent);
+      expect(parsed.metadata.category).toBe('core');
+      expect(parsed.metadata.tags).toContain('core');
+      expect(getBuiltInCeremonyMetadata(name)).toEqual({ category: 'core', tags: ['core'] });
     }
   });
 

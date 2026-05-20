@@ -122,6 +122,59 @@ describe('ceremonyRowToWorkflowYaml', () => {
     expect(reparsed.spec.trigger.type).toBe('github-event');
   });
 
+  it('preserves core category and tags from active YAML metadata', () => {
+    const activeYaml = stringifyWorkflowYaml({
+      apiVersion: 'squad.io/v1',
+      kind: 'Ceremony',
+      metadata: {
+        name: 'work-pickup',
+        displayName: 'Work Pickup',
+        category: 'core',
+        tags: ['core'],
+      },
+      spec: {
+        trigger: { type: 'agent-signal', signalName: 'board.ready' },
+        steps: [],
+      },
+    });
+    const row = makeRow({
+      slug: 'work-pickup',
+      name: 'Work Pickup',
+      triggerKind: 'agent-signal',
+      triggerConfig: { signalName: 'board.ready', sourceYamlPath: 'import:built-in/work-pickup' },
+    });
+
+    const wf = ceremonyRowToWorkflowYaml(
+      row as Parameters<typeof ceremonyRowToWorkflowYaml>[0],
+      activeYaml,
+    );
+
+    expect(wf.metadata.category).toBe('core');
+    expect(wf.metadata.tags).toEqual(['core']);
+  });
+
+  it('falls back to triggerConfig core metadata when active YAML predates tags', () => {
+    const row = makeRow({
+      slug: 'scribe-close-out',
+      name: 'Scribe Close-Out',
+      triggerKind: 'agent-signal',
+      triggerConfig: {
+        signalName: 'wave.closeout',
+        sourceYamlPath: 'import:built-in/scribe-close-out',
+        category: 'core',
+        tags: ['core'],
+      },
+    });
+
+    const wf = ceremonyRowToWorkflowYaml(
+      row as Parameters<typeof ceremonyRowToWorkflowYaml>[0],
+      null,
+    );
+
+    expect(wf.metadata.category).toBe('core');
+    expect(wf.metadata.tags).toEqual(['core']);
+  });
+
   it('multiple ceremonies in one project export independently', () => {
     const row1 = makeRow({ slug: 'retro', name: 'Retrospective', triggerKind: 'on_schedule', triggerConfig: { schedule: '0 9 * * 5' } });
     const row2 = makeRow({ slug: 'design-review', name: 'Design Review', triggerKind: 'on_event', triggerConfig: { event: 'pull_request' } });

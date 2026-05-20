@@ -98,6 +98,33 @@ export function extractSteps(
   return [];
 }
 
+function stringArray(value: unknown): string[] {
+  return Array.isArray(value)
+    ? value.filter((item): item is string => typeof item === 'string' && item.trim().length > 0)
+    : [];
+}
+
+function extractMetadata(
+  yamlContent: string | null | undefined,
+): Pick<WorkflowYaml['metadata'], 'category' | 'tags'> {
+  if (!yamlContent) return {};
+  try {
+    const parsed = parseDocument(yamlContent).toJSON() as Record<string, unknown>;
+    const metadata = parsed?.metadata as Record<string, unknown> | undefined;
+    if (!metadata || typeof metadata !== 'object') return {};
+    const category = typeof metadata.category === 'string' && metadata.category.trim().length > 0
+      ? metadata.category
+      : undefined;
+    const tags = stringArray(metadata.tags);
+    return {
+      ...(category ? { category } : {}),
+      ...(tags.length > 0 ? { tags } : {}),
+    };
+  } catch {
+    return {};
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Core mapping function
 // ---------------------------------------------------------------------------
@@ -115,6 +142,13 @@ export function ceremonyRowToWorkflowYaml(
   const triggerConfig = (row.triggerConfig ?? {}) as Record<string, unknown>;
   const trigger = mapTriggerKind(row.triggerKind, triggerConfig);
   const steps = extractSteps(activeVersionYaml);
+  const activeMetadata = extractMetadata(activeVersionYaml);
+  const triggerConfigTags = stringArray(triggerConfig.tags);
+  const tags = activeMetadata.tags ?? (triggerConfigTags.length > 0 ? triggerConfigTags : undefined);
+  const category = activeMetadata.category
+    ?? (typeof triggerConfig.category === 'string' && triggerConfig.category.trim().length > 0
+      ? triggerConfig.category
+      : undefined);
 
   return {
     apiVersion: 'squad.io/v1',
@@ -123,6 +157,8 @@ export function ceremonyRowToWorkflowYaml(
       name: row.slug,
       displayName: row.name,
       ...(row.description ? { description: row.description } : {}),
+      ...(category ? { category } : {}),
+      ...(tags ? { tags } : {}),
     },
     spec: {
       trigger,

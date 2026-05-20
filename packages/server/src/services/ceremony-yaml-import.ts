@@ -36,6 +36,11 @@ export interface ImportCeremonyOptions {
   sourceMarker?: string;
 }
 
+function normalizedTags(tags: readonly string[] | undefined): string[] {
+  if (!tags) return [];
+  return tags.map((tag) => tag.trim()).filter(Boolean);
+}
+
 // ---------------------------------------------------------------------------
 // Trigger mapping: YAML trigger.type -> DB triggerKind + triggerConfig
 // ---------------------------------------------------------------------------
@@ -108,10 +113,17 @@ export async function importCeremonyFromYaml(
   const slug = workflow.metadata.name;
   const displayName = workflow.metadata.displayName ?? workflow.metadata.name;
   const description = workflow.metadata.description ?? null;
+  const tags = normalizedTags(workflow.metadata.tags);
+  const category = workflow.metadata.category?.trim();
 
   // Source marker stored in triggerConfig so origin derivation sees 'yaml-import'
   const sourceMarker = options.sourceMarker ?? `import:${slug}`;
-  const { triggerKind, triggerConfig } = mapYamlTriggerToDb(workflow.spec.trigger, sourceMarker);
+  const { triggerKind, triggerConfig: triggerConfigBase } = mapYamlTriggerToDb(workflow.spec.trigger, sourceMarker);
+  const triggerConfig = {
+    ...triggerConfigBase,
+    ...(category ? { category } : {}),
+    ...(tags.length > 0 ? { tags } : {}),
+  };
 
   // Canonical YAML string for storage (normalised round-trip)
   const canonicalYaml = stringifyWorkflowYaml(workflow);

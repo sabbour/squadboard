@@ -78,6 +78,18 @@ function makeRow(overrides: Partial<Record<string, unknown>> = {}) {
 // ---------------------------------------------------------------------------
 
 describe('Canonicalizer byte-equality — built-in YAMLs', () => {
+  it('work-pickup.workflow.yaml is byte-identical after parse → stringify', async () => {
+    const original = await readBuiltIn('work-pickup.workflow.yaml');
+    const result = roundtrip(original);
+    expect(normalise(result)).toBe(normalise(original));
+  });
+
+  it('scribe-close-out.workflow.yaml is byte-identical after parse → stringify', async () => {
+    const original = await readBuiltIn('scribe-close-out.workflow.yaml');
+    const result = roundtrip(original);
+    expect(normalise(result)).toBe(normalise(original));
+  });
+
   it('design-review.workflow.yaml is byte-identical after parse → stringify', async () => {
     const original = await readBuiltIn('design-review.workflow.yaml');
     const result = roundtrip(original);

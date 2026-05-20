@@ -4,6 +4,9 @@ metadata:
   name: scribe-close-out
   displayName: Scribe Close-Out
   description: Required project ceremony for merging decisions, updating logs, and keeping Squad memory tidy after work finishes.
+  category: core
+  tags:
+    - core
 spec:
   trigger:
     type: agent-signal
@@ -24,4 +27,3 @@ spec:
     - id: publish-close-out
       kind: notify
       target: project-timeline
-

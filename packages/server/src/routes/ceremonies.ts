@@ -53,6 +53,7 @@ import { getBuiltinTemplates } from '../workflows/templates/index.js';
 import { exportCeremonyAsYaml } from '../services/ceremony-yaml-export.js';
 import { importCeremonyFromYaml, type ImportResult } from '../services/ceremony-yaml-import.js';
 import { isProtectedBuiltInCeremony } from '../ceremonies/built-in/protection.js';
+import { getBuiltInCeremonyMetadata } from '../ceremonies/built-in/index.js';
 import {
   buildRunLifecycleMetadata,
   resolveWorktreeExists,
@@ -219,6 +220,38 @@ function ceremonyOrigin(row: { parentNarrativeId?: string | null; triggerConfig:
   });
 }
 
+function stringArray(value: unknown): string[] {
+  return Array.isArray(value)
+    ? value.filter((item): item is string => typeof item === 'string' && item.trim().length > 0)
+    : [];
+}
+
+function triggerConfigRecord(row: { triggerConfig: unknown }): Record<string, unknown> {
+  return row.triggerConfig && typeof row.triggerConfig === 'object'
+    ? row.triggerConfig as Record<string, unknown>
+    : {};
+}
+
+function ceremonyTags(row: { slug: string; triggerConfig: unknown }): string[] {
+  const configTags = stringArray(triggerConfigRecord(row).tags);
+  if (configTags.length > 0) return configTags;
+  if (sourceYamlPath(row)?.startsWith('import:built-in/')) {
+    return [...(getBuiltInCeremonyMetadata(row.slug)?.tags ?? [])];
+  }
+  return [];
+}
+
+function ceremonyCategory(row: { slug: string; triggerConfig: unknown }): string | null {
+  const configCategory = triggerConfigRecord(row).category;
+  if (typeof configCategory === 'string' && configCategory.trim().length > 0) {
+    return configCategory;
+  }
+  if (sourceYamlPath(row)?.startsWith('import:built-in/')) {
+    return getBuiltInCeremonyMetadata(row.slug)?.category ?? null;
+  }
+  return null;
+}
+
 /** Extract `# Heading` (or `## Heading`) from the first non-blank markdown line. */
 function extractFirstMarkdownHeading(markdown: string): string | null {
   for (const line of markdown.split('\n')) {
@@ -261,6 +294,8 @@ ceremoniesRouter.get('/', async (req: Request, res: Response) => {
     const result = rows.map((row) => ({
       ...row,
       origin: ceremonyOrigin(row) satisfies CeremonyOrigin,
+      category: ceremonyCategory(row),
+      tags: ceremonyTags(row),
       activeVersionId: activeVersionIds.get(row.id) ?? null,
       protected: isProtectedBuiltInCeremony(row),
       lifecycle: lifecycleByWorkflow.get(row.id) ?? buildRunLifecycleMetadata({}),

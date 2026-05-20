@@ -131,6 +131,10 @@ export function stringifyWorkflowYaml(workflow: WorkflowYaml): string {
     metaEntries.push(['displayName', workflow.metadata.displayName]);
   if (workflow.metadata.description !== undefined)
     metaEntries.push(['description', workflow.metadata.description]);
+  if (workflow.metadata.category !== undefined)
+    metaEntries.push(['category', workflow.metadata.category]);
+  if (workflow.metadata.tags !== undefined)
+    metaEntries.push(['tags', workflow.metadata.tags]);
 
   const triggerMap = buildTriggerMap(workflow.spec.trigger);
 

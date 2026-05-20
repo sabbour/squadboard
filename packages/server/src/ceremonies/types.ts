@@ -107,6 +107,8 @@ export interface WorkflowYamlMetadata {
   name: string;
   displayName?: string;
   description?: string;
+  category?: string;
+  tags?: string[];
 }
 
 export interface WorkflowYamlSpec {

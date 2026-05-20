@@ -57,6 +57,8 @@ export interface Ceremony {
   triggerKind: TriggerKind
   triggerConfig: Record<string, unknown>
   kind: CeremonyKind
+  category?: string | null
+  tags?: string[]
   // Phase 11
   status?: CeremonyStatus
   parentNarrativeId?: string | null

@@ -146,6 +146,8 @@ export const metadataSchema = z
     name: z.string().min(1, 'metadata.name is required'),
     displayName: z.string().optional(),
     description: z.string().optional(),
+    category: z.string().min(1).optional(),
+    tags: z.array(z.string().min(1)).optional(),
   })
   .strict();
 

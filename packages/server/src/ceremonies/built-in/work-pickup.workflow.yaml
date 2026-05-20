@@ -4,6 +4,9 @@ metadata:
   name: work-pickup
   displayName: Work Pickup
   description: Required default run plan for assigning Ready cards to the best available project agent.
+  category: core
+  tags:
+    - core
 spec:
   trigger:
     type: agent-signal
@@ -21,4 +24,3 @@ spec:
     - id: start-work
       kind: notify
       target: project-timeline
-

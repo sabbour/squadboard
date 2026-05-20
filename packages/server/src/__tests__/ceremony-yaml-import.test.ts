@@ -77,6 +77,21 @@ const validYaml = stringifyWorkflowYaml({
   },
 } satisfies WorkflowYaml);
 
+const coreBuiltInYaml = stringifyWorkflowYaml({
+  apiVersion: 'squad.io/v1',
+  kind: 'Ceremony',
+  metadata: {
+    name: 'work-pickup',
+    displayName: 'Work Pickup',
+    category: 'core',
+    tags: ['core'],
+  },
+  spec: {
+    trigger: { type: 'agent-signal', signalName: 'board.ready' },
+    steps: [],
+  },
+} satisfies WorkflowYaml);
+
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
@@ -140,6 +155,29 @@ spec:
     expect(workflowInsert).toBeDefined();
     const triggerConfig = workflowInsert!.values.triggerConfig as Record<string, unknown>;
     expect(triggerConfig.sourceYamlPath).toBe('import:design-review');
+  });
+
+  it('metadata category and tags are stored in triggerConfig when seeding core built-ins', async () => {
+    await importCeremonyFromYaml(coreBuiltInYaml, 'proj-1', {
+      sourceMarker: 'import:built-in/work-pickup',
+    });
+
+    const workflowInsert = insertedRows.find((r) =>
+      r.values.slug === 'work-pickup',
+    );
+    expect(workflowInsert).toBeDefined();
+    const triggerConfig = workflowInsert!.values.triggerConfig as Record<string, unknown>;
+    expect(triggerConfig.sourceYamlPath).toBe('import:built-in/work-pickup');
+    expect(triggerConfig.category).toBe('core');
+    expect(triggerConfig.tags).toEqual(['core']);
+
+    const versionInsert = insertedRows.find((r) => r.values.yamlContent);
+    const storedYaml = versionInsert?.values.yamlContent as string | undefined;
+    expect(storedYaml).toBeDefined();
+    const { parseWorkflowYaml } = await import('../ceremonies/yaml-canonicalize.js');
+    const stored = parseWorkflowYaml(storedYaml!);
+    expect(stored.metadata.category).toBe('core');
+    expect(stored.metadata.tags).toEqual(['core']);
   });
 
   it('imported then exported = same YAML (round-trip fidelity)', async () => {
