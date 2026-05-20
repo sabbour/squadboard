@@ -28,6 +28,7 @@ import { createTool, listTools } from './tools.js';
 import { createMcpServer, listMcpServers } from './mcp.js';
 import { normalizeSquadPath } from './setup-lifecycle.js';
 import { assertProjectPathAvailable } from './project-path-uniqueness.js';
+import { computeNextFire } from './ceremony-scheduler.js';
 import type {
   SquadboardBundle,
   ApplyResult,
@@ -165,6 +166,85 @@ async function applyProject(
 
   result.applied.push(`project:${created.id} ("${projectName}" created)`);
   return created.id;
+}
+
+async function applyProjectSettings(
+  bundle: SquadboardBundle,
+  projectId: string,
+  opts: Required<ApplyBundleOpts>,
+  result: ExtendedApplyResult,
+): Promise<void> {
+  const settings = bundle.project?.settings;
+  if (!settings || typeof settings !== 'object') return;
+  const db = getDb();
+
+  for (const [key, value] of Object.entries(settings)) {
+    if (key === 'squadPath') continue;
+    const namespacedKey = projectSettingKey(projectId, key);
+    const serialized = typeof value === 'string' ? value : JSON.stringify(value);
+
+    if (opts.dryRun) {
+      result.applied.push(`setting: would store "${key}"`);
+      continue;
+    }
+
+    const [existing] = await db
+      .select({ id: schema.settings.id })
+      .from(schema.settings)
+      .where(eq(schema.settings.key, namespacedKey))
+      .limit(1);
+
+    if (existing && !opts.overwriteExisting) {
+      result.skipped.push(`setting: "${key}" already exists`);
+    } else if (existing) {
+      await db
+        .update(schema.settings)
+        .set({ value: serialized, projectId })
+        .where(eq(schema.settings.id, existing.id));
+      result.applied.push(`setting: "${key}" updated`);
+    } else {
+      await db.insert(schema.settings).values({
+        key: namespacedKey,
+        value: serialized,
+        projectId,
+      });
+      result.applied.push(`setting: "${key}" stored`);
+    }
+
+    if ((key === 'githubIssueIntake' || key === 'docReview') && value && typeof value === 'object') {
+      const cfg = value as Record<string, unknown>;
+      const source = cfg.source && typeof cfg.source === 'object'
+        ? cfg.source as Record<string, unknown>
+        : {};
+      const repo = parseGithubRepoSetting(cfg) ?? parseGithubRepoSetting(source);
+      if (repo) {
+        await db
+          .update(schema.projects)
+          .set({
+            githubOwner: repo.owner,
+            githubRepo: repo.repo,
+            updatedAt: new Date(),
+          })
+          .where(eq(schema.projects.id, projectId));
+        result.applied.push(`project: ${key} source ${repo.owner}/${repo.repo}`);
+      }
+    }
+  }
+}
+
+function parseGithubRepoSetting(config: Record<string, unknown>): { owner: string; repo: string } | null {
+  const owner = typeof config.owner === 'string' && config.owner.trim() ? config.owner.trim() : null;
+  const repo = typeof config.repo === 'string' && config.repo.trim() ? config.repo.trim() : null;
+  if (owner && repo) return { owner, repo };
+
+  const htmlUrl = typeof config.htmlUrl === 'string' ? config.htmlUrl : '';
+  const match = htmlUrl.match(/^https:\/\/github\.com\/([^/]+)\/([^/#?]+)(?:[/?#].*)?$/i);
+  if (!match) return null;
+  return { owner: match[1], repo: match[2].replace(/\.git$/i, '') };
+}
+
+function projectSettingKey(projectId: string, key: string): string {
+  return `project:${projectId}:${key}`;
 }
 
 // ---------------------------------------------------------------------------
@@ -315,7 +395,7 @@ async function insertWorkflowWithVersion(
     yamlContent: string;
     description?: string;
   },
-): Promise<void> {
+): Promise<string> {
   const slug = toSlug(params.name);
   const [wf] = await db
     .insert(schema.workflows)
@@ -337,6 +417,56 @@ async function insertWorkflowWithVersion(
     yamlContent: params.yamlContent,
     isActive: true,
   });
+  return wf.id;
+}
+
+async function ensureScheduleForWorkflow(
+  db: ReturnType<typeof getDb>,
+  workflowId: string,
+  triggerConfig: Record<string, unknown>,
+  opts: Required<ApplyBundleOpts>,
+  result: ExtendedApplyResult,
+  ceremonyName: string,
+): Promise<void> {
+  const cronExpr = typeof triggerConfig['cronExpr'] === 'string'
+    ? triggerConfig['cronExpr']
+    : typeof triggerConfig['cron'] === 'string'
+      ? triggerConfig['cron']
+      : null;
+  if (!cronExpr) return;
+  const timezone = typeof triggerConfig['timezone'] === 'string' && triggerConfig['timezone']
+    ? triggerConfig['timezone']
+    : 'UTC';
+
+  const nextFireAt = computeNextFire(cronExpr, timezone);
+  const [existing] = await db
+    .select({ id: schema.ceremonySchedules.id })
+    .from(schema.ceremonySchedules)
+    .where(eq(schema.ceremonySchedules.workflowId, workflowId))
+    .limit(1);
+
+  if (existing && !opts.overwriteExisting) {
+    result.skipped.push(`schedule: "${ceremonyName}" already has a schedule`);
+    return;
+  }
+
+  if (existing) {
+    await db
+      .update(schema.ceremonySchedules)
+      .set({ cronExpr, timezone, nextFireAt, enabled: true, updatedAt: new Date() })
+      .where(eq(schema.ceremonySchedules.id, existing.id));
+    result.applied.push(`schedule: "${ceremonyName}" updated (${cronExpr})`);
+    return;
+  }
+
+  await db.insert(schema.ceremonySchedules).values({
+    workflowId,
+    cronExpr,
+    timezone,
+    nextFireAt,
+    enabled: true,
+  });
+  result.applied.push(`schedule: "${ceremonyName}" created (${cronExpr})`);
 }
 
 // ---------------------------------------------------------------------------
@@ -387,6 +517,17 @@ async function applyCeremonies(
     const key = ceremony.name.toLowerCase();
     if (existingByName.has(key) && !opts.overwriteExisting) {
       result.skipped.push(`ceremony: "${ceremony.name}" already exists`);
+      const { kind: triggerKind, config: triggerConfig } = normalizeCeremonyTrigger(ceremony.trigger);
+      if (!opts.dryRun && triggerKind === 'on_schedule') {
+        await ensureScheduleForWorkflow(
+          db,
+          existingByName.get(key)!,
+          triggerConfig,
+          opts,
+          result,
+          ceremony.name,
+        );
+      }
       continue;
     }
 
@@ -442,9 +583,12 @@ async function applyCeremonies(
         isActive: true,
       });
       result.applied.push(`ceremony: "${ceremony.name}" updated`);
+      if (triggerKind === 'on_schedule') {
+        await ensureScheduleForWorkflow(db, id, triggerConfig, opts, result, ceremony.name);
+      }
     } else {
       const { kind: triggerKind, config: triggerConfig } = normalizeCeremonyTrigger(ceremony.trigger);
-      await insertWorkflowWithVersion(db, {
+      const workflowId = await insertWorkflowWithVersion(db, {
         projectId,
         name: ceremony.name,
         kind: 'ceremony',
@@ -453,6 +597,9 @@ async function applyCeremonies(
         yamlContent,
       });
       result.applied.push(`ceremony: "${ceremony.name}" created`);
+      if (triggerKind === 'on_schedule') {
+        await ensureScheduleForWorkflow(db, workflowId, triggerConfig, opts, result, ceremony.name);
+      }
     }
   }
 }
@@ -782,6 +929,7 @@ export async function applyBundle(
 
   const pid = projectId ?? 'dry-run-placeholder';
 
+  if (projectId) await applyProjectSettings(bundle, projectId, resolvedOpts, result);
   await applyKanban(bundle, pid, resolvedOpts, result);
   await applyTeam(bundle, pid, resolvedOpts, result);
   await applyCeremonies(bundle, pid, resolvedOpts, result);

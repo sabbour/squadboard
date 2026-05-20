@@ -1,0 +1,162 @@
+{
+  "manifest": {
+    "bundleId": "squad-issues-router",
+    "name": "Squad Issues Router",
+    "version": "0.1.0",
+    "description": "Operating model for scheduled intake and triage of Squad GitHub Issues from bradygaster/squad.",
+    "author": "Squadboard team",
+    "license": "MIT",
+    "schemaVersion": 1
+  },
+  "project": {
+    "name": "Squad Issues Router",
+    "description": "A GitHub Issues routing operating model for the Squad repository.",
+    "icon": "ISS",
+    "settings": {
+      "githubIssueIntake": {
+        "contractVersion": "squadboard.github-issue-intake.v1",
+        "owner": "bradygaster",
+        "repo": "squad",
+        "htmlUrl": "https://github.com/bradygaster/squad",
+        "state": "open",
+        "excludePullRequests": true,
+        "scheduleCron": "0 */6 * * *",
+        "cursor": {
+          "kind": "project.githubSyncLastAt",
+          "fallback": "initial-import-uses-updated-desc-first-page"
+        },
+        "dedupeBy": [
+          "githubIssueNumber",
+          "githubNodeId"
+        ],
+        "targetColumn": "triage",
+        "triageCeremonyId": "squad-issue-triage",
+        "backendDependency": "Reusable scheduled GitHub issue intake should map this contract onto GitHubSync.pullChanges(since), skip already-linked issues by githubIssueNumber/githubNodeId, update project.githubSyncLastAt, and route new or changed open issues into targetColumn."
+      }
+    }
+  },
+  "kanban": {
+    "columns": [
+      {
+        "slug": "triage",
+        "label": "Triage",
+        "order": 0,
+        "wip_limit": 8
+      },
+      {
+        "slug": "needs-info",
+        "label": "Needs Info",
+        "order": 1
+      },
+      {
+        "slug": "done",
+        "label": "Done",
+        "order": 2
+      }
+    ],
+    "defaultColumn": "triage"
+  },
+  "team": [
+    {
+      "name": "issue-triager",
+      "role": "Squad Issue Triage Lead",
+      "persistent": true,
+      "charter": "# issue-triager\n\n## Role\nClassifies incoming Squad GitHub Issues and chooses the next workflow state.\n\n## Focus\n- Distinguish bugs, feature requests, docs issues, questions, and maintenance chores.\n- Detect duplicates and requests that need more information.\n- Recommend labels, severity, and the next human or agent owner.\n"
+    },
+    {
+      "name": "maintainer-router",
+      "role": "Squad Maintainer Router",
+      "persistent": true,
+      "charter": "# maintainer-router\n\n## Role\nPrepares issues that require Squad maintainer attention.\n\n## Focus\n- Summarize impact, repro evidence, related issues, and requested decision.\n- Separate user support from repository maintenance work.\n- Keep escalation notes short enough for maintainers to act on quickly.\n"
+    },
+    {
+      "name": "response-drafter",
+      "role": "GitHub Response Drafter",
+      "persistent": true,
+      "charter": "# response-drafter\n\n## Role\nDrafts clear, respectful GitHub issue responses for Squad contributors and users.\n\n## Focus\n- Ask for missing diagnostics or reproduction details.\n- Explain next steps without over-promising.\n- Link to relevant docs or project areas when known.\n"
+    }
+  ],
+  "ceremonies": [
+    {
+      "id": "squad-github-issue-intake",
+      "name": "Squad GitHub Issue Intake",
+      "scope": "project",
+      "trigger": {
+        "kind": "on_schedule",
+        "config": {
+          "cron": "0 */6 * * *",
+          "timezone": "UTC",
+          "contractVersion": "squadboard.github-issue-intake.v1",
+          "owner": "bradygaster",
+          "repo": "squad",
+          "sinceCursor": "project.githubSyncLastAt",
+          "dedupeBy": [
+            "githubIssueNumber",
+            "githubNodeId"
+          ],
+          "targetColumn": "triage",
+          "excludePullRequests": true
+        }
+      },
+      "workflowYaml": "name: Squad GitHub Issue Intake\ndescription: Scheduled intake contract for bradygaster/squad GitHub Issues. Requires backend support for squadboard.github-issue-intake.v1.\nsteps:\n  - type: agent_run\n    label: Plan incremental GitHub issue intake\n    agent: issue-triager\n    prompt: \"Use the squadboard.github-issue-intake.v1 contract from project.settings.githubIssueIntake: repo bradygaster/squad, state=open, exclude pull requests, cursor=project.githubSyncLastAt, dedupeBy=githubIssueNumber/githubNodeId, targetColumn=triage. Backend dependency: a reusable GitHub issue intake step/tool must fetch only issues updated since the cursor, skip already-linked issues, upsert new or changed issues, update the cursor, and enqueue changed issues for Squad Issue Triage. Until that backend primitive is available, return the exact intake plan and do not claim issues were imported.\"\n    timeout: 20m\n  - type: agent_run\n    label: Route imported issue batch\n    agent: issue-triager\n    prompt: \"For each newly imported or changed issue made available by the intake step, route it into Triage with recommended labels, duplicate candidates, good-first-issue suitability, and maintainer decision needs. If no imported batch is present, report that the backend intake dependency is not yet available.\"\n    timeout: 30m\n"
+    },
+    {
+      "id": "squad-issue-triage",
+      "name": "Squad Issue Triage",
+      "scope": "task",
+      "trigger": {
+        "kind": "on_issue_entry",
+        "config": {
+          "column": "triage"
+        }
+      },
+      "workflowYaml": "name: Squad Issue Triage\ndescription: Classify newly imported or changed Squad GitHub Issues and recommend the next maintainer action.\nsteps:\n  - type: agent_run\n    label: Classify Squad issue\n    agent: issue-triager\n    prompt: \"Classify this Squad GitHub Issue from bradygaster/squad. Identify type, severity, duplicate risk, missing information, suggested labels, whether it belongs in Needs Info or Done, and next owner. Follow the open-source workflow: good-first-issue when safe, maintainer escalation when a decision is needed, and contributor-friendly guidance for unclear reports.\"\n    timeout: 20m\n  - type: agent_run\n    label: Draft GitHub response\n    agent: response-drafter\n    prompt: \"Draft a concise GitHub response using the triage findings. Ask for missing details when needed, link relevant docs when known, and avoid promising timelines.\"\n    timeout: 20m\n"
+    }
+  ],
+  "skills": [
+    {
+      "key": "squad-issue-triage",
+      "name": "Squad GitHub Issue Triage",
+      "description": "Classify Squad GitHub Issues, identify duplicates and missing details, and draft next-action responses.",
+      "category": "github",
+      "promptAddendum": "When triaging Squad GitHub Issues, always return issue type, severity, missing information, duplicate candidates if known, recommended labels, and a concise next action."
+    }
+  ],
+  "routing": [
+    {
+      "pattern": "bug",
+      "matchType": "label",
+      "agentName": "issue-triager",
+      "priority": 10,
+      "rawRule": "| bug | issue-triager | Bugs start with issue triage. |"
+    },
+    {
+      "pattern": "docs",
+      "matchType": "label",
+      "agentName": "response-drafter",
+      "priority": 20,
+      "rawRule": "| docs | response-drafter | Docs issues need a contributor-facing response. |"
+    },
+    {
+      "pattern": "maintainer",
+      "matchType": "label",
+      "agentName": "maintainer-router",
+      "priority": 30,
+      "rawRule": "| maintainer | maintainer-router | Maintainer-labeled issues need escalation context. |"
+    },
+    {
+      "pattern": "needs-info",
+      "matchType": "label",
+      "agentName": "response-drafter",
+      "priority": 40,
+      "rawRule": "| needs-info | response-drafter | Needs Info issues need a clear request for missing details. |"
+    },
+    {
+      "pattern": "catchall",
+      "matchType": "catchall",
+      "agentName": "issue-triager",
+      "priority": 99,
+      "rawRule": "| * | issue-triager | All other issues start in triage. |"
+    }
+  ]
+}

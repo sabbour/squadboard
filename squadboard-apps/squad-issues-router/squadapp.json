@@ -1,0 +1,22 @@
+{
+  "$schema": "https://squadboard.dev/schemas/squadapp/v1/squadapp.json",
+  "schemaVersion": 1,
+  "appId": "squad-issues-router",
+  "version": "0.1.0",
+  "name": "Squad Issues Router",
+  "displayName": "Squad Issues Router",
+  "description": "Operating model for scheduled intake and triage of Squad GitHub Issues from bradygaster/squad.",
+  "kind": "squadboard-app",
+  "author": "Squadboard team",
+  "license": "MIT",
+  "homepage": "https://github.com/sabbour/squadboard-apps",
+  "tags": [
+    "squad",
+    "github",
+    "issues",
+    "triage"
+  ],
+  "requires": {
+    "squadboard": ">=0.1.0"
+  }
+}

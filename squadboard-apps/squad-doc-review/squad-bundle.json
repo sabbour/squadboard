@@ -1,0 +1,281 @@
+{
+  "manifest": {
+    "bundleId": "squad-doc-review",
+    "name": "Squad Doc Review",
+    "version": "0.1.0",
+    "description": "Scheduled and manual review of Squad documentation changes, producing grouped Squadboard review issues by doc path.",
+    "author": "Squadboard team",
+    "license": "MIT",
+    "schemaVersion": 1
+  },
+  "project": {
+    "name": "Squad Doc Review",
+    "description": "A scheduled and manual documentation review workflow for the Squad repository.",
+    "icon": "DOC",
+    "settings": {
+      "docReview": {
+        "contractVersion": "squadboard.doc-review-intake.v1",
+        "source": {
+          "type": "github-repo",
+          "owner": "bradygaster",
+          "repo": "squad",
+          "htmlUrl": "https://github.com/bradygaster/squad",
+          "includePaths": [
+            "docs/**",
+            "README.md",
+            "CONTRIBUTING.md"
+          ]
+        },
+        "reviewProfiles": [
+          "technical-accuracy",
+          "reader-success",
+          "staleness"
+        ],
+        "staleThresholdDays": 30,
+        "rubric": {
+          "profile": "balanced-maintainer",
+          "checks": [
+            "technical-accuracy",
+            "reader-success",
+            "stale-screenshots-or-commands",
+            "missing-prerequisites",
+            "owner-and-severity"
+          ]
+        },
+        "schedule": {
+          "cron": "0 9 * * 1",
+          "timezone": "UTC",
+          "configurable": true,
+          "cronExpr": "0 9 * * 1"
+        },
+        "cursor": {
+          "kind": "docReviewCursor",
+          "dedupeKey": [
+            "repo",
+            "path",
+            "blobSha",
+            "commitSha",
+            "reviewProfile"
+          ],
+          "fallback": "initial-run-reviews-configured-source-once"
+        },
+        "manual": {
+          "enabled": true,
+          "platformCapability": "reusable-ceremony-run-now-with-context",
+          "modes": [
+            "selected-docs",
+            "changed-docs",
+            "configured-source"
+          ],
+          "defaultMode": "selected-docs",
+          "contextContract": {
+            "selectedDocs": "array of repo-relative paths with optional commitSha/blobSha",
+            "mode": "selected-docs | changed-docs | configured-source"
+          }
+        },
+        "explicitQueue": {
+          "kind": "doc-path-list",
+          "description": "Optional queued docs are reviewed even when unchanged since the cursor."
+        },
+        "triage": {
+          "labels": [
+            "docs",
+            "technical-review",
+            "reader-success",
+            "needs-owner"
+          ],
+          "stages": [
+            "technical-review",
+            "reader-review",
+            "maintainer-review"
+          ]
+        },
+        "finalAction": {
+          "kind": "create-or-update-squadboard-issues",
+          "groupBy": "docPath",
+          "autoEditDocs": false,
+          "draftPr": "future-explicit-action-only",
+          "fields": [
+            "docPath",
+            "findingSummary",
+            "severity",
+            "ownerRecommendation",
+            "suggestedPatchChecklist",
+            "sourceSha",
+            "reviewProfile"
+          ],
+          "futureOptionalActions": [
+            "draft-pr"
+          ]
+        },
+        "backendDependencies": [
+          "Reusable doc review intake enumerates changed/stale docs since the source-specific docReviewCursor plus explicitly queued docs, using repo+path+blob/commit SHA+review profile as the dedupe key.",
+          "Manual ceremony runs exist and POST /ceremonies/:id/run persists selected-doc/manual-mode payloads in trigger_source.context so the UI can pass selected docs into the run.",
+          "Final action should create/update Squadboard issues grouped by doc path; it must not auto-edit docs by default."
+        ]
+      }
+    }
+  },
+  "kanban": {
+    "columns": [
+      {
+        "slug": "backlog",
+        "label": "Backlog",
+        "order": 0
+      },
+      {
+        "slug": "ready",
+        "label": "Ready",
+        "order": 1
+      },
+      {
+        "slug": "technical-review",
+        "label": "Technical Review",
+        "order": 2,
+        "wip_limit": 3
+      },
+      {
+        "slug": "reader-review",
+        "label": "Reader Review",
+        "order": 3
+      },
+      {
+        "slug": "maintainer-review",
+        "label": "Maintainer Review",
+        "order": 4
+      },
+      {
+        "slug": "done",
+        "label": "Done",
+        "order": 5
+      }
+    ],
+    "defaultColumn": "backlog"
+  },
+  "team": [
+    {
+      "name": "docs-maintainer",
+      "role": "Squad Docs Maintainer",
+      "persistent": true,
+      "charter": "# docs-maintainer\n\n## Role\nOwns the documentation review path for changes to Squad docs.\n\n## Focus\n- Confirm the change explains the user task clearly.\n- Check that examples, commands, and file paths match the Squad repository conventions.\n- Separate blocking doc correctness issues from editorial suggestions.\n"
+    },
+    {
+      "name": "technical-reviewer",
+      "role": "Squad Technical Reviewer",
+      "persistent": true,
+      "charter": "# technical-reviewer\n\n## Role\nReviews Squad documentation for technical accuracy against expected product behavior.\n\n## Focus\n- Validate setup steps, CLI commands, API names, and integration boundaries.\n- Flag stale architecture claims or unsafe operational advice.\n- Ask for reproduction or verification evidence when instructions are ambiguous.\n"
+    },
+    {
+      "name": "reader-advocate",
+      "role": "New User Advocate",
+      "persistent": true,
+      "charter": "# reader-advocate\n\n## Role\nReads Squad docs from the perspective of a first-time contributor or operator.\n\n## Focus\n- Identify missing prerequisites and unexplained terms.\n- Keep task flow discoverable and concise.\n- Convert feedback into concrete rewrite suggestions.\n"
+    }
+  ],
+  "ceremonies": [
+    {
+      "id": "squad-doc-review-scheduled",
+      "name": "Squad Doc Review \u2014 Scheduled",
+      "scope": "project",
+      "trigger": {
+        "kind": "on_schedule",
+        "config": {
+          "cron": "0 9 * * 1",
+          "timezone": "UTC",
+          "configurable": true,
+          "contractVersion": "squadboard.doc-review-intake.v1",
+          "owner": "bradygaster",
+          "repo": "squad",
+          "staleThresholdDays": 30,
+          "includePaths": [
+            "docs/**",
+            "README.md",
+            "CONTRIBUTING.md"
+          ],
+          "reviewProfiles": [
+            "technical-accuracy",
+            "reader-success",
+            "staleness"
+          ],
+          "cursor": "docReviewCursor",
+          "dedupeBy": [
+            "repo",
+            "path",
+            "blobSha",
+            "commitSha",
+            "reviewProfile"
+          ],
+          "includeQueuedDocs": true,
+          "triageStages": [
+            "technical-review",
+            "reader-review",
+            "maintainer-review"
+          ],
+          "finalAction": "create-or-update-squadboard-issues",
+          "finalActionPolicy": {
+            "autoEditDocs": false,
+            "draftPr": "future-explicit-action-only"
+          },
+          "cronExpr": "0 9 * * 1"
+        }
+      },
+      "workflowYaml": "name: Squad Doc Review\noutput_schema:\n  type: object\n  required:\n    - reviewIssues\n  properties:\n    reviewIssues:\n      type: array\n      items:\n        type: object\n        required:\n          - docPath\n          - severity\n          - findingSummary\n          - ownerRecommendation\n          - suggestedPatchChecklist\n        properties:\n          docPath:\n            type: string\n          severity:\n            type: string\n            enum: [critical, high, medium, low]\n          findingSummary:\n            type: string\n          ownerRecommendation:\n            type: string\n          suggestedPatchChecklist:\n            type: array\n            items:\n              type: string\n          sourceSha:\n            type: string\n          reviewProfile:\n            type: string\nsteps:\n  - type: agent_run\n    label: Select docs for review\n    agent: docs-maintainer\n    prompt: \"Use project.settings.docReview (squadboard.doc-review-intake.v1). For scheduled runs, select changed or stale docs from bradygaster/squad since the docReviewCursor plus any explicitly queued docs. For manual runs, honor selected docs, changed docs, or the configured source mode from run context when provided. Dedupe by repo + path + blob/commit SHA + review profile. If backend intake/context is unavailable, return the exact candidate-selection plan and dependency gap.\"\n    timeout: 20m\n  - type: agent_run\n    label: Technical documentation review\n    agent: technical-reviewer\n    prompt: \"Review the selected Squad docs for technical accuracy. Check commands, repository paths, API names, integration boundaries, stale behavior, and validation evidence. Do not edit files. Return findings grouped by doc path with severity and source SHA when known.\"\n    timeout: 30m\n  - type: agent_run\n    label: Reader success review\n    agent: reader-advocate\n    prompt: \"Review the selected Squad docs as a first-time user or contributor. Flag missing prerequisites, unexplained jargon, confusing flow, stale screenshots or examples, and unclear next steps. Do not edit files. Return findings grouped by doc path.\"\n    timeout: 25m\n  - type: agent_run\n    label: Create or update review issues\n    agent: docs-maintainer\n    prompt: \"Final action: create or update Squadboard review issues grouped by doc path. Each issue must include finding summary, severity, owner recommendation, source SHA/review profile, and a suggested patch or PR checklist. Do NOT auto-edit docs or open a PR by default. If issue-creation tooling is not available in this runtime, output the issue payloads exactly so the backend can persist them.\"\n    timeout: 30m\n"
+    },
+    {
+      "id": "squad-doc-review-manual",
+      "name": "Squad Doc Review \u2014 Manual",
+      "scope": "project",
+      "trigger": {
+        "kind": "manual",
+        "config": {
+          "contractVersion": "squadboard.doc-review-intake.v1",
+          "platformCapability": "reusable-ceremony-run-now-with-context",
+          "supportedModes": [
+            "selected-docs",
+            "changed-docs",
+            "configured-source"
+          ],
+          "defaultMode": "selected-docs",
+          "contextContract": {
+            "selectedDocs": "array of repo-relative paths with optional commitSha/blobSha",
+            "mode": "selected-docs | changed-docs | configured-source"
+          },
+          "finalAction": "create-or-update-squadboard-issues"
+        }
+      },
+      "workflowYaml": "name: Squad Doc Review\noutput_schema:\n  type: object\n  required:\n    - reviewIssues\n  properties:\n    reviewIssues:\n      type: array\n      items:\n        type: object\n        required:\n          - docPath\n          - severity\n          - findingSummary\n          - ownerRecommendation\n          - suggestedPatchChecklist\n        properties:\n          docPath:\n            type: string\n          severity:\n            type: string\n            enum: [critical, high, medium, low]\n          findingSummary:\n            type: string\n          ownerRecommendation:\n            type: string\n          suggestedPatchChecklist:\n            type: array\n            items:\n              type: string\n          sourceSha:\n            type: string\n          reviewProfile:\n            type: string\nsteps:\n  - type: agent_run\n    label: Select docs for review\n    agent: docs-maintainer\n    prompt: \"Use project.settings.docReview (squadboard.doc-review-intake.v1). For scheduled runs, select changed or stale docs from bradygaster/squad since the docReviewCursor plus any explicitly queued docs. For manual runs, honor selected docs, changed docs, or the configured source mode from run context when provided. Dedupe by repo + path + blob/commit SHA + review profile. If backend intake/context is unavailable, return the exact candidate-selection plan and dependency gap.\"\n    timeout: 20m\n  - type: agent_run\n    label: Technical documentation review\n    agent: technical-reviewer\n    prompt: \"Review the selected Squad docs for technical accuracy. Check commands, repository paths, API names, integration boundaries, stale behavior, and validation evidence. Do not edit files. Return findings grouped by doc path with severity and source SHA when known.\"\n    timeout: 30m\n  - type: agent_run\n    label: Reader success review\n    agent: reader-advocate\n    prompt: \"Review the selected Squad docs as a first-time user or contributor. Flag missing prerequisites, unexplained jargon, confusing flow, stale screenshots or examples, and unclear next steps. Do not edit files. Return findings grouped by doc path.\"\n    timeout: 25m\n  - type: agent_run\n    label: Create or update review issues\n    agent: docs-maintainer\n    prompt: \"Final action: create or update Squadboard review issues grouped by doc path. Each issue must include finding summary, severity, owner recommendation, source SHA/review profile, and a suggested patch or PR checklist. Do NOT auto-edit docs or open a PR by default. If issue-creation tooling is not available in this runtime, output the issue payloads exactly so the backend can persist them.\"\n    timeout: 30m\n"
+    }
+  ],
+  "skills": [
+    {
+      "key": "squad-doc-review",
+      "name": "Squad Documentation Review",
+      "description": "Review Squad docs for technical accuracy, reader success, examples, prerequisites, and publish readiness.",
+      "category": "docs",
+      "promptAddendum": "When reviewing Squad docs, separate blocking correctness issues from editorial polish. Always identify the exact command, path, heading, or prerequisite that needs attention."
+    }
+  ],
+  "routing": [
+    {
+      "pattern": "docs",
+      "matchType": "label",
+      "agentName": "docs-maintainer",
+      "priority": 10,
+      "rawRule": "| docs | docs-maintainer | Documentation work starts with the docs maintainer. |"
+    },
+    {
+      "pattern": "technical-review",
+      "matchType": "label",
+      "agentName": "technical-reviewer",
+      "priority": 20,
+      "rawRule": "| technical-review | technical-reviewer | Technical doc review routes to the technical reviewer. |"
+    },
+    {
+      "pattern": "catchall",
+      "matchType": "catchall",
+      "agentName": "reader-advocate",
+      "priority": 99,
+      "rawRule": "| * | reader-advocate | Unlabeled documentation work gets a reader-success pass. |"
+    }
+  ]
+}

@@ -403,7 +403,12 @@ export interface BuiltinProjectTemplate {
   tags?: string[]
   /** App kind from squadapp.json — e.g. 'project-template'. */
   kind?: string
+  /** Catalog surface: generic project template or Squadboard App. */
+  catalog?: 'template' | 'squadboard-app'
+  homepage?: string
 }
+
+export type SquadboardAppTemplate = BuiltinProjectTemplate
 
 /** List built-in project bundle templates scanned from the server's bundles/ directory. */
 export function useBuiltinProjectTemplates() {
@@ -414,6 +419,20 @@ export function useBuiltinProjectTemplates() {
         '/api/templates/builtin-projects',
       )
       return unwrapEnvelope(env).templates
+    },
+    staleTime: 60_000,
+  })
+}
+
+/** List installable Squadboard Apps. These are domain-specific app packages, not generic project templates. */
+export function useSquadboardApps() {
+  return useQuery<SquadboardAppTemplate[], Error>({
+    queryKey: ['templates', 'squadboard-apps'],
+    queryFn: async () => {
+      const env = await apiFetch<ApiEnvelope<{ apps: SquadboardAppTemplate[] }>>(
+        '/api/templates/squadboard-apps',
+      )
+      return unwrapEnvelope(env).apps
     },
     staleTime: 60_000,
   })
@@ -443,4 +462,43 @@ export function useApplyBuiltinProjectTemplate() {
   })
 }
 
+export function useApplySquadboardApp() {
+  const queryClient = useQueryClient()
+  return useMutation<
+    { id: string; name: string },
+    Error,
+    { bundleId: string; name: string; squadPath: string }
+  >({
+    mutationFn: async ({ bundleId, name, squadPath }) => {
+      const env = await apiFetch<ApiEnvelope<{ project: { id: string; name: string } }>>(
+        `/api/templates/squadboard-apps/${bundleId}/apply`,
+        { method: 'POST', body: JSON.stringify({ name, squadPath }) },
+      )
+      return unwrapEnvelope(env).project
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['projects'] })
+    },
+  })
+}
+
+export function useInstallSquadboardAppFromGithub() {
+  const queryClient = useQueryClient()
+  return useMutation<
+    { id: string; name: string },
+    Error,
+    { repoUrl: string; appPath?: string; ref?: string; name: string; squadPath: string }
+  >({
+    mutationFn: async ({ repoUrl, appPath, ref, name, squadPath }) => {
+      const env = await apiFetch<ApiEnvelope<{ project: { id: string; name: string } }>>(
+        '/api/templates/squadboard-apps/install-from-github',
+        { method: 'POST', body: JSON.stringify({ repoUrl, appPath, ref, name, squadPath }) },
+      )
+      return unwrapEnvelope(env).project
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['projects'] })
+    },
+  })
+}
 

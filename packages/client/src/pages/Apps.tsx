@@ -1,33 +1,11 @@
-/**
- * Apps.tsx — First-class Apps marketplace surface (W26).
- *
- * Provides three views via URL search param `?tab=browse|installed`:
- *
- *   Browse    — all built-in bundle templates (GET /api/templates/builtin-projects).
- *               Each card shows icon, name, description, tags, and an "Apply" button.
- *   Installed — projects you've created (each project is an installed squad app).
- *               Links directly into the project dashboard.
- *
- * "Apply" opens an inline dialog: pick a squad path + project name, then calls
- * POST /api/templates/builtin-projects/:bundleId/apply (reuses useApplyBuiltinProjectTemplate).
- *
- * Sync ownership note (shown in help copy):
- *   Squadboard DB is the source of truth for project state.
- *   Disk (.squad/) is a projection written by the CLI.
- *   Run `squad sync` to push hand-edited disk files back into the DB.
- *   The SDK does not live-mirror filesystem changes automatically.
- */
-
 import { useState } from 'react'
-import { useNavigate, useSearchParams, Link } from 'react-router'
+import { useNavigate } from 'react-router'
 import {
   Title3,
   Body1,
   Caption1,
   Button,
   Spinner,
-  TabList,
-  Tab,
   Field,
   Input,
   Dialog,
@@ -38,18 +16,17 @@ import {
   DialogActions,
   tokens,
   makeStyles,
-  type SelectTabData,
-  type SelectTabEvent,
 } from '@fluentui/react-components'
 import {
-  AppsListDetail24Regular,
-  Folder24Regular,
-  ArrowRight20Regular,
   Info16Regular,
+  Warning20Regular,
 } from '@fluentui/react-icons'
-import { useBuiltinProjectTemplates, useApplyBuiltinProjectTemplate } from '../api/templates.ts'
-import type { BuiltinProjectTemplate } from '../api/templates.ts'
-import { useProjects } from '../api/projects.ts'
+import {
+  useApplySquadboardApp,
+  useInstallSquadboardAppFromGithub,
+  useSquadboardApps,
+} from '../api/templates.ts'
+import type { SquadboardAppTemplate } from '../api/templates.ts'
 import PageHeader from '../components/layout/PageHeader.tsx'
 
 const useStyles = makeStyles({
@@ -64,15 +41,21 @@ const useStyles = makeStyles({
     overflowY: 'auto',
     padding: `${tokens.spacingVerticalL} ${tokens.spacingHorizontalXXL}`,
   },
-  tabBar: {
-    padding: `0 ${tokens.spacingHorizontalXXL}`,
-    borderBottom: `1px solid ${tokens.colorNeutralStroke2}`,
+  section: {
+    marginBottom: tokens.spacingVerticalXXL,
+  },
+  sectionHeader: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: tokens.spacingHorizontalM,
+    marginBottom: tokens.spacingVerticalM,
   },
   grid: {
     display: 'grid',
     gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))',
     gap: tokens.spacingVerticalL,
-    marginTop: tokens.spacingVerticalL,
+    alignItems: 'stretch',
   },
   card: {
     background: tokens.colorNeutralBackground2,
@@ -82,16 +65,13 @@ const useStyles = makeStyles({
     display: 'flex',
     flexDirection: 'column',
     gap: tokens.spacingVerticalS,
+    minHeight: '220px',
+    height: '100%',
   },
   cardHeader: {
     display: 'flex',
     alignItems: 'center',
     gap: tokens.spacingHorizontalS,
-  },
-  cardIcon: {
-    fontSize: '28px',
-    lineHeight: 1,
-    flexShrink: 0,
   },
   cardActions: {
     marginTop: 'auto',
@@ -121,10 +101,10 @@ const useStyles = makeStyles({
     alignItems: 'center',
     justifyContent: 'center',
     gap: tokens.spacingVerticalM,
-    padding: '80px 24px',
+    padding: '48px 24px',
     textAlign: 'center',
   },
-  syncNote: {
+  note: {
     display: 'flex',
     alignItems: 'flex-start',
     gap: tokens.spacingHorizontalS,
@@ -132,176 +112,230 @@ const useStyles = makeStyles({
     border: `1px solid ${tokens.colorNeutralStroke2}`,
     borderRadius: tokens.borderRadiusMedium,
     padding: `${tokens.spacingVerticalS} ${tokens.spacingHorizontalM}`,
-    marginTop: tokens.spacingVerticalL,
     color: tokens.colorNeutralForeground3,
     fontSize: tokens.fontSizeBase200,
   },
-  projectRow: {
+  warning: {
     display: 'flex',
-    alignItems: 'center',
-    gap: tokens.spacingHorizontalM,
+    alignItems: 'flex-start',
+    gap: tokens.spacingHorizontalS,
+    background: tokens.colorStatusWarningBackground1,
+    border: `1px solid ${tokens.colorStatusWarningBorder1}`,
+    borderRadius: tokens.borderRadiusMedium,
     padding: `${tokens.spacingVerticalS} ${tokens.spacingHorizontalM}`,
+    color: tokens.colorNeutralForeground1,
+    fontSize: tokens.fontSizeBase200,
+  },
+  githubPanel: {
     background: tokens.colorNeutralBackground2,
     border: `1px solid ${tokens.colorNeutralStroke2}`,
-    borderRadius: tokens.borderRadiusMedium,
-    textDecoration: 'none',
-    color: 'inherit',
-    transition: 'border-color 0.15s',
-  },
-  projectRowIcon: {
-    color: tokens.colorNeutralForeground3,
-    flexShrink: 0,
-  },
-  projectList: {
+    borderRadius: tokens.borderRadiusLarge,
+    padding: tokens.spacingVerticalL,
     display: 'flex',
     flexDirection: 'column',
-    gap: tokens.spacingVerticalS,
-    marginTop: tokens.spacingVerticalL,
+    gap: tokens.spacingVerticalM,
   },
 })
 
-type TabValue = 'browse' | 'installed'
-
 export default function Apps() {
   const styles = useStyles()
-  const [searchParams, setSearchParams] = useSearchParams()
-  const tab = (searchParams.get('tab') as TabValue) ?? 'browse'
-
-  function setTab(t: TabValue) {
-    setSearchParams({ tab: t }, { replace: true })
-  }
+  const { data: apps = [], isLoading, isError } = useSquadboardApps()
+  const [applyTarget, setApplyTarget] = useState<SquadboardAppTemplate | null>(null)
 
   return (
     <div className={styles.root}>
       <PageHeader
-        title="Apps"
-        description="Browse built-in squad app templates and apply them to create new projects."
+        title="Squadboard Apps"
+        description="Install specific domain packages as new Squadboard projects. Generic, repeatable Project Templates stay under Projects -> Create from template."
       />
 
-      <div className={styles.tabBar}>
-        <TabList
-          selectedValue={tab}
-          onTabSelect={(_: SelectTabEvent, d: SelectTabData) => setTab(d.value as TabValue)}
-        >
-          <Tab value="browse" icon={<AppsListDetail24Regular />}>Browse</Tab>
-          <Tab value="installed" icon={<Folder24Regular />}>Installed</Tab>
-        </TabList>
+      <div className={styles.body}>
+        <section className={styles.section}>
+          <InstallFromGithubPanel />
+        </section>
+
+        <section className={styles.section}>
+          <div className={styles.sectionHeader}>
+            <div>
+              <Title3 as="h2">Available locally</Title3>
+              <Caption1 style={{ display: 'block', color: tokens.colorNeutralForeground3, marginTop: tokens.spacingVerticalXXS }}>
+                Reference apps included with this checkout or staged in the local <code>squadboard-apps/</code> folder.
+              </Caption1>
+            </div>
+          </div>
+
+          {isLoading && (
+            <div className={styles.center}>
+              <Spinner label="Loading Squadboard Apps..." />
+            </div>
+          )}
+
+          {isError && (
+            <div className={styles.center}>
+              <Body1 style={{ color: tokens.colorStatusDangerForeground1 }}>
+                Failed to load local Squadboard Apps.
+              </Body1>
+            </div>
+          )}
+
+          {!isLoading && !isError && apps.length === 0 && (
+            <div className={styles.note}>
+              <Info16Regular style={{ flexShrink: 0, marginTop: '2px' }} />
+              <span>
+                No local Squadboard Apps are available in this checkout yet. Use the GitHub installer above,
+                or clone example apps into <code>squadboard-apps/</code>.
+              </span>
+            </div>
+          )}
+
+          {!isLoading && !isError && apps.length > 0 && (
+            <div className={styles.grid}>
+              {apps.map((app) => (
+                <AppCard key={app.bundleId} app={app} onInstall={() => setApplyTarget(app)} />
+              ))}
+            </div>
+          )}
+        </section>
+
+        <SyncOwnershipNote />
       </div>
 
-      <div className={styles.body}>
-        {tab === 'browse' && <BrowseTab />}
-        {tab === 'installed' && <InstalledTab />}
-      </div>
+      {applyTarget && (
+        <ApplyDialog
+          app={applyTarget}
+          onClose={() => setApplyTarget(null)}
+        />
+      )}
     </div>
   )
 }
 
-// ---------------------------------------------------------------------------
-// Browse tab
-// ---------------------------------------------------------------------------
-
-function BrowseTab() {
+function InstallFromGithubPanel() {
   const styles = useStyles()
-  const { data: bundles = [], isLoading, isError } = useBuiltinProjectTemplates()
-  const [applyTarget, setApplyTarget] = useState<BuiltinProjectTemplate | null>(null)
+  const navigate = useNavigate()
+  const install = useInstallSquadboardAppFromGithub()
+  const [repoUrl, setRepoUrl] = useState('https://github.com/sabbour/squadboard-apps')
+  const [appPath, setAppPath] = useState('')
+  const [ref, setRef] = useState('')
+  const [name, setName] = useState('')
+  const [squadPath, setSquadPath] = useState('')
+  const [error, setError] = useState<string | null>(null)
 
-  if (isLoading) {
-    return (
-      <div className={styles.center}>
-        <Spinner label="Loading apps…" />
-      </div>
-    )
+  async function handleInstall() {
+    if (!repoUrl.trim() || !name.trim() || !squadPath.trim()) return
+    setError(null)
+    try {
+      const result = await install.mutateAsync({
+        repoUrl: repoUrl.trim(),
+        appPath: appPath.trim() || undefined,
+        ref: ref.trim() || undefined,
+        name: name.trim(),
+        squadPath: squadPath.trim(),
+      })
+      void navigate(`/projects/${result.id}/dashboard`)
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : 'Failed to install Squadboard App')
+    }
   }
 
-  if (isError) {
-    return (
-      <div className={styles.center}>
-        <Body1 style={{ color: tokens.colorStatusDangerForeground1 }}>
-          Failed to load built-in apps.
-        </Body1>
-      </div>
-    )
-  }
-
-  if (bundles.length === 0) {
-    return (
-      <div className={styles.center}>
-        <Body1 style={{ color: tokens.colorNeutralForeground3 }}>No built-in apps found.</Body1>
-      </div>
-    )
-  }
+  const canInstall = repoUrl.trim().length > 0 && name.trim().length > 0 && squadPath.trim().length > 0 && !install.isPending
 
   return (
-    <>
-      <div className={styles.grid}>
-        {bundles.map((bundle) => (
-          <BundleCard key={bundle.bundleId} bundle={bundle} onApply={() => setApplyTarget(bundle)} />
-        ))}
+    <div className={styles.githubPanel}>
+      <div>
+        <Title3 as="h2">Install from GitHub</Title3>
+        <Caption1 style={{ display: 'block', color: tokens.colorNeutralForeground3, marginTop: tokens.spacingVerticalXXS }}>
+          Point to a GitHub repo that contains a Squadboard App. Squadboard clones the repo, reads the bundle, and creates a normal project.
+        </Caption1>
       </div>
 
-      <SyncOwnershipNote />
-
-      {applyTarget && (
-        <ApplyDialog
-          bundle={applyTarget}
-          onClose={() => setApplyTarget(null)}
-        />
-      )}
-    </>
-  )
-}
-
-function BundleCard({
-  bundle,
-  onApply,
-}: {
-  bundle: BuiltinProjectTemplate
-  onApply: () => void
-}) {
-  const styles = useStyles()
-
-  return (
-    <div className={styles.card}>
-      <div className={styles.cardHeader}>
-        {bundle.icon && <span className={styles.cardIcon}>{bundle.icon}</span>}
-        <Title3 as="h3" style={{ margin: 0 }}>{bundle.name}</Title3>
+      <div className={styles.warning}>
+        <Warning20Regular style={{ flexShrink: 0, marginTop: '1px' }} />
+        <span>
+          Only install Squadboard Apps from sources you trust. Unknown repos can add agent prompts,
+          ceremonies, skills, tools, MCP server recipes, and seed work to the new project. Review
+          the source before installing.
+        </span>
       </div>
 
-      <Body1 style={{ color: tokens.colorNeutralForeground2 }}>{bundle.description}</Body1>
+      <Field label="GitHub repository URL" required>
+        <Input value={repoUrl} onChange={(_, d) => setRepoUrl(d.value)} placeholder="https://github.com/sabbour/squadboard-apps" />
+      </Field>
+      <Field label="App folder" hint="Folder inside the repo that contains squad-bundle.json. Leave empty if the app is at the repo root.">
+        <Input value={appPath} onChange={(_, d) => setAppPath(d.value)} placeholder="squad-doc-review" />
+      </Field>
+      <Field label="Git ref" hint="Optional branch or tag. Defaults to the repository default branch.">
+        <Input value={ref} onChange={(_, d) => setRef(d.value)} placeholder="main" />
+      </Field>
+      <Field label="Project name" required>
+        <Input value={name} onChange={(_, d) => setName(d.value)} placeholder="Squad Doc Review" />
+      </Field>
+      <Field label="Absolute project folder or .squad path" hint="Use an absolute path. If you provide a project folder, Squadboard creates .squad/ inside it." required>
+        <Input value={squadPath} onChange={(_, d) => setSquadPath(d.value)} placeholder="/home/you/projects/squad-doc-review" />
+      </Field>
 
-      {bundle.tags && bundle.tags.length > 0 && (
-        <div className={styles.tagRow}>
-          {bundle.tags.map((tag) => (
-            <span key={tag} className={styles.tag}>{tag}</span>
-          ))}
-        </div>
-      )}
+      {error && <Body1 style={{ color: tokens.colorStatusDangerForeground1 }}>{error}</Body1>}
 
-      <Caption1 style={{ color: tokens.colorNeutralForeground4 }}>v{bundle.version}</Caption1>
-
-      <div className={styles.cardActions}>
-        <Button appearance="primary" size="small" onClick={onApply}>
-          Apply
+      <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+        <Button
+          appearance="primary"
+          onClick={() => void handleInstall()}
+          disabled={!canInstall}
+          icon={install.isPending ? <Spinner size="tiny" /> : undefined}
+        >
+          {install.isPending ? 'Installing...' : 'Install as project'}
         </Button>
       </div>
     </div>
   )
 }
 
-// ---------------------------------------------------------------------------
-// Apply dialog
-// ---------------------------------------------------------------------------
+function AppCard({
+  app,
+  onInstall,
+}: {
+  app: SquadboardAppTemplate
+  onInstall: () => void
+}) {
+  const styles = useStyles()
+
+  return (
+    <div className={styles.card}>
+      <div className={styles.cardHeader}>
+        <Title3 as="h3" style={{ margin: 0 }}>{app.name}</Title3>
+      </div>
+
+      <Body1 style={{ color: tokens.colorNeutralForeground2 }}>{app.description}</Body1>
+
+      {app.tags && app.tags.length > 0 && (
+        <div className={styles.tagRow}>
+          {app.tags.map((tag) => (
+            <span key={tag} className={styles.tag}>{tag}</span>
+          ))}
+        </div>
+      )}
+
+      <Caption1 style={{ color: tokens.colorNeutralForeground4 }}>v{app.version}</Caption1>
+
+      <div className={styles.cardActions}>
+        <Button appearance="primary" size="small" onClick={onInstall}>
+          Install as project
+        </Button>
+      </div>
+    </div>
+  )
+}
 
 function ApplyDialog({
-  bundle,
+  app,
   onClose,
 }: {
-  bundle: BuiltinProjectTemplate
+  app: SquadboardAppTemplate
   onClose: () => void
 }) {
   const navigate = useNavigate()
-  const apply = useApplyBuiltinProjectTemplate()
-  const [name, setName] = useState(bundle.name)
+  const apply = useApplySquadboardApp()
+  const [name, setName] = useState(app.name)
   const [squadPath, setSquadPath] = useState('')
   const [error, setError] = useState<string | null>(null)
 
@@ -310,14 +344,14 @@ function ApplyDialog({
     setError(null)
     try {
       const result = await apply.mutateAsync({
-        bundleId: bundle.bundleId,
+        bundleId: app.bundleId,
         name: name.trim(),
         squadPath: squadPath.trim(),
       })
       onClose()
       void navigate(`/projects/${result.id}/dashboard`)
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : 'Failed to apply app')
+      setError(e instanceof Error ? e.message : 'Failed to install Squadboard App')
     }
   }
 
@@ -327,37 +361,19 @@ function ApplyDialog({
     <Dialog open onOpenChange={(_, d) => { if (!d.open) onClose() }}>
       <DialogSurface style={{ maxWidth: 520, width: '100%' }}>
         <DialogBody>
-          <DialogTitle>
-            Apply — {bundle.name}
-          </DialogTitle>
+          <DialogTitle>Install Squadboard App - {app.name}</DialogTitle>
           <DialogContent style={{ display: 'flex', flexDirection: 'column', gap: tokens.spacingVerticalM }}>
-            <Body1 style={{ color: tokens.colorNeutralForeground2 }}>
-              {bundle.description}
-            </Body1>
+            <Body1 style={{ color: tokens.colorNeutralForeground2 }}>{app.description}</Body1>
 
             <Field label="Project name" required>
-              <Input
-                value={name}
-                onChange={(_, d) => setName(d.value)}
-                placeholder={bundle.name}
-              />
+              <Input value={name} onChange={(_, d) => setName(d.value)} placeholder={app.name} />
             </Field>
 
-            <Field
-              label="Squad path"
-              hint="Absolute path to the .squad/ directory for this project (e.g. /home/you/myproject/.squad). Squadboard DB is the source of truth; this path is used to write the disk projection."
-              required
-            >
-              <Input
-                value={squadPath}
-                onChange={(_, d) => setSquadPath(d.value)}
-                placeholder="/home/you/myproject/.squad"
-              />
+            <Field label="Absolute project folder or .squad path" hint="Use an absolute path. If you provide a project folder, Squadboard creates .squad/ inside it." required>
+              <Input value={squadPath} onChange={(_, d) => setSquadPath(d.value)} placeholder="/home/you/projects/my-app-project" />
             </Field>
 
-            {error && (
-              <Body1 style={{ color: tokens.colorStatusDangerForeground1 }}>{error}</Body1>
-            )}
+            {error && <Body1 style={{ color: tokens.colorStatusDangerForeground1 }}>{error}</Body1>}
           </DialogContent>
           <DialogActions>
             <Button appearance="secondary" onClick={onClose} disabled={apply.isPending}>
@@ -369,7 +385,7 @@ function ApplyDialog({
               disabled={!canApply}
               icon={apply.isPending ? <Spinner size="tiny" /> : undefined}
             >
-              {apply.isPending ? 'Applying…' : 'Apply'}
+              {apply.isPending ? 'Installing...' : 'Install as project'}
             </Button>
           </DialogActions>
         </DialogBody>
@@ -378,84 +394,15 @@ function ApplyDialog({
   )
 }
 
-// ---------------------------------------------------------------------------
-// Installed tab
-// ---------------------------------------------------------------------------
-
-function InstalledTab() {
-  const styles = useStyles()
-  const { data: projects = [], isLoading, isError } = useProjects()
-
-  if (isLoading) {
-    return (
-      <div className={styles.center}>
-        <Spinner label="Loading projects…" />
-      </div>
-    )
-  }
-
-  if (isError) {
-    return (
-      <div className={styles.center}>
-        <Body1 style={{ color: tokens.colorStatusDangerForeground1 }}>
-          Failed to load projects.
-        </Body1>
-      </div>
-    )
-  }
-
-  if (projects.length === 0) {
-    return (
-      <div className={styles.center}>
-        <Body1 style={{ color: tokens.colorNeutralForeground3 }}>
-          No projects yet. Apply an app from the <strong>Browse</strong> tab to get started.
-        </Body1>
-      </div>
-    )
-  }
-
-  return (
-    <>
-      <Body1 style={{ color: tokens.colorNeutralForeground3, marginTop: tokens.spacingVerticalS, display: 'block' }}>
-        Each project is a running squad app. Click to open the project dashboard.
-      </Body1>
-
-      <div className={styles.projectList}>
-        {projects.map((project) => (
-          <Link
-            key={project.id}
-            to={`/projects/${project.id}/dashboard`}
-            className={styles.projectRow}
-          >
-            <Folder24Regular className={styles.projectRowIcon} />
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <Body1 style={{ display: 'block', fontWeight: 600 }}>{project.name}</Body1>
-              <Caption1 style={{ color: tokens.colorNeutralForeground3 }}>{project.squadPath}</Caption1>
-            </div>
-            <ArrowRight20Regular style={{ color: tokens.colorNeutralForeground3, flexShrink: 0 }} />
-          </Link>
-        ))}
-      </div>
-
-      <SyncOwnershipNote />
-    </>
-  )
-}
-
-// ---------------------------------------------------------------------------
-// Shared sync ownership note
-// ---------------------------------------------------------------------------
-
 function SyncOwnershipNote() {
   const styles = useStyles()
   return (
-    <div className={styles.syncNote}>
+    <div className={styles.note}>
       <Info16Regular style={{ flexShrink: 0, marginTop: '2px' }} />
       <span>
-        <strong>Sync ownership:</strong> Squadboard DB is the source of truth for all project
-        state. The <code>.squad/</code> directory on disk is a projection written by the CLI.
-        To push hand-edited disk files back into the DB, run <code>squad sync</code> from the
-        project directory. The SDK does not live-mirror filesystem changes automatically.
+        <strong>Sync ownership:</strong> a Squadboard App creates a normal project. Squadboard state and
+        repository <code>.squad/</code> files stay interchangeable: start in either client, then use sync
+        to reconcile changes so the other surface can continue the same work.
       </span>
     </div>
   )

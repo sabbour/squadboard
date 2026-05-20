@@ -1,8 +1,8 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
   "$id": "https://squadboard.dev/schemas/squadapp/v1/squadapp.json",
-  "title": "SquadApp Manifest",
-  "description": "squadapp.json — the root manifest for a Squadboard Squad App package.",
+  "title": "Squadboard App Manifest",
+  "description": "squadapp.json — the root manifest for a Squadboard App package.",
   "type": "object",
   "required": ["schemaVersion", "appId", "version", "name", "description"],
   "additionalProperties": true,
@@ -33,7 +33,7 @@
       "type": "string",
       "minLength": 1,
       "maxLength": 128,
-      "description": "Canonical display name shown in CLI output and installed-app registry."
+      "description": "Canonical display name shown in CLI output, browse surfaces, and project creation flows."
     },
 
     "displayName": {
@@ -45,7 +45,7 @@
 
     "kind": {
       "type": "string",
-      "enum": ["project-template", "skills-pack", "team-preset", "ceremony-pack"],
+      "enum": ["project-template", "squadboard-app", "skills-pack", "team-preset", "ceremony-pack"],
       "default": "project-template",
       "description": "App classification. Controls install dialog presentation and marketplace browse filters. Defaults to 'project-template'. (W23 gap resolved)"
     },
@@ -85,7 +85,7 @@
       "properties": {
         "squadboard": {
           "type": "string",
-          "description": "semver range that the installed Squadboard version must satisfy."
+      "description": "semver range that the running Squadboard version must satisfy."
         }
       },
       "additionalProperties": false

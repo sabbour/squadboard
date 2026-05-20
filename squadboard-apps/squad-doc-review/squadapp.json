@@ -1,0 +1,22 @@
+{
+  "$schema": "https://squadboard.dev/schemas/squadapp/v1/squadapp.json",
+  "schemaVersion": 1,
+  "appId": "squad-doc-review",
+  "version": "0.1.0",
+  "name": "Squad Doc Review",
+  "displayName": "Squad Doc Review",
+  "description": "Scheduled and manual review of Squad documentation changes, producing grouped Squadboard review issues by doc path.",
+  "kind": "squadboard-app",
+  "author": "Squadboard team",
+  "license": "MIT",
+  "homepage": "https://github.com/sabbour/squadboard-apps",
+  "tags": [
+    "squad",
+    "docs",
+    "review",
+    "open-source"
+  ],
+  "requires": {
+    "squadboard": ">=0.1.0"
+  }
+}
