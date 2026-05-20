@@ -12,7 +12,7 @@ import {
   tokens,
   type BadgeProps,
 } from '@fluentui/react-components'
-import { ArrowClockwise20Regular, ArrowLeft20Regular, Open20Regular } from '@fluentui/react-icons'
+import { ArrowClockwise20Regular, ArrowLeft20Regular, Open20Regular, Play16Regular } from '@fluentui/react-icons'
 import { useProject } from '../api/projects.ts'
 import { useCeremonyRuns, type CeremonyRunEvent, type CeremonyRunStep, type CeremonyRunSummary } from '../api/ceremonies.ts'
 import PageHeader from '../components/layout/PageHeader.tsx'
@@ -97,6 +97,7 @@ export default function CeremonyRuns() {
   const { data: project } = useProject(projectId)
   const { data, isLoading, isError, refetch } = useCeremonyRuns(projectId, ceremonyId)
   const focusedRunId = searchParams.get('run')
+  const ceremonyPath = `/projects/${projectId}/ceremonies/${ceremonyId}`
 
   const runs = useMemo(() => {
     if (!data?.runs || !focusedRunId) return data?.runs ?? []
@@ -114,7 +115,7 @@ export default function CeremonyRuns() {
       <Button
         appearance="subtle"
         icon={<ArrowLeft20Regular />}
-        onClick={() => navigate(`/projects/${projectId}/ceremonies/${ceremonyId}`)}
+        onClick={() => navigate(ceremonyPath)}
       >
         Ceremony
       </Button>
@@ -169,19 +170,50 @@ export default function CeremonyRuns() {
 
         {!isError && runs.length === 0 && (
           <div
+            role="region"
+            aria-labelledby="ceremony-runs-empty-heading"
             style={{
-              border: `1px dashed ${tokens.colorNeutralStroke2}`,
-              borderRadius: tokens.borderRadiusLarge,
-              padding: tokens.spacingHorizontalXXL,
+              alignSelf: 'center',
+              width: '100%',
+              maxWidth: 520,
+              boxSizing: 'border-box',
+              display: 'grid',
+              justifyItems: 'center',
+              gap: tokens.spacingVerticalM,
+              border: `1px solid ${tokens.colorNeutralStroke2}`,
+              borderRadius: tokens.borderRadiusXLarge,
+              background: tokens.colorNeutralBackground2,
+              boxShadow: tokens.shadow4,
+              padding: `${tokens.spacingVerticalXXL} ${tokens.spacingHorizontalXXL}`,
               textAlign: 'center',
-              color: tokens.colorNeutralForeground3,
             }}
           >
-            <Subtitle1>No runs yet</Subtitle1>
-            <Body1 style={{ maxWidth: 560, margin: `${tokens.spacingVerticalS} auto 0` }}>
-              Run this ceremony manually, or wait for its schedule/event/agent signal. When it executes,
-              workflow runs, step output, errors, and agent event logs will appear here.
+            <Subtitle1
+              as="h2"
+              id="ceremony-runs-empty-heading"
+              style={{ margin: 0, color: tokens.colorNeutralForeground1 }}
+            >
+              No runs yet
+            </Subtitle1>
+            <Body1
+              as="p"
+              style={{
+                display: 'block',
+                maxWidth: 460,
+                margin: 0,
+                color: tokens.colorNeutralForeground3,
+              }}
+            >
+              Open the ceremony and choose Run now, or wait for a schedule, event, or agent signal.
+              Once it starts, trigger details, step output, errors, and linked agent event logs will appear here.
             </Body1>
+            <Button
+              appearance="primary"
+              icon={<Play16Regular />}
+              onClick={() => navigate(ceremonyPath)}
+            >
+              Open ceremony to run
+            </Button>
           </div>
         )}
 

@@ -124,12 +124,29 @@ describe('CeremonyRuns page', () => {
     expect(navigateMock).toHaveBeenCalledWith('/projects/project-123/issues/issue-123/runs/issue-run-123/live')
   })
 
-  it('explains the empty state before a ceremony has run', () => {
+  it('renders an intentional empty state before a ceremony has run', () => {
     apiMock.runsQuery.data = makeRunsResponse({ runs: [] })
 
     renderCeremonyRuns()
 
-    expect(screen.getByText('No runs yet')).toBeInTheDocument()
-    expect(screen.getByText(/workflow runs, step output, errors, and agent event logs/i)).toBeInTheDocument()
+    const heading = screen.getByRole('heading', { level: 2, name: 'No runs yet' })
+    const body = screen.getByText(/Open the ceremony and choose Run now/i)
+
+    expect(heading).toBeInTheDocument()
+    expect(heading).not.toHaveTextContent(/Open the ceremony/i)
+    expect(body.tagName).toBe('P')
+    expect(body).toHaveTextContent(/linked agent event logs will appear here/i)
+    expect(screen.getByRole('button', { name: /open ceremony to run/i })).toBeInTheDocument()
+  })
+
+  it('opens the ceremony editor from the empty state call to action', async () => {
+    const user = userEvent.setup()
+    apiMock.runsQuery.data = makeRunsResponse({ runs: [] })
+
+    renderCeremonyRuns()
+
+    await user.click(screen.getByRole('button', { name: /open ceremony to run/i }))
+
+    expect(navigateMock).toHaveBeenCalledWith('/projects/project-123/ceremonies/ceremony-123')
   })
 })
