@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import RunHistory from '../RunHistory'
@@ -14,6 +14,7 @@ const runsMock = vi.hoisted(() => ({
     completedAt?: string | null
     finishedAt?: string | null
     updatedAt?: string | null
+    durationMs?: number | null
   }>,
   retrigger: {
     mutate: vi.fn(),
@@ -59,6 +60,10 @@ describe('RunHistory retrigger', () => {
     }]
     runsMock.retrigger.mutate.mockReset()
     runsMock.retrigger.isPending = false
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
   })
 
   it('shows a retrigger action for failed runs', () => {
@@ -125,5 +130,29 @@ describe('RunHistory retrigger', () => {
     render(<RunHistory projectId="project-1" issueId="issue-1" />)
 
     expect(screen.getByRole('button', { name: /retrigger run run-1/i })).toBeDisabled()
+  })
+
+  it('freezes failed run elapsed time at the terminal timestamp', () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-05-20T14:45:00.000Z'))
+    runsMock.issueRuns = [{
+      id: 'run-1',
+      issueId: 'issue-1',
+      agentId: 'agent-1',
+      status: 'failed',
+      workspaceStrategy: 'scratch',
+      startedAt: '2026-05-20T14:00:00.000Z',
+      completedAt: null,
+      finishedAt: null,
+      updatedAt: '2026-05-20T14:21:59.000Z',
+    }]
+
+    render(<RunHistory projectId="project-1" issueId="issue-1" />)
+
+    expect(screen.getByText('21m 59s')).toBeInTheDocument()
+
+    vi.advanceTimersByTime(60_000)
+
+    expect(screen.getByText('21m 59s')).toBeInTheDocument()
   })
 })

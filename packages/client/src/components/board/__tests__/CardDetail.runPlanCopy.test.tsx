@@ -7,6 +7,7 @@ const apiMocks = vi.hoisted(() => ({
   assignMutate: vi.fn(),
   updateDeliverableMutateAsync: vi.fn(),
   startWorkflowMutateAsync: vi.fn(),
+  issueRuns: [] as unknown[],
 }))
 
 vi.mock('../../../api/issues.ts', () => ({
@@ -19,7 +20,7 @@ vi.mock('../../../api/labels.ts', () => ({
 }))
 
 vi.mock('../../../api/runs.ts', () => ({
-  useIssueRuns: () => ({ data: [] }),
+  useIssueRuns: () => ({ data: apiMocks.issueRuns }),
 }))
 
 vi.mock('../../../api/agents.ts', () => ({
@@ -112,6 +113,7 @@ function renderCardDetail(card: Issue) {
 describe('CardDetail run-plan copy', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    apiMocks.issueRuns = []
   })
 
   it('makes the implicit Work Pickup default safe to leave alone', () => {
@@ -132,5 +134,23 @@ describe('CardDetail run-plan copy', () => {
     expect(screen.getByText('Customer escalation plan')).toBeInTheDocument()
     expect(screen.getByText('Overrides the default Work Pickup plan for this card.')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Change override' })).toBeInTheDocument()
+  })
+
+  it('shows the latest failed run status in the modal header instead of the board column', () => {
+    apiMocks.issueRuns = [{
+      id: 'run-1',
+      issueId: 'issue-1',
+      agentId: 'agent-1',
+      status: 'failed',
+      workspaceStrategy: 'scratch',
+      startedAt: '2026-05-20T14:00:00.000Z',
+      finishedAt: '2026-05-20T14:21:59.000Z',
+      durationMs: 1_319_000,
+    }]
+
+    renderCardDetail(issue({ column: 'in_progress' }))
+
+    expect(screen.getByText('Failed')).toBeInTheDocument()
+    expect(screen.queryByText('In Progress')).not.toBeInTheDocument()
   })
 })

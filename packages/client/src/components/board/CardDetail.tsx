@@ -27,6 +27,7 @@ import CommentList from './CommentList.tsx'
 import AddComment from './AddComment.tsx'
 import RunOutputPanel from '../runs/RunOutputPanel.tsx'
 import RunHistory from '../runs/RunHistory.tsx'
+import RunStatusBadge from '../runs/RunStatusBadge.tsx'
 import { AttachWorkflowModal } from '../workflows/AttachWorkflowModal.tsx'
 import { ReviewPanel } from '../reviews/ReviewPanel.tsx'
 import DeliverableList from '../deliverables/DeliverableList.tsx'
@@ -64,6 +65,8 @@ export default function CardDetail({ projectId, issue, onClose, initialTab }: Ca
   const updateDeliverable = useUpdateDeliverable(projectId)
 
   const activeRun = runs?.find((r) => r.status === 'running' || r.status === 'pending')
+  const latestRun = runs && runs.length > 0 ? runs[runs.length - 1] : undefined
+  const headerRunStatus = activeRun?.status ?? latestRun?.status
   const assignableAgents = (() => {
     const activeAgents = (agents ?? []).filter((agent) => agent.status === 'active')
     if (issue.assignee && !activeAgents.some((agent) => agent.id === issue.assignee?.id)) {
@@ -148,17 +151,21 @@ export default function CardDetail({ projectId, issue, onClose, initialTab }: Ca
               padding: '16px 20px 12px',
             }}
           >
-            <Caption1
-              style={{
-                color: tokens.colorNeutralForeground2,
-                background: tokens.colorNeutralBackground3,
-                border: `1px solid ${tokens.colorNeutralStroke1}`,
-                borderRadius: '4px',
-                padding: '2px 8px',
-              }}
-            >
-              {COLUMN_LABELS[issue.column] ?? issue.column}
-            </Caption1>
+            {headerRunStatus ? (
+              <RunStatusBadge status={headerRunStatus} />
+            ) : (
+              <Caption1
+                style={{
+                  color: tokens.colorNeutralForeground2,
+                  background: tokens.colorNeutralBackground3,
+                  border: `1px solid ${tokens.colorNeutralStroke1}`,
+                  borderRadius: '4px',
+                  padding: '2px 8px',
+                }}
+              >
+                {COLUMN_LABELS[issue.column] ?? issue.column}
+              </Caption1>
+            )}
             <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
               <button
                 onClick={onClose}

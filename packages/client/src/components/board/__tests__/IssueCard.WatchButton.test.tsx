@@ -49,7 +49,7 @@ vi.mock('../../runs/RunButton', () => ({
 }))
 
 vi.mock('../../runs/RunStatusBadge', () => ({
-  default: () => <span data-testid="run-status-badge" />,
+  default: ({ status }: { status: string }) => <span data-testid="run-status-badge">{status}</span>,
 }))
 
 vi.mock('../../runs/CostDisplay', () => ({
@@ -102,7 +102,7 @@ const BASE_RUN = {
   workspaceStrategy: 'scratch' as const,
 }
 
-function renderCard(runs: unknown[]) {
+function renderCard(runs: unknown[], columnSemantic?: 'ready' | 'in_progress') {
   mockUseIssueRuns.mockReturnValue({ data: runs })
   mockUseActiveAgents.mockReturnValue({ data: [] })
   mockUseAssignIssue.mockReturnValue({ mutate: vi.fn() })
@@ -112,6 +112,7 @@ function renderCard(runs: unknown[]) {
       issue={BASE_ISSUE as never}
       index={0}
       projectId="proj-1"
+      columnSemantic={columnSemantic}
       isSelected={false}
       onSelect={vi.fn()}
       onOpen={vi.fn()}
@@ -139,6 +140,16 @@ describe('IssueCard — Watch button (JIS-T9)', () => {
   it('does not show Watch button when run is completed', () => {
     renderCard([{ ...BASE_RUN, status: 'completed' }])
     expect(screen.queryByTestId('watch-run-button')).not.toBeInTheDocument()
+  })
+
+  it('uses the latest terminal run for the card summary instead of implying active work', () => {
+    renderCard([
+      { ...BASE_RUN, id: 'run-old', status: 'completed' },
+      { ...BASE_RUN, id: 'run-new', status: 'failed' },
+    ], 'in_progress')
+
+    expect(screen.getByTestId('run-status-badge')).toHaveTextContent('failed')
+    expect(screen.queryByText('Waiting for active run')).not.toBeInTheDocument()
   })
 
   it('shows Watch button when run.status === "running"', () => {

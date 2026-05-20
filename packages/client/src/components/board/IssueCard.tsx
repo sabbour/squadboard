@@ -137,8 +137,8 @@ export default function IssueCard({ issue, index, projectId, columnSemantic, isS
   const navigate = useNavigate()
   const { data: runs } = useIssueRuns(projectId, issue.id)
   const activeRun = runs?.find((r) => r.status === 'running' || r.status === 'pending')
-  const lastRun = runs?.[0]
-  const runHint = !activeRun ? automaticRunHint(columnSemantic) : null
+  const latestRun = runs && runs.length > 0 ? runs[runs.length - 1] : undefined
+  const runHint = !activeRun && !latestRun ? automaticRunHint(columnSemantic) : null
 
   return (
     <Draggable draggableId={issue.id} index={index}>
@@ -263,13 +263,13 @@ export default function IssueCard({ issue, index, projectId, columnSemantic, isS
                 <WorkflowBadge workflowName={issue.attachedWorkflowName} />
               )}
               {activeRun && <RunStatusBadge status={activeRun.status} />}
-              {!activeRun && lastRun?.routingTier && (
-                <RoutingTierBadge tier={lastRun.routingTier} />
+              {!activeRun && latestRun?.routingTier && (
+                <RoutingTierBadge tier={latestRun.routingTier} />
               )}
-              {!activeRun && lastRun?.status === 'completed' && (
-                <CostDisplay costUsd={lastRun.costUsd} costTokens={lastRun.costTokens} />
+              {!activeRun && latestRun?.status === 'completed' && (
+                <CostDisplay costUsd={latestRun.costUsd} costTokens={latestRun.costTokens} />
               )}
-              {!activeRun && lastRun?.status === 'failed' && (
+              {!activeRun && latestRun?.status === 'failed' && (
                 <RunStatusBadge status="failed" />
               )}
             </div>
