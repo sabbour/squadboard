@@ -416,7 +416,16 @@ Run the built CLI entry point when you need the previous root `start` behavior:
 pnpm run cli:start
 ```
 
-### Documentation Site
+### Documentation
+
+#### API Reference & WebSocket Protocol
+
+Developer documentation for integrating with Squadboard:
+
+- **[REST API Reference](docs/api-reference.md)** — 24+ endpoint groups covering projects, agents, issues, runs, workflows, and more.
+- **[WebSocket Protocol](docs/websocket-protocol.md)** — Real-time event streaming for presence, issues, runs, consult (chat), and comments.
+
+#### Documentation Site
 
 The Docusaurus docs site lives in `packages/docs-site` and is mounted under
 `/docs/` to match the public docs URL shape.
