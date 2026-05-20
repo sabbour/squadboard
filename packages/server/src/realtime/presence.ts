@@ -35,7 +35,7 @@ export function joinPresence(projectId: string, userId: string): void {
     issueId: null,
   };
   room.set(userId, record);
-  eventBus.emitPresenceEvent('presence.joined', projectId, { userId, cursor: null });
+  eventBus.emitPresenceEvent('presence.joined', projectId, { projectId, userId, issueId: null });
 }
 
 /** Called when a WS client unsubscribes from a project or disconnects. */
@@ -44,7 +44,7 @@ export function leavePresence(projectId: string, userId: string): void {
   if (!room) return;
   room.delete(userId);
   if (room.size === 0) presenceMap.delete(projectId);
-  eventBus.emitPresenceEvent('presence.left', projectId, { userId });
+  eventBus.emitPresenceEvent('presence.left', projectId, { projectId, userId });
 }
 
 /** Called on presence.cursor messages from the client. */
@@ -54,8 +54,8 @@ export function moveCursor(projectId: string, userId: string, issueId: string | 
   const record = room.get(userId);
   if (!record) return;
   record.issueId = issueId;
-  // Broadcast to OTHER subscribers only; ws-server handles filtering
-  eventBus.emitPresenceEvent('presence.moved', projectId, { userId, issueId });
+  // Broadcast to OTHER subscribers only; ws-server handles filtering.
+  eventBus.emitPresenceEvent('presence.updated', projectId, { projectId, userId, issueId });
 }
 
 /** Returns a snapshot of current presence for a project (for GET /presence). */
@@ -85,7 +85,7 @@ export function sweepStalePresence(maxAgeMs: number): number {
       if (record.connectedAt < cutoff) {
         room.delete(userId);
         evicted += 1;
-        eventBus.emitPresenceEvent('presence.left', projectId, { userId });
+        eventBus.emitPresenceEvent('presence.left', projectId, { projectId, userId });
       }
     }
     if (room.size === 0) presenceMap.delete(projectId);

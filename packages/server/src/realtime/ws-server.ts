@@ -13,7 +13,7 @@
  *   issue.created   issue.updated   issue.moved   issue.deleted
  *   run.started     run.output      run.completed
  *   workflow.advanced
- *   presence.joined presence.left   presence.moved
+ *   presence.joined presence.left   presence.updated
  *
  * W28 J3: 15 s WS ping/pong heartbeat. Connections that miss a pong are
  * terminated to free stale sockets and give the client a clean reconnect.
@@ -161,10 +161,12 @@ function handleMessage(state: ClientState, raw: string): void {
 
     case 'presence.cursor':
       if (!projectId) { send(state.ws, 'error', { message: 'presence.cursor requires projectId' }); return; }
+      if (!state.subscribedProjects.has(projectId)) {
+        send(state.ws, 'error', { message: 'presence.cursor requires an active project subscription' });
+        return;
+      }
+      presenceUpdateSenders.set(`${projectId}:${state.userId}`, state.ws);
       moveCursor(projectId, state.userId, payload?.issueId ?? null);
-      // Broadcast to others in the room; the emitter in presence.ts fires eventBus which
-      // goes through the bus listener below — but we need to exclude the sender there.
-      // The exclusion is handled in the bus listener via the excludeWs mechanism.
       break;
 
     case 'resubscribe': {

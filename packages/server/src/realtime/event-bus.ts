@@ -24,7 +24,7 @@ export type WorkflowEventType = 'workflow.advanced';
 export type PresenceEventType =
   | 'presence.joined'
   | 'presence.left'
-  | 'presence.moved';
+  | 'presence.updated';
 
 /**
  * Live multi-agent session events.

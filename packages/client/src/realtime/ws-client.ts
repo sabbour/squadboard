@@ -181,7 +181,8 @@ class WsClient {
   }
 
   sendPresence(issueId: string | null) {
-    this.safeSend({ type: 'presence', issueId })
+    if (!this.projectId) return
+    this.safeSend({ type: 'presence.cursor', payload: { projectId: this.projectId, issueId } })
   }
 
   /**

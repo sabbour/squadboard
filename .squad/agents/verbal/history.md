@@ -251,3 +251,32 @@ Verbal owns all three. Routing deferred to W27; W26 closes with these noted for 
 - 472 total tests passing (464 server + 8 client)
 - `pnpm -r build` green
 - W28: JIS foundation (T1,T5,T6) — issue_run_events schema + bigserial, active session registry, events query endpoint (f62e1bd6); JIS stream (T2,T3,T4) — RunningIssueSessionImpl + bridge event emission (start/turn/metric/finish or error) + steer endpoint validation (a92f6d39)
+
+## Learnings
+
+### 2026-05-20: Deep WebSocket & Real-time Code Review
+
+**Findings report:** `.squad/decisions/inbox/verbal-deep-review-websocket.md`
+
+Key learnings from the audit:
+
+1. **Zero auth on WS upgrade.** The `WebSocketServer` constructor has no `verifyClient` callback and the `_req: IncomingMessage` is ignored. JWT validation mentioned in the PRD was never implemented. Must add before any multi-tenant deployment.
+
+2. **Client↔Server event name drift is real.** Three event names are mismatched: client sends `type: 'presence'` but server expects `presence.cursor`; client listens for `presence.updated` but server emits `presence.moved`; client defines `run.failed`/`run.cancelled` but server only emits `run.completed`. Cursor presence is completely broken. Lesson: event name contracts must be tested end-to-end, not just typed.
+
+3. **Reconnect cursor only covers consult sessions.** The `resubscribe` + `lastSeq` path in ws-server.ts only replays from the SSE buffer (consult events). Regular project events (issue lifecycle, run output) have zero reconnect replay. The `useRunStream` hook works around this via a 5s poll interval, but `useRealtimeBoard` has no such fallback — board clients silently miss events on disconnect.
+
+4. **`_flowHeartbeatLastEmit` map never evicts.** The throttle map grows per-instance but entries are never removed when instances finish. Same pattern in `sse-stream.ts` where `buffers` and `seqCounters` maps grow per-session without cleanup. Both are slow leaks.
+
+5. **No `maxPayload` on WebSocketServer.** Default is 100 MiB. Combined with no auth, this is a trivial DoS vector.
+
+6. **WS `send()` has no backpressure.** Fire-and-forget `ws.send(JSON.stringify(...))` with no bufferedAmount check. Slow clients accumulate unbounded send buffers until the 15s ping/pong terminates them.
+
+7. **Dead code pattern: typed-but-never-emitted events.** `presence.snapshot`, `assistant.thinking.start/stop`, `run.failed`, `run.cancelled` are all typed in `WsEventMap` with handlers registered, but the server never emits them. This happens when client-side types are written speculatively before the server surface exists.
+
+### 2026-05-20: P0 WS auth + presence protocol fix
+
+1. **Auth belongs on the upgrade, not the message loop.** The fix moved WS auth to `httpServer.on('upgrade')`, rejects missing/invalid tokens before `handleUpgrade()`, and carries verified claims into the connection state. `maxPayload` is capped at 64 KiB there too.
+2. **JWT scope must become room scope.** Once the token yields a `projectId`, every client message that names a room/project must be checked against that single allowed project. The WS fast path cannot invent broader access than the token grants.
+3. **Canonical event names must be shared, not inferred.** Presence only came back once both directions agreed on one pair: client message `presence.cursor`, server broadcast `presence.updated`. The payload also needed `projectId` on every emitted event or the client silently filtered everything out.
+4. **Exclude-sender fan-out needs explicit bookkeeping.** Because presence updates travel through the in-process event bus, the sender socket has to be tracked and removed at broadcast time; comments alone do not create exclusion semantics.
