@@ -26,7 +26,44 @@ export interface IssueRunEventRow {
   createdAt: string
 }
 
+export type IssueRunDbStatus = 'pending' | 'running' | 'completed' | 'failed' | 'cancelled' | 'splitting' | 'waiting_children'
+
+export interface IssueRunStreamSnapshot {
+  id: string
+  issueId: string
+  agentId: string
+  kind?: string
+  status: IssueRunDbStatus
+  workspaceStrategy?: string
+  workspacePath?: string | null
+  createdAt: string | null
+  updatedAt: string | null
+  startedAt: string | null
+  completedAt: string | null
+  leaseExpiresAt: string | null
+  heartbeatAt: string | null
+  durationMs: number | null
+  costTokens: number
+  inputTokens: number
+  outputTokens: number
+  cachedInputTokens: number
+  costUsd: string
+  premiumRequests: string
+  output: {
+    available: boolean
+    length: number
+  }
+  errorMessage?: string | null
+  staleReason?: string | null
+  recovery: {
+    reason: string
+    message: string
+    recoveredAt: string | null
+  } | null
+}
+
 interface EventsResponse {
+  run: IssueRunStreamSnapshot
   events: IssueRunEventRow[]
   total: number
   nextSeq: number
@@ -34,6 +71,7 @@ interface EventsResponse {
 
 export interface RunStreamResult {
   events: IssueRunEventRow[]
+  run: IssueRunStreamSnapshot | null
   status: RunStatus
   lastSeq: number
   error: Error | null
@@ -57,6 +95,94 @@ export const ISSUE_RUN_EVENT_TYPES = [
 
 export type IssueRunWsEventType = (typeof ISSUE_RUN_EVENT_TYPES)[number]
 
+function errorFromPayload(payload: Record<string, unknown>): Error {
+  const value = payload.message ?? payload.errorMessage ?? payload.error
+  return new Error(typeof value === 'string' && value.trim() ? value : 'Run failed')
+}
+
+function latestErrorFromEvents(events: IssueRunEventRow[]): Error | null {
+  for (let i = events.length - 1; i >= 0; i--) {
+    const event = events[i]
+    if (event.eventType === 'issue.run.error') return errorFromPayload(event.payload)
+  }
+  return null
+}
+
+function errorFromRunSnapshot(run: IssueRunStreamSnapshot): Error | null {
+  if (run.status !== 'failed' && run.status !== 'cancelled') return null
+  return new Error(run.errorMessage || run.recovery?.message || `Run ${run.status}`)
+}
+
+function resolveStatusFromEvents(
+  evts: IssueRunEventRow[],
+  run: IssueRunStreamSnapshot | null,
+  fallback: RunStatus,
+): RunStatus {
+  if (run?.status === 'completed') return 'finished'
+  if (run?.status === 'failed' || run?.status === 'cancelled') return 'error'
+  if (evts.some((e) => e.eventType === 'issue.run.finish')) return 'finished'
+  if (evts.some((e) => e.eventType === 'issue.run.error')) return 'error'
+  return fallback
+}
+
+function applyEventToRunSnapshot(
+  run: IssueRunStreamSnapshot | null,
+  event: IssueRunEventRow,
+): IssueRunStreamSnapshot | null {
+  if (!run) return run
+  const p = event.payload
+
+  if (event.eventType === 'issue.run.start') {
+    return {
+      ...run,
+      status: 'running',
+      startedAt: run.startedAt ?? event.createdAt,
+      updatedAt: event.createdAt,
+    }
+  }
+
+  if (event.eventType === 'issue.run.metric') {
+    const inputTokens = typeof p.inputTokens === 'number' ? p.inputTokens : run.inputTokens
+    const outputTokens = typeof p.outputTokens === 'number' ? p.outputTokens : run.outputTokens
+    return {
+      ...run,
+      inputTokens,
+      outputTokens,
+      costTokens: inputTokens + outputTokens,
+      updatedAt: event.createdAt,
+    }
+  }
+
+  if (event.eventType === 'issue.run.finish') {
+    const tokenCounts = p.tokenCounts && typeof p.tokenCounts === 'object'
+      ? p.tokenCounts as { input?: unknown; output?: unknown; total?: unknown }
+      : null
+    return {
+      ...run,
+      status: 'completed',
+      completedAt: event.createdAt,
+      updatedAt: event.createdAt,
+      durationMs: typeof p.durationMs === 'number' ? p.durationMs : run.durationMs,
+      costUsd: typeof p.cost === 'string' ? p.cost : run.costUsd,
+      inputTokens: typeof tokenCounts?.input === 'number' ? tokenCounts.input : run.inputTokens,
+      outputTokens: typeof tokenCounts?.output === 'number' ? tokenCounts.output : run.outputTokens,
+      costTokens: typeof tokenCounts?.total === 'number' ? tokenCounts.total : run.costTokens,
+    }
+  }
+
+  if (event.eventType === 'issue.run.error') {
+    return {
+      ...run,
+      status: 'failed',
+      completedAt: run.completedAt ?? event.createdAt,
+      updatedAt: event.createdAt,
+      errorMessage: typeof p.message === 'string' ? p.message : run.errorMessage,
+    }
+  }
+
+  return run
+}
+
 // ─── Hook ────────────────────────────────────────────────────────────────────
 
 export function useRunStream(
@@ -65,6 +191,7 @@ export function useRunStream(
   issueId: string,
 ): RunStreamResult {
   const [events, setEvents] = useState<IssueRunEventRow[]>([])
+  const [run, setRun] = useState<IssueRunStreamSnapshot | null>(null)
   const [status, setStatus] = useState<RunStatus>('idle')
   const [lastSeq, setLastSeq] = useState(0)
   const [error, setError] = useState<Error | null>(null)
@@ -125,6 +252,7 @@ export function useRunStream(
     if (!runId) {
       applyStatus('idle')
       setEvents([])
+      setRun(null)
       setError(null)
       lastSeqRef.current = 0
       setLastSeq(0)
@@ -133,32 +261,24 @@ export function useRunStream(
 
     applyStatus('loading')
     setEvents([])
+    setRun(null)
     setError(null)
     lastSeqRef.current = 0
     setLastSeq(0)
 
     wsClient.connect(projectId)
 
-    // ── Determine terminal status from a snapshot ─────────────────────────
-
-    function resolveStatusFromEvents(
-      evts: IssueRunEventRow[],
-      fallback: RunStatus,
-    ): RunStatus {
-      if (evts.some((e) => e.eventType === 'issue.run.finish')) return 'finished'
-      if (evts.some((e) => e.eventType === 'issue.run.error')) return 'error'
-      return fallback
-    }
-
     // ── Initial HTTP fetch ─────────────────────────────────────────────────
 
     fetchEvents()
       .then((data) => {
         if (!mountedRef.current) return
+        setRun(data.run)
         setEvents(data.events)
         lastSeqRef.current = data.nextSeq
         setLastSeq(data.nextSeq)
-        applyStatus(resolveStatusFromEvents(data.events, 'live'))
+        setError(latestErrorFromEvents(data.events) ?? errorFromRunSnapshot(data.run))
+        applyStatus(resolveStatusFromEvents(data.events, data.run, 'live'))
       })
       .catch((err: unknown) => {
         if (!mountedRef.current) return
@@ -174,17 +294,18 @@ export function useRunStream(
       const fn = (payload: unknown) => {
         if (!mountedRef.current) return
         if (!payload || typeof payload !== 'object') return
-        const p = payload as { runId?: string; seq?: number }
+        const p = payload as { runId?: string; seq?: number; createdAt?: unknown }
         if (p.runId !== runId) return
 
         const seq = typeof p.seq === 'number' ? p.seq : Date.now()
+        const createdAt = typeof p.createdAt === 'string' ? p.createdAt : new Date().toISOString()
         const row: IssueRunEventRow = {
           id: `ws-${type}-${seq}`,
           runId,
           seq,
           eventType: type,
           payload: payload as Record<string, unknown>,
-          createdAt: new Date().toISOString(),
+          createdAt,
         }
 
         setEvents((prev) => {
@@ -192,6 +313,7 @@ export function useRunStream(
           if (prev.some((e) => e.eventType === type && e.seq === seq)) return prev
           return [...prev, row]
         })
+        setRun((prev) => applyEventToRunSnapshot(prev, row))
 
         const nextSeq = seq + 1
         if (nextSeq > lastSeqRef.current) {
@@ -200,7 +322,10 @@ export function useRunStream(
         }
 
         if (type === 'issue.run.finish') applyStatus('finished')
-        else if (type === 'issue.run.error') applyStatus('error')
+        else if (type === 'issue.run.error') {
+          setError(errorFromPayload(payload as Record<string, unknown>))
+          applyStatus('error')
+        }
         else if (
           statusRef.current !== 'live' &&
           statusRef.current !== 'finished' &&
@@ -242,6 +367,7 @@ export function useRunStream(
         fetchEvents(lastSeqRef.current)
           .then((data) => {
             if (!mountedRef.current) return
+            setRun(data.run)
             if (data.events.length > 0) {
               setEvents((prev) => {
                 const seqs = new Set(prev.map((e) => `${e.eventType}:${e.seq}`))
@@ -255,7 +381,8 @@ export function useRunStream(
             }
             // Successful replay — reset failure counter
             reconnectFailuresRef.current = 0
-            applyStatus(resolveStatusFromEvents(data.events, 'live'))
+            setError(latestErrorFromEvents(data.events) ?? errorFromRunSnapshot(data.run))
+            applyStatus(resolveStatusFromEvents(data.events, data.run, 'live'))
           })
           .catch(() => {
             // GET replay failed — WS is connected but we couldn't fetch catch-up events.
@@ -278,5 +405,5 @@ export function useRunStream(
     }
   }, [runId, projectId, issueId, fetchEvents])
 
-  return { events, status, lastSeq, error, steer, retry }
+  return { events, run, status, lastSeq, error, steer, retry }
 }

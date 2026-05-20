@@ -16,7 +16,60 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 // DB mock state (mutated per test)
 // ---------------------------------------------------------------------------
 
-let _runRow: { id: string } | null = { id: 'run-001' };
+type MockRunRow = {
+  id: string;
+  issueId?: string;
+  agentId?: string;
+  kind?: string;
+  status?: string;
+  workspaceStrategy?: string;
+  workspacePath?: string | null;
+  createdAt?: Date | string | null;
+  updatedAt?: Date | string | null;
+  startedAt?: Date | string | null;
+  completedAt?: Date | string | null;
+  leaseExpiresAt?: Date | string | null;
+  heartbeatAt?: Date | string | null;
+  output?: string | null;
+  errorMessage?: string | null;
+  costTokens?: number | null;
+  inputTokens?: number | null;
+  outputTokens?: number | null;
+  cachedInputTokens?: number | null;
+  costUsd?: string | null;
+  premiumRequests?: string | null;
+  staleReason?: string | null;
+};
+
+function makeRunRow(overrides: Partial<MockRunRow> = {}): MockRunRow {
+  return {
+    id: 'run-001',
+    issueId: 'issue-001',
+    agentId: 'agent-001',
+    kind: 'agent_run',
+    status: 'running',
+    workspaceStrategy: 'scratch',
+    workspacePath: null,
+    createdAt: new Date('2026-05-20T14:00:00.000Z'),
+    updatedAt: new Date('2026-05-20T14:00:00.000Z'),
+    startedAt: null,
+    completedAt: null,
+    leaseExpiresAt: null,
+    heartbeatAt: null,
+    output: null,
+    errorMessage: null,
+    costTokens: 0,
+    inputTokens: 0,
+    outputTokens: 0,
+    cachedInputTokens: 0,
+    costUsd: '0',
+    premiumRequests: '0',
+    staleReason: null,
+    ...overrides,
+  };
+}
+
+let _runRow: MockRunRow | null = makeRunRow();
 let _countTotal = 0;
 let _events: Array<{ id: number; runId: string; seq: number; eventType: string; payload: object; createdAt: Date }> = [];
 
@@ -31,10 +84,28 @@ vi.mock('../db/index.js', () => ({
   getDb: () => mockDb,
   schema: {
     issueRuns: {
-      id:        'issue_runs.id',
-      issueId:   'issue_runs.issue_id',
-      createdAt: 'issue_runs.created_at',
-      agentId:   'issue_runs.agent_id',
+      id:                'issue_runs.id',
+      issueId:           'issue_runs.issue_id',
+      createdAt:         'issue_runs.created_at',
+      updatedAt:         'issue_runs.updated_at',
+      agentId:           'issue_runs.agent_id',
+      kind:              'issue_runs.kind',
+      status:            'issue_runs.status',
+      workspaceStrategy: 'issue_runs.workspace_strategy',
+      workspacePath:     'issue_runs.workspace_path',
+      startedAt:         'issue_runs.started_at',
+      completedAt:       'issue_runs.completed_at',
+      leaseExpiresAt:    'issue_runs.lease_expires_at',
+      heartbeatAt:       'issue_runs.heartbeat_at',
+      output:            'issue_runs.output',
+      errorMessage:      'issue_runs.error_message',
+      costTokens:        'issue_runs.cost_tokens',
+      inputTokens:       'issue_runs.input_tokens',
+      outputTokens:      'issue_runs.output_tokens',
+      cachedInputTokens: 'issue_runs.cached_input_tokens',
+      costUsd:           'issue_runs.cost_usd',
+      premiumRequests:   'issue_runs.premium_requests',
+      staleReason:       'issue_runs.stale_reason',
     },
     issueRunEvents: {
       id:        'ire.id',
@@ -174,7 +245,7 @@ function findHandler(path: string, method: 'get' | 'post') {
 // ---------------------------------------------------------------------------
 
 beforeEach(() => {
-  _runRow      = { id: 'run-001' };
+  _runRow      = makeRunRow();
   _countTotal  = 0;
   _events      = [];
   resetSelectMock();
@@ -253,6 +324,53 @@ describe('offset + limit pagination', () => {
     const body = res._body as { events: unknown[]; total: number };
     expect(body.events).toHaveLength(0);
     expect(body.total).toBe(0);
+  });
+
+  it('includes a run snapshot with duration, cost, output, and recovery metadata', async () => {
+    _runRow = makeRunRow({
+      status: 'failed',
+      startedAt: new Date('2026-05-20T14:00:00.000Z'),
+      completedAt: null,
+      updatedAt: new Date('2026-05-20T14:00:05.000Z'),
+      output: 'hello',
+      errorMessage: 'Agent lost connection [recovered: server restarted]',
+      inputTokens: 10,
+      outputTokens: 20,
+      costTokens: 30,
+      costUsd: '0.1234',
+      staleReason: 'restart-pickup',
+    });
+
+    const handler = findHandler('/:runId/events', 'get');
+    const req = makeReq({ projectId: 'proj-001', issueId: 'issue-001', runId: 'run-001' });
+    const res = makeRes();
+    await handler!(req as unknown as Request, res as unknown as Response, vi.fn() as NextFunction);
+
+    const body = res._body as {
+      run: {
+        status: string;
+        durationMs: number;
+        inputTokens: number;
+        outputTokens: number;
+        costUsd: string;
+        output: { available: boolean; length: number };
+        recovery: { reason: string; message: string; recoveredAt: string };
+      };
+    };
+
+    expect(body.run).toMatchObject({
+      status: 'failed',
+      durationMs: 5000,
+      inputTokens: 10,
+      outputTokens: 20,
+      costUsd: '0.1234',
+      output: { available: true, length: 5 },
+      recovery: {
+        reason: 'restart-pickup',
+        message: 'Server restarted while this run was active',
+        recoveredAt: '2026-05-20T14:00:05.000Z',
+      },
+    });
   });
 });
 

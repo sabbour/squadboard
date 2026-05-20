@@ -18,7 +18,7 @@ export interface WsEventMap {
   'issue.deleted': { projectId: string; issueId: string }
   // Run lifecycle
   'run.started': { projectId: string; issueId: string; runId: string }
-  'run.output': { runId: string; line: string }
+  'run.output': { runId: string; line?: string; chunk?: string }
   'run.completed': { projectId: string; issueId: string; runId: string; status: string }
   'run.failed': { projectId: string; issueId: string; runId: string; error: string }
   'run.cancelled': { projectId: string; issueId: string; runId: string }
@@ -69,16 +69,16 @@ export interface WsEventMap {
   'assistant.thinking.start': { sessionId: string; agentName?: string | null }
   'assistant.thinking.stop':  { sessionId: string }
   // Wave 28 JIS-T7: issue run stream events (routed via projectId room).
-  // All payloads include runId + seq injected by RunningIssueSessionImpl.
-  'issue.run.start':       { runId: string; seq: number; agentName?: string; model?: string }
-  'issue.run.turn':        { runId: string; seq: number; role?: string; content?: string }
-  'issue.run.token':       { runId: string; seq: number; inputTokens?: number; outputTokens?: number; model?: string | null; cost?: number }
-  'issue.run.tool_call':   { runId: string; seq: number; toolName?: string; args?: unknown }
-  'issue.run.tool_result': { runId: string; seq: number; toolName?: string; result?: unknown }
-  'issue.run.metric':      { runId: string; seq: number; [key: string]: unknown }
-  'issue.run.finish':      { runId: string; seq: number; durationMs?: number; outputSummary?: string }
-  'issue.run.error':       { runId: string; seq: number; message?: string }
-  'issue.run.steered':     { runId: string; seq: number; message: string; actor: string }
+  // All payloads include runId + seq + server createdAt injected by RunningIssueSessionImpl.
+  'issue.run.start':       { runId: string; seq: number; createdAt?: string; agentName?: string; model?: string }
+  'issue.run.turn':        { runId: string; seq: number; createdAt?: string; role?: string; content?: string }
+  'issue.run.token':       { runId: string; seq: number; createdAt?: string; inputTokens?: number; outputTokens?: number; model?: string | null; cost?: number }
+  'issue.run.tool_call':   { runId: string; seq: number; createdAt?: string; toolName?: string; args?: unknown }
+  'issue.run.tool_result': { runId: string; seq: number; createdAt?: string; toolName?: string; result?: unknown }
+  'issue.run.metric':      { runId: string; seq: number; createdAt?: string; [key: string]: unknown }
+  'issue.run.finish':      { runId: string; seq: number; createdAt?: string; durationMs?: number; outputSummary?: string; cost?: string | number | null; tokenCounts?: { input?: number; output?: number; total?: number } }
+  'issue.run.error':       { runId: string; seq: number; createdAt?: string; message?: string }
+  'issue.run.steered':     { runId: string; seq: number; createdAt?: string; message: string; actor: string }
   // W25 — Sweep timeline animation. Fired server-side on every heartbeat
   // sweep completion (success + error) and fanned out to '__global__'
   // subscribers (Heartbeat + Now pages).

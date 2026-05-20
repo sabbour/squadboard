@@ -522,6 +522,72 @@ issueRunsRouter.post('/:runId/retrigger', async (req: Request, res: Response) =>
 // ---------------------------------------------------------------------------
 
 const MAX_EVENT_LIMIT = 500;
+const TERMINAL_RUN_STATUSES = new Set(['completed', 'failed', 'cancelled']);
+
+type IssueRunRow = typeof schema.issueRuns.$inferSelect;
+
+function toIsoString(value: Date | string | null | undefined): string | null {
+  if (!value) return null;
+  return value instanceof Date ? value.toISOString() : value;
+}
+
+function toEpochMs(value: Date | string | null | undefined): number | null {
+  if (!value) return null;
+  const ms = value instanceof Date ? value.getTime() : Date.parse(value);
+  return Number.isFinite(ms) ? ms : null;
+}
+
+function buildRunStreamSnapshot(run: IssueRunRow) {
+  const startedMs = toEpochMs(run.startedAt);
+  const terminalAt = TERMINAL_RUN_STATUSES.has(run.status)
+    ? (run.completedAt ?? run.updatedAt)
+    : null;
+  const terminalMs = toEpochMs(terminalAt);
+  const durationMs =
+    startedMs !== null && terminalMs !== null
+      ? Math.max(0, terminalMs - startedMs)
+      : null;
+  const outputLength = run.output?.length ?? 0;
+  const updatedAt = toIsoString(run.updatedAt);
+
+  return {
+    id: run.id,
+    issueId: run.issueId,
+    agentId: run.agentId,
+    kind: run.kind,
+    status: run.status,
+    workspaceStrategy: run.workspaceStrategy,
+    workspacePath: run.workspacePath,
+    createdAt: toIsoString(run.createdAt),
+    updatedAt,
+    startedAt: toIsoString(run.startedAt),
+    completedAt: toIsoString(run.completedAt),
+    leaseExpiresAt: toIsoString(run.leaseExpiresAt),
+    heartbeatAt: toIsoString(run.heartbeatAt),
+    durationMs,
+    costTokens: run.costTokens ?? 0,
+    inputTokens: run.inputTokens ?? 0,
+    outputTokens: run.outputTokens ?? 0,
+    cachedInputTokens: run.cachedInputTokens ?? 0,
+    costUsd: run.costUsd ?? '0',
+    premiumRequests: run.premiumRequests ?? '0',
+    output: {
+      available: outputLength > 0,
+      length: outputLength,
+    },
+    errorMessage: run.errorMessage,
+    staleReason: run.staleReason,
+    recovery: run.staleReason
+      ? {
+        reason: run.staleReason,
+        message: run.staleReason === 'restart-pickup'
+          ? 'Server restarted while this run was active'
+          : 'Run was recovered by the engine',
+        recoveredAt: updatedAt,
+      }
+      : null,
+  };
+}
 
 issueRunsRouter.get('/:runId/events', async (req: Request, res: Response) => {
   try {
@@ -530,7 +596,7 @@ issueRunsRouter.get('/:runId/events', async (req: Request, res: Response) => {
 
     // Validate that the run belongs to this issue
     const [runRow] = await db
-      .select({ id: schema.issueRuns.id })
+      .select()
       .from(schema.issueRuns)
       .where(and(eq(schema.issueRuns.id, runId), eq(schema.issueRuns.issueId, issueId)))
       .limit(1);
@@ -579,7 +645,7 @@ issueRunsRouter.get('/:runId/events', async (req: Request, res: Response) => {
     const lastEvent = events[events.length - 1];
     const nextSeq   = lastEvent ? lastEvent.seq + 1 : (useSince ? sinceSeq : offset + events.length);
 
-    res.json({ events, total, nextSeq });
+    res.json({ run: buildRunStreamSnapshot(runRow), events, total, nextSeq });
   } catch (err) {
     handleError(res, err);
   }

@@ -69,12 +69,51 @@ vi.mock('../../realtime/ws-client.ts', () => ({
   },
 }))
 
-import { useRunStream, ISSUE_RUN_EVENT_TYPES, type IssueRunEventRow } from '../useRunStream.ts'
+import {
+  useRunStream,
+  ISSUE_RUN_EVENT_TYPES,
+  type IssueRunEventRow,
+  type IssueRunStreamSnapshot,
+} from '../useRunStream.ts'
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-function makeEventsResponse(events: IssueRunEventRow[] = [], nextSeq = 0) {
-  return { events, total: events.length, nextSeq }
+function makeRunSnapshot(overrides: Partial<IssueRunStreamSnapshot> = {}): IssueRunStreamSnapshot {
+  return {
+    id: RUN_ID,
+    issueId: ISSUE_ID,
+    agentId: 'agent-1',
+    kind: 'agent_run',
+    status: 'running',
+    workspaceStrategy: 'scratch',
+    workspacePath: null,
+    createdAt: '2026-05-20T14:00:00.000Z',
+    updatedAt: '2026-05-20T14:00:00.000Z',
+    startedAt: null,
+    completedAt: null,
+    leaseExpiresAt: null,
+    heartbeatAt: null,
+    durationMs: null,
+    costTokens: 0,
+    inputTokens: 0,
+    outputTokens: 0,
+    cachedInputTokens: 0,
+    costUsd: '0',
+    premiumRequests: '0',
+    output: { available: false, length: 0 },
+    errorMessage: null,
+    staleReason: null,
+    recovery: null,
+    ...overrides,
+  }
+}
+
+function makeEventsResponse(
+  events: IssueRunEventRow[] = [],
+  nextSeq = 0,
+  run = makeRunSnapshot(),
+) {
+  return { run, events, total: events.length, nextSeq }
 }
 
 function emitWsEvent(type: string, payload: unknown) {
@@ -140,6 +179,49 @@ describe('useRunStream', () => {
       await waitFor(() => expect(result.current.status).toBe('finished'))
     })
 
+    it('sets a useful error when initial events contain issue.run.error', async () => {
+      const events = [
+        { id: 'e1', runId: RUN_ID, seq: 0, eventType: 'issue.run.start', payload: { runId: RUN_ID, seq: 0 }, createdAt: new Date().toISOString() },
+        {
+          id: 'e2',
+          runId: RUN_ID,
+          seq: 1,
+          eventType: 'issue.run.error',
+          payload: { runId: RUN_ID, seq: 1, message: 'Agent emitted no structured output' },
+          createdAt: new Date().toISOString(),
+        },
+      ]
+      mockApiFetch.mockResolvedValueOnce(makeEventsResponse(events, 2))
+
+      const { result } = renderHook(() => useRunStream(RUN_ID, PROJECT_ID, ISSUE_ID))
+
+      await waitFor(() => expect(result.current.status).toBe('error'))
+      expect(result.current.error?.message).toBe('Agent emitted no structured output')
+    })
+
+    it('maps failed run snapshots to a useful error even before error events replay', async () => {
+      mockApiFetch.mockResolvedValueOnce(makeEventsResponse(
+        [],
+        0,
+        makeRunSnapshot({
+          status: 'failed',
+          errorMessage: 'Server restarted before the SDK emitted structured output',
+          staleReason: 'restart-pickup',
+          recovery: {
+            reason: 'restart-pickup',
+            message: 'Server restarted while this run was active',
+            recoveredAt: '2026-05-20T14:00:05.000Z',
+          },
+        }),
+      ))
+
+      const { result } = renderHook(() => useRunStream(RUN_ID, PROJECT_ID, ISSUE_ID))
+
+      await waitFor(() => expect(result.current.status).toBe('error'))
+      expect(result.current.error?.message).toBe('Server restarted before the SDK emitted structured output')
+      expect(result.current.run?.recovery?.message).toBe('Server restarted while this run was active')
+    })
+
     it('sets error status on fetch failure', async () => {
       mockApiFetch.mockRejectedValueOnce(new Error('Network error'))
 
@@ -189,6 +271,24 @@ describe('useRunStream', () => {
       })
 
       expect(result.current.status).toBe('finished')
+    })
+
+    it('sets a useful error on issue.run.error WS event', async () => {
+      mockApiFetch.mockResolvedValueOnce(makeEventsResponse([], 0))
+
+      const { result } = renderHook(() => useRunStream(RUN_ID, PROJECT_ID, ISSUE_ID))
+      await waitFor(() => expect(result.current.status).toBe('live'))
+
+      act(() => {
+        emitWsEvent('issue.run.error', {
+          runId: RUN_ID,
+          seq: 2,
+          message: 'Worker crashed after restart',
+        })
+      })
+
+      expect(result.current.status).toBe('error')
+      expect(result.current.error?.message).toBe('Worker crashed after restart')
     })
 
     it('deduplicates events with the same (eventType, seq)', async () => {
@@ -361,6 +461,40 @@ describe('useRunStream', () => {
       // Dedup: initialEvent not doubled
       const starts = result.current.events.filter(e => e.eventType === 'issue.run.start')
       expect(starts).toHaveLength(1)
+    })
+
+    it('preserves replayed recovery markers after a server restart', async () => {
+      const initialEvent: IssueRunEventRow = {
+        id: 'e1', runId: RUN_ID, seq: 0, eventType: 'issue.run.start',
+        payload: { runId: RUN_ID, seq: 0 }, createdAt: new Date().toISOString(),
+      }
+      const recoveryEvent: IssueRunEventRow = {
+        id: 'e-recovery', runId: RUN_ID, seq: 1, eventType: 'issue.run.metric',
+        payload: { runId: RUN_ID, seq: 1, kind: 'recovery', message: '[recovered: server restarted]' },
+        createdAt: new Date().toISOString(),
+      }
+      setupNoAutoConnect()
+
+      mockApiFetch
+        .mockResolvedValueOnce(makeEventsResponse([initialEvent], 1))
+        .mockResolvedValueOnce(makeEventsResponse([recoveryEvent], 2))
+
+      const { result } = renderHook(() => useRunStream(RUN_ID, PROJECT_ID, ISSUE_ID))
+      await waitFor(() => expect(result.current.status).toBe('live'))
+
+      act(() => emitStateChange('reconnecting'))
+      act(() => emitStateChange('connected'))
+
+      await waitFor(() =>
+        expect(result.current.events).toEqual(
+          expect.arrayContaining([
+            expect.objectContaining({
+              eventType: 'issue.run.metric',
+              payload: expect.objectContaining({ message: '[recovered: server restarted]' }),
+            }),
+          ]),
+        ),
+      )
     })
 
     it('tracks lastSeq correctly through replay', async () => {

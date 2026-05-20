@@ -140,7 +140,12 @@ export class RunningIssueSessionImpl implements RunningIssueSession {
    */
   async emit(eventType: IssueRunEventType | string, payload: Record<string, unknown>): Promise<number> {
     const seq = ++this.seq;
-    const enriched: Record<string, unknown> = { runId: this.runId, seq, ...payload };
+    const enriched: Record<string, unknown> = {
+      ...payload,
+      runId: this.runId,
+      seq,
+      createdAt: new Date().toISOString(),
+    };
 
     try {
       const db = getDb();
