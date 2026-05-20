@@ -1,0 +1,22 @@
+{
+  "$schema": "https://squadboard.dev/schemas/squadapp/v1/squadapp.json",
+  "schemaVersion": 1,
+  "appId": "gmail",
+  "version": "1.0.0",
+  "name": "Email Inbox Triage — Gmail Edition",
+  "displayName": "Email Inbox Triage — Gmail Edition",
+  "description": "A Squad sample that opens your real Gmail inbox in a browser, scrapes the visible emails using Playwright, and feeds them to a four-agent AI triage squad for actionable advice.",
+  "kind": "squadboard-app",
+  "author": "Squad IRL",
+  "license": "MIT",
+  "homepage": "https://github.com/bradygaster/Squad-IRL/tree/main/gmail",
+  "tags": [
+    "email",
+    "gmail",
+    "inbox",
+    "multi-agent"
+  ],
+  "requires": {
+    "squadboard": ">=0.1.0"
+  }
+}

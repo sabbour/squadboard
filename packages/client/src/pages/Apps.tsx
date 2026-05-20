@@ -28,6 +28,7 @@ import {
 } from '../api/templates.ts'
 import type { SquadboardAppTemplate } from '../api/templates.ts'
 import PageHeader from '../components/layout/PageHeader.tsx'
+import BrowseFolderButton from '../components/BrowseFolderButton.tsx'
 
 const useStyles = makeStyles({
   root: {
@@ -271,7 +272,10 @@ function InstallFromGithubPanel() {
         <Input value={name} onChange={(_, d) => setName(d.value)} placeholder="Squad Doc Review" />
       </Field>
       <Field label="Absolute project folder or .squad path" hint="Use an absolute path. If you provide a project folder, Squadboard creates .squad/ inside it." required>
-        <Input value={squadPath} onChange={(_, d) => setSquadPath(d.value)} placeholder="/home/you/projects/squad-doc-review" />
+        <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+          <Input style={{ flex: 1 }} value={squadPath} onChange={(_, d) => setSquadPath(d.value)} placeholder="/home/you/projects/squad-doc-review" />
+          <BrowseFolderButton onPath={setSquadPath} />
+        </div>
       </Field>
 
       {error && <Body1 style={{ color: tokens.colorStatusDangerForeground1 }}>{error}</Body1>}
@@ -370,7 +374,10 @@ function ApplyDialog({
             </Field>
 
             <Field label="Absolute project folder or .squad path" hint="Use an absolute path. If you provide a project folder, Squadboard creates .squad/ inside it." required>
-              <Input value={squadPath} onChange={(_, d) => setSquadPath(d.value)} placeholder="/home/you/projects/my-app-project" />
+              <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+                <Input style={{ flex: 1 }} value={squadPath} onChange={(_, d) => setSquadPath(d.value)} placeholder="/home/you/projects/my-app-project" />
+                <BrowseFolderButton onPath={setSquadPath} />
+              </div>
             </Field>
 
             {error && <Body1 style={{ color: tokens.colorStatusDangerForeground1 }}>{error}</Body1>}

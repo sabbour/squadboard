@@ -1,0 +1,22 @@
+{
+  "$schema": "https://squadboard.dev/schemas/squadapp/v1/squadapp.json",
+  "schemaVersion": 1,
+  "appId": "inventory-manager",
+  "version": "1.0.0",
+  "name": "Inventory Manager",
+  "displayName": "Inventory Manager",
+  "description": "A Squad-powered inventory analysis demo. Reads a CSV file of product data and feeds it to a four-agent Squad that predicts stockouts, optimises reorder points, finds cost savings, and produces an actionable restock plan.",
+  "kind": "squadboard-app",
+  "author": "Squad IRL",
+  "license": "MIT",
+  "homepage": "https://github.com/bradygaster/Squad-IRL/tree/main/inventory-manager",
+  "tags": [
+    "inventory",
+    "operations",
+    "tracking",
+    "multi-agent"
+  ],
+  "requires": {
+    "squadboard": ">=0.1.0"
+  }
+}

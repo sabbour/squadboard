@@ -19,6 +19,7 @@ import { SystemBackupSection } from '../components/settings/SystemBackupSection.
 import { SystemGitHubSection } from '../components/settings/SystemGitHubSection.tsx'
 import { GitHubActivityFeed } from '../components/GitHubActivityFeed.tsx'
 import PageHeader from '../components/layout/PageHeader.tsx'
+import BrowseFolderButton from '../components/BrowseFolderButton.tsx'
 import { useUserPrefs } from '../utils/userPrefs.ts'
 import { useUnsavedChangesWarning } from '../hooks/useUnsavedChangesWarning.ts'
 import {
@@ -617,12 +618,16 @@ function PortabilitySection({ projectId, projectName }: { projectId: string; pro
                   required
                   hint="Absolute path on disk where the new project's .squad/ folder will live."
                 >
-                  <Input
-                    value={importSquadPath}
-                    onChange={(_, d) => setImportSquadPath(d.value)}
-                    placeholder="/home/you/projects/my-new-app/.squad"
-                    autoFocus
-                  />
+                  <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+                    <Input
+                      style={{ flex: 1 }}
+                      value={importSquadPath}
+                      onChange={(_, d) => setImportSquadPath(d.value)}
+                      placeholder="/home/you/projects/my-new-app/.squad"
+                      autoFocus
+                    />
+                    <BrowseFolderButton onPath={setImportSquadPath} />
+                  </div>
                 </Field>
                 <Field label="Project JSON file" required>
                   <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
@@ -863,7 +868,7 @@ function DangerZoneSection({ project }: { project: Project }) {
               </Button>
               <Button
                 appearance="primary"
-                style={{ background: '#da3633', borderColor: '#da3633' }}
+                style={{ background: '#da3633', borderColor: '#da3633', whiteSpace: 'nowrap' }}
                 disabled={isPending}
                 onClick={handleConfirm}
               >

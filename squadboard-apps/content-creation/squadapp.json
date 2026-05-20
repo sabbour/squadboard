@@ -1,0 +1,22 @@
+{
+  "$schema": "https://squadboard.dev/schemas/squadapp/v1/squadapp.json",
+  "schemaVersion": 1,
+  "appId": "content-creation",
+  "version": "1.0.0",
+  "name": "Content Creation Workflow — Squad Edition",
+  "displayName": "Content Creation Workflow — Squad Edition",
+  "description": "A Squad sample that takes a blog topic and produces a polished, SEO-optimized article through a four-agent content pipeline: research → outline → write → edit.",
+  "kind": "squadboard-app",
+  "author": "Squad IRL",
+  "license": "MIT",
+  "homepage": "https://github.com/bradygaster/Squad-IRL/tree/main/content-creation",
+  "tags": [
+    "content",
+    "writing",
+    "marketing",
+    "multi-agent"
+  ],
+  "requires": {
+    "squadboard": ">=0.1.0"
+  }
+}

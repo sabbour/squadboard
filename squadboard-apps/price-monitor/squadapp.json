@@ -1,0 +1,22 @@
+{
+  "$schema": "https://squadboard.dev/schemas/squadapp/v1/squadapp.json",
+  "schemaVersion": 1,
+  "appId": "price-monitor",
+  "version": "1.0.0",
+  "name": "Price Monitor & Deal Finder",
+  "displayName": "Price Monitor & Deal Finder",
+  "description": "A Squad sample that opens a real browser, scrapes product prices from any shopping page, and feeds them to a four-agent deal analysis squad for actionable buy/wait/skip advice.",
+  "kind": "squadboard-app",
+  "author": "Squad IRL",
+  "license": "MIT",
+  "homepage": "https://github.com/bradygaster/Squad-IRL/tree/main/price-monitor",
+  "tags": [
+    "ecommerce",
+    "shopping",
+    "deals",
+    "multi-agent"
+  ],
+  "requires": {
+    "squadboard": ">=0.1.0"
+  }
+}

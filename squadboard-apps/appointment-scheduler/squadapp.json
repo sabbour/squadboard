@@ -1,0 +1,22 @@
+{
+  "$schema": "https://squadboard.dev/schemas/squadapp/v1/squadapp.json",
+  "schemaVersion": 1,
+  "appId": "appointment-scheduler",
+  "version": "1.0.0",
+  "name": "Appointment Scheduler",
+  "displayName": "Appointment Scheduler",
+  "description": "A Squad sample that turns plain-text scheduling requests into optimized meeting proposals across timezones. Describe who needs to meet, when, and what to avoid — four AI specialists handle the rest.",
+  "kind": "squadboard-app",
+  "author": "Squad IRL",
+  "license": "MIT",
+  "homepage": "https://github.com/bradygaster/Squad-IRL/tree/main/appointment-scheduler",
+  "tags": [
+    "scheduling",
+    "calendar",
+    "productivity",
+    "multi-agent"
+  ],
+  "requires": {
+    "squadboard": ">=0.1.0"
+  }
+}

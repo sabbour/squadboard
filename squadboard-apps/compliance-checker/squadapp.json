@@ -1,0 +1,22 @@
+{
+  "$schema": "https://squadboard.dev/schemas/squadapp/v1/squadapp.json",
+  "schemaVersion": 1,
+  "appId": "compliance-checker",
+  "version": "1.0.0",
+  "name": "Compliance Checker — Codebase Compliance Scanner",
+  "displayName": "Compliance Checker — Codebase Compliance Scanner",
+  "description": "A Squad-powered compliance checker that scans a real project folder and evaluates compliance across security, licensing, documentation, and data privacy — with a team of four AI specialists.",
+  "kind": "squadboard-app",
+  "author": "Squad IRL",
+  "license": "MIT",
+  "homepage": "https://github.com/bradygaster/Squad-IRL/tree/main/compliance-checker",
+  "tags": [
+    "compliance",
+    "security",
+    "codebase",
+    "multi-agent"
+  ],
+  "requires": {
+    "squadboard": ">=0.1.0"
+  }
+}

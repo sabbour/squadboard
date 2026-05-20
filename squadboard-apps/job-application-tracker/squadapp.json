@@ -1,0 +1,22 @@
+{
+  "$schema": "https://squadboard.dev/schemas/squadapp/v1/squadapp.json",
+  "schemaVersion": 1,
+  "appId": "job-application-tracker",
+  "version": "1.0.0",
+  "name": "Job Application Tracker",
+  "displayName": "Job Application Tracker",
+  "description": "A Squad sample that opens a real browser, scrapes job listings from any job board, and analyzes them with a team of four AI specialists — matching opportunities to your profile, researching companies, preparing application strategies, and c",
+  "kind": "squadboard-app",
+  "author": "Squad IRL",
+  "license": "MIT",
+  "homepage": "https://github.com/bradygaster/Squad-IRL/tree/main/job-application-tracker",
+  "tags": [
+    "jobs",
+    "career",
+    "productivity",
+    "multi-agent"
+  ],
+  "requires": {
+    "squadboard": ">=0.1.0"
+  }
+}

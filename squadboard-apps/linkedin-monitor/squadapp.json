@@ -1,0 +1,22 @@
+{
+  "$schema": "https://squadboard.dev/schemas/squadapp/v1/squadapp.json",
+  "schemaVersion": 1,
+  "appId": "linkedin-monitor",
+  "version": "1.0.0",
+  "name": "LinkedIn Monitor & Engagement Tracker",
+  "displayName": "LinkedIn Monitor & Engagement Tracker",
+  "description": "A Squad sample that opens your real LinkedIn in a browser, scrapes your notifications and messages using Playwright, and feeds them to a four-agent AI squad that tells you what needs your attention — with direct links to take action.",
+  "kind": "squadboard-app",
+  "author": "Squad IRL",
+  "license": "MIT",
+  "homepage": "https://github.com/bradygaster/Squad-IRL/tree/main/linkedin-monitor",
+  "tags": [
+    "linkedin",
+    "social",
+    "networking",
+    "multi-agent"
+  ],
+  "requires": {
+    "squadboard": ">=0.1.0"
+  }
+}

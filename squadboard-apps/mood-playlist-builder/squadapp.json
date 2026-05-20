@@ -1,0 +1,22 @@
+{
+  "$schema": "https://squadboard.dev/schemas/squadapp/v1/squadapp.json",
+  "schemaVersion": 1,
+  "appId": "mood-playlist-builder",
+  "version": "1.0.0",
+  "name": "Mood Playlist Builder",
+  "displayName": "Mood Playlist Builder",
+  "description": "Create a playlist based on how you feel, refine the songs interactively, save everything in markdown, and instantly open a YouTube playlist.",
+  "kind": "squadboard-app",
+  "author": "Squad IRL",
+  "license": "MIT",
+  "homepage": "https://github.com/bradygaster/Squad-IRL/tree/main/mood-playlist-builder",
+  "tags": [
+    "music",
+    "spotify",
+    "creative",
+    "multi-agent"
+  ],
+  "requires": {
+    "squadboard": ">=0.1.0"
+  }
+}

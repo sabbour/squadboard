@@ -1,0 +1,22 @@
+{
+  "$schema": "https://squadboard.dev/schemas/squadapp/v1/squadapp.json",
+  "schemaVersion": 1,
+  "appId": "bug-triage",
+  "version": "1.0.0",
+  "name": "Bug Triage — GitHub Issues Edition",
+  "displayName": "Bug Triage — GitHub Issues Edition",
+  "description": "A Squad-powered GitHub issue triage system — fetches real open issues from any repo using the gh CLI and triages them with a team of AI specialists.",
+  "kind": "squadboard-app",
+  "author": "Squad IRL",
+  "license": "MIT",
+  "homepage": "https://github.com/bradygaster/Squad-IRL/tree/main/bug-triage",
+  "tags": [
+    "github",
+    "issues",
+    "triage",
+    "multi-agent"
+  ],
+  "requires": {
+    "squadboard": ">=0.1.0"
+  }
+}

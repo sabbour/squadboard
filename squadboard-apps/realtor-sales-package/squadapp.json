@@ -1,0 +1,22 @@
+{
+  "$schema": "https://squadboard.dev/schemas/squadapp/v1/squadapp.json",
+  "schemaVersion": 1,
+  "appId": "realtor-sales-package",
+  "version": "1.0.0",
+  "name": "Realtor Home Sales Package Builder",
+  "displayName": "Realtor Home Sales Package Builder",
+  "description": "A Squad sample that scrapes Redfin and Zillow using Playwright and feeds the listings to a four-agent AI squad that builds a client-ready Comparative Market Analysis (CMA) sales package for realtors.",
+  "kind": "squadboard-app",
+  "author": "Squad IRL",
+  "license": "MIT",
+  "homepage": "https://github.com/bradygaster/Squad-IRL/tree/main/realtor-sales-package",
+  "tags": [
+    "real-estate",
+    "sales",
+    "marketing",
+    "multi-agent"
+  ],
+  "requires": {
+    "squadboard": ">=0.1.0"
+  }
+}

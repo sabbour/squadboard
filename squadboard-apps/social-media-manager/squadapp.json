@@ -1,0 +1,22 @@
+{
+  "$schema": "https://squadboard.dev/schemas/squadapp/v1/squadapp.json",
+  "schemaVersion": 1,
+  "appId": "social-media-manager",
+  "version": "1.0.0",
+  "name": "Social Media Content Manager",
+  "displayName": "Social Media Content Manager",
+  "description": "A Squad sample that takes a content theme or product description and generates platform-optimized social media posts for Twitter, LinkedIn, and Instagram — complete with timing recommendations and engagement monitoring strategies.",
+  "kind": "squadboard-app",
+  "author": "Squad IRL",
+  "license": "MIT",
+  "homepage": "https://github.com/bradygaster/Squad-IRL/tree/main/social-media-manager",
+  "tags": [
+    "social-media",
+    "content",
+    "marketing",
+    "multi-agent"
+  ],
+  "requires": {
+    "squadboard": ">=0.1.0"
+  }
+}

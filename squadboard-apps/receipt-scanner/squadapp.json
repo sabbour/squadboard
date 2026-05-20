@@ -1,0 +1,22 @@
+{
+  "$schema": "https://squadboard.dev/schemas/squadapp/v1/squadapp.json",
+  "schemaVersion": 1,
+  "appId": "receipt-scanner",
+  "version": "1.0.0",
+  "name": "Receipt Scanner & Expense Analyzer",
+  "displayName": "Receipt Scanner & Expense Analyzer",
+  "description": "A Squad-powered sample that reads receipt files from a folder and processes them",
+  "kind": "squadboard-app",
+  "author": "Squad IRL",
+  "license": "MIT",
+  "homepage": "https://github.com/bradygaster/Squad-IRL/tree/main/receipt-scanner",
+  "tags": [
+    "expense",
+    "finance",
+    "ocr",
+    "multi-agent"
+  ],
+  "requires": {
+    "squadboard": ">=0.1.0"
+  }
+}

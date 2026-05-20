@@ -1,0 +1,22 @@
+{
+  "$schema": "https://squadboard.dev/schemas/squadapp/v1/squadapp.json",
+  "schemaVersion": 1,
+  "appId": "travel-planner",
+  "version": "1.0.0",
+  "name": "Travel Planner — A Squad of Travel Experts",
+  "displayName": "Travel Planner — A Squad of Travel Experts",
+  "description": "Trip planning sucks. You're bouncing between Google Maps, TripAdvisor, Booking.com, Reddit threads, and your friend's cousin's blog. Visa requirements, flight connections, neighborhood vibes, whether that $200 hotel is worth it — it's fragm",
+  "kind": "squadboard-app",
+  "author": "Squad IRL",
+  "license": "MIT",
+  "homepage": "https://github.com/bradygaster/Squad-IRL/tree/main/travel-planner",
+  "tags": [
+    "travel",
+    "planning",
+    "productivity",
+    "multi-agent"
+  ],
+  "requires": {
+    "squadboard": ">=0.1.0"
+  }
+}

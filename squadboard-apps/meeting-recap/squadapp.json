@@ -1,0 +1,22 @@
+{
+  "$schema": "https://squadboard.dev/schemas/squadapp/v1/squadapp.json",
+  "schemaVersion": 1,
+  "appId": "meeting-recap",
+  "version": "1.0.0",
+  "name": "Meeting Recap & Action Item Generator",
+  "displayName": "Meeting Recap & Action Item Generator",
+  "description": "A Squad sample that turns meeting transcripts into structured recaps with action items, decisions, and follow-ups. Paste your notes directly or point to a transcript file — four AI specialists do the rest.",
+  "kind": "squadboard-app",
+  "author": "Squad IRL",
+  "license": "MIT",
+  "homepage": "https://github.com/bradygaster/Squad-IRL/tree/main/meeting-recap",
+  "tags": [
+    "meetings",
+    "productivity",
+    "action-items",
+    "multi-agent"
+  ],
+  "requires": {
+    "squadboard": ">=0.1.0"
+  }
+}

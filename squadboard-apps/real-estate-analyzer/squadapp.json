@@ -1,0 +1,22 @@
+{
+  "$schema": "https://squadboard.dev/schemas/squadapp/v1/squadapp.json",
+  "schemaVersion": 1,
+  "appId": "real-estate-analyzer",
+  "version": "1.0.0",
+  "name": "Real Estate Investment Analyzer",
+  "displayName": "Real Estate Investment Analyzer",
+  "description": "A Squad sample that opens Redfin or Zillow in a browser, scrapes visible property listings using Playwright, and feeds them to a four-agent AI squad for investment analysis.",
+  "kind": "squadboard-app",
+  "author": "Squad IRL",
+  "license": "MIT",
+  "homepage": "https://github.com/bradygaster/Squad-IRL/tree/main/real-estate-analyzer",
+  "tags": [
+    "real-estate",
+    "investment",
+    "finance",
+    "multi-agent"
+  ],
+  "requires": {
+    "squadboard": ">=0.1.0"
+  }
+}

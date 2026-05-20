@@ -1,0 +1,22 @@
+{
+  "$schema": "https://squadboard.dev/schemas/squadapp/v1/squadapp.json",
+  "schemaVersion": 1,
+  "appId": "options-trader",
+  "version": "1.0.0",
+  "name": "Options Day Trader",
+  "displayName": "Options Day Trader",
+  "description": "A Squad sample that opens TradingView in a real browser, reads live chart signals (VWAP, EMA 9/21, RSI, VIX), and feeds them to a four-agent analysis squad that produces trade recommendations for 0DTE debit spreads. Uses SPX as the default ",
+  "kind": "squadboard-app",
+  "author": "Squad IRL",
+  "license": "MIT",
+  "homepage": "https://github.com/bradygaster/Squad-IRL/tree/main/options-trader",
+  "tags": [
+    "finance",
+    "trading",
+    "options",
+    "multi-agent"
+  ],
+  "requires": {
+    "squadboard": ">=0.1.0"
+  }
+}

@@ -1,0 +1,22 @@
+{
+  "$schema": "https://squadboard.dev/schemas/squadapp/v1/squadapp.json",
+  "schemaVersion": 1,
+  "appId": "ab-test-orchestrator",
+  "version": "1.0.0",
+  "name": "A/B Test Orchestrator — Squad Edition",
+  "displayName": "A/B Test Orchestrator — Squad Edition",
+  "description": "A Squad sample that turns an experiment hypothesis into a complete A/B test plan. Provide a hypothesis at the terminal or point it at an experiment brief file, and four AI specialists collaborate to design your test.",
+  "kind": "squadboard-app",
+  "author": "Squad IRL",
+  "license": "MIT",
+  "homepage": "https://github.com/bradygaster/Squad-IRL/tree/main/ab-test-orchestrator",
+  "tags": [
+    "experimentation",
+    "a-b-testing",
+    "analytics",
+    "multi-agent"
+  ],
+  "requires": {
+    "squadboard": ">=0.1.0"
+  }
+}

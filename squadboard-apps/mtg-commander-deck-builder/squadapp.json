@@ -1,0 +1,22 @@
+{
+  "$schema": "https://squadboard.dev/schemas/squadapp/v1/squadapp.json",
+  "schemaVersion": 1,
+  "appId": "mtg-commander-deck-builder",
+  "version": "1.0.0",
+  "name": "MTG Commander Deck Builder",
+  "displayName": "MTG Commander Deck Builder",
+  "description": "A Squad sample that scrapes EDHREC card recommendations using Playwright, then hands them to a four-agent AI squad to build a complete 100-card Commander deck. Supports follow-up modifications in a conversation loop.",
+  "kind": "squadboard-app",
+  "author": "Squad IRL",
+  "license": "MIT",
+  "homepage": "https://github.com/bradygaster/Squad-IRL/tree/main/mtg-commander-deck-builder",
+  "tags": [
+    "gaming",
+    "mtg",
+    "creative",
+    "multi-agent"
+  ],
+  "requires": {
+    "squadboard": ">=0.1.0"
+  }
+}

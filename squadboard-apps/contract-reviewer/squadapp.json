@@ -1,0 +1,22 @@
+{
+  "$schema": "https://squadboard.dev/schemas/squadapp/v1/squadapp.json",
+  "schemaVersion": 1,
+  "appId": "contract-reviewer",
+  "version": "1.0.0",
+  "name": "Contract Reviewer — Squad Edition",
+  "displayName": "Contract Reviewer — Squad Edition",
+  "description": "A real Squad-powered contract review tool. Point it at a contract file and a team of four AI legal specialists will extract clauses, score risk, suggest negotiation alternatives, and deliver an executive summary — all with 🔴🟡🟢 traffic-li",
+  "kind": "squadboard-app",
+  "author": "Squad IRL",
+  "license": "MIT",
+  "homepage": "https://github.com/bradygaster/Squad-IRL/tree/main/contract-reviewer",
+  "tags": [
+    "contracts",
+    "legal",
+    "review",
+    "multi-agent"
+  ],
+  "requires": {
+    "squadboard": ">=0.1.0"
+  }
+}

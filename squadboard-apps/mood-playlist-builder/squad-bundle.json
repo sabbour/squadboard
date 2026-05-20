@@ -1,0 +1,90 @@
+{
+  "manifest": {
+    "bundleId": "mood-playlist-builder",
+    "name": "Mood Playlist Builder",
+    "version": "1.0.0",
+    "description": "Create a playlist based on how you feel, refine the songs interactively, save everything in markdown, and instantly open a YouTube playlist.",
+    "author": "Squad IRL",
+    "license": "MIT",
+    "schemaVersion": 1
+  },
+  "project": {
+    "name": "Mood Playlist Builder",
+    "description": "Create a playlist based on how you feel, refine the songs interactively, save everything in markdown, and instantly open a YouTube playlist.",
+    "icon": "MusicNote2Regular"
+  },
+  "kanban": {
+    "columns": [
+      {
+        "slug": "backlog",
+        "label": "Backlog",
+        "order": 0
+      },
+      {
+        "slug": "building",
+        "label": "Building",
+        "order": 1,
+        "wip_limit": 3
+      },
+      {
+        "slug": "done",
+        "label": "Done",
+        "order": 2
+      }
+    ],
+    "defaultColumn": "backlog"
+  },
+  "team": [
+    {
+      "name": "mood-interpreter",
+      "role": "Mood Interpreter",
+      "persistent": true,
+      "charterPath": "agents/mood-interpreter/charter.md",
+      "charter": "# mood-interpreter\n\n## Role\n\nMood Interpreter\n\n## Expertise\n\n- Summarizes raw mood text into a clear 1-3 word phrase with adjacent options.\n\n## Style\n\nYou convert free-form mood check-ins into a concise, reusable mood signal.\n\nReturn strict JSON only:\n{\n  \"moodPhrase\": \"1-3 word title-cased phrase\",\n  \"adjacentMoods\": [\"string\", \"string\"]\n}\n\nRules:\n- moodPhrase must be non-empty and 1-3 words\n- adjacentMoods is an array with 0-4 strings\n- no markdown, no extra keys\n"
+    },
+    {
+      "name": "song-curator",
+      "role": "Song Curator",
+      "persistent": true,
+      "charterPath": "agents/song-curator/charter.md",
+      "charter": "# song-curator\n\n## Role\n\nSong Curator\n\n## Expertise\n\n- Builds a mood-aligned list of songs with genre, artist, and title.\n\n## Style\n\nYou curate songs that match the interpreted mood.\n\nReturn strict JSON only:\n{\n  \"songs\": [\n    { \"genre\": \"string\", \"artist\": \"string\", \"song\": \"string\" }\n  ]\n}\n\nRules:\n- include 1-8 songs\n- each item needs non-empty genre, artist, and song\n- no markdown, no extra keys\n"
+    },
+    {
+      "name": "mood-logic-guardian",
+      "role": "Mood Logic Guardian",
+      "persistent": true,
+      "charterPath": "agents/mood-logic-guardian/charter.md",
+      "charter": "# mood-logic-guardian\n\n## Role\n\nMood Logic Guardian\n\n## Expertise\n\n- Applies history-aware mood logic and fallback policy guardrails.\n\n## Style\n\nYou are the policy and reliability checkpoint for mood planning output.\n\nReturn strict JSON only:\n{\n  \"moodPhrase\": \"1-3 word title-cased mood phrase\",\n  \"adjacentMoods\": [\"string\", \"string\"],\n  \"songs\": [\n    { \"genre\": \"string\", \"artist\": \"string\", \"song\": \"string\" }\n  ]\n}\n\nRules:\n- preserve the interpreted mood intent\n- keep adjacent moods history-aware when context suggests it\n- songs must contain 1-8 valid items\n- no markdown, no extra keys\n"
+    }
+  ],
+  "routing": [
+    {
+      "pattern": "mood|feeling|summarize|phrase|adjacent",
+      "matchType": "keyword",
+      "agentName": "mood-interpreter",
+      "priority": 4,
+      "rawRule": "{\"pattern\":\"mood|feeling|summarize|phrase|adjacent\",\"agents\":[\"@mood-interpreter\"],\"tier\":\"direct\",\"description\":\"Mood interpretation and summarization\"}"
+    },
+    {
+      "pattern": "songs|playlist|genre|artist|curate|music",
+      "matchType": "keyword",
+      "agentName": "song-curator",
+      "priority": 3,
+      "rawRule": "{\"pattern\":\"songs|playlist|genre|artist|curate|music\",\"agents\":[\"@song-curator\"],\"tier\":\"direct\",\"description\":\"Song matching and curation\"}"
+    },
+    {
+      "pattern": "history|fallback|policy|guardrail|logic",
+      "matchType": "keyword",
+      "agentName": "mood-logic-guardian",
+      "priority": 2,
+      "rawRule": "{\"pattern\":\"history|fallback|policy|guardrail|logic\",\"agents\":[\"@mood-logic-guardian\"],\"tier\":\"direct\",\"description\":\"History-aware mood logic and fallback policy\"}"
+    },
+    {
+      "pattern": "mood playlist|plan playlist|build playlist|full pipeline",
+      "matchType": "keyword",
+      "agentName": "mood-interpreter",
+      "priority": 10,
+      "rawRule": "{\"pattern\":\"mood playlist|plan playlist|build playlist|full pipeline\",\"agents\":[\"@mood-interpreter\",\"@song-curator\",\"@mood-logic-guardian\"],\"tier\":\"full\",\"priority\":10,\"description\":\"Full mood-to-playlist pipeline\"}"
+    }
+  ]
+}
