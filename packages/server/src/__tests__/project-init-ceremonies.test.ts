@@ -26,6 +26,12 @@ vi.mock('../db/index.js', () => ({
   },
 }));
 
+vi.mock('../services/project-path-uniqueness.js', () => ({
+  assertProjectPathAvailable: vi.fn(async (inputPath: string) =>
+    inputPath.endsWith('/.squad') ? inputPath : `${inputPath}/.squad`,
+  ),
+}));
+
 // ---------------------------------------------------------------------------
 // seedBuiltInCeremonies mock — tracks calls and can simulate failure
 // ---------------------------------------------------------------------------

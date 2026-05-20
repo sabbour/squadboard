@@ -27,6 +27,7 @@ import { createSkill, listSkills } from './skills.js';
 import { createTool, listTools } from './tools.js';
 import { createMcpServer, listMcpServers } from './mcp.js';
 import { normalizeSquadPath } from './setup-lifecycle.js';
+import { assertProjectPathAvailable } from './project-path-uniqueness.js';
 import type {
   SquadboardBundle,
   ApplyResult,
@@ -128,12 +129,13 @@ async function applyProject(
   if (existing.length > 0) {
     const proj = existing[0];
     if (opts.overwriteExisting && bundle.project) {
+      const availableProjectPath = await assertProjectPathAvailable(projectPath, { excludeProjectId: proj.id });
       if (!opts.dryRun) {
         await db
           .update(schema.projects)
           .set({
             name: bundle.project.name,
-            path: projectPath,
+            path: availableProjectPath,
             description: bundle.project.description ?? null,
           })
           .where(eq(schema.projects.id, proj.id));
@@ -146,15 +148,17 @@ async function applyProject(
   }
 
   if (opts.dryRun) {
+    await assertProjectPathAvailable(projectPath);
     result.applied.push(`project:"${projectName}" (would create)`);
     return undefined;
   }
 
+  const availableProjectPath = await assertProjectPathAvailable(projectPath);
   const [created] = await db
     .insert(schema.projects)
     .values({
       name: projectName,
-      path: projectPath,
+      path: availableProjectPath,
       description: bundle.project?.description ?? null,
     })
     .returning();

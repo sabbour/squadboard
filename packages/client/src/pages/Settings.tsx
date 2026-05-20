@@ -12,6 +12,7 @@ import {
   readFileAsJson,
 } from '../api/templates.ts'
 import { McpConfigPanel } from '../components/settings/McpConfigPanel.tsx'
+import { ProjectIdentityForm } from '../components/settings/ProjectIdentityForm.tsx'
 import { SquadSyncStatusPanel } from '../components/settings/SquadSyncStatusPanel.tsx'
 import { ReviewPolicySection } from '../components/settings/ReviewPolicySection.tsx'
 import { SystemBackupSection } from '../components/settings/SystemBackupSection.tsx'
@@ -904,28 +905,7 @@ export default function Settings() {
           {activeSection === 'general' && (
             <>
               <SectionHeader title="General" sub="Basic project settings." />
-              <div
-                style={{
-                  background: 'var(--surface)',
-                  border: '1px solid var(--border)',
-                  borderRadius: '8px',
-                  padding: '14px 16px',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  gap: '4px',
-                  maxWidth: '480px',
-                }}
-              >
-                <label>
-                  <Caption1 style={{ display: 'block', color: tokens.colorNeutralForeground3, textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: tokens.fontWeightSemibold }}>
-                    Project name
-                  </Caption1>
-                </label>
-                <Subtitle2 style={{ display: 'block', color: tokens.colorNeutralForeground1, margin: 0 }}>{project.name}</Subtitle2>
-                <Caption1 style={{ display: 'block', color: tokens.colorNeutralForeground3, margin: '4px 0 0' }}>
-                  Squad path: <code style={{ fontFamily: tokens.fontFamilyMonospace, color: tokens.colorNeutralForeground3 }}>{project.squadPath}</code>
-                </Caption1>
-              </div>
+              <ProjectIdentityForm project={project} />
               <DefaultModelSection projectId={projectId} current={project.defaultModel ?? null} />
             </>
           )}

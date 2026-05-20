@@ -30,6 +30,9 @@ export interface CreateProjectInput {
 }
 
 export interface UpdateProjectInput {
+  name?: string
+  description?: string | null
+  path?: string
   defaultModel?: string | null
   costModel?: 'usd' | 'gh_multipliers' | null
 }

@@ -13,8 +13,29 @@ import {
 } from '../db/index.js';
 import { createProject } from '../services/project-init.js';
 import { suggestProjectSetup } from '../services/setup-lifecycle.js';
+import { assertProjectPathAvailable } from '../services/project-path-uniqueness.js';
 
 const router = Router();
+
+function errorPayload(err: unknown): Record<string, unknown> {
+  const typed = err as Error & {
+    code?: string;
+    projectId?: string;
+    projectName?: string;
+    path?: string;
+  };
+  return {
+    error: err instanceof Error ? err.message : String(err),
+    ...(typed.code ? { code: typed.code } : {}),
+    ...(typed.projectId ? { projectId: typed.projectId } : {}),
+    ...(typed.projectName ? { projectName: typed.projectName } : {}),
+    ...(typed.path ? { path: typed.path } : {}),
+  };
+}
+
+function errorStatus(err: unknown): number {
+  return (err as Error & { status?: number }).status ?? 500;
+}
 
 router.get('/', async (_req: Request, res: Response) => {
   const db = getDb();
@@ -30,9 +51,12 @@ router.post('/', async (req: Request, res: Response) => {
     return;
   }
 
-  const created = await createProject({ name, path });
-
-  res.status(201).json(created);
+  try {
+    const created = await createProject({ name, path });
+    res.status(201).json(created);
+  } catch (err) {
+    res.status(errorStatus(err)).json(errorPayload(err));
+  }
 });
 
 router.get('/:id', async (req: Request, res: Response) => {
@@ -51,13 +75,16 @@ router.get('/:id', async (req: Request, res: Response) => {
 });
 
 router.patch('/:id', async (req: Request, res: Response) => {
-  const { name, description, defaultModel, costModel } = (req.body ?? {}) as {
+  const { name, description, defaultModel, costModel, path: projectPath, squadPath } = (req.body ?? {}) as {
     name?: string | null;
     description?: string | null;
     defaultModel?: string | null;
     costModel?: string | null;
+    path?: string | null;
+    squadPath?: string | null;
   };
   const updates: Partial<typeof schema.projects.$inferInsert> = {};
+  const projectId = req.params.id as string;
 
   // W27 — future-patch-project-fields: allow renaming and describing a project.
   if (name !== undefined) {
@@ -107,6 +134,20 @@ router.patch('/:id', async (req: Request, res: Response) => {
     }
   }
 
+  const requestedPath = projectPath ?? squadPath;
+  if (requestedPath !== undefined) {
+    if (typeof requestedPath !== 'string' || requestedPath.trim() === '') {
+      res.status(400).json({ error: '`path` must be a non-empty string' });
+      return;
+    }
+    try {
+      updates.path = await assertProjectPathAvailable(requestedPath, { excludeProjectId: projectId });
+    } catch (err) {
+      res.status(errorStatus(err)).json(errorPayload(err));
+      return;
+    }
+  }
+
   if (Object.keys(updates).length === 0) {
     res.status(400).json({ error: 'No supported fields to update' });
     return;
@@ -116,7 +157,7 @@ router.patch('/:id', async (req: Request, res: Response) => {
   const [updated] = await db
     .update(schema.projects)
     .set(updates)
-    .where(eq(schema.projects.id, req.params.id as string))
+    .where(eq(schema.projects.id, projectId))
     .returning();
 
   if (!updated) {

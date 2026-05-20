@@ -22,6 +22,7 @@ import {
   listStarters,
 } from '../services/starter-projects.js';
 import { materialiseIrlPlan } from '../services/irl-mapper.js';
+import { assertProjectPathAvailable } from '../services/project-path-uniqueness.js';
 
 export const startersRouter = Router();
 
@@ -103,6 +104,18 @@ startersRouter.post('/:slug/use', async (req: Request, res: Response) => {
 
   const projectName = (body.projectName ?? detail.meta.title).slice(0, 200) || slug;
   const projectPath = await resolveProjectPath(body.projectPath, slug);
+  let squadPath: string;
+  try {
+    squadPath = await assertProjectPathAvailable(projectPath);
+  } catch (err) {
+    res.status((err as Error & { status?: number }).status ?? 500).json({
+      ok: false,
+      error: (err as Error & { code?: string }).code ?? 'project_path_unavailable',
+      message: err instanceof Error ? err.message : String(err),
+      projectId: (err as Error & { projectId?: string }).projectId,
+    });
+    return;
+  }
 
   // Refuse if the target path already has anything in it that would collide.
   try {
@@ -122,7 +135,7 @@ startersRouter.post('/:slug/use', async (req: Request, res: Response) => {
   const db = getDb();
   const [project] = await db
     .insert(schema.projects)
-    .values({ name: projectName, path: projectPath })
+    .values({ name: projectName, path: squadPath })
     .returning();
   if (!project) {
     res.status(500).json({ ok: false, error: 'project_insert_failed' });

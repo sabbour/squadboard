@@ -10,6 +10,7 @@
 
 import { getDb, schema } from '../db/index.js';
 import { seedBuiltInCeremonies } from '../ceremonies/seed-built-in.js';
+import { assertProjectPathAvailable } from './project-path-uniqueness.js';
 
 export interface CreateProjectOptions {
   name: string;
@@ -36,10 +37,11 @@ export async function createProject(
   options: CreateProjectOptions,
 ): Promise<CreateProjectResult> {
   const db = getDb();
+  const safePath = await assertProjectPathAvailable(options.path);
 
   const [project] = await db
     .insert(schema.projects)
-    .values({ name: options.name, path: options.path })
+    .values({ name: options.name, path: safePath })
     .returning();
 
   if (!project) {

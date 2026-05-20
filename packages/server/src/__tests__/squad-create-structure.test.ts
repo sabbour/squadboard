@@ -58,6 +58,11 @@ vi.mock('../services/project-squad.js', () => ({
   linkProjectToSquad: (...args: unknown[]) => linkProjectToSquadMock(...args),
 }));
 
+vi.mock('../services/project-path-uniqueness.js', () => ({
+  assertProjectPathAvailable: vi.fn(async (inputPath: string) => inputPath),
+  findProjectBySquadPath: vi.fn(async () => null),
+}));
+
 vi.mock('drizzle-orm', () => ({
   eq: (left: unknown, right: unknown) => ({ left, right }),
 }));

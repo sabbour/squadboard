@@ -56,6 +56,12 @@ vi.mock('drizzle-orm', () => ({
   eq: vi.fn((col, val) => ({ col, val })),
 }));
 
+vi.mock('../services/project-path-uniqueness.js', () => ({
+  assertProjectPathAvailable: vi.fn(async (inputPath: string) =>
+    inputPath.endsWith('/.squad') ? inputPath : `${inputPath}/.squad`,
+  ),
+}));
+
 // ---------------------------------------------------------------------------
 // Minimal Express-like mock: builds req/res and captures the response.
 // ---------------------------------------------------------------------------
@@ -111,6 +117,8 @@ vi.mock('express', async () => {
 
 // Load the route module (side-effect: registers handlers via the mocked Router).
 await import('../routes/projects.js');
+const { assertProjectPathAvailable } = await import('../services/project-path-uniqueness.js');
+const mockAssertProjectPathAvailable = vi.mocked(assertProjectPathAvailable);
 
 const patchHandler = handlers['PATCH']?.['/:id'];
 if (!patchHandler) throw new Error('PATCH /:id handler not found — check route registration');
@@ -120,6 +128,9 @@ if (!patchHandler) throw new Error('PATCH /:id handler not found — check route
 beforeEach(() => {
   capturedUpdates = {};
   shouldFindProject = true;
+  mockAssertProjectPathAvailable.mockImplementation(async (inputPath: string) =>
+    inputPath.endsWith('/.squad') ? inputPath : `${inputPath}/.squad`,
+  );
 });
 
 // ---------------------------------------------------------------------------
@@ -182,5 +193,45 @@ describe('PATCH /api/projects/:id — name + description (W27)', () => {
     await patchHandler(req, res);
     expect(getStatus()).toBe(400);
     expect((getBody() as Record<string, string>).error).toMatch(/4000/);
+  });
+
+  it('updates the registered project path after duplicate validation', async () => {
+    const { req, res, getStatus } = makeReqRes(
+      { id: 'test-project-id' },
+      { path: '/tmp/renamed-project' },
+    );
+    await patchHandler(req, res);
+
+    expect(getStatus()).toBe(200);
+    expect(mockAssertProjectPathAvailable).toHaveBeenCalledWith('/tmp/renamed-project', {
+      excludeProjectId: 'test-project-id',
+    });
+    expect(capturedUpdates['path']).toBe('/tmp/renamed-project/.squad');
+  });
+
+  it('returns a clear conflict when the requested path belongs to another project', async () => {
+    mockAssertProjectPathAvailable.mockRejectedValueOnce(Object.assign(
+      new Error('Folder path is already registered to project "Other".'),
+      {
+        status: 409,
+        code: 'duplicate_project_path',
+        projectId: 'other-project-id',
+        projectName: 'Other',
+        path: '/tmp/other/.squad',
+      },
+    ));
+    const { req, res, getStatus, getBody } = makeReqRes(
+      { id: 'test-project-id' },
+      { path: '/tmp/other' },
+    );
+    await patchHandler(req, res);
+
+    expect(getStatus()).toBe(409);
+    expect(getBody()).toMatchObject({
+      code: 'duplicate_project_path',
+      projectId: 'other-project-id',
+      projectName: 'Other',
+      path: '/tmp/other/.squad',
+    });
   });
 });

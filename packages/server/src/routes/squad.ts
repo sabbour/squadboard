@@ -7,8 +7,25 @@ import { discoverSquadDirectories, validateSquadDir } from '../services/squad-di
 import { linkProjectToSquad } from '../services/project-squad.js';
 import { scaffoldSquad } from '../services/setup-lifecycle.js';
 import { getDb, schema } from '../db/index.js';
+import { assertProjectPathAvailable, findProjectBySquadPath } from '../services/project-path-uniqueness.js';
 
 const router = Router();
+
+function errorBody(err: unknown): Record<string, unknown> {
+  const typed = err as Error & { code?: string; projectId?: string; projectName?: string; path?: string };
+  return {
+    ok: false,
+    error: err instanceof Error ? err.message : String(err),
+    ...(typed.code ? { code: typed.code } : {}),
+    ...(typed.projectId ? { projectId: typed.projectId } : {}),
+    ...(typed.projectName ? { projectName: typed.projectName } : {}),
+    ...(typed.path ? { path: typed.path } : {}),
+  };
+}
+
+function errorStatus(err: unknown): number {
+  return (err as Error & { status?: number }).status ?? 500;
+}
 
 /**
  * GET /api/squad/home
@@ -83,35 +100,14 @@ router.post('/register', async (req: Request, res: Response) => {
     }
 
     const projectName = name ?? squadPath.split('/').at(-2) ?? 'unnamed';
-    const db = getDb();
-
-    // Upsert: if this path is already registered, return the existing project.
-    const existing = await db
-      .select()
-      .from(schema.projects)
-      .where(eq(schema.projects.path, squadPath))
-      .limit(1);
-
-    let project = existing[0];
-
-    if (!project) {
-      const [inserted] = await db
-        .insert(schema.projects)
-        .values({ name: projectName, path: squadPath })
-        .returning();
-      project = inserted;
-    }
-
-    // Link sidecar (idempotent — Kobayashi's service uses this for getSquadContext)
-    await linkProjectToSquad(project.id, squadPath);
+    const project = await registerProject(squadPath, projectName);
 
     res.status(201).json({
       ok: true,
-      data: { projectId: project.id, name: project.name, squadPath: project.path },
+      data: { projectId: project.projectId, name: project.projectName, squadPath: project.squadPath },
     });
   } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    res.status(500).json({ ok: false, error: message });
+    res.status(errorStatus(err)).json(errorBody(err));
   }
 });
 
@@ -120,22 +116,36 @@ async function registerProject(
   projectName: string,
 ): Promise<{ projectId: string; projectName: string; squadPath: string }> {
   const db = getDb();
-  const existing = await db
-    .select()
-    .from(schema.projects)
-    .where(eq(schema.projects.path, squadPath))
-    .limit(1);
-
-  let project = existing[0];
+  const owner = await findProjectBySquadPath(squadPath);
+  let project: typeof schema.projects.$inferSelect | undefined;
+  if (owner) {
+    const existing = await db
+      .select()
+      .from(schema.projects)
+      .where(eq(schema.projects.id, owner.id))
+      .limit(1);
+    project = existing[0];
+  }
   if (!project) {
+    const safePath = await assertProjectPathAvailable(squadPath);
     const [inserted] = await db
       .insert(schema.projects)
-      .values({ name: projectName, path: squadPath })
+      .values({ name: projectName, path: safePath })
       .returning();
     project = inserted;
+  } else {
+    const safePath = await assertProjectPathAvailable(squadPath, { excludeProjectId: project.id });
+    if (project.path !== safePath) {
+      const [updated] = await db
+        .update(schema.projects)
+        .set({ path: safePath })
+        .where(eq(schema.projects.id, project.id))
+        .returning();
+      project = updated ?? project;
+    }
   }
 
-  await linkProjectToSquad(project.id, squadPath);
+  await linkProjectToSquad(project.id, project.path);
   return { projectId: project.id, projectName: project.name, squadPath: project.path };
 }
 
@@ -167,6 +177,7 @@ router.post('/init', async (req: Request, res: Response) => {
     }
 
     const squadPath = path.join(dirPath, '.squad');
+    await assertProjectPathAvailable(squadPath);
 
     // Reject if .squad/ already exists
     try {
@@ -183,8 +194,7 @@ router.post('/init', async (req: Request, res: Response) => {
 
     res.status(201).json({ ok: true, data });
   } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    res.status(500).json({ ok: false, error: message });
+    res.status(errorStatus(err)).json(errorBody(err));
   }
 });
 
@@ -216,6 +226,8 @@ router.post('/create', async (req: Request, res: Response) => {
     }
 
     const projectPath = path.join(parentPath, projectName);
+    const squadPath = path.join(projectPath, '.squad');
+    await assertProjectPathAvailable(squadPath);
 
     // Reject if project directory already exists
     try {
@@ -227,7 +239,6 @@ router.post('/create', async (req: Request, res: Response) => {
     }
 
     await fs.mkdir(projectPath, { recursive: true });
-    const squadPath = path.join(projectPath, '.squad');
     await scaffoldSquad({ squadPath, projectName });
     const registration = await registerProject(squadPath, projectName);
 
@@ -236,8 +247,7 @@ router.post('/create', async (req: Request, res: Response) => {
       data: { ...registration, projectPath },
     });
   } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    res.status(500).json({ ok: false, error: message });
+    res.status(errorStatus(err)).json(errorBody(err));
   }
 });
 
