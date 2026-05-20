@@ -190,12 +190,23 @@ function applyEventToRunSnapshot(
   return run
 }
 
+function isTerminalDbStatus(status: IssueRunDbStatus): boolean {
+  return status === 'completed' || status === 'failed' || status === 'cancelled'
+}
+
+function isTerminalEvent(eventType: string): boolean {
+  return eventType === 'issue.run.finish' || eventType === 'issue.run.error'
+}
+
 function applyEventsToRunSnapshot(
   run: IssueRunStreamSnapshot,
   events: IssueRunEventRow[],
 ): IssueRunStreamSnapshot {
   return events.reduce<IssueRunStreamSnapshot>(
-    (current, event) => applyEventToRunSnapshot(current, event) ?? current,
+    (current, event) => {
+      if (isTerminalDbStatus(current.status) && !isTerminalEvent(event.eventType)) return current
+      return applyEventToRunSnapshot(current, event) ?? current
+    },
     run,
   )
 }

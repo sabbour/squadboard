@@ -232,6 +232,47 @@ describe('useRunStream', () => {
       expect(result.current.run?.recovery?.message).toBe('Server restarted while this run was active')
     })
 
+    it('does not downgrade a terminal failed snapshot when replay only has non-terminal events', async () => {
+      const events = [
+        {
+          id: 'e-start',
+          runId: RUN_ID,
+          seq: 0,
+          eventType: 'issue.run.start',
+          payload: { runId: RUN_ID, seq: 0, agentName: 'Kujan' },
+          createdAt: '2026-05-20T14:00:00.000Z',
+        },
+        {
+          id: 'e-recovery',
+          runId: RUN_ID,
+          seq: 1,
+          eventType: 'issue.run.metric',
+          payload: { runId: RUN_ID, seq: 1, kind: 'recovery', message: '[recovered: server restarted]' },
+          createdAt: '2026-05-20T14:01:00.000Z',
+        },
+      ]
+      mockApiFetch.mockResolvedValueOnce(makeEventsResponse(
+        events,
+        2,
+        makeRunSnapshot({
+          status: 'failed',
+          startedAt: '2026-05-20T14:00:00.000Z',
+          completedAt: null,
+          finishedAt: '2026-05-20T14:21:59.000Z',
+          updatedAt: '2026-05-20T14:21:59.000Z',
+          durationMs: 1_319_000,
+          errorMessage: 'Agent emitted no structured output after restart',
+        }),
+      ))
+
+      const { result } = renderHook(() => useRunStream(RUN_ID, PROJECT_ID, ISSUE_ID))
+
+      await waitFor(() => expect(result.current.status).toBe('error'))
+      expect(result.current.run?.status).toBe('failed')
+      expect(result.current.run?.durationMs).toBe(1_319_000)
+      expect(result.current.run?.finishedAt).toBe('2026-05-20T14:21:59.000Z')
+    })
+
     it('sets error status on fetch failure', async () => {
       mockApiFetch.mockRejectedValueOnce(new Error('Network error'))
 

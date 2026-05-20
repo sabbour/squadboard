@@ -271,20 +271,61 @@ describe('LiveRunViewer', () => {
     })
 
     it('freezes elapsed time from a terminal failed run snapshot', () => {
+      vi.useFakeTimers()
+      vi.setSystemTime(new Date('2026-05-20T14:45:00.000Z'))
       mockUseRunStream.mockReturnValue(makeStream({
         status: 'error',
-        error: new Error('Recovered failed run'),
+        error: null,
         run: {
-          startedAt: '2026-05-16T06:00:00.000Z',
+          id: 'run-abc',
+          issueId: 'issue-1',
+          agentId: 'agent-1',
+          kind: 'agent_run',
+          status: 'failed',
+          workspaceStrategy: 'scratch',
+          workspacePath: null,
+          createdAt: '2026-05-20T14:00:00.000Z',
+          updatedAt: '2026-05-20T14:21:59.000Z',
+          startedAt: '2026-05-20T14:00:00.000Z',
           completedAt: null,
-          finishedAt: '2026-05-16T06:00:05.000Z',
-          updatedAt: '2026-05-16T06:00:06.000Z',
+          finishedAt: '2026-05-20T14:21:59.000Z',
+          leaseExpiresAt: null,
+          heartbeatAt: null,
+          durationMs: 1_319_000,
+          costTokens: 0,
+          inputTokens: 0,
+          outputTokens: 0,
+          cachedInputTokens: 0,
+          costUsd: '0',
+          premiumRequests: '0',
+          output: { available: false, length: 0 },
+          errorMessage: 'Agent emitted no structured output after restart',
+          staleReason: null,
+          recovery: null,
         },
+        events: [{
+          id: 'e-error',
+          runId: 'run-abc',
+          seq: 2,
+          eventType: 'issue.run.error',
+          payload: {
+            runId: 'run-abc',
+            seq: 2,
+            message: 'Agent emitted no structured output after restart',
+          },
+          createdAt: '2026-05-20T14:21:59.000Z',
+        }],
       }))
 
       renderViewer()
 
-      expect(screen.getByText('0m 5s')).toBeInTheDocument()
+      expect(screen.getByText('Failed')).toBeInTheDocument()
+      expect(screen.getByText('21m 59s')).toBeInTheDocument()
+      expect(screen.queryByRole('textbox', { name: /steering message/i })).not.toBeInTheDocument()
+
+      vi.advanceTimersByTime(60_000)
+
+      expect(screen.getByText('21m 59s')).toBeInTheDocument()
     })
   })
 
