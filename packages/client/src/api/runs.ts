@@ -7,6 +7,55 @@ export type WorkspaceStrategy = 'scratch' | 'dir' | 'worktree'
 export type RunKind = 'agent_run' | 'route' | 'peer_review' | 'approve'
 export type RoutingTier = 'T1' | 'T2' | 'T3'
 
+export interface RunOwnershipContext {
+  project: {
+    id: string
+    name: string
+    path: string
+  }
+  issue: {
+    id: string
+    title: string
+    status: string
+    githubIssueNumber?: number | null
+    githubIssueUrl?: string | null
+  }
+  workflow: {
+    id: string
+    name: string | null
+    slug: string | null
+    kind: string | null
+    triggerKind: string | null
+    versionId: string | null
+    version: number | null
+  } | null
+  workflowRun: {
+    id: string
+    status: string | null
+    currentStepIndex: number | null
+    parentWorkflowRunId: string | null
+    triggerSource: unknown
+  } | null
+  stepRun: {
+    id: string
+    stepIndex: number | null
+    stepType: string | null
+    status: string | null
+  } | null
+  parent: {
+    workflowRunId: string | null
+    issueRunId: string | null
+  }
+  actions: {
+    canRetrigger: boolean
+    retriggerBlockedReason: string | null
+    retriggerUrl: string
+    liveUrl: string
+    issueUrl: string
+    projectUrl: string
+  }
+}
+
 export interface IssueRun {
   id: string
   issueId: string
@@ -28,6 +77,7 @@ export interface IssueRun {
   durationMs?: number | null
   leaseExpiresAt?: string | null
   heartbeatAt?: string | null
+  context?: RunOwnershipContext | null
 }
 
 const BASE = import.meta.env.VITE_API_URL ?? 'http://localhost:3000'

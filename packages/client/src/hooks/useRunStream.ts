@@ -12,6 +12,7 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
 import { apiFetch } from '../api/client.ts'
 import { wsClient } from '../realtime/ws-client.ts'
+import type { RunOwnershipContext } from '../api/runs.ts'
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -61,6 +62,7 @@ export interface IssueRunStreamSnapshot {
     message: string
     recoveredAt: string | null
   } | null
+  context?: RunOwnershipContext | null
 }
 
 interface EventsResponse {

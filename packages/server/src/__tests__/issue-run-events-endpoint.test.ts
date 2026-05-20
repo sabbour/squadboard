@@ -72,13 +72,48 @@ function makeRunRow(overrides: Partial<MockRunRow> = {}): MockRunRow {
 let _runRow: MockRunRow | null = makeRunRow();
 let _countTotal = 0;
 let _events: Array<{ id: number; runId: string; seq: number; eventType: string; payload: object; createdAt: Date }> = [];
+let _contextRows: Array<Record<string, unknown>> = [];
 
 // Query call counter used to distinguish which select() call is which.
 let _selectCallCount = 0;
 
 const mockSelect = vi.fn();
 const mockInsert = vi.fn();
-const mockDb = { select: mockSelect, insert: mockInsert };
+const mockExecute = vi.fn();
+const mockDb = { select: mockSelect, insert: mockInsert, execute: mockExecute };
+
+function makeContextRow(overrides: Record<string, unknown> = {}) {
+  return {
+    project_id: 'proj-001',
+    project_name: 'Squadboard',
+    project_path: '/repo/.squad',
+    issue_id: 'issue-001',
+    issue_title: 'Fix run detail',
+    issue_status: 'in-progress',
+    github_issue_number: 42,
+    github_issue_url: 'https://github.com/acme/repo/issues/42',
+    agent_name: 'McManus',
+    agent_status: 'active',
+    step_run_id: 'step-001',
+    step_index: 1,
+    step_type: 'agent_run',
+    step_status: 'failed',
+    workflow_run_id: 'workflow-run-001',
+    workflow_run_status: 'failed',
+    workflow_current_step_index: 1,
+    parent_workflow_run_id: 'parent-workflow-run-001',
+    trigger_source: { detail: JSON.stringify({ issueRunId: 'parent-run-001' }) },
+    workflow_version_id: 'workflow-version-001',
+    workflow_version: 3,
+    workflow_id: 'workflow-001',
+    workflow_name: 'Work Pickup',
+    workflow_slug: 'work-pickup',
+    workflow_kind: 'ceremony',
+    workflow_trigger_kind: 'on_schedule',
+    active_run_count: 0,
+    ...overrides,
+  };
+}
 
 vi.mock('../db/index.js', () => ({
   getDb: () => mockDb,
@@ -179,6 +214,7 @@ function makeChain(resolveWith: unknown) {
 
 function resetSelectMock() {
   _selectCallCount = 0;
+  mockExecute.mockImplementation(async () => ({ rows: _contextRows }));
   mockSelect.mockImplementation(() => {
     _selectCallCount++;
     const call = _selectCallCount;
@@ -248,6 +284,8 @@ beforeEach(() => {
   _runRow      = makeRunRow();
   _countTotal  = 0;
   _events      = [];
+  _contextRows = [makeContextRow()];
+  mockExecute.mockReset();
   resetSelectMock();
 });
 
@@ -373,6 +411,46 @@ describe('offset + limit pagination', () => {
         reason: 'restart-pickup',
         message: 'Server restarted while this run was active',
         recoveredAt: '2026-05-20T14:00:05.000Z',
+      },
+    });
+  });
+
+  it('includes ownership context and recovery actions for failed run pages', async () => {
+    _runRow = makeRunRow({
+      status: 'failed',
+      updatedAt: new Date('2026-05-20T14:00:05.000Z'),
+      startedAt: new Date('2026-05-20T14:00:00.000Z'),
+    });
+    _contextRows = [makeContextRow()];
+
+    const handler = findHandler('/:runId/events', 'get');
+    const req = makeReq({ projectId: 'proj-001', issueId: 'issue-001', runId: 'run-001' });
+    const res = makeRes();
+    await handler!(req as unknown as Request, res as unknown as Response, vi.fn() as NextFunction);
+
+    const body = res._body as {
+      run: {
+        context: {
+          project: { id: string; name: string; path: string };
+          issue: { id: string; title: string; status: string };
+          workflow: { id: string; name: string };
+          workflowRun: { id: string; parentWorkflowRunId: string };
+          parent: { workflowRunId: string; issueRunId: string };
+          actions: { canRetrigger: boolean; retriggerBlockedReason: string | null; issueUrl: string };
+        };
+      };
+    };
+
+    expect(body.run.context).toMatchObject({
+      project: { id: 'proj-001', name: 'Squadboard', path: '/repo/.squad' },
+      issue: { id: 'issue-001', title: 'Fix run detail', status: 'in-progress' },
+      workflow: { id: 'workflow-001', name: 'Work Pickup' },
+      workflowRun: { id: 'workflow-run-001', parentWorkflowRunId: 'parent-workflow-run-001' },
+      parent: { workflowRunId: 'parent-workflow-run-001', issueRunId: 'parent-run-001' },
+      actions: {
+        canRetrigger: true,
+        retriggerBlockedReason: null,
+        issueUrl: '/projects/proj-001/issues/issue-001',
       },
     });
   });

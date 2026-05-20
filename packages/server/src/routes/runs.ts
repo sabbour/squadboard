@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import type { Request, Response } from 'express';
 import { eq, and, gte, asc, sql, max, inArray } from 'drizzle-orm';
-import { getDb, schema } from '../db/index.js';
+import { getDb, schema, type DrizzleDb } from '../db/index.js';
 import { eventBus } from '../realtime/event-bus.js';
 import * as activeIssueSessions from '../engine/active-issue-sessions.js';
 import {
@@ -526,6 +526,204 @@ const TERMINAL_RUN_STATUSES = new Set(['completed', 'failed', 'cancelled']);
 
 type IssueRunRow = typeof schema.issueRuns.$inferSelect;
 
+type RunContextQueryRow = {
+  project_id: string;
+  project_name: string;
+  project_path: string;
+  issue_id: string;
+  issue_title: string;
+  issue_status: string;
+  github_issue_number: number | null;
+  github_issue_url: string | null;
+  agent_name: string | null;
+  agent_status: string | null;
+  step_run_id: string | null;
+  step_index: number | null;
+  step_type: string | null;
+  step_status: string | null;
+  workflow_run_id: string | null;
+  workflow_run_status: string | null;
+  workflow_current_step_index: number | null;
+  parent_workflow_run_id: string | null;
+  trigger_source: unknown;
+  workflow_version_id: string | null;
+  workflow_version: number | null;
+  workflow_id: string | null;
+  workflow_name: string | null;
+  workflow_slug: string | null;
+  workflow_kind: string | null;
+  workflow_trigger_kind: string | null;
+  active_run_count: number | string | null;
+};
+
+function asRecord(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : null;
+}
+
+function nestedString(value: unknown, path: string[]): string | null {
+  let current: unknown = value;
+  for (const key of path) {
+    const record = asRecord(current);
+    if (!record) return null;
+    current = record[key];
+  }
+  return typeof current === 'string' && current.trim() ? current : null;
+}
+
+function parentIssueRunIdFromTrigger(triggerSource: unknown): string | null {
+  const direct = nestedString(triggerSource, ['detail', 'issueRunId'])
+    ?? nestedString(triggerSource, ['issueRunId'])
+    ?? nestedString(triggerSource, ['context', 'parentIssueRunId']);
+  if (direct) return direct;
+
+  const detail = asRecord(triggerSource)?.detail;
+  if (typeof detail === 'string' && detail.trim()) {
+    try {
+      return nestedString(JSON.parse(detail) as unknown, ['issueRunId']);
+    } catch {
+      return null;
+    }
+  }
+  return null;
+}
+
+function retriggerBlockedReason(run: IssueRunRow, row: RunContextQueryRow): string | null {
+  if (!isRetriggerableRunStatus(run.status)) {
+    return `Run is ${run.status}; only completed, failed, or cancelled runs can be retriggered.`;
+  }
+  if (!row.agent_status) {
+    return 'The original agent is no longer available.';
+  }
+  if (row.agent_status !== 'active') {
+    return `Agent "${row.agent_name ?? run.agentId}" is ${row.agent_status}; re-enable it before retriggering.`;
+  }
+  const activeRunCount = Number(row.active_run_count ?? 0);
+  if (Number.isFinite(activeRunCount) && activeRunCount > 0) {
+    return 'This work item already has an active run.';
+  }
+  return null;
+}
+
+async function buildRunOwnershipContext(
+  db: DrizzleDb,
+  run: IssueRunRow,
+  projectId?: string,
+) {
+  const rows = await db.execute(sql`
+    SELECT
+      p.id                     AS project_id,
+      p.name                   AS project_name,
+      p.path                   AS project_path,
+      i.id                     AS issue_id,
+      i.title                  AS issue_title,
+      i.status                 AS issue_status,
+      i.github_issue_number    AS github_issue_number,
+      i.github_issue_url       AS github_issue_url,
+      a.name                   AS agent_name,
+      a.status                 AS agent_status,
+      sr.id                    AS step_run_id,
+      sr.step_index            AS step_index,
+      sr.step_type             AS step_type,
+      sr.status                AS step_status,
+      COALESCE(wr.id, signal_wr.id) AS workflow_run_id,
+      COALESCE(wr.status, signal_wr.status) AS workflow_run_status,
+      COALESCE(wr.current_step_index, signal_wr.current_step_index) AS workflow_current_step_index,
+      COALESCE(wr.parent_workflow_run_id, signal_wr.parent_workflow_run_id) AS parent_workflow_run_id,
+      COALESCE(wr.trigger_source, signal_wr.trigger_source) AS trigger_source,
+      COALESCE(wr.workflow_version_id, signal_wr.workflow_version_id) AS workflow_version_id,
+      wv.version               AS workflow_version,
+      w.id                     AS workflow_id,
+      w.name                   AS workflow_name,
+      w.slug                   AS workflow_slug,
+      w.kind                   AS workflow_kind,
+      w.trigger_kind           AS workflow_trigger_kind,
+      (
+        SELECT count(*)::int
+        FROM issue_runs active_ir
+        WHERE active_ir.issue_id = ir.issue_id
+          AND active_ir.status IN ('pending', 'running')
+      )                        AS active_run_count
+    FROM issue_runs ir
+    JOIN issues i ON i.id = ir.issue_id
+    JOIN projects p ON p.id = i.project_id
+    LEFT JOIN agents a ON a.id = ir.agent_id
+    LEFT JOIN step_runs sr ON sr.issue_run_id = ir.id
+    LEFT JOIN workflow_runs wr ON wr.id = sr.workflow_run_id
+    LEFT JOIN workflow_runs signal_wr ON signal_wr.issue_id = ir.issue_id
+      AND signal_wr.trigger_source->>'eventType' = 'agent-signal:board.ready'
+      AND signal_wr.trigger_source->>'detail' LIKE '%"issueRunId"%'
+      AND signal_wr.trigger_source->>'detail' LIKE '%' || ir.id::text || '%'
+    LEFT JOIN workflow_versions wv ON wv.id = COALESCE(wr.workflow_version_id, signal_wr.workflow_version_id)
+    LEFT JOIN workflows w ON w.id = wv.workflow_id
+    WHERE ir.id = ${run.id}::uuid
+      ${projectId ? sql`AND p.id = ${projectId}::uuid` : sql``}
+    ORDER BY COALESCE(sr.created_at, signal_wr.created_at) DESC NULLS LAST
+    LIMIT 1
+  `);
+  const row = (rows.rows as RunContextQueryRow[])[0];
+  if (!row) return null;
+
+  const blockedReason = retriggerBlockedReason(run, row);
+  const issueRunId = parentIssueRunIdFromTrigger(row.trigger_source);
+
+  return {
+    project: {
+      id: row.project_id,
+      name: row.project_name,
+      path: row.project_path,
+    },
+    issue: {
+      id: row.issue_id,
+      title: row.issue_title,
+      status: row.issue_status,
+      githubIssueNumber: row.github_issue_number,
+      githubIssueUrl: row.github_issue_url,
+    },
+    workflow: row.workflow_id
+      ? {
+        id: row.workflow_id,
+        name: row.workflow_name,
+        slug: row.workflow_slug,
+        kind: row.workflow_kind,
+        triggerKind: row.workflow_trigger_kind,
+        versionId: row.workflow_version_id,
+        version: row.workflow_version,
+      }
+      : null,
+    workflowRun: row.workflow_run_id
+      ? {
+        id: row.workflow_run_id,
+        status: row.workflow_run_status,
+        currentStepIndex: row.workflow_current_step_index,
+        parentWorkflowRunId: row.parent_workflow_run_id,
+        triggerSource: row.trigger_source,
+      }
+      : null,
+    stepRun: row.step_run_id
+      ? {
+        id: row.step_run_id,
+        stepIndex: row.step_index,
+        stepType: row.step_type,
+        status: row.step_status,
+      }
+      : null,
+    parent: {
+      workflowRunId: row.parent_workflow_run_id,
+      issueRunId,
+    },
+    actions: {
+      canRetrigger: blockedReason === null,
+      retriggerBlockedReason: blockedReason,
+      retriggerUrl: `/api/projects/${row.project_id}/issues/${row.issue_id}/runs/${run.id}/retrigger`,
+      liveUrl: `/projects/${row.project_id}/issues/${row.issue_id}/runs/${run.id}/live`,
+      issueUrl: `/projects/${row.project_id}/issues/${row.issue_id}`,
+      projectUrl: `/projects/${row.project_id}`,
+    },
+  };
+}
+
 function toIsoString(value: Date | string | null | undefined): string | null {
   if (!value) return null;
   return value instanceof Date ? value.toISOString() : value;
@@ -560,7 +758,10 @@ function withRunTimingMetadata(run: IssueRunRow) {
   };
 }
 
-function buildRunStreamSnapshot(run: IssueRunRow) {
+function buildRunStreamSnapshot(
+  run: IssueRunRow,
+  context: Awaited<ReturnType<typeof buildRunOwnershipContext>> = null,
+) {
   const terminalAt = terminalTimestamp(run);
   const durationMs = durationMsForRun(run, terminalAt);
   const outputLength = run.output?.length ?? 0;
@@ -603,6 +804,7 @@ function buildRunStreamSnapshot(run: IssueRunRow) {
         recoveredAt: updatedAt,
       }
       : null,
+    context,
   };
 }
 
@@ -662,7 +864,13 @@ issueRunsRouter.get('/:runId/events', async (req: Request, res: Response) => {
     const lastEvent = events[events.length - 1];
     const nextSeq   = lastEvent ? lastEvent.seq + 1 : (useSince ? sinceSeq : offset + events.length);
 
-    res.json({ run: buildRunStreamSnapshot(runRow), events, total, nextSeq });
+    const context = await buildRunOwnershipContext(db, runRow, (req.params as Record<string, string>).projectId);
+    if (!context) {
+      res.status(404).json({ error: 'Run not found for this project' });
+      return;
+    }
+
+    res.json({ run: buildRunStreamSnapshot(runRow, context), events, total, nextSeq });
   } catch (err) {
     handleError(res, err);
   }
@@ -757,7 +965,7 @@ export const projectRunsRouter = Router({ mergeParams: true });
 // GET /:runId
 projectRunsRouter.get('/:runId', async (req: Request, res: Response) => {
   try {
-    const { runId } = req.params as Record<string, string>;
+    const { projectId, runId } = req.params as Record<string, string>;
     const db = getDb();
     const [run] = await db
       .select()
@@ -769,9 +977,16 @@ projectRunsRouter.get('/:runId', async (req: Request, res: Response) => {
       res.status(404).json({ error: 'Run not found' });
       return;
     }
+    const context = await buildRunOwnershipContext(db, run, projectId);
+    if (!context) {
+      res.status(404).json({ error: 'Run not found for this project' });
+      return;
+    }
+
     const worktreePath = run.workspaceStrategy === 'worktree' ? run.workspacePath : null;
     res.json({
       ...withRunTimingMetadata(run),
+      context,
       lifecycle: buildRunLifecycleMetadata({
         issueRun: run,
         worktreeExists: await resolveWorktreeExists(worktreePath),
