@@ -129,23 +129,28 @@ vi.mock('../services/worktree-lifecycle.js', () => ({
 type RouteHandler = (req: Record<string, unknown>, res: Record<string, unknown>) => unknown;
 
 const handlers: Record<string, Record<string, RouteHandler>> = {};
+const routeRegistrations: Array<{ method: string; path: string }> = [];
 
 vi.mock('express', () => ({
   Router: vi.fn(() => ({
     get: vi.fn((path: string, ...fns: RouteHandler[]) => {
       handlers.GET ??= {};
+      routeRegistrations.push({ method: 'GET', path });
       handlers.GET[path] = fns[fns.length - 1]!;
     }),
     post: vi.fn((path: string, ...fns: RouteHandler[]) => {
       handlers.POST ??= {};
+      routeRegistrations.push({ method: 'POST', path });
       handlers.POST[path] = fns[fns.length - 1]!;
     }),
     patch: vi.fn((path: string, ...fns: RouteHandler[]) => {
       handlers.PATCH ??= {};
+      routeRegistrations.push({ method: 'PATCH', path });
       handlers.PATCH[path] = fns[fns.length - 1]!;
     }),
     delete: vi.fn((path: string, ...fns: RouteHandler[]) => {
       handlers.DELETE ??= {};
+      routeRegistrations.push({ method: 'DELETE', path });
       handlers.DELETE[path] = fns[fns.length - 1]!;
     }),
   })),
@@ -236,5 +241,17 @@ describe('GET / ceremonies list', () => {
       category: 'core',
       tags: ['core'],
     }));
+  });
+});
+
+describe('ceremony route registration order', () => {
+  it('registers GET /audit before GET /:id so audit is not parsed as a ceremony id', () => {
+    const getRoutes = routeRegistrations
+      .filter((route) => route.method === 'GET')
+      .map((route) => route.path);
+
+    expect(getRoutes.indexOf('/audit')).toBeGreaterThanOrEqual(0);
+    expect(getRoutes.indexOf('/:id')).toBeGreaterThanOrEqual(0);
+    expect(getRoutes.indexOf('/audit')).toBeLessThan(getRoutes.indexOf('/:id'));
   });
 });

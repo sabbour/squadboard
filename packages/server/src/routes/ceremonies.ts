@@ -13,6 +13,7 @@
  * Endpoints (project-scoped):
  *   GET    /                         list (filters: kind, triggerKind)
  *   POST   /                         create (yamlContent + triggerKind + …)
+ *   GET    /audit                   ceremony audit summary
  *   GET    /:id                      get + active version + versions[]
  *   GET    /:id/runs                 list execution runs + step logs
  *   PATCH  /:id                      update name/desc/triggerKind/triggerConfig/kind/yaml
@@ -434,6 +435,10 @@ ceremoniesRouter.post('/', async (req: Request, res: Response) => {
     handleError(res, err);
   }
 });
+
+// Static GET routes must be registered before /:id so Express does not treat
+// reserved path segments such as "audit" as ceremony ids.
+ceremoniesRouter.get('/audit', getCeremonyAudit);
 
 // GET /:id
 ceremoniesRouter.get('/:id', async (req: Request, res: Response) => {
@@ -1092,7 +1097,7 @@ async function loadAvailableAgents(projectId: string): Promise<TranslatorAvailab
  * "Dead"    = status='active' + triggerKind is github-event-based but the project
  *             has no GitHub integration configured (githubOwner/githubRepo null).
  */
-ceremoniesRouter.get('/audit', async (req: Request, res: Response) => {
+async function getCeremonyAudit(req: Request, res: Response): Promise<void> {
   try {
     const { projectId } = req.params as Record<string, string>;
     const db = getDb();
@@ -1224,7 +1229,7 @@ ceremoniesRouter.get('/audit', async (req: Request, res: Response) => {
   } catch (err) {
     handleError(res, err);
   }
-});
+}
 
 /**
  * POST /api/projects/:projectId/ceremonies/invoke

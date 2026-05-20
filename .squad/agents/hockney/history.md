@@ -317,3 +317,7 @@ Hockney-close-w24 dispatched in parallel to run build + main FF + smoke tests be
 **Key files:** `packages/server/src/db/index.ts`, `packages/server/src/routes/projects.ts`, `packages/server/src/__tests__/delete-project.test.ts`, `packages/server/src/__tests__/pglite-oid-retry.test.ts`.
 
 **Invariant:** Dispatcher/stepper/spawner discipline unaffected. No real folders touched in tests. Safety guards unchanged.
+
+## Learnings
+
+- Express route registration order is a backend invariant: project-scoped static ceremony paths such as `/audit` must be registered before `/:id`, or PostgreSQL will receive reserved words as UUID ceremony ids.
