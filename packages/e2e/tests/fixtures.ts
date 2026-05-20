@@ -81,6 +81,19 @@ export async function createProjectViaApi(name: string): Promise<string> {
   return (await createProjectViaApiDetails(name)).projectId
 }
 
+export async function deleteProjectViaApi(projectId: string, apiBase = API_BASE): Promise<void> {
+  const ctx = await request.newContext({ baseURL: apiBase })
+  try {
+    const res = await ctx.delete(`/api/projects/${projectId}`)
+    if (res.status() === 404) return
+    if (!res.ok()) {
+      throw new Error(`deleteProjectViaApi: DELETE /api/projects/${projectId} returned ${res.status()}: ${await res.text()}`)
+    }
+  } finally {
+    await ctx.dispose()
+  }
+}
+
 export async function createIssueViaApi(
   projectId: string,
   issue: {

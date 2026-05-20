@@ -26,6 +26,7 @@ const commonEnv = {
 export default defineConfig({
   testDir: './tests',
   outputDir: './test-results',
+  globalTeardown: './tests/global-teardown.ts',
   fullyParallel: false,
   forbidOnly: !!process.env['CI'],
   retries: process.env['CI'] ? 1 : 0,
