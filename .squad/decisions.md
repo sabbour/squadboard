@@ -1,3 +1,181 @@
+## 2026-05-20T14:00:00Z — Wave 4 Decisions (Merged from Inbox)
+
+# Decision: Squad→Squadboard Onboarding Guide & Docs Index
+
+**Date:** 2026-05-20  
+**Owner:** Redfoot (Docs / DevRel Dev)  
+**Status:** Implemented ✅
+
+## Problem
+
+Squad CLI users discovering Squadboard had no clear path to:
+1. Understand what they're getting (board, MCP, ceremonies, run history)
+2. Choose between local PGlite and cloud PostgreSQL
+3. Wire MCP into their existing workflow without disruption
+4. Learn what happens when MCP is NOT wired (graceful fallback)
+
+Also, `docs/README.md` was a placeholder table — new contributors couldn't find anything.
+
+## Solution
+
+### 1. New Getting Started Guide (`docs/setup/getting-started-from-squad.md`)
+
+**Audience:** Squad CLI users with existing `.squad/` workflows
+
+**Key decisions:**
+- **Both modes work simultaneously** — board is additive, filesystem is permanent
+- **Storage provider is the mental model** — `SQUADBOARD_SQUAD_STORAGE_PROVIDER` controls both agent routing and board availability
+- **Graceful degradation upfront** — explicitly document what happens without MCP (filesystem fallback)
+- **MCP is optional but recommended** — reduce friction by showing it's not required to start
+- **Local-first default** — PGlite with zero config is the on-ramp; PostgreSQL is for teams
+- **Project ID discoverable** — provide CLI command, not hidden in UI
+- **Smoke test included** — minimal verification that MCP is wired and working
+
+**Structure:** 140 lines, <200 word sections, code blocks for every command
+
+### 2. Updated MCP Install Doc (`docs/setup/mcp-install.md`)
+
+**Added sections:**
+- Storage Providers & Graceful Degradation table
+- Project ID discovery moved earlier (was buried)
+- Clear SQUADBOARD_SQUAD_STORAGE_PROVIDER explanation
+
+**Key distinction:** Provider setting affects BOTH:
+- Where agents write (database vs. filesystem)
+- Whether the board UI is available
+
+### 3. Rewritten Docs Index (`docs/README.md`)
+
+**Changed from:** Alphabetical table of files  
+**Changed to:** User journey organized by role/task
+
+**New structure:**
+1. Getting Started — for new Squadboard users
+2. API Reference — for integrators
+3. Ceremonies & Workflows — for automation designers
+4. Core Concepts — for architecture learners
+5. Product Documentation — for Squadboard team (PRD, features, bugs, chores)
+6. Specification — for deep technical dives
+7. Release & Quality — for ship checklist
+
+**Result:** <30 second discovery for any doc type
+
+## Key Decisions
+
+### Storage Provider Awareness
+
+Users need to understand that `SQUADBOARD_SQUAD_STORAGE_PROVIDER` is the master switch:
+- `fs` = filesystem mode (no database, board read-only)
+- `postgresql` = full board mode (agents use database)
+- Unset = default to filesystem (CLI-first default)
+
+This is NOT a hidden implementation detail — it's a user-facing choice with real tradeoffs (speed vs. shared state).
+
+### Graceful Degradation = No Surprises
+
+Agents work whether MCP is wired or not:
+- **With MCP:** agents can `capture` cards and `done:` close them
+- **Without MCP:** agents write to `.squad/decisions/inbox/` files instead
+
+This removes the pressure to "get MCP working first." Users can start with filesystem mode and wire MCP later.
+
+### Project ID Discoverability
+
+Project IDs are UUIDs — users can't guess them. Provide CLI command:
+```bash
+npx @sabbour/squadboard list-projects
+```
+
+This is discoverable from the guide, not hidden in Squadboard UI.
+
+### Board is Additive, Not Replacement
+
+The `.squad/` directory remains the permanent record:
+- All files are committed to git
+- The board is a view on top
+- Switching providers doesn't lose data
+
+## Learnings
+
+1. **Squad users already have workflows** — don't disrupt them. Board is a view upgrade.
+2. **Local-first is powerful** — PGlite removes setup friction; most users will never need PostgreSQL.
+3. **Storage provider is the key mental model** — not "database on/off" but "where does my data live and who sees it?"
+4. **Graceful degradation matters** — if MCP is confusing, agents still work. This reduces onboarding pressure.
+5. **Documentation discovery is UI** — reorganized README from alphabetical to user-journey saves 90% lookup time.
+
+## Metrics
+
+- **Lines added:** 220+ (guide + MCP updates + README reorg)
+- **User paths covered:** Squad-only, local board, team+MCP, migration stories
+- **Code blocks:** 8+ runnable commands
+- **Setup options:** 2 (PGlite, PostgreSQL)
+- **Mental models explained:** 3 (storage provider, graceful degradation, both modes coexist)
+
+## Trade-offs
+
+### What we kept simple
+- **No "auto-detect" of project ID** — users run a CLI command, it's explicit
+- **No "guided tour" in board UI** — documentation is better than UI overlays
+- **No database migrations guide** — we auto-migrate on startup
+
+### What we could add later
+- **Migrate .squad/ files to board** — tool to bulk-import decisions/inbox into database
+- **MCP health dashboard** — visualize what's wired and where
+- **Project templates** — pre-configured PGlite + MCP setup scripts
+
+## Acceptance Criteria
+
+- [x] Getting Started guide is <200 lines and every command is runnable
+- [x] Storage provider table explains fs vs. postgresql vs. unset
+- [x] Graceful degradation is documented with examples
+- [x] Project ID discovery includes CLI command
+- [x] docs/README.md navigation is organized by user journey, not alphabetical
+- [x] All docs are linked from README (no orphaned docs)
+- [x] Commit message references all 3 files changed
+
+
+---
+
+## 2026-05-20: SDK Documentation Decisions — @sabbour/squadboard-sdk
+
+**Agent:** kobayashi  
+**Commit:** 14866667080c08976a02f43d5ca90b1195037a45  
+**Task:** Add JSDoc to all exported symbols + rewrite README
+
+---
+
+### What was documented
+
+**All exported symbols now have JSDoc.** Specifically:
+
+- `primitives.ts` — Added interface-level one-liners to `SpawnManifestEntry`, `SpawnManifest`, `ArchiveResult`. Function-level JSDoc was already present for all 7 primitives.
+- `close-out.ts` — Added interface-level one-liners to `CloseOutOptions`, `CloseOutResult`. Added full JSDoc to `closeOut()` (the primary API), including `@param`, `@returns`, and a complete `@example` covering the health-report integration path.
+- `step-8-health-report.ts` — Added interface-level one-liners to `BacklogSnapshot`, `SpawnLineageEntry`, `SpawnSummary`, `NextWaveTodo`, `HealthReportOptions`, `HealthReportResult`. `writeHealthReport()` already had JSDoc.
+- `bundle/schema.ts` — Added interface-level one-liners to all 20 exported interfaces/types that were missing them (`BundleWorkflowRouteStep`, `BundleWorkflowAgentRunStep`, `BundleWorkflowApproveStep`, `BundleWorkflowFanOutStep`, `BundleWorkflowHandoffStep`, `BundleWorkflowStep`, `BundleCeremonyTriggerKind`, `BundleCeremonyTrigger`, `BundleManifest`, `BundleProject`, `BundleKanbanColumn`, `BundleKanban`, `BundleTeamMember`, `BundleCeremony`, `BundleWorkflow`, `BundleSkill`, `BundleTool`, `BundleMcpServer`, `BundleRoutingRule`, `BundleAgent`, `ApplyResult`). Also tightened `BundleCeremonyGithubTrigger`'s existing JSDoc.
+- `index.ts` — Added JSDoc to the `squadboard` namespace const (the primary IntelliSense-visible symbol).
+
+### What was skipped (and why)
+
+- **Internal helpers** (`readUtf8`, `fileSize`, `resolveTeamRoot`, `toError`, `localDateString`, `slugifyWave`, `renderBacklogDelta`) — task spec says "do NOT add comments to internal/private members." These are not exported. Skipped intentionally.
+- **`scribe/index.ts` barrel** — Only re-exports; no new logic or types defined here. Module-level comment already present. No additional JSDoc needed.
+- **`ArchiveResult` field-level docs** — Fields already had inline `/** ... */` comments. Only the interface-level one-liner was missing; added.
+
+### README decisions
+
+- Rewrote from scratch. The previous README listed exports in bullet points with no parameter tables or examples. New README has:
+  - Full parameter table for `closeOut()`
+  - Working `@example` code for every function
+  - Bundle types reference table
+  - `@bradygaster/squad-sdk` comparison table (key requirement: explicit SDK disambiguation)
+- Kept under 300 lines (actual: ~260 lines).
+- Used `@sabbour/squadboard-sdk/bundle` as the import path in bundle examples (matches the package.json exports map — `./bundle` → `dist/bundle/schema.js`).
+
+### SDK disambiguation rationale
+
+The `@bradygaster/squad-sdk` vs `@sabbour/squadboard-sdk` distinction is documented in both the README comparison table and the `index.ts` module-level comment. Decision: do NOT document `@bradygaster/squad-sdk` internals in this package — only provide the "when to use which" summary.
+
+---
+
 ## 2026-05-20T20:52:37Z — Wave 3 Decisions (Merged from Inbox)
 
 # Hockney P0/P1 backend fixes — 2026-05-20

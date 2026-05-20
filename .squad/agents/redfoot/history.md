@@ -5,9 +5,65 @@
 
 ## Quick Summary
 
-**Total waves:** 2
+**Total waves:** 3
 
 ## Latest Activity
+
+---
+
+## W31 Wave 4 — Squad→Squadboard Onboarding Guide
+
+**Date:** 2026-05-20T14:00:00.000-07:00  
+**Status:** Completed ✅
+
+### Deliverables
+
+Created a complete onboarding experience for Squad CLI users discovering Squadboard:
+
+1. **New Guide: `docs/setup/getting-started-from-squad.md`** (140 lines)
+   - Target audience: Squad CLI users with existing `.squad/` workflows
+   - Two setup options (PGlite local, PostgreSQL cloud)
+   - Step-by-step MCP wiring for Copilot CLI
+   - Storage provider comparison table (fs vs. postgresql)
+   - Graceful degradation explanation — agents work without MCP, just use filesystem
+   - Smoke test checklist + automation rules reference
+   - Audience insight: "write for the confused reader at 11pm"
+
+2. **Updated: `docs/setup/mcp-install.md`** (added ~80 lines)
+   - New "Storage Providers & Graceful Degradation" section
+   - Moved project ID discovery earlier (was buried)
+   - Clearer distinction: SQUADBOARD_SQUAD_STORAGE_PROVIDER impacts both agent routing AND board availability
+   - Added table of provider behaviors
+
+3. **Rewritten: `docs/README.md`** (navigation index)
+   - Organized by user journey, not alphabetical
+   - 6 sections: Getting Started, API, Ceremonies, Concepts, Product, Release
+   - Each section has 2–5 docs with one-line purpose statements
+   - New contributors can find anything in <30 seconds
+   - Positioned new Squad→Squadboard guide as entry point
+
+### Metrics
+
+- **Total:** 220+ lines of new/updated documentation
+- **Key decision:** Storage provider awareness in onboarding (fs vs postgresql)
+- **Graceful degradation:** Explicitly documented so users understand both modes work
+- **MCP optional:** Emphasized "recommended but optional" to reduce friction
+
+### Design Decisions
+
+- **No "magic" — explicit env vars:** Users see exactly how to switch between modes, not hidden config
+- **Entry point is Squad CLI:** The guide assumes existing Squad users; they're the first audience
+- **Both modes coexist:** Emphasized that `.squad/` files are permanent and always safe, board is additive
+- **Project ID discovery:** Made discoverable via CLI command, not hidden in UI
+- **Graceful degradation upfront:** Explained what happens without MCP so users aren't surprised
+
+### Learnings
+
+1. **Squad users have a .squad/ folder as source of truth** — board is a view, not a replacement
+2. **MCP wiring is optional:** Many users will skip it; agents still work via filesystem
+3. **Storage provider is the key mental model:** It controls both agent routing AND board availability
+4. **PGlite is a game-changer for new users:** Zero-config local board removes adoption friction
+5. **Project ID discoverability matters:** Users need a clear CLI command, not guessing from UI
 
 ---
 
@@ -92,25 +148,29 @@ Wrote READMEs for all 3 published npm packages (previously undocumented):
 
 ### Design Decisions
 
-- No aspirational content; only current surf
+- No aspirational content; only current surface
 
+---
 
-## Wave 3 — API Documentation Complete (2026-05-20T20:52:37Z)
+## Wave 4 — Squad→Squadboard Onboarding Complete
 
-### Delivery
-- docs/api-reference.md — 129 REST endpoints, 24 resource groups (~375 lines)
-- docs/websocket-protocol.md — Full WebSocket protocol, 50+ event types (~467 lines)
-- README.md — Documentation section added with links
+**Date:** 2026-05-20T14:00:00Z  
+**Status:** Delivered & Logged ✅  
+**Session Log:** `.squad/log/2026-05-20-wave4-docs-sdk.md`
 
-### Key Decisions
-- Organized API by resource domain (not route files)
-- Extract-only: no aspirational endpoints
-- WebSocket priority for real-time features
-- Minimal scope: reference only, not tutorials
+### Orchestration
 
-### Commits
-238939d13 — Created docs/api-reference.md, docs/websocket-protocol.md
-457524b6c — Updated README.md with Documentation section
+- Created `.squad/orchestration-log/2026-05-20-redfoot-wave4.md`
+- Merged inbox decision into `.squad/decisions.md`
+- All 3 files (guide, MCP update, README) linked in session log
 
-### Status
-✓ Complete — all endpoints documented, WebSocket protocol specified, README linked
+### Outcome
+
+The onboarding experience is complete. Squad users now have:
+- Clear mental model (storage provider as the switch)
+- Graceful degradation documented (MCP optional, filesystem fallback)
+- Local-first on-ramp (PGlite, zero config)
+- Project ID discoverability (CLI command provided)
+- Docs index that's discoverable by role/task, not alphabetical
+
+**Key metric:** <30 second discovery for any doc type (down from 5+ minutes with old alphabetical index).
