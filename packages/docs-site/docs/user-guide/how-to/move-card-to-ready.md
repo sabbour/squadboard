@@ -45,6 +45,6 @@ If the wrong agent was assigned, don't override it by hand. Instead, fix the rol
 
 ## Next steps
 
-- [Key Concepts](../getting-started/key-concepts.md) — Understand Ready column and agent runs
-- [Quickstart](../getting-started/quickstart.mdx) — Full workflow walkthrough
-- [Board and Runs](../user-guide/board-and-runs.mdx) — Deep dive on pickup and run lifecycle
+- [Key Concepts](../../getting-started/key-concepts.md) — Understand Ready column and agent runs
+- [Quickstart](../../getting-started/quickstart.mdx) — Full workflow walkthrough
+- [Board and Runs](../../user-guide/board-and-runs.mdx) — Deep dive on pickup and run lifecycle

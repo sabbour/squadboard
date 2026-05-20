@@ -79,3 +79,9 @@ Build the CLI, then point your MCP client at the local command:
 Set `SQUADBOARD_DEFAULT_PROJECT_ID` if you want project-scoped tools to work without passing a project ID every time.
 
 To create the Copilot CLI config from the CLI, run `squadboard init --write-mcp-config` in the repository. It writes `.copilot/mcp-config.json` with the default PostgreSQL provider; add `--squad-storage fs` if you want filesystem fallback.
+
+## Next steps
+
+- **[Quickstart](./quickstart.mdx)** — Create your first project and run a workflow in 10 minutes
+- **[What is Squadboard?](./what-is-squadboard.md)** — Understand the core concepts
+- **[Tutorials](./tutorials/index.mdx)** — Walk through complete end-to-end workflows

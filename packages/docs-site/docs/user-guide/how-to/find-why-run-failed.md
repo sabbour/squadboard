@@ -26,9 +26,9 @@ Scroll down in the run panel. Look for:
 - **Logs** — Execution logs showing where things went wrong
 
 Common causes:
-- **Tool not found** — The agent tried to call a tool that isn't available. Check [Built-in Tools](../user-guide/built-ins.mdx).
+- **Tool not found** — The agent tried to call a tool that isn't available. Check [Built-in Tools](../../user-guide/built-ins.mdx).
 - **Model error** — The model hit a rate limit or timeout. Wait a few minutes and try again.
-- **Permission denied** — The agent doesn't have access to the resource. Check [Security](../user-guide/security.md).
+- **Permission denied** — The agent doesn't have access to the resource. Check [Security](../../user-guide/security.md).
 - **Malformed output** — The agent's output didn't match the validation schema. Check the prompt in step 3.
 
 ## Step 3: Check the prompt context
@@ -50,6 +50,6 @@ If the prompt is wrong (missing context, wrong team root, outdated charter), fix
 
 ## Next steps
 
-- [Key Concepts](../getting-started/key-concepts.md) — Understand agent runs and ceremonies
-- [Board and Runs](../user-guide/board-and-runs.mdx) — Full lifecycle of runs
-- [Troubleshooting](../reference/troubleshooting.md) — General troubleshooting
+- [Key Concepts](../../getting-started/key-concepts.md) — Understand agent runs and ceremonies
+- [Board and Runs](../../user-guide/board-and-runs.mdx) — Full lifecycle of runs
+- [Troubleshooting](../../reference/troubleshooting.md) — General troubleshooting

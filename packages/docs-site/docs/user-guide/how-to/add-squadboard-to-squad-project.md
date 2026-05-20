@@ -13,7 +13,7 @@ Squadboard is additive. Your `.squad/` folder stays the source of truth. Squadbo
 
 ## Step 1: Install and start Squadboard
 
-Follow [Installation](../getting-started/installation.md):
+Follow [Installation](../../getting-started/installation.md):
 
 ```bash
 git clone https://github.com/sabbour/squadboard.git
@@ -51,7 +51,7 @@ SQUADBOARD_DEFAULT_PROJECT_ID=<your-project-id>
 
 You can find the project ID in Squadboard under **Configuration** → **Copy Project ID**.
 
-See [MCP Integration](../user-guide/mcp.mdx) for full details.
+See [MCP Integration](../../user-guide/mcp.mdx) for full details.
 
 ## Step 5: Create a card and move it to Ready
 
@@ -75,6 +75,6 @@ Drag it to **Ready**. Squadboard will pick an agent and run. You now have a dura
 
 ## Next steps
 
-- [Squad Integration](../user-guide/squad-integration.mdx) — Deep dive on how Squadboard and Squad coexist
-- [Quickstart](../getting-started/quickstart.mdx) — Full workflow walkthrough
-- [Key Concepts](../getting-started/key-concepts.md) — Understand board, cards, and runs
+- [Squad Integration](../../user-guide/squad-integration.mdx) — Deep dive on how Squadboard and Squad coexist
+- [Quickstart](../../getting-started/quickstart.mdx) — Full workflow walkthrough
+- [Key Concepts](../../getting-started/key-concepts.md) — Understand board, cards, and runs

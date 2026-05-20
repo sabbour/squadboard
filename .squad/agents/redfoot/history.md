@@ -1,13 +1,104 @@
 # Redfoot Agent History
 
-**Last summarized:** 2026-05-20T13:46:25Z
+**Last summarized:** 2026-05-20T14:01:32Z
 **Archive:** See `history-archive.md` for full history
 
 ## Quick Summary
 
-**Total waves:** 3
+**Total waves:** 5
 
 ## Latest Activity
+
+---
+
+## W31 Wave 5 — Paperclip-Quality Docs Pass
+
+**Date:** 2026-05-20T14:01:32.848-07:00  
+**Status:** Completed ✅
+
+### Deliverables
+
+Executed a comprehensive documentation quality pass modeled after Paperclip's docs standard (https://docs.paperclip.ing). The pass modernized the docs-site navigation, added critical conceptual clarity, and created a task-oriented how-to section.
+
+1. **Rewritten: `docs/intro.md`** (75 lines)
+   - Hero copy: "Run multi-agent work without the chaos"
+   - Replaced table-heavy quick links with 5-card grid layout
+   - Each card has emoji, title, and one-line description
+   - CTAs: Quickstart and What is Squadboard
+   - Maintained LLM entry points at footer
+
+2. **New: `docs/getting-started/what-is-squadboard.md`** (70 lines)
+   - Target audience: Confused reader at 11pm
+   - One-line version with Squad/Squadboard relationship
+   - "What you can do" (5 concrete actions)
+   - "What it is NOT" (3 important negations)
+   - 30-second data model explanation
+   - Links to quickstart, concepts, learning path
+
+3. **New: `docs/getting-started/key-concepts.md`** (90 lines)
+   - 10 core terms defined in plain English
+   - Each term: one paragraph, no jargon, no marketing
+   - Covers Board, Card, Ready column, Agent Run, Ceremony, Workflow, Squad, MCP, Storage Provider, Scribe
+   - Links to related docs
+
+4. **New: `docs/user-guide/how-to/move-card-to-ready.md`** (55 lines)
+   - Task: "How to trigger an agent run in 3 steps"
+   - Step-by-step walkthrough of board → Ready → pickup flow
+   - Audience: New users who need to understand the trigger mechanic
+   - Links to related docs
+
+5. **New: `docs/user-guide/how-to/find-why-run-failed.md`** (60 lines)
+   - Task: "How to debug a failed run"
+   - 4-step troubleshooting: status → error message → prompt context → retry/escalate
+   - Common causes (tool not found, model error, permission denied, malformed output)
+   - Links to Built-in Tools, Security, Troubleshooting
+
+6. **New: `docs/user-guide/how-to/add-squadboard-to-squad-project.md`** (80 lines)
+   - Task: "How to add Squadboard to an existing Squad project"
+   - 5 steps: install → create project → confirm team → connect MCP (optional) → test card
+   - Emphasizes `.squad/` stays source of truth
+   - Migration path for Squad CLI users
+   - Links to Squad Integration, Quickstart, Key Concepts
+
+7. **Updated: `sidebars.ts`**
+   - Reordered Getting Started: installation → what-is → quickstart → key-concepts → learning-path
+   - Added new "How-to Guides" category under Product Guide
+   - Wired all 3 new how-to guides
+
+### Metrics
+
+- **Total new/updated:** 7 files, 420+ lines
+- **Average per how-to:** 65 lines (task-focused, not verbose)
+- **Intro length:** 75 lines (down from 73, but vastly improved signal)
+- **Commit:** 6a8e99115 (7 files changed, 323 insertions)
+
+### Design Decisions
+
+- **Card grid over table:** Easier to scan, modern design, Paperclip-inspired
+- **"What is NOT" section:** Honest about boundaries (not replacement for Squad, not cloud, not AI)
+- **Task-oriented how-to names:** "How to trigger...", "How to debug...", "How to add..."
+- **No aspirational features:** All how-tos document current behavior, not wishlist
+- **Plain English definitions:** No undefined jargon, no marketing language
+- **Sidebar reorder:** New user journey is install → understand → quickstart → concepts → learning
+- **Optional MCP emphasis:** Documented that MCP is recommended but not required
+
+### Key Insights
+
+1. **New users need "What is this?" before "How do I use it?"** — What-is-squadboard page closes the gap
+2. **Jargon is the #1 blocker** — Key Concepts page defines the 10 terms that confuse people
+3. **How-to guides are about tasks, not features** — "How to trigger a run" > "Agent Run Trigger Mechanics"
+4. **Squad users are the primary migration audience** — Third how-to directly addresses existing Squad CLI users
+5. **The Ready column is magic** — New users need explicit callout that moving cards to Ready is the trigger
+
+### Quality Checklist
+
+- ✅ Every page: one job, one audience, one outcome
+- ✅ No paragraphs longer than 4 sentences
+- ✅ Code blocks for every command
+- ✅ Links to related pages at bottom of every page
+- ✅ No "this document explains..." preambles
+- ✅ Written like Paperclip: honest, direct, no hype
+- ✅ All files under 150 lines (task-focused)
 
 ---
 

@@ -5,6 +5,13 @@ description: Choose the docs path that matches your role and goal.
 
 # Learning path
 
+New to Squadboard? Start here:
+
+1. [What is Squadboard?](./what-is-squadboard.md) — High-level overview and why it exists
+2. [Key Concepts](./key-concepts.md) — Core terms you'll see everywhere
+
+Then choose the path that matches your goal:
+
 ## I want to run Squadboard locally
 
 1. [Installation](./installation.md)
