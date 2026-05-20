@@ -3,7 +3,7 @@
  *
  * All channels must be declared here before the preload exposes them.
  * Renderer code may ONLY invoke channels present in this list.
- * L5/L6 will extend this list as MCP and first-run channels are added.
+ * L6 will add first-run channels.
  */
 export const IPC_CHANNELS = [
   'health.check',
@@ -13,6 +13,10 @@ export const IPC_CHANNELS = [
   'app.openExternal',
   'dialog.openFolder',
   'system.openDevTools',
+  // MCP endpoint discovery and configuration
+  'mcp.getConnectionInfo',
+  'mcp.setDefaultProject',
+  'mcp.getDefaultProject',
 ] as const;
 
 export type IpcChannel = (typeof IPC_CHANNELS)[number];

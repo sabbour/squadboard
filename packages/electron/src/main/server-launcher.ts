@@ -30,7 +30,7 @@
 import { spawn, type ChildProcess } from 'node:child_process';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { app } from 'electron';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -41,6 +41,17 @@ let startResolve: (() => void) | null = null;
 
 /** Port the embedded server listens on. */
 export const SERVER_PORT = 3000;
+
+/** Read the MCP config written by `mcp.setDefaultProject` IPC handler. */
+function readElectronMcpConfig(): { defaultProjectId?: string } {
+  try {
+    const configPath = join(app.getPath('userData'), 'squadboard-mcp-config.json');
+    const raw = readFileSync(configPath, 'utf8');
+    return JSON.parse(raw) as { defaultProjectId?: string };
+  } catch {
+    return {};
+  }
+}
 
 /**
  * Resolve the path to the server entry point.
@@ -81,12 +92,17 @@ export function startServer(): Promise<void> {
 
     console.log(`[server-launcher] spawning server → ${serverPath}`);
 
+    const mcpConfig = readElectronMcpConfig();
+
     serverProcess = spawn(process.execPath, [serverPath], {
       stdio: ['ignore', 'pipe', 'pipe'],
       env: {
         ...process.env,
         NODE_ENV: app.isPackaged ? 'production' : 'development',
         PORT: String(SERVER_PORT),
+        ...(mcpConfig.defaultProjectId
+          ? { SQUADBOARD_DEFAULT_PROJECT_ID: mcpConfig.defaultProjectId }
+          : {}),
       },
       // Detach=false: child is tied to Electron's lifetime; we kill it on quit.
       detached: false,

@@ -9,7 +9,6 @@
  * Channel allowlist is the single source of truth: if a channel isn't listed
  * here, the renderer cannot invoke it even if a handler is registered in main.
  *
- * L5 will extend the allowlist with MCP channels.
  * L6 will add first-run channels.
  */
 import { contextBridge, ipcRenderer } from 'electron';
@@ -23,6 +22,9 @@ const ALLOWED_CHANNELS = [
   'app.openExternal',
   'dialog.openFolder',
   'system.openDevTools',
+  'mcp.getConnectionInfo',
+  'mcp.setDefaultProject',
+  'mcp.getDefaultProject',
 ] as const;
 
 type AllowedChannel = (typeof ALLOWED_CHANNELS)[number];

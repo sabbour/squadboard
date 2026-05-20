@@ -4,7 +4,7 @@
  * Scaffold for L2. L3 will add deep-link handlers; L6 will add first-run
  * triggers; L11 will add tray integration.
  */
-import { Menu, app, shell, BrowserWindow, MenuItem } from 'electron';
+import { Menu, app, shell, clipboard, dialog, BrowserWindow, MenuItem } from 'electron';
 
 const isMac = process.platform === 'darwin';
 const isDev = !app.isPackaged;
@@ -109,6 +109,20 @@ export function buildMenu(win: BrowserWindow): void {
         {
           label: 'Open Logs Folder',
           click: () => shell.openPath(app.getPath('logs')),
+        },
+        { type: 'separator' },
+        {
+          label: 'Copy MCP URL',
+          click: () => {
+            const mcpUrl = 'http://localhost:3000/mcp';
+            clipboard.writeText(mcpUrl);
+            dialog.showMessageBox(win, {
+              type: 'info',
+              title: 'MCP URL Copied',
+              message: `MCP URL copied to clipboard:\n${mcpUrl}`,
+              buttons: ['OK'],
+            });
+          },
         },
       ],
     },

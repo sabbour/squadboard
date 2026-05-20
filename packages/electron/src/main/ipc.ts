@@ -1,16 +1,16 @@
 /**
- * IPC handler registry — v1 stubs.
+ * IPC handler registry.
  *
  * Handlers are registered here and called by the main process after the
- * BrowserWindow is created. Each handler is a stub that will be wired to
- * real server functions in L3-L5.
+ * BrowserWindow is created.
  *
  * OUT OF SCOPE for L2:
  *   - Real projects.list / projects.create API calls (L3)
- *   - MCP channel handlers (L5)
  *   - First-run wizard handlers (L6)
  */
 import { ipcMain, app, shell, dialog, BrowserWindow } from 'electron';
+import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
+import { join } from 'node:path';
 import type { IpcChannel } from './ipc-channels.js';
 
 type Handler = (event: Electron.IpcMainInvokeEvent, ...args: unknown[]) => unknown;
@@ -58,6 +58,45 @@ export function registerIpcHandlers(win: BrowserWindow): void {
     // Only meaningful in dev; guarded by isDev check in main.
     if (!app.isPackaged) {
       win.webContents.openDevTools();
+    }
+  });
+
+  // ── MCP handlers ────────────────────────────────────────────────────────────
+
+  const MCP_URL = `http://localhost:3000/mcp`;
+
+  handle('mcp.getConnectionInfo', async () => {
+    const base = { url: MCP_URL, transport: 'http', port: 3000 };
+    try {
+      const res = await fetch(`http://localhost:3000/mcp/health`);
+      if (res.ok) {
+        const data = (await res.json()) as Record<string, unknown>;
+        return { ...base, ...data };
+      }
+    } catch {
+      // Server not ready yet — return basic info
+    }
+    return base;
+  });
+
+  handle('mcp.setDefaultProject', async (_event, projectId) => {
+    if (typeof projectId !== 'string' && projectId !== null) {
+      throw new Error('projectId must be a string or null');
+    }
+    const configPath = join(app.getPath('userData'), 'squadboard-mcp-config.json');
+    mkdirSync(join(app.getPath('userData')), { recursive: true });
+    writeFileSync(configPath, JSON.stringify({ defaultProjectId: projectId ?? null }, null, 2), 'utf8');
+    return { ok: true };
+  });
+
+  handle('mcp.getDefaultProject', async () => {
+    try {
+      const configPath = join(app.getPath('userData'), 'squadboard-mcp-config.json');
+      const raw = readFileSync(configPath, 'utf8');
+      const config = JSON.parse(raw) as { defaultProjectId?: string | null };
+      return config.defaultProjectId ?? null;
+    } catch {
+      return null;
     }
   });
 }
