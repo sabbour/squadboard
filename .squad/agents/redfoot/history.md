@@ -94,3 +94,23 @@ Wrote READMEs for all 3 published npm packages (previously undocumented):
 
 - No aspirational content; only current surf
 
+
+## Wave 3 — API Documentation Complete (2026-05-20T20:52:37Z)
+
+### Delivery
+- docs/api-reference.md — 129 REST endpoints, 24 resource groups (~375 lines)
+- docs/websocket-protocol.md — Full WebSocket protocol, 50+ event types (~467 lines)
+- README.md — Documentation section added with links
+
+### Key Decisions
+- Organized API by resource domain (not route files)
+- Extract-only: no aspirational endpoints
+- WebSocket priority for real-time features
+- Minimal scope: reference only, not tutorials
+
+### Commits
+238939d13 — Created docs/api-reference.md, docs/websocket-protocol.md
+457524b6c — Updated README.md with Documentation section
+
+### Status
+✓ Complete — all endpoints documented, WebSocket protocol specified, README linked

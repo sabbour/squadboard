@@ -1,3 +1,250 @@
+## 2026-05-20T20:52:37Z — Wave 3 Decisions (Merged from Inbox)
+
+# Hockney P0/P1 backend fixes — 2026-05-20
+
+## What changed
+- Replaced the sweeper's raw UUID array splice with Drizzle `inArray()` so expired-step retries are parameterized instead of string-built.
+- Wrapped workflow advancement write sequences in Drizzle transactions so step completion, review-run creation, fan-out state changes, handoffs, and cursor advancement commit atomically.
+- Added a hard timeout path for `runWorker` agent runs, propagated timeout control into the Squad SDK bridge, and introduced terminal `timed_out` handling across engine/runtime surfaces.
+
+## Why
+- `sql.raw()` with interpolated row ids was a direct SQL injection vector.
+- Multi-statement workflow advancement allowed concurrent workers to observe and write partial state, corrupting parent/child progression.
+- Hung Squad SDK calls could renew heartbeats forever; explicit timeout + heartbeat teardown restores lease-based liveness and gives operators a visible terminal state instead of an immortal run.
+
+
+---
+
+# Keyser — route-level code splitting
+
+- **Date:** 2026-05-20T13:50:14-07:00
+- **Scope:** `packages/client/src/App.tsx`, `packages/client/src/components/Layout.tsx`
+
+## Approach
+
+1. Replaced all static route-component imports in `App.tsx` with `lazy(() => import(...))`.
+2. Covered all 26 route-mounted screens, including route-only components outside `src/pages`:
+   - `components/runs/LiveRunViewer.tsx`
+   - `components/loading/LoadingGallery.tsx` (dev-only route)
+3. Added a single `Suspense` boundary around `Layout`'s `<Outlet />`.
+4. Reused the existing `PageLoading` component for fallback UI so the shell stays visible while route chunks load.
+
+## Exclusions
+
+- **No routed pages excluded.**
+- `Layout`, `RouteProgressBar`, and other shared shell/navigation components remain eager by design because they are needed on first paint.
+
+
+---
+
+# Kobayashi P0/P1 SDK fixes
+
+**Date:** 2026-05-20T12:51:52-07:00  
+**Author:** Kobayashi  
+**Status:** Implemented
+
+## What changed
+
+1. Hardened `packages/server/src/sdk/squad-client.ts` so charter content loaded from disk is no longer injected raw into the system prompt.
+   - Added a stable wrapper prompt.
+   - Injected charter text inside `<charter>...</charter>` boundaries.
+   - XML-escaped charter payload so embedded tags cannot terminate the boundary or masquerade as higher-priority instructions.
+   - Capped charter prompt input at 8,000 characters and emit a warning when truncation occurs.
+2. Added a 120-second hard timeout around `client.sendAndWait(...)` in `squad-client.ts`.
+   - Failure mode is explicit (`sendAndWait timeout after 120s`).
+   - `client.disconnect()` still runs in `finally`, so hung runs do not hold the bridge open indefinitely.
+3. Deleted `packages/server/src/sdk/hook-pipeline.ts`.
+   - `globalPipeline`/`registerOutputValidationHook()` had no callers.
+   - Output-schema enforcement already happens in `packages/server/src/services/output-validator.ts` via `recordRunCompletion()` before run finalization.
+
+## Decision rationale
+
+### Charter prompt injection
+
+Invariant: **host-owned system prompt composition must preserve the boundary between coordinator instructions and developer-authored charter content.**
+
+Raw charter interpolation let a malicious or malformed charter inject literal XML/HTML-like delimiters into the top-level system prompt. Wrapping plus escaping keeps the charter readable to the model while preventing boundary breaks such as `</charter><system>...`.
+
+The 8k cap is defense in depth: oversized charters should not silently dominate token budget or create unpredictable truncation downstream.
+
+### HookPipeline
+
+Invariant: **there must be one authoritative completion-validation path.**
+
+`HookPipeline` never ran. Wiring it in now would duplicate `recordRunCompletion()` or introduce a second place that could disagree on pass/fail semantics. Since the singleton had zero consumers and no startup registration path, deletion is safer than speculative activation.
+
+### sendAndWait timeout
+
+Invariant: **a single provider stall must not pin an issue run forever.**
+
+The 120-second timeout is long enough for normal agent turns but finite enough to fail closed when the provider or SDK hangs.
+
+
+---
+
+# Kujan CI fix — run Vitest on every PR
+
+- **Timestamp:** 2026-05-20T12:51:52.451-07:00
+- **Owner:** Kujan
+- **Scope:** GitHub Actions CI gate for tests and types
+- **Status:** Landed locally; expected to fail on existing red suites until product fixes land
+
+## What changed
+
+Updated `.github/workflows/ci.yml` so the `npm-packages` job now does the following in order:
+
+1. `pnpm install --frozen-lockfile`
+2. `pnpm run npm:build`
+3. **Type check workspace packages**
+   - `pnpm --filter @sabbour/squadboard-client typecheck`
+   - `pnpm --filter @sabbour/squadboard-sdk typecheck`
+   - `pnpm --filter @sabbour/squadboard exec tsc --noEmit`
+   - `pnpm --filter @sabbour/squadboard-cli exec tsc --noEmit`
+4. **Run Vitest suites**
+   - `pnpm --filter @sabbour/squadboard-sdk test`
+   - `pnpm --filter @sabbour/squadboard-client test`
+   - `pnpm --filter @sabbour/squadboard test -- --run`
+5. `pnpm run npm:publish:dry-run`
+
+Both new CI gates use `timeout-minutes: 10`.
+
+## Baseline state before the CI edit
+
+- Root `pnpm test` is not a valid gate because the monorepo root has **no** `test` script.
+- `pnpm -r test` immediately exposed existing failures:
+  - `packages/client`: `RunButton.test.tsx` fails and throws `TypeError: Cannot read properties of undefined (reading 'toLowerCase')` in `src/components/agents/agent-origin.ts`.
+  - `packages/server`: Vitest is red in `src/__tests__/ceremonies-list-route.test.ts` and `src/__tests__/pglite-issue-run-events-catalog-repair.test.ts`.
+- Type baseline:
+  - `packages/client` typecheck: pass
+  - `packages/squadboard-sdk` typecheck: pass
+  - `packages/server` `tsc --noEmit`: fail in `src/engine/workflow-runner.ts`
+  - `packages/cli` `tsc --noEmit`: pass
+
+## Post-change validation
+
+Reran the exact commands wired into CI. Results are unchanged from baseline, which is the point of the fix: CI now detects the existing red state instead of ignoring it.
+
+- `@sabbour/squadboard-sdk` tests: pass
+- `@sabbour/squadboard-client` tests: fail reproducibly
+- `@sabbour/squadboard` tests: fail reproducibly
+- Client + SDK typecheck: pass
+- Server `tsc --noEmit`: fail reproducibly
+- CLI `tsc --noEmit`: pass
+
+## QA conclusion
+
+This workflow now enforces the invariant the audit called out: broken Vitest suites and broken TypeScript types are PR blockers. The remaining work is product-side: fix the already-red client/server tests and the server type errors.
+
+
+---
+
+# API Documentation Complete
+
+**Owner:** Redfoot (Docs/DevRel)  
+**Date:** 2026-05-20T13:46:25.412-07:00  
+**Status:** Closed (Implemented)
+
+## What Was Documented
+
+The audit identified 129 undocumented REST API endpoints and zero WebSocket protocol docs. This decision records the fix.
+
+### Deliverables
+
+1. **REST API Reference** (docs/api-reference.md)
+   - 24 resource groups: Projects, Agents, Issues, Runs, Workflows, Ceremonies, Costs, GitHub Sync, Health, Presence, etc.
+   - 129 unique endpoints extracted from 41 route files
+   - Base URL, auth requirements, common patterns (pagination, error responses)
+   - ~375 lines
+
+2. **WebSocket Protocol** (docs/websocket-protocol.md)
+   - Connection & authentication (JWT query param or header)
+   - 15-second ping/pong heartbeat
+   - 4 client→server message types (subscribe, unsubscribe, presence.cursor, resubscribe)
+   - 50+ server→client event types with payload examples
+   - Reconnection strategy & event buffer replay
+   - Comparison matrix: REST vs. WebSocket (polling vs. push)
+   - ~467 lines
+
+3. **README Links** (README.md)
+   - Added "Documentation" section with direct links to API + WebSocket docs
+   - Positioned in Getting Started flow
+
+### Metrics
+
+- **Total docs:** 842 lines (842 / 129 endpoints ≈ 6.5 lines per endpoint average)
+- **Endpoints grouped by domain:** Not file-by-file, but semantic resource (easier to scan)
+- **WebSocket scope:** Full protocol reference, not SDK examples
+- **Commit:** 238939d13
+
+## Key Decisions
+
+### 1. Grouping by Resource, Not Route Files
+
+**Decision:** Organize API reference by semantic domain (Projects, Agents, Issues) rather than source file name.
+
+**Rationale:**
+- Developers looking for "project endpoints" don't care that some live in `projects.ts` and others in `project-portability.ts`
+- Reduces cognitive load — all project-related operations in one place
+- Scales: new endpoints added to same group without restructuring
+
+### 2. Extract, Don't Invent
+
+**Decision:** Only document endpoints actually present in code; do not add aspirational or planned endpoints.
+
+**Rationale:**
+- API reference is source of truth; aspirational content creates broken links and confusion
+- All 129 endpoints extracted from regex on 41 route files (`router.get/post/put/delete/patch`)
+- No guessing about message types or payload shapes — sourced from WebSocket server code
+
+### 3. WebSocket Priority Over REST
+
+**Decision:** Emphasize real-time WebSocket for live features; REST is snapshot-only.
+
+**Rationale:**
+- Presence, run output, chat (consult) are WebSocket-only; REST `/presence` is stale
+- Client-side `usePresence` hook uses WebSocket, not polling REST
+- Event buffers & replay make WebSocket viable for lossy networks (15-min Consult buffer)
+
+### 4. Minimal Scope
+
+**Decision:** API reference only; no SDK examples, no setup, no tutorials.
+
+**Rationale:**
+- Getting Started covers setup (already documented in README)
+- SDK examples belong in SDK docs or tutorials (separate docs repos)
+- This doc is a lookup table, not a walkthrough
+- Keeps maintenance burden low (only updates if endpoints change)
+
+## Gaps & Future Work
+
+1. **Request/Response Examples** — Current docs show structure; code examples per language would help (e.g., curl, axios, fetch).
+2. **Error Code Catalog** — Documented generic 400/401/403/404/500; specific error codes per endpoint not yet cataloged.
+3. **Webhook Events** — GitHub webhook payloads documented (30-day retention), but GitHub event schema not detailed.
+4. **Rate Limiting** — WebSocket mentions limits; REST endpoint limits not documented.
+
+## Audience
+
+- **API consumers:** Direct HTTP/WebSocket integrators (tools, dashboards, agents)
+- **Integration developers:** Building MCP servers or CLI tools on top of Squadboard
+- **Self-hosters:** Running Squadboard locally and needing protocol reference
+
+## Verification
+
+- [x] All 129 endpoints extracted and grouped
+- [x] REST API reference contains: path, method, brief description
+- [x] WebSocket protocol includes: connection, auth, message types, examples, reconnection
+- [x] README linked to both docs
+- [x] Commit includes Co-authored-by trailer
+
+## References
+
+- Commit: 238939d13
+- Files: docs/api-reference.md, docs/websocket-protocol.md, README.md (updated)
+- Source: packages/server/src/routes/* (41 files), packages/server/src/realtime/ws-server.ts, packages/client/src/realtime/usePresence.ts
+
+
+---
+
 # Squad Decisions
 
 ## Active Decisions

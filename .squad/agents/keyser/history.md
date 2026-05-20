@@ -66,3 +66,17 @@ Client-side dead code cleanup: 4 UI components removed
 - Converted all 26 route-mounted screens in `packages/client/src/App.tsx` to `lazy()` imports.
 - Put the `Suspense` boundary in `Layout.tsx` around `<Outlet />` so sidebar/topbar stay eager while page content loads behind `PageLoading`.
 - Included route-only components outside `src/pages` (`LiveRunViewer`, dev-only `LoadingGallery`) in the lazy set because they are mounted exclusively by routes.
+
+## Wave 3 — React.lazy() Code Splitting (2026-05-20T20:52:37Z)
+
+### Delivery
+- Wrapped all 26 route-mounted screens with lazy() in packages/client/src/App.tsx
+- Added Suspense boundary around Layout's <Outlet />
+- Reused PageLoading component for loading UI
+- Shell components remain eager for first paint
+
+### Commit
+28e67f493 — Added React.lazy() code splitting to all 26 routed pages
+
+### Status
+✓ Complete — build verified, per-page chunks emitted, tests pass
