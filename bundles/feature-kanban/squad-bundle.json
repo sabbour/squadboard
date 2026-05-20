@@ -139,42 +139,42 @@
       "name": "Customer Research",
       "description": "Gather, deduplicate, and rank customer signals for product decisions.",
       "category": "product-management",
-      "promptAddendum": "---\nname: customer-research\ndescription: Gather, deduplicate, and rank customer signals for product decisions.\ndomain: product-management\nconfidence: high\nsource: bundled\n---\n\n## Use when\n\nUse this skill when a feature needs evidence from customers, users, community feedback, support tickets, surveys, interviews, analytics, or sales notes.\n\n## Process\n\n1. Define the decision the research must inform.\n2. Gather signals from approved sources and keep source links with each signal.\n3. Remove duplicates by customer problem, not by wording.\n4. Tag each signal with persona, workflow, severity, frequency, recency, and confidence.\n5. Separate direct evidence from assumptions.\n6. Recommend one of: create feature, merge into existing feature, investigate more, or reject.\n\n## Output\n\nReturn a table with: problem, evidence, source, frequency, severity, confidence, related feature, and recommended next action.\n\n## Guardrails\n\nAnonymize personal data. Do not include confidential customer identifiers. Do not inflate weak evidence.\n"
+      "bodyPath": "skills/customer-research/SKILL.md"
     },
     {
       "key": "prd-writing",
       "name": "PRD Writing",
       "description": "Write concise PRDs with testable requirements, metrics, risks, and rollout plans.",
       "category": "product-management",
-      "promptAddendum": "---\nname: prd-writing\ndescription: Produce concise PRDs that connect customer problems to requirements and launch criteria.\ndomain: product-management\nconfidence: high\nsource: bundled\n---\n\n## PRD sections\n\n1. Summary\n2. Customer problem\n3. Target users and scenarios\n4. Goals and non-goals\n5. Requirements and acceptance criteria\n6. User experience notes\n7. Metrics and instrumentation\n8. Risks, dependencies, and mitigations\n9. Rollout and rollback plan\n10. Open questions\n\n## Quality bar\n\nEvery requirement must be testable. Every goal must tie to a measurable outcome. Non-goals must be explicit enough to prevent scope creep.\n"
+      "bodyPath": "skills/prd-writing/SKILL.md"
     },
     {
       "key": "prototype-creation",
       "name": "Prototype Creation",
       "description": "Plan lightweight prototypes that validate the riskiest assumption quickly.",
       "category": "product-design",
-      "promptAddendum": "---\nname: prototype-creation\ndescription: Plan lightweight prototypes that validate the riskiest product assumption quickly.\ndomain: product-design\nconfidence: high\nsource: bundled\n---\n\n## Prototype brief\n\n- Hypothesis to validate\n- Target persona and scenario\n- Critical path flow\n- Screens, artifacts, or clickable interactions needed\n- Sample data or content needed\n- Questions for reviewers or users\n- Success signal and decision threshold\n\n## Guardrails\n\nPrototype the smallest useful slice. Include empty states, error states, and handoff notes when they affect the decision.\n"
+      "bodyPath": "skills/prototype-creation/SKILL.md"
     },
     {
       "key": "feature-naming",
       "name": "Feature Naming",
       "description": "Generate clear, reusable, customer-facing feature names.",
       "category": "product-management",
-      "promptAddendum": "---\nname: feature-naming\ndescription: Generate clear, reusable, customer-facing feature names.\ndomain: product-management\nconfidence: high\nsource: bundled\n---\n\n## Naming checklist\n\n- Names should describe user value or capability, not implementation.\n- Prefer short, specific names over clever names.\n- Avoid internal code names, roadmap labels, org names, and temporary project names.\n- Check for confusing overlap with nearby features.\n- Provide at least three options and one recommendation.\n\n## Output\n\nReturn: recommended name, two alternates, rationale, rejected terms, and guidance for release notes or docs.\n"
+      "bodyPath": "skills/feature-naming/SKILL.md"
     },
     {
       "key": "feature-disclosure",
       "name": "Feature Disclosure",
       "description": "Write concise release notes, changelog entries, and feature announcements.",
       "category": "documentation",
-      "promptAddendum": "---\nname: feature-disclosure\ndescription: Write concise customer-facing feature announcements, release notes, or changelog entries.\ndomain: documentation\nconfidence: high\nsource: bundled\n---\n\n## Structure\n\n1. Feature name and status if relevant\n2. One or two sentences on customer value\n3. What's new bullets\n4. Availability, prerequisites, or limitations\n5. Link or next step\n\n## Style\n\nLead with what users can now do. Use plain language and active voice. Avoid internal ticket numbers, implementation detail, unsupported commitments, and marketing superlatives.\n"
+      "bodyPath": "skills/feature-disclosure/SKILL.md"
     },
     {
       "key": "feature-docs",
       "name": "Feature Documentation",
       "description": "Plan and draft user-facing documentation for new or changed features.",
       "category": "documentation",
-      "promptAddendum": "---\nname: feature-docs\ndescription: Plan and draft user-facing feature documentation.\ndomain: documentation\nconfidence: high\nsource: bundled\n---\n\n## Documentation checklist\n\n- Overview and when to use the feature\n- Prerequisites\n- Setup or usage steps\n- Examples\n- Limitations and known behaviors\n- Troubleshooting\n- Related tasks or next steps\n\n## Quality bar\n\nA new user should understand whether the feature applies to them, how to start, how to verify success, and where to go next.\n"
+      "bodyPath": "skills/feature-docs/SKILL.md"
     }
   ],
   "routing": [

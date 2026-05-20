@@ -6,9 +6,8 @@
  * library so users can clone starter skills into the project. A "New skill"
  * modal supports authoring a custom skill from scratch.
  *
- * Skills surface their `promptAddendum` to assigned agents — the editor
- * shows it as a multiline textarea so users can see the prompt fragment
- * that will be injected into the agent's system prompt.
+ * Skills surface markdown content to assigned agents — the editor shows the
+ * stored content that will be injected into the agent's system prompt.
  */
 
 import { useRef, useState } from 'react'
@@ -47,6 +46,7 @@ import FormulatePanel from '../components/formulate/FormulatePanel.tsx'
 import PageHeader from '../components/layout/PageHeader.tsx'
 import EmptyState from '../components/layout/EmptyState.tsx'
 import { PageLoading } from '../components/loading/index.tsx'
+import { formatCuratedSkillLabel, getSkillProvenanceMeta } from '../utils/skill-provenance.ts'
 
 const KEBAB_RE = /^[a-z][a-z0-9-]*$/
 
@@ -227,18 +227,27 @@ export default function Skills() {
   )
 }
 
-function SourceBadge({ source }: { source: Skill['source'] }) {
-  const meta = (() => {
+function SourceBadge({
+  source,
+  curatedKey,
+  sourceUri,
+}: {
+  source: Skill['source']
+  curatedKey?: string | null
+  sourceUri?: string | null
+}) {
+  const provenance = getSkillProvenanceMeta(source, curatedKey, sourceUri)
+  const colors = (() => {
     switch (source) {
       case 'curated':
-        return { label: 'Built-in catalog', bg: tokens.colorBrandBackground2, fg: tokens.colorBrandForeground1 }
+        return { bg: tokens.colorBrandBackground2, fg: tokens.colorBrandForeground1 }
       case 'imported':
-        return { label: 'Imported', bg: tokens.colorPaletteGreenBackground2, fg: tokens.colorPaletteGreenForeground2 }
+        return { bg: tokens.colorPaletteGreenBackground2, fg: tokens.colorPaletteGreenForeground2 }
       case 'project':
-        return { label: 'Project', bg: tokens.colorNeutralBackground3, fg: tokens.colorNeutralForeground2 }
+        return { bg: tokens.colorNeutralBackground3, fg: tokens.colorNeutralForeground2 }
       case 'custom':
       default:
-        return { label: 'Custom', bg: tokens.colorNeutralBackground3, fg: tokens.colorNeutralForeground2 }
+        return { bg: tokens.colorNeutralBackground3, fg: tokens.colorNeutralForeground2 }
     }
   })()
   return (
@@ -247,17 +256,30 @@ function SourceBadge({ source }: { source: Skill['source'] }) {
         fontSize: '10px',
         padding: '1px 6px',
         borderRadius: '8px',
-        background: meta.bg,
-        color: meta.fg,
+        background: colors.bg,
+        color: colors.fg,
         textTransform: 'uppercase',
         letterSpacing: '0.04em',
         fontWeight: 600,
       }}
-      title={`Skill provenance: ${meta.label.toLowerCase()}`}
+      title={provenance.title}
     >
-      {meta.label}
+      {provenance.label}
     </span>
   )
+}
+
+function getSkillContentSummary(skill: Pick<Skill, 'source' | 'sourceUri'>) {
+  if (skill.source === 'imported' && skill.sourceUri?.endsWith('/SKILL.md')) {
+    return 'View imported SKILL.md content'
+  }
+  if (skill.source === 'imported') {
+    return 'View imported skill content'
+  }
+  if (skill.source === 'curated') {
+    return 'View curated skill content'
+  }
+  return 'View skill content'
 }
 
 function SkillRow({ skill, onEdit, onDelete }: { skill: Skill; onEdit: () => void; onDelete: () => void }) {
@@ -270,10 +292,13 @@ function SkillRow({ skill, onEdit, onDelete }: { skill: Skill; onEdit: () => voi
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px', flexWrap: 'wrap' }}>
           <Body1Strong style={{ color: tokens.colorNeutralForeground1 }}>{skill.name}</Body1Strong>
           <code style={{ fontSize: '11px', color: tokens.colorNeutralForeground3, fontFamily: tokens.fontFamilyMonospace }}>{skill.key}</code>
-          <SourceBadge source={skill.source} />
+          <SourceBadge source={skill.source} curatedKey={skill.curatedKey} sourceUri={skill.sourceUri} />
           {skill.curatedKey && skill.source !== 'curated' && (
-            <span style={{ fontSize: '10px', padding: '1px 6px', borderRadius: '8px', background: tokens.colorBrandBackground2, color: tokens.colorBrandForeground1 }}>
-              cloned from {skill.curatedKey}
+            <span
+              title={`Original curated skill key: ${skill.curatedKey}`}
+              style={{ fontSize: '10px', padding: '1px 6px', borderRadius: '8px', background: tokens.colorBrandBackground2, color: tokens.colorBrandForeground1 }}
+            >
+              {formatCuratedSkillLabel(skill.curatedKey)}
             </span>
           )}
         </div>
@@ -282,11 +307,11 @@ function SkillRow({ skill, onEdit, onDelete }: { skill: Skill; onEdit: () => voi
         )}
         {skill.sourceUri && (
           <Caption1 style={{ display: 'block', color: tokens.colorNeutralForeground3, margin: '0 0 6px', fontFamily: tokens.fontFamilyMonospace, fontSize: '11px' }}>
-            ↳ {skill.sourceUri}
+            Source file: {skill.sourceUri}
           </Caption1>
         )}
         <details style={{ fontSize: '12px' }}>
-          <summary style={{ cursor: 'pointer', color: 'var(--text-muted)' }}>Prompt addendum</summary>
+          <summary style={{ cursor: 'pointer', color: 'var(--text-muted)' }}>{getSkillContentSummary(skill)}</summary>
           <pre style={{
             background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: '4px',
             padding: '8px', marginTop: '6px', fontSize: '11px', color: 'var(--text)',
@@ -390,12 +415,12 @@ function SkillFormDialog({ projectId, skill, onClose }: { projectId: string; ski
                 <Field label="Description (optional)">
                   <Input value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} placeholder="Short summary" />
                 </Field>
-                <Field label="Prompt addendum" hint="Injected into the agent's system prompt when this skill is assigned.">
+                <Field label="Skill content" hint="Markdown injected into the agent's system prompt when this skill is assigned.">
                   <Textarea
                     value={form.promptAddendum}
                     onChange={(_, d) => setForm({ ...form, promptAddendum: d.value })}
                     rows={8}
-                    placeholder="When the user asks for X, do Y…"
+                    placeholder="Describe when to use this skill, the process to follow, and the expected output."
                   />
                 </Field>
               </form>
@@ -446,9 +471,23 @@ function CuratedDialog({ projectId, existingKeys, onClose }: { projectId: string
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                         <strong style={{ color: 'var(--text)' }}>{c.name}</strong>
+                        <span
+                          title="Bundled curated starter available to clone into this project."
+                          style={{ fontSize: '10px', padding: '1px 6px', borderRadius: '8px', background: tokens.colorBrandBackground2, color: tokens.colorBrandForeground1, textTransform: 'uppercase', letterSpacing: '0.04em', fontWeight: 600 }}
+                        >
+                          Curated starter
+                        </span>
                         <span style={{ fontSize: '10px', padding: '1px 6px', borderRadius: '8px', background: 'var(--bg)', color: 'var(--text-muted)' }}>{c.category}</span>
                       </div>
                       <p style={{ fontSize: '12px', color: 'var(--text-muted)', margin: '4px 0 0' }}>{c.description}</p>
+                      <details style={{ fontSize: '12px', marginTop: '8px' }}>
+                        <summary style={{ cursor: 'pointer', color: 'var(--text-muted)' }}>Preview skill content</summary>
+                        <pre style={{
+                          background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: '4px',
+                          padding: '8px', marginTop: '6px', fontSize: '11px', color: 'var(--text)',
+                          whiteSpace: 'pre-wrap', maxHeight: '180px', overflow: 'auto',
+                        }}>{c.promptAddendum}</pre>
+                      </details>
                     </div>
                     <Button
                       size="small"

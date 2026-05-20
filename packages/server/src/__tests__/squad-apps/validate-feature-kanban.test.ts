@@ -101,6 +101,15 @@ describe('feature-kanban project template', () => {
         expect(bundleFileExists(`skills/${skill.key}/SKILL.md`), `Missing skill ${skill.key}`).toBe(true);
       }
 
+      const bundle = readJson('squad-bundle.json') as {
+        skills: Array<{ key: string; bodyPath?: string; promptAddendum?: string }>;
+      };
+      expect(bundle.skills.map((skill) => skill.key)).toEqual(skills.map((skill) => skill.key));
+      for (const skill of bundle.skills) {
+        expect(skill.bodyPath).toBe(`skills/${skill.key}/SKILL.md`);
+        expect(skill).not.toHaveProperty('promptAddendum');
+      }
+
       const ceremonyText = (manifest.ceremonies as Array<{ workflowPath: string }>)
         .map((ceremony) => readFileSync(resolve(BUNDLE_ROOT, ceremony.workflowPath), 'utf-8'))
         .join('\n');

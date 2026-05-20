@@ -580,6 +580,10 @@ async function applySkills(
       continue;
     }
 
+    const sourceUri = skill.bodyPath && !isAbsolute(skill.bodyPath)
+      ? `bundle:${bundle.manifest.bundleId}/${skill.bodyPath}`
+      : `bundle:${bundle.manifest.bundleId}`;
+
     await createSkill(projectId, {
       key: skill.key,
       name: skill.name,
@@ -587,7 +591,7 @@ async function applySkills(
       category: skill.category,
       promptAddendum,
       source: 'imported',
-      sourceUri: `bundle:${bundle.manifest.bundleId}`,
+      sourceUri,
     });
     result.applied.push(`skill: "${skill.key}" created`);
   }
