@@ -1,0 +1,114 @@
+{
+  "manifest": {
+    "bundleId": "aks-github-issues-reviews",
+    "name": "AKS GitHub Issues Reviews",
+    "version": "0.1.0",
+    "description": "Review AKS GitHub Issues for severity, product area, duplicate risk, customer impact, and next action.",
+    "author": "Squadboard team",
+    "license": "MIT",
+    "schemaVersion": 1
+  },
+  "project": {
+    "name": "AKS GitHub Issues Reviews",
+    "description": "A private AKS GitHub Issues review workflow.",
+    "icon": "AKS"
+  },
+  "kanban": {
+    "columns": [
+      {
+        "slug": "new",
+        "label": "New",
+        "order": 0
+      },
+      {
+        "slug": "triage",
+        "label": "Triage",
+        "order": 1,
+        "wip_limit": 5
+      },
+      {
+        "slug": "needs-info",
+        "label": "Needs Info",
+        "order": 2
+      },
+      {
+        "slug": "maintainer-review",
+        "label": "Maintainer Review",
+        "order": 3
+      },
+      {
+        "slug": "ready",
+        "label": "Ready",
+        "order": 4
+      },
+      {
+        "slug": "done",
+        "label": "Done",
+        "order": 5
+      }
+    ],
+    "defaultColumn": "new"
+  },
+  "team": [
+    {
+      "name": "aks-issue-triager",
+      "role": "AKS Issue Triage Lead",
+      "persistent": true,
+      "charter": "# aks-issue-triager\n\nClassifies AKS GitHub Issues by product area, severity, duplicate risk, and supportability.\n"
+    },
+    {
+      "name": "aks-service-engineer",
+      "role": "AKS Service Engineer",
+      "persistent": true,
+      "charter": "# aks-service-engineer\n\nReviews technical plausibility, likely AKS component, reproduction gaps, and logs needed for engineering follow-up.\n"
+    },
+    {
+      "name": "aks-customer-advocate",
+      "role": "AKS Customer Advocate",
+      "persistent": true,
+      "charter": "# aks-customer-advocate\n\nDrafts customer-safe GitHub responses and identifies supportability or documentation follow-up.\n"
+    }
+  ],
+  "ceremonies": [
+    {
+      "id": "aks-github-issue-review",
+      "name": "AKS GitHub Issue Review",
+      "scope": "task",
+      "trigger": {
+        "kind": "on_issue_entry",
+        "config": {
+          "column": "triage"
+        }
+      },
+      "workflowYaml": "name: AKS GitHub Issue Review\nsteps:\n  - type: agent_run\n    label: AKS issue triage\n    agent: aks-issue-triager\n    prompt: \"Classify this AKS GitHub Issue by type, severity, product area, duplicate risk, missing details, and next owner.\"\n    timeout: 20m\n  - type: agent_run\n    label: Engineering review\n    agent: aks-service-engineer\n    prompt: \"Review technical plausibility, likely component, logs needed, and reproduction gaps.\"\n    timeout: 25m\n  - type: agent_run\n    label: Customer response\n    agent: aks-customer-advocate\n    prompt: \"Draft a concise GitHub response with next steps and requested diagnostics.\"\n    timeout: 20m\n"
+    }
+  ],
+  "skills": [
+    {
+      "key": "aks-github-issue-review",
+      "name": "AKS GitHub Issue Review",
+      "description": "Triage AKS GitHub Issues with engineering and customer-response context.",
+      "category": "github"
+    }
+  ],
+  "routing": [
+    {
+      "pattern": "bug",
+      "matchType": "label",
+      "agentName": "aks-issue-triager",
+      "priority": 10
+    },
+    {
+      "pattern": "networking",
+      "matchType": "keyword",
+      "agentName": "aks-service-engineer",
+      "priority": 20
+    },
+    {
+      "pattern": "catchall",
+      "matchType": "catchall",
+      "agentName": "aks-customer-advocate",
+      "priority": 99
+    }
+  ]
+}

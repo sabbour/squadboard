@@ -1,14 +1,59 @@
-# docs/
+# Squadboard Documentation
 
-| Document | Purpose |
-|----------|---------|
-| [`../packages/docs-site/`](../packages/docs-site/) | Docusaurus docs site source, structured for public docs and LLM-readable indexes |
-| [`prd.md`](./prd.md) | Canonical Product Requirements Document — the executive view of Squadboard |
-| [`features.md`](./features.md) | Current feature inventory, including driver-parity surfaces and known limits |
-| [`concepts/ceremonies.md`](./concepts/ceremonies.md) | Mental model for ceremonies, workflows, triggers, and step kinds |
-| [`concepts/squad-apps-and-templates.md`](./concepts/squad-apps-and-templates.md) | Squad Apps implementation map and comparison with project/team/workflow templates |
-| [`concepts/dogfood-loop.md`](./concepts/dogfood-loop.md) | How directives, routing, agent runs, GitHub events, and Scribe close-out feed the next wave |
-| [`ceremonies/`](./ceremonies/README.md) | Authoring, lifecycle, trigger, and YAML reference docs for ceremonies |
-| [`setup/mcp-install.md`](./setup/mcp-install.md) | MCP setup for Copilot CLI, VS Code, and HTTP embedding |
-| [`RELEASE-READINESS.md`](./RELEASE-READINESS.md) | Pre-release validation, publishing steps, and rollback plan |
-| [`demos/`](./demos/) | Demo scripts and acceptance notes for vertical slices |
+Find everything you need in <30 seconds.
+
+## Getting Started
+
+New to Squadboard? Start here:
+
+- **[Getting Started with Squadboard (for Squad users)](./setup/getting-started-from-squad.md)** — Add Squadboard to your Squad CLI workflow without changing anything. Zero-config local board or cloud PostgreSQL.
+- **[MCP Installation & Configuration](./setup/mcp-install.md)** — Wire Squadboard MCP into Copilot CLI or VS Code. Storage providers, project discovery, and troubleshooting.
+
+## API Reference
+
+Integrate with Squadboard programmatically:
+
+- **[REST API Reference](./api-reference.md)** — 129 endpoints across Projects, Agents, Issues, Runs, Workflows, Ceremonies, and more
+- **[WebSocket Protocol](./websocket-protocol.md)** — Real-time events, presence, consult (chat), 15-min buffer replay, and heartbeat
+
+## Ceremonies & Workflows
+
+Design and run workflow automations:
+
+- **[Ceremonies](./ceremonies/)** — Authoring guide, lifecycle, triggers, and YAML schema reference
+- **[Concepts: Ceremonies & Workflows](./concepts/ceremonies.md)** — Mental model for triggers, steps, and multi-user coordination
+
+## Core Concepts
+
+Understand Squadboard's design:
+
+- **[Dogfood Loop](./concepts/dogfood-loop.md)** — How directives, routing, agent runs, GitHub events, and Scribe closeout feed the next wave
+- **[Squad Apps & Templates](./concepts/squad-apps-and-templates.md)** — Squad Apps implementation map and comparison with project/team/workflow templates
+
+## Product Documentation
+
+Internal reference for the Squadboard team:
+
+- **[Product Requirements Document (PRD)](./prd.md)** — Executive vision, user personas, and success metrics
+- **[Feature Inventory](./features.md)** — Current features, driver-parity surfaces, and known limits
+- **[Features (detailed)](./features/)** — Individual feature specs and acceptance criteria
+- **[Bugs (open)](./bugs/)** — Known issues, reproduction steps, and severity
+- **[Chores (tasks)](./chores/)** — Housekeeping, refactors, dependency updates, and tooling
+- **[Demos](./demos/)** — Demo scripts and acceptance notes for vertical slices
+- **[Review Policy](./review-policy.md)** — Code review and PR guidelines
+
+## Specification
+
+Deep technical dives:
+
+- **[SquadApp Spec](./squadapp-spec.md)** — SquadApp manifest, plugin system, and integration patterns
+- **[Cross-Surface Squad Sync Contract](./setup/cross-surface-squad-sync-contract.md)** — Data flow and sync guarantees between Squadboard and Squad CLI
+- **[Cross-Surface Sync Implementation Plan](./setup/cross-surface-sync-implementation-plan.md)** — Detailed implementation roadmap
+
+## Release & Quality
+
+Before shipping:
+
+- **[Release Readiness](./RELEASE-READINESS.md)** — Pre-release validation, publishing steps, and rollback procedures
+- **[Acceptance Criteria](./acceptance-criteria.md)** — Feature sign-off checklist
+

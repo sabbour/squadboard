@@ -59,6 +59,7 @@ async function fileSize(path: string): Promise<number> {
 // Types
 // ---------------------------------------------------------------------------
 
+/** A single agent's participation record within a spawn manifest. */
 export interface SpawnManifestEntry {
   /** Agent cast name (e.g. "kobayashi", "verbal"). */
   name: string;
@@ -68,6 +69,7 @@ export interface SpawnManifestEntry {
   commitSha?: string;
 }
 
+/** Describes all agents that participated in a single Scribe run/wave. */
 export interface SpawnManifest {
   /** Wave or run identifier (e.g. "wave-14", "q8-scribe-as-ceremony"). */
   runId: string;
@@ -79,6 +81,7 @@ export interface SpawnManifest {
   topic?: string;
 }
 
+/** Return value from {@link archiveDecisionsBySize}. */
 export interface ArchiveResult {
   /** Byte size of decisions.md before archiving. */
   before: number;

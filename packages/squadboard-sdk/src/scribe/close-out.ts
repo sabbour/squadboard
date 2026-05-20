@@ -62,6 +62,10 @@ const execFile = promisify(_execFile);
 // Public contract
 // ---------------------------------------------------------------------------
 
+/**
+ * Options for {@link closeOut}. All fields are optional — defaults resolve from
+ * the environment and the git repo root.
+ */
 export interface CloseOutOptions {
   /** Which project (defaults to SQUADBOARD_DEFAULT_PROJECT_ID env var). */
   projectId?: string;
@@ -84,6 +88,7 @@ export interface CloseOutOptions {
   healthReport?: Omit<HealthReportOptions, 'teamRoot'>;
 }
 
+/** Structured summary of everything {@link closeOut} did during the run. */
 export interface CloseOutResult {
   /** Whether the decisions.md size-archive gate fired. */
   decisionsArchived: boolean;
@@ -131,6 +136,43 @@ function toError(step: string, err: unknown): { step: string; error: string } {
 // closeOut — the convergence function
 // ---------------------------------------------------------------------------
 
+/**
+ * Run the full Scribe close-out sequence (tasks 0-8 from squad.agent.md).
+ *
+ * Executes in order: archive decisions → merge inbox → write orchestration logs
+ * → write session log → cross-agent history updates → history compaction →
+ * git commit → optional push → optional health report.
+ *
+ * Each step is non-fatal: failures are collected in `result.errors` and the
+ * sequence continues. Callers should inspect `errors` after awaiting.
+ *
+ * @param opts - Close-out options (all fields optional)
+ * @returns Structured {@link CloseOutResult} describing what was done
+ *
+ * @example
+ * ```typescript
+ * import { squadboard } from '@sabbour/squadboard-sdk';
+ *
+ * const result = await squadboard.scribe.closeOut({
+ *   spawnManifest: {
+ *     runId: 'wave-31',
+ *     datetime: new Date().toISOString(),
+ *     agents: [{ name: 'kobayashi', summary: 'Added JSDoc to SDK' }],
+ *   },
+ *   push: true,
+ *   healthReport: {
+ *     waveNumber: 31,
+ *     sessionId: 'abc12345',
+ *     backlogBefore: { total: 10, done: 4, inProgress: 2, blocked: 1, pending: 3 },
+ *     backlogAfter:  { total: 10, done: 6, inProgress: 1, blocked: 1, pending: 2 },
+ *     spawnSummaries: [{ name: 'kobayashi', plainLanguageSummary: 'SDK docs complete.' }],
+ *   },
+ * });
+ *
+ * if (result.errors.length) console.warn('Non-fatal errors:', result.errors);
+ * console.log('Commit:', result.commitSha);
+ * ```
+ */
 export async function closeOut(opts: CloseOutOptions = {}): Promise<CloseOutResult> {
   const teamRoot = await resolveTeamRoot(opts.teamRoot);
   const squadDir = join(teamRoot, '.squad');

@@ -1,0 +1,22 @@
+{
+  "$schema": "https://squadboard.dev/schemas/squadapp/v1/squadapp.json",
+  "schemaVersion": 1,
+  "appId": "aks-github-issues-reviews",
+  "version": "0.1.0",
+  "name": "AKS GitHub Issues Reviews",
+  "displayName": "AKS GitHub Issues Reviews",
+  "description": "Review AKS GitHub Issues for severity, product area, duplicate risk, customer impact, and next action.",
+  "kind": "squadboard-app",
+  "author": "Squadboard team",
+  "license": "MIT",
+  "homepage": "https://github.com/sabbour/aks-squadboard-apps",
+  "tags": [
+    "aks",
+    "github",
+    "issues",
+    "private"
+  ],
+  "requires": {
+    "squadboard": ">=0.1.0"
+  }
+}

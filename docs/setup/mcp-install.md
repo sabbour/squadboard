@@ -98,43 +98,56 @@ No token required for localhost development. Production deployments should enabl
 
 ## Configuration Examples
 
-### Set Project ID in Config
+### Storage Providers & Graceful Degradation
+
+Squadboard adapts based on the `SQUADBOARD_SQUAD_STORAGE_PROVIDER` setting:
+
+| Provider | Behavior | Use Case |
+|----------|----------|----------|
+| `postgresql` (or `DATABASE_URL` set) | Full board enabled; agents write to database | Team workflows, persistent data, visual collaboration |
+| `fs` (filesystem) | Board shows `.squad/` files only; read-only UI | CLI-first development, git-native records |
+| **Not set** (default) | Fallback to filesystem mode | Local development without database |
+
+**Graceful degradation:** If the MCP tries to `capture` or `done:` without `postgresql` provider configured, it falls back to writing `.squad/decisions/inbox/` files instead. The agent still works — it just skips the board update.
+
+**Switching providers:** Just change the env var and restart. Your `.squad/` directory remains committed and safe — it's the permanent record.
+
+### Find & Set Your Project ID
 
 To avoid passing `projectId` in every tool call, set the default project via `SQUADBOARD_DEFAULT_PROJECT_ID`:
 
-```bash
-# Shell env var (Copilot CLI will inherit)
-export SQUADBOARD_DEFAULT_PROJECT_ID="550e8400-e29b-41d4-a716-446655440000"
+1. **Discover project ID:**
+   ```bash
+   npx @sabbour/squadboard list-projects
+   # Output: [{ id: "550e8400-e29b-41d4-a716-446655440000", name: "My Project", squadPath: "/home/you/.squad" }]
+   ```
 
-# Or in ~/.copilot/mcp-config.json (env section)
-{
-  "mcpServers": {
-    "squadboard": {
-      "command": "node",
-      "args": ["/path/to/packages/cli/dist/index.js", "mcp"],
-      "env": {
-        "SQUADBOARD_SQUAD_STORAGE_PROVIDER": "postgresql",
-        "SQUADBOARD_DEFAULT_PROJECT_ID": "550e8400-e29b-41d4-a716-446655440000"
-      }
-    }
-  }
-}
-```
+2. **Set in shell or config:**
+   ```bash
+   # Shell env var (Copilot CLI will inherit)
+   export SQUADBOARD_DEFAULT_PROJECT_ID="550e8400-e29b-41d4-a716-446655440000"
 
-Then `list_issues` works without explicit `projectId`:
+   # Or in ~/.copilot/mcp-config.json (env section)
+   {
+     "mcpServers": {
+       "squadboard": {
+         "command": "node",
+         "args": ["/path/to/packages/cli/dist/index.js", "mcp"],
+         "env": {
+           "SQUADBOARD_SQUAD_STORAGE_PROVIDER": "postgresql",
+           "SQUADBOARD_DEFAULT_PROJECT_ID": "550e8400-e29b-41d4-a716-446655440000"
+         }
+       }
+     }
+   }
+   ```
 
-```bash
-cd /path/to/your/squadboard/project
-gh copilot run "list all cards in in_progress status"
-# Uses SQUADBOARD_DEFAULT_PROJECT_ID automatically
-```
-
-Discover your project ID:
-
-```bash
-npx @sabbour/squadboard list-projects
-# Output: [{ id: "550e8400...", name: "My Project", squadPath: "/home/you/.squad" }]
-```
+3. **Use without explicit projectId:**
+   ```bash
+   cd /path/to/your/squadboard/project
+   gh copilot run "list all cards in in_progress status"
+   # Uses SQUADBOARD_DEFAULT_PROJECT_ID automatically
+   ```
 
 ### Multi-Project Setup
 

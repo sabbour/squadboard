@@ -1,0 +1,22 @@
+{
+  "$schema": "https://squadboard.dev/schemas/squadapp/v1/squadapp.json",
+  "schemaVersion": 1,
+  "appId": "aks-stale-doc-reviews",
+  "version": "0.1.0",
+  "name": "AKS Stale Doc Reviews",
+  "displayName": "AKS Stale Doc Reviews",
+  "description": "Review AKS documentation for stale commands, versions, screenshots, and unsupported guidance before refresh planning.",
+  "kind": "squadboard-app",
+  "author": "Squadboard team",
+  "license": "MIT",
+  "homepage": "https://github.com/sabbour/aks-squadboard-apps",
+  "tags": [
+    "aks",
+    "docs",
+    "stale-review",
+    "private"
+  ],
+  "requires": {
+    "squadboard": ">=0.1.0"
+  }
+}

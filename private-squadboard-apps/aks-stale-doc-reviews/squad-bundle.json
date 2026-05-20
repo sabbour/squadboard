@@ -1,0 +1,114 @@
+{
+  "manifest": {
+    "bundleId": "aks-stale-doc-reviews",
+    "name": "AKS Stale Doc Reviews",
+    "version": "0.1.0",
+    "description": "Review AKS documentation for stale commands, versions, screenshots, and unsupported guidance before refresh planning.",
+    "author": "Squadboard team",
+    "license": "MIT",
+    "schemaVersion": 1
+  },
+  "project": {
+    "name": "AKS Stale Doc Reviews",
+    "description": "A private AKS documentation freshness review workflow.",
+    "icon": "AKS"
+  },
+  "kanban": {
+    "columns": [
+      {
+        "slug": "backlog",
+        "label": "Backlog",
+        "order": 0
+      },
+      {
+        "slug": "ready",
+        "label": "Ready",
+        "order": 1
+      },
+      {
+        "slug": "technical-review",
+        "label": "Technical Review",
+        "order": 2,
+        "wip_limit": 3
+      },
+      {
+        "slug": "reader-review",
+        "label": "Reader Review",
+        "order": 3
+      },
+      {
+        "slug": "maintainer-review",
+        "label": "Maintainer Review",
+        "order": 4
+      },
+      {
+        "slug": "done",
+        "label": "Done",
+        "order": 5
+      }
+    ],
+    "defaultColumn": "backlog"
+  },
+  "team": [
+    {
+      "name": "aks-doc-auditor",
+      "role": "AKS Documentation Auditor",
+      "persistent": true,
+      "charter": "# aks-doc-auditor\n\nReviews AKS docs for stale commands, screenshots, dates, and unsupported guidance. Separates customer-impacting staleness from editorial cleanup.\n"
+    },
+    {
+      "name": "aks-command-validator",
+      "role": "AKS Command Validator",
+      "persistent": true,
+      "charter": "# aks-command-validator\n\nChecks Azure CLI, kubectl, and Kubernetes version references for current AKS behavior. Requests live validation evidence for risky changes.\n"
+    },
+    {
+      "name": "aks-pm-reviewer",
+      "role": "AKS Product Reviewer",
+      "persistent": true,
+      "charter": "# aks-pm-reviewer\n\nPrioritizes stale-doc findings by customer impact, support burden, preview/GA status, and release timing.\n"
+    }
+  ],
+  "ceremonies": [
+    {
+      "id": "aks-stale-doc-review",
+      "name": "AKS Stale Doc Review",
+      "scope": "task",
+      "trigger": {
+        "kind": "on_issue_entry",
+        "config": {
+          "column": "ready"
+        }
+      },
+      "workflowYaml": "name: AKS Stale Doc Review\nsteps:\n  - type: agent_run\n    label: Staleness audit\n    agent: aks-doc-auditor\n    prompt: \"Review this AKS doc for stale commands, versions, screenshots, screenshots references, and unsupported guidance.\"\n    timeout: 25m\n  - type: agent_run\n    label: Command validation\n    agent: aks-command-validator\n    prompt: \"Validate CLI and kubectl guidance for current AKS behavior and list commands needing live verification.\"\n    timeout: 25m\n  - type: agent_run\n    label: Customer-impact priority\n    agent: aks-pm-reviewer\n    prompt: \"Prioritize findings by customer impact, support burden, and release timing.\"\n    timeout: 20m\n"
+    }
+  ],
+  "skills": [
+    {
+      "key": "aks-stale-doc-review",
+      "name": "AKS Stale Documentation Review",
+      "description": "Audit AKS docs for stale technical guidance and prioritize remediation.",
+      "category": "docs"
+    }
+  ],
+  "routing": [
+    {
+      "pattern": "docs",
+      "matchType": "label",
+      "agentName": "aks-doc-auditor",
+      "priority": 10
+    },
+    {
+      "pattern": "cli",
+      "matchType": "label",
+      "agentName": "aks-command-validator",
+      "priority": 20
+    },
+    {
+      "pattern": "catchall",
+      "matchType": "catchall",
+      "agentName": "aks-pm-reviewer",
+      "priority": 99
+    }
+  ]
+}
