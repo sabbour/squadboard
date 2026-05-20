@@ -1,5 +1,6 @@
+import { useState } from 'react'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { fireEvent, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { AttachWorkflowModal } from '../AttachWorkflowModal.tsx'
 
@@ -17,7 +18,7 @@ vi.mock('../../../api/ceremonies.ts', () => ({
   useCreateCeremony: () => ({ mutateAsync: apiMocks.createMutateAsync }),
 }))
 
-function arrangeModal() {
+function mockRunPlanData() {
   apiMocks.useCeremonies.mockReturnValue({
     data: [
       { id: 'ceremony-1', name: 'Design Review', activeVersionId: 'version-review' },
@@ -44,14 +45,53 @@ function arrangeModal() {
   apiMocks.createMutateAsync.mockResolvedValue({
     version: { id: 'created-version' },
   })
+}
+
+function arrangeModal(onClose = vi.fn()) {
+  mockRunPlanData()
 
   return render(
     <AttachWorkflowModal
       projectId="project-1"
       issueId="issue-1"
-      onClose={vi.fn()}
+      onClose={onClose}
     />,
   )
+}
+
+function arrangeStatefulModal() {
+  mockRunPlanData()
+  const onClose = vi.fn()
+
+  function Harness() {
+    const [open, setOpen] = useState(true)
+    if (!open) return null
+
+    return (
+      <AttachWorkflowModal
+        projectId="project-1"
+        issueId="issue-1"
+        onClose={() => {
+          onClose()
+          setOpen(false)
+        }}
+      />
+    )
+  }
+
+  return { onClose, ...render(<Harness />) }
+}
+
+function getDialogBackdrop() {
+  const dialog = screen.getByRole('dialog')
+  const backdrop = Array.from(document.body.querySelectorAll<HTMLElement>('[aria-hidden="true"]'))
+    .find((element) => !element.contains(dialog))
+
+  if (!backdrop) {
+    throw new Error('Expected dialog backdrop')
+  }
+
+  return backdrop
 }
 
 describe('AttachWorkflowModal run-plan override copy', () => {
@@ -82,6 +122,37 @@ describe('AttachWorkflowModal run-plan override copy', () => {
     await user.click(screen.getByRole('button', { name: 'Use selected plan' }))
 
     expect(apiMocks.attachMutateAsync).toHaveBeenCalledWith({ workflowVersionId: 'version-review' })
+  })
+
+  it('keeps the modal open while the project plan dropdown is interacting outside the surface', async () => {
+    const user = userEvent.setup()
+    const { onClose } = arrangeStatefulModal()
+
+    const projectPlanDropdown = screen.getByRole('combobox', { name: 'Project run plan' })
+    await user.click(projectPlanDropdown)
+    fireEvent.click(getDialogBackdrop())
+
+    expect(onClose).not.toHaveBeenCalled()
+    expect(screen.getByRole('heading', { name: 'Override default Work Pickup' })).toBeInTheDocument()
+
+    await user.selectOptions(projectPlanDropdown, 'version-review')
+    expect(projectPlanDropdown).toHaveValue('version-review')
+
+    await user.click(screen.getByRole('button', { name: 'Use selected plan' }))
+
+    expect(apiMocks.attachMutateAsync).toHaveBeenCalledWith({ workflowVersionId: 'version-review' })
+    expect(onClose).toHaveBeenCalledTimes(1)
+    expect(screen.queryByRole('heading', { name: 'Override default Work Pickup' })).not.toBeInTheDocument()
+  })
+
+  it('still closes from the explicit Cancel action', async () => {
+    const user = userEvent.setup()
+    const { onClose } = arrangeStatefulModal()
+
+    await user.click(screen.getByRole('button', { name: 'Cancel' }))
+
+    expect(onClose).toHaveBeenCalledTimes(1)
+    expect(screen.queryByRole('heading', { name: 'Override default Work Pickup' })).not.toBeInTheDocument()
   })
 
   it('creates a project plan from a template before attaching it to the card', async () => {

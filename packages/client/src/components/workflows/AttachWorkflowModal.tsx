@@ -126,7 +126,17 @@ export function AttachWorkflowModal({ projectId, issueId, onClose }: AttachWorkf
   }
 
   return (
-    <Dialog open onOpenChange={(_, data) => { if (!data.open) onClose() }}>
+    <Dialog
+      open
+      onOpenChange={(event, data) => {
+        if (data.open) return
+        if (data.type === 'backdropClick') {
+          event.preventDefault()
+          return
+        }
+        onClose()
+      }}
+    >
       <DialogSurface style={{ maxWidth: '440px', width: '100%' }}>
         <DialogBody>
           <DialogTitle>Override default Work Pickup</DialogTitle>
@@ -147,6 +157,7 @@ export function AttachWorkflowModal({ projectId, issueId, onClose }: AttachWorkf
                   </div>
                   <div className={styles.attachRow}>
                     <select
+                      aria-label="Project run plan"
                       value={selectedVersionId}
                       onChange={(e) => setSelectedVersionId(e.target.value)}
                       style={{
