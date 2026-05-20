@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from 'react'
 import { Checkmark20Regular, ChevronDown20Regular, Play20Regular } from '@fluentui/react-icons'
 import { useActiveAgents } from '../../api/agents.ts'
 import { useStartRun, useCancelRun, useIssueRuns, type IssueRun } from '../../api/runs.ts'
+import { pickDefaultConsultAgent } from '../agents/agent-origin.ts'
 
 interface RunButtonProps {
   projectId: string
@@ -46,9 +47,9 @@ export default function RunButton({ projectId, issueId, onRunStarted }: RunButto
   }, [lastRun?.status])
 
   function handleRun() {
-    // useActiveAgents already filters to status === 'active'; this fallback
-    // simply auto-picks the first active agent if no selection was made.
-    const agentId = selectedAgentId || agents?.[0]?.id
+    // pickDefaultConsultAgent prefers lead/architect agents over background
+    // agents (monitors, scribes) so runs are dispatched to a conversational agent.
+    const agentId = selectedAgentId || pickDefaultConsultAgent(agents ?? []) || agents?.[0]?.id
     if (!agentId) return
     startRun.mutate(
       { issueId, agentId },

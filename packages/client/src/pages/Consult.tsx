@@ -62,7 +62,7 @@ import PageHeader from '../components/layout/PageHeader.tsx'
 import { ChatBubble } from '../components/ChatBubble.tsx'
 import { ContextPanel } from '../components/consult/ContextPanel.tsx'
 import { ConsultDisconnectBar } from '../components/consult/ConsultDisconnectBar.tsx'
-import { getAgentOriginBadge, normalizeAgentOrigin } from '../components/agents/agent-origin.ts'
+import { getAgentOriginBadge, normalizeAgentOrigin, isBackgroundAgent, pickDefaultConsultAgent } from '../components/agents/agent-origin.ts'
 
 const useStyles = makeStyles({
   root: {
@@ -484,10 +484,11 @@ function NewSessionView({
   // 5xx server) — show a MessageBar with retry instead of crashing.
   const [startError, setStartError] = useState<string | null>(null)
 
-  // Auto-pick first agent for new project-scoped agent-mode consults.
+  // Auto-pick best conversational agent for new project-scoped agent-mode consults.
+  // Prefers a lead/architect agent over background agents (monitors, scribes, etc.).
   useEffect(() => {
     if (mode === 'agent' && !agentId && agents.length > 0) {
-      setAgentId(agents[0].id)
+      setAgentId(pickDefaultConsultAgent(agents) ?? agents[0].id)
     }
   }, [mode, agentId, agents])
 
@@ -600,7 +601,7 @@ function NewSessionView({
                   >
                     {agents.map((a) => (
                       <Option key={a.id} value={a.id} text={a.name}>
-                        {a.name} ({a.role}) · {getAgentOriginBadge(a).label}{a.readOnly ? ' · read-only' : ''}
+                        {a.name} ({a.role}) · {getAgentOriginBadge(a).label}{isBackgroundAgent(a) ? ' · background' : ''}{a.readOnly ? ' · read-only' : ''}
                       </Option>
                     ))}
                   </Dropdown>
