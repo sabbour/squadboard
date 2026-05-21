@@ -47,7 +47,8 @@ export default defineConfig({
   reporter: [['list']],
   globalTeardown: './tests/global-teardown.ts',
   // Real LLM calls + multi-agent ceremonies can take many minutes.
-  timeout: 600_000,
+  // A.2 alone needs: ~90s pickup + ~600s work + ~600s review + ~300s approve = ~1590s minimum.
+  timeout: 2_700_000, // 45 minutes per test
 
   use: {
     baseURL,

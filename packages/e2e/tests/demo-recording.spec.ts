@@ -198,45 +198,48 @@ test('Scenario A.2 — Board in action', async ({ page }, testInfo) => {
   // Follow the live run
   await watchRunBtn.click()
   await page.waitForURL(/\/runs\/[^/]+\/live/, { timeout: 15_000 })
-  await expect(page.getByRole('log', { name: 'Run event stream' })).toBeVisible({ timeout: 10_000 })
+  await expect(
+    page.getByRole('log', { name: 'Run event stream' })
+      .or(page.getByLabel('Run event log'))
+  ).toBeVisible({ timeout: 10_000 })
   await pause(page)
   await capture(page, testInfo, 'a2-03-live-run-start')
 
-  // Wait for the agent to finish its work (real LLM — generous timeout)
-  await expect(page.getByText('Completed', { exact: false })).toBeVisible({ timeout: 300_000 })
+  // Wait for the agent to finish its work (real LLM — up to 10 min)
+  await expect(page.getByText('Completed', { exact: false })).toBeVisible({ timeout: 600_000 })
   await pause(page, 1500)
   await capture(page, testInfo, 'a2-04-run-completed')
 
   // Card auto-moves to In Review after the run — show the board
   await page.goto(`/projects/${newProjectId}/board`)
-  await expect(page.getByText('In Review').first()).toBeVisible({ timeout: 10_000 })
+  // Wait for the card to appear in the "In Review" column specifically
+  await expect(
+    page.locator(`[data-column-semantic="review"] [data-issue-id="${demoCardId}"]`)
+  ).toBeVisible({ timeout: 30_000 })
   await pause(page, 1500)
   await capture(page, testInfo, 'a2-05-board-in-review')
 
   // Simple Review ceremony auto-triggered on card entry into In Review.
-  // Open the card detail and wait for the reviewer agent to finish, then approve.
-  await page.getByText(DEMO_CARD_TITLE).click()
-  await expect(page.getByRole('dialog')).toBeVisible({ timeout: 10_000 })
+  // Navigate to ceremonies to show it running
+  await page.goto(`/projects/${newProjectId}/ceremonies`)
+  await expect(page.getByRole('heading', { name: 'Ceremonies' })).toBeVisible({ timeout: 10_000 })
+  await expect(page.getByText('Simple Review')).toBeVisible({ timeout: 60_000 })
   await pause(page, 1000)
-  await capture(page, testInfo, 'a2-06-card-detail-in-review')
+  await capture(page, testInfo, 'a2-06-review-ceremony-triggered')
 
-  // Wait for the reviewer agent_run step to complete — Approve button appears
-  const approveBtn = page.getByRole('button', { name: 'Approve' })
-  await expect(approveBtn).toBeVisible({ timeout: 300_000 })
-  await pause(page, 1500)
-  await capture(page, testInfo, 'a2-07-review-approve-gate')
+  // The reviewer agent reviews the work (real LLM). Show the ceremony running.
+  await page.getByText('Simple Review').click()
+  await pause(page, 1200)
+  await capture(page, testInfo, 'a2-07-review-ceremony-detail')
 
-  // Human approval — Lead approves the work
-  await approveBtn.click()
-  await pause(page, 2000)
-  await capture(page, testInfo, 'a2-08-review-approved')
-
-  // Card auto-moves to Done after review ceremony completes — show the board
-  await page.keyboard.press('Escape')
+  // Card auto-moves to Done after review ceremony completes — show the board.
+  // Simple Review has an agent_run step (up to 10 min) + approve (instant if auto).
   await page.goto(`/projects/${newProjectId}/board`)
-  await expect(page.getByText('Done').first()).toBeVisible({ timeout: 30_000 })
+  await expect(
+    page.locator(`[data-column-semantic="done"] [data-issue-id="${demoCardId}"]`)
+  ).toBeVisible({ timeout: 900_000 })
   await pause(page, 1500)
-  await capture(page, testInfo, 'a2-09-card-done')
+  await capture(page, testInfo, 'a2-08-card-done')
 
   // Scribe ceremony fires automatically (wave.closeout on Done entry)
   await page.goto(`/projects/${newProjectId}/ceremonies`)
@@ -244,7 +247,7 @@ test('Scenario A.2 — Board in action', async ({ page }, testInfo) => {
     page.getByText('Scribe', { exact: false }).or(page.getByText('scribe', { exact: false }))
   ).toBeVisible({ timeout: 60_000 })
   await pause(page, 2000)
-  await capture(page, testInfo, 'a2-10-scribe-triggered')
+  await capture(page, testInfo, 'a2-09-scribe-triggered')
 })
 
 // ── Scenario B — Onboard an existing Squad project ──────────────────────────

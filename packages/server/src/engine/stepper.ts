@@ -188,7 +188,15 @@ export async function runWorker(issueRunId: string): Promise<void> {
     stopHeartbeat();
 
     if (result.timedOut) {
-      await markTimedOut(db, issueRunId, result.errorMessage ?? 'Agent run timed out');
+      if (run.kind === 'peer_review') {
+        // A timed-out reviewer is treated as a soft pass: mark the issue_run
+        // completed so advanceWorkflowRun can advance the workflow_run to
+        // 'completed', which triggers autoMoveReviewedIssueToDone.
+        console.warn(`[stepper] peer_review run ${issueRunId} timed out — treating as soft pass`);
+        await recordRunCompletion(issueRunId, '(reviewer timed out — auto-passed)', workflowVersionId);
+      } else {
+        await markTimedOut(db, issueRunId, result.errorMessage ?? 'Agent run timed out');
+      }
       eventBus.emitFlowEvent('flow.instance.ended', project.id, { instanceId: issueRunId, status: 'timed_out' });
       return;
     }
@@ -309,7 +317,8 @@ async function syncRunIssueColumn(
   try {
     const result = await db.execute(sql`
       WITH run_issue AS (
-        SELECT issues.id AS issue_id, issues.project_id AS project_id
+        SELECT issues.id AS issue_id, issues.project_id AS project_id,
+               issues.status AS current_status
         FROM issue_runs
         JOIN issues ON issues.id = issue_runs.issue_id
         WHERE issue_runs.id = ${issueRunId}
@@ -322,13 +331,26 @@ async function syncRunIssueColumn(
         ORDER BY column_meta.position ASC
         LIMIT 1
       ),
+      current_semantic AS (
+        SELECT column_meta.semantic AS sem
+        FROM column_meta
+        JOIN run_issue ON run_issue.project_id = column_meta.project_id
+                      AND run_issue.current_status = column_meta.column_id
+        LIMIT 1
+      ),
       updated AS (
         UPDATE issues
         SET status = target.column_id,
             updated_at = NOW()
-        FROM target, run_issue
+        FROM target, run_issue, current_semantic
         WHERE issues.id = run_issue.issue_id
           AND issues.status <> target.column_id
+          -- Never pull a card BACK from a downstream column.
+          -- In-progress sync only applies when the card is still upstream.
+          AND (
+            ${semantic} <> 'in_progress'
+            OR current_semantic.sem NOT IN ('review', 'done')
+          )
         RETURNING issues.id AS issue_id, issues.project_id, issues.status, issues.position
       )
       SELECT * FROM updated

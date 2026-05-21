@@ -5,7 +5,7 @@ import { resolveModel } from './model-defaults.js';
 import { estimateCost } from './pricing.js';
 
 const MAX_CHARTER_PROMPT_CHARS = 8_000;
-const SEND_AND_WAIT_TIMEOUT_MS = 120_000;
+const SEND_AND_WAIT_TIMEOUT_MS = 300_000; // 5 minutes — generous for peer-review LLM calls
 
 export class AgentRunTimeoutError extends Error {
   constructor(message: string) {
@@ -168,13 +168,14 @@ async function sendAndWaitWithTimeout<TSession>(
   let timeoutHandle: ReturnType<typeof setTimeout> | undefined;
   try {
     return await Promise.race([
-      client.sendAndWait(session, { prompt }),
+      client.sendAndWait(session, { prompt }, timeoutMs),
       new Promise<never>((_, reject) => {
         timeoutHandle = setTimeout(() => {
-          void (async () => {
-            await onTimeout?.().catch(() => {});
-            reject(new AgentRunTimeoutError(`sendAndWait timeout after ${timeoutMs / 1000}s`));
-          })();
+          // Reject the race FIRST so the caller unblocks immediately.
+          // Then fire cleanup as a best-effort background task — if
+          // client.disconnect() hangs it no longer blocks the timeout.
+          reject(new AgentRunTimeoutError(`sendAndWait timeout after ${timeoutMs / 1000}s`));
+          void onTimeout?.().catch(() => {});
         }, timeoutMs);
       }),
     ]);
@@ -226,7 +227,11 @@ export async function createAgentSession(options: SessionOptions): Promise<Sessi
         // Best-effort.
       }
     }
-    await client.disconnect().catch(() => {});
+    // Disconnect with a 5 s hard cap so this cleanup never blocks indefinitely.
+    await Promise.race([
+      client.disconnect(),
+      new Promise<void>((res) => setTimeout(res, 5_000)),
+    ]).catch(() => {});
   };
 
   const attach = (eventType: AgentSessionEventType, handler: (event: unknown) => void) => {

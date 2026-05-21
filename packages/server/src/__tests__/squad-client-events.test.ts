@@ -225,9 +225,9 @@ describe('createAgentSession live event bridge', () => {
       agentModel: 'gpt-5.4',
       projectDefaultModel: null,
     });
-    const rejection = expect(pending).rejects.toThrow('sendAndWait timeout after 120s');
+    const rejection = expect(pending).rejects.toThrow('sendAndWait timeout after 300s');
 
-    await vi.advanceTimersByTimeAsync(120_000);
+    await vi.advanceTimersByTimeAsync(300_000);
 
     await rejection;
     expect(mockDisconnect).toHaveBeenCalled();

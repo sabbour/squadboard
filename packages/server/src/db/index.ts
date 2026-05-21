@@ -694,7 +694,7 @@ async function bootstrapSchema(): Promise<void> {
 
     CREATE TABLE IF NOT EXISTS workflow_runs (
       id                  UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
-      issue_id            UUID        NOT NULL REFERENCES issues(id),
+      issue_id            UUID        NOT NULL REFERENCES issues(id) ON DELETE CASCADE,
       status              run_status  NOT NULL DEFAULT 'pending',
       current_step_index  INTEGER     DEFAULT 0,
       created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -704,7 +704,7 @@ async function bootstrapSchema(): Promise<void> {
     CREATE TABLE IF NOT EXISTS step_runs (
       id               UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
       workflow_run_id  UUID        NOT NULL REFERENCES workflow_runs(id) ON DELETE CASCADE,
-      issue_run_id     UUID        REFERENCES issue_runs(id),
+      issue_run_id     UUID        REFERENCES issue_runs(id) ON DELETE SET NULL,
       step_index       INTEGER     NOT NULL,
       step_type        TEXT        NOT NULL,
       status           run_status  NOT NULL DEFAULT 'pending',
@@ -1770,6 +1770,41 @@ async function bootstrapSchema(): Promise<void> {
     UPDATE consult_sessions
       SET agent_origin = 'model'
       WHERE mode = 'model' AND agent_origin = 'project';
+  `);
+
+  // Fix workflow_runs.issue_id FK — add ON DELETE CASCADE so projects/issues
+  // can be deleted without violating the constraint.
+  await _pool.query(`
+    DO $$ BEGIN
+      IF EXISTS (
+        SELECT 1 FROM information_schema.table_constraints
+        WHERE constraint_name = 'workflow_runs_issue_id_fkey'
+          AND table_name = 'workflow_runs'
+      ) THEN
+        ALTER TABLE workflow_runs DROP CONSTRAINT workflow_runs_issue_id_fkey;
+      END IF;
+      ALTER TABLE workflow_runs
+        ADD CONSTRAINT workflow_runs_issue_id_fkey
+        FOREIGN KEY (issue_id) REFERENCES issues(id) ON DELETE CASCADE;
+    END $$;
+  `);
+
+  // Fix step_runs.issue_run_id FK — SET NULL on delete so issue_run deletion
+  // (cascaded from issues) doesn't block while the step_run's own cascade
+  // (via workflow_run_id) handles cleanup.
+  await _pool.query(`
+    DO $$ BEGIN
+      IF EXISTS (
+        SELECT 1 FROM information_schema.table_constraints
+        WHERE constraint_name = 'step_runs_issue_run_id_fkey'
+          AND table_name = 'step_runs'
+      ) THEN
+        ALTER TABLE step_runs DROP CONSTRAINT step_runs_issue_run_id_fkey;
+      END IF;
+      ALTER TABLE step_runs
+        ADD CONSTRAINT step_runs_issue_run_id_fkey
+        FOREIGN KEY (issue_run_id) REFERENCES issue_runs(id) ON DELETE SET NULL;
+    END $$;
   `);
 
   console.log('[db] schema bootstrapped');
