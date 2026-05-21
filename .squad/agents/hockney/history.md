@@ -98,3 +98,44 @@ Added a single onboarding repair action that runs MCP config write, built-in cer
 - Disconnect must remove config only: strip the `squadboard` MCP entry and delete the connection marker, but leave ceremonies and regenerated `.squad/ceremonies.md` untouched.
 - `checkedFiles` should describe the exact filesystem probes the UI cares about; pairing it with `lastCheckedAt` makes the status envelope self-describing without inventing client-side timers or path knowledge.
 
+
+---
+
+## W32 Wave 9: CLI Overhaul + Onboarding Repairs
+
+**Date:** 2026-05-21T18:43:00Z  
+**Status:** ✅ Complete  
+**Commits:** d4edc32 (CLI), (onboarding repairs), 637f2a2 (PGLite recovery), (release infra)  
+
+### Deliverables
+
+1. **CLI connect/diagnose/init overhaul**
+   - `squadboard connect` is now the canonical MCP setup path
+   - `squadboard diagnose` provides operator-readable health check
+   - `squadboard init` prefers Electron with browser fallback
+   - `--write-mcp-config` removed from user-facing flows
+   - Agent hint injection is idempotent
+
+2. **Primary onboard-to-squadboard repair action**
+   - Composite action runs three repairs in sequence: write `.mcp.json`, seed ceremonies, import markdown
+   - Single obvious onboarding button for Settings
+   - Lower-level repairs remain independently callable
+   - `.squadboard/.connected` marker gates reconciliation
+
+3. **PGLite WASM abort auto-recovery**
+   - On abort, backs up corrupted data, creates fresh directory, retries once
+   - Preserves user data in backup, surfaces clear recovery instructions
+   - Non-WASM errors throw immediately to surface environmental problems
+
+4. **Release infrastructure**
+   - All four public packages linked in changesets configuration
+   - Versions unified to 0.0.1
+   - GitHub workflows (release.yml, electron-release.yml) in place
+   - Awaiting Ahmed to create public repo and push
+
+### Learnings
+
+- Electron dev mode must probe port 3000 before spawning backend; failures should be graceful so the UI can surface connection problems
+- Idempotent hint injection requires a retrofit guard that distinguishes between full updates and partial appends
+- A `.connected` marker cleanly separates lifecycle state from drift; status reconciliation can gate on the marker
+- Composite repair actions improve UX by reducing UI branching while preserving lower-level actions for testing

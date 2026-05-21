@@ -65,3 +65,33 @@ Public SDK is now fully documented:
 - No JSDoc on internal/private helpers (per spec)
 
 **Coverage:** 100% of public API surface documented. Ready for external teams.
+
+---
+
+## W32 Wave 9: Squad Agent Polling Guidance Injection
+
+**Date:** 2026-05-21T11:23:00Z  
+**Status:** ✅ Complete  
+**Commit:** 932c76d  
+
+### Deliverable
+
+Extended injected ceremony delegation guidance in `.github/agents/squad.agent.md` with explicit `squadboard_get_run_status` polling instructions. Coordinator now knows how to:
+
+- Capture `run.id` from `squadboard_run_agent`
+- Poll `squadboard_get_run_status` every 5–10 seconds
+- Handle `pending`, `running`, `completed`, `failed` states
+- Treat runs exceeding 10 minutes as stalled
+
+### Implementation
+
+- Added reusable `POLLING_BLOCK` template string appended inside `CEREMONY_DELEGATION`
+- Updated injection guard to distinguish fully up-to-date files, older hints, and new projects
+- Tightened `hasSquadboardMcpHints()` so drift detection requires both hint + polling guidance
+- Build validation: `cd packages/server && pnpm build` passed
+
+### Learnings
+
+- Coordinator guidance must be actionable: delegation without completion observability leaves workflows half-specified
+- Retrofit guards must be safe: existing repos should gain only missing pieces, not duplication
+- Status should reflect the full contract: if polling guidance is missing, treat projection as drifted rather than silently healthy

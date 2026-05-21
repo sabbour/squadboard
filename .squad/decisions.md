@@ -12057,3 +12057,279 @@ Reran the exact commands wired into CI. Results are unchanged from baseline, whi
 
 This workflow now enforces the invariant the audit called out: broken Vitest suites and broken TypeScript types are PR blockers. The remaining work is product-side: fix the already-red client/server tests and the server type errors.
 
+
+---
+
+## 2026-05-21T11:23:00-07:00 — CLI connect/diagnose + Electron-first init (Hockney)
+
+The Squadboard CLI now has an explicit `connect` setup flow, a `diagnose` health check, and an Electron-first `init` path. Electron dev mode also self-starts the backend when nothing is already listening on port 3000.
+
+### Decisions Made
+
+1. **`squadboard connect` is the canonical MCP setup path.**
+   - Merges `.mcp.json` in the current working directory using the existing Squadboard MCP entry logic.
+   - Injects Squadboard detection/delegation hints into `.github/agents/squad.agent.md` when that file exists.
+
+2. **`--write-mcp-config` is removed from user-facing CLI flows.**
+   - `init` and `mcp` no longer advertise or parse the old flag.
+   - `writeMcpConfigFile()` stays as an internal helper used by `connect`.
+
+3. **Agent hint injection is intentionally idempotent.**
+   - If `squadboard_*` is already present, the CLI skips patching `squad.agent.md`.
+   - Injected ceremony delegation block matches backend squad-sync guidance for alignment.
+
+4. **`squadboard diagnose` favors operator-readable output over raw JSON.**
+   - Reports server health, MCP config presence, squad agent hint status, Electron app discovery, port 3000 listening status.
+   - Server reachability uses `GET /api/health`; port check is a single short TCP probe.
+
+5. **`squadboard init` now prefers Electron, but never hard-depends on it.**
+   - Looks for monorepo root and `packages/electron/dist/main/index.js`.
+   - If Electron available, launches detached via `npx electron`; otherwise falls back to browser.
+   - `--no-electron` and `SQUADBOARD_NO_ELECTRON` force browser fallback.
+
+6. **Electron dev mode must be resilient when server is not already running.**
+   - Probes localhost:3000 first in dev.
+   - If something is already listening, Electron reuses it.
+   - If not, Electron spawns `packages/server/dist/index.js` itself.
+   - Logs clear message if server build is missing.
+
+**Commit:** d4edc32
+
+---
+
+## 2026-05-21T11:23:00-07:00 — Primary onboard-to-squadboard repair action (Hockney)
+
+Squad sync now exposes a single primary `onboard-to-squadboard` repair action that runs three onboarding repairs in sequence: write `.mcp.json`, seed built-in ceremonies, import custom `ceremonies.md` entries, then rebuild `.squad/ceremonies.md` once at the end.
+
+### Why
+
+Settings needed one obvious onboarding button instead of three separate backend repair actions. The composite action reduces UI branching while preserving existing lower-level actions for targeted recovery and testing.
+
+### Decisions Made
+
+1. **Composite action is additive, not a replacement.**
+   - `write-mcp-config`, `seed-ceremony-defaults`, and `import-ceremonies-from-md` remain independently callable.
+
+2. **Sequence is fixed and deterministic.**
+   - `.mcp.json` write first, then DB seeding, then markdown import.
+
+3. **Rebuild `.squad/ceremonies.md` once at the end.**
+   - Avoids repeated file churn and ensures final file reflects post-import DB state with delegation hints.
+
+4. **Non-fatal sub-step failures do not short-circuit the run.**
+   - Composite result aggregates all child changes so UI can show partial progress plus failure reason.
+
+5. **Expose only the composite onboarding action for onboarding repairs.**
+   - Lower-level actions stay callable on backend but are hidden from status action list.
+
+6. **Reconciliation rides on the existing status endpoint.**
+   - `GET /squad-sync/status` returns `onboardingSync` with `mcpConfigPresent`, `ceremoniesSeeded`, `squadAgentPresent`, `inSync`, and `driftedFields`.
+
+7. **Connected state is explicit and filesystem-backed.**
+   - Successful onboarding writes `.squadboard/.connected` with `{ connectedAt, version }`.
+   - Status derives `connected` from marker and only runs live reconciliation when marker exists.
+
+8. **Disconnect removes config, not ceremony data.**
+   - `disconnect-squadboard` deletes marker and removes Squadboard MCP entry (or `.mcp.json` if only entry) but leaves DB ceremonies and `.squad/ceremonies.md` intact.
+
+---
+
+## 2026-05-21T11:23:00-07:00 — PGLite WASM abort auto-recovery strategy (Hockney)
+
+On a WASM abort boot failure, `startPglite()` now backs up `~/.squadboard/data/pglite` → `~/.squadboard/data/pglite.corrupted.{timestamp}`, creates fresh data directory, and retries `new PGlite()` once. On retry success, server starts with empty database and logs clear warning. Non-WASM errors throw immediately.
+
+### Rationale
+
+Corrupted data directory is a recoverable condition: user's data is preserved in backup, server can start fresh rather than crashing. One retry is sufficient; if a fresh empty directory also fails, problem is environmental. Clear log messages make this user-actionable.
+
+**Commit:** 637f2a2
+
+---
+
+## 2026-05-20T16:46:00-07:00 — Release Infrastructure: Changesets + GitHub Workflows (Hockney)
+
+Full release infrastructure is in place for `sabbour/squadboard`. All four public packages release together at same semver via changesets' linked-release model, with automated OIDC-provisioned npm publishing and Electron binary distribution on GitHub Releases.
+
+### Implementation
+
+- **Changesets**: `@changesets/cli` + `@changesets/changelog-github` installed; `.changeset/config.json` configured with all four packages linked, `access: public`, `baseBranch: dev`.
+- **Versions**: All packages bumped from `0.1.0-prealpha.0` to `0.0.1`.
+- **GitHub Workflows**:
+  - `release.yml` fires on push to `main`, uses changesets to either open "Version Packages" PR or publish to npm with OIDC provenance.
+  - `electron-release.yml` fires on `v*` tag push or `workflow_dispatch`, matrix build (macOS DMG, Windows NSIS, Linux AppImage), uploads to GitHub Releases.
+
+### What Ahmed needs to do
+
+1. Create `sabbour/squadboard` as public repo (personal account).
+2. Add `NPM_TOKEN` secret to repo.
+3. Run: `git push -u origin dev && git push origin v0.0.1`.
+
+**Commit:** commit pending
+
+---
+
+## 2026-05-20T18:31:00-07:00 — Electron Router Strategy + Window Icon (Keyser)
+
+**Decision 1:** Use `HashRouter` (UA detection) for Electron, `BrowserRouter` for web. Electron loads renderer from `file://` in production; History API doesn't work with `file://`. Detect via `window.navigator.userAgent.toLowerCase().includes('electron')` and use `HashRouter` when in Electron.
+
+**Decision 2:** Window icon served from `packages/electron/resources/icon.png` (copied from client assets). In dev: resolved via `path.resolve(__dirname, '../../resources/icon.png')`. In packaged: loaded from `process.resourcesPath` (electron-builder extraResources).
+
+**Files changed:** `packages/client/src/main.tsx`, `packages/electron/src/main/index.ts`, `packages/electron/electron-builder.yml`, `packages/electron/resources/icon.png`.
+
+---
+
+## 2026-05-20T16:46:00Z — L3 Electron + React Client Integration (Keyser)
+
+Wired `packages/client` (full React Squadboard UI) as Electron renderer in production builds.
+
+### Key Decisions
+
+1. **electron-vite config filename is `electron.vite.config.ts` (dot, not dash).** Project had `electron-vite.config.ts` — a misspelling. electron-vite v5 silently ignores it. Renamed to `electron.vite.config.ts`.
+
+2. **Renderer root set to `packages/client` absolute path.** `renderer.root: resolve(__dirname, '../client')` points electron-vite's renderer build at full client package. `outDir` is `dist/renderer`.
+
+3. **VITE_API_URL baked as `http://localhost:3000`.** In Electron production, window loads via `file://`. Relative API URLs don't work. `define` block bakes URL at build time.
+
+4. **`@/` alias explicitly declared.** Vite doesn't read tsconfig paths automatically. Added `resolve.alias: { '@': resolve(__dirname, '../client/src') }` in electron renderer config.
+
+5. **Plugin devDependencies added to electron package.** `@vitejs/plugin-react` and `@tailwindcss/vite` added to `packages/electron/package.json`.
+
+6. **electron:build chains server build.** Updated root `package.json` `electron:build` to first build server, then electron.
+
+**Result:** `pnpm electron:build` produces 94 renderer assets, 3577 modules transformed, ~4MB total bundle.
+
+**Commit:** 48773f5a9
+
+---
+
+## 2026-05-20T16:53:45-07:00 — Playwright Script for npmjs Trusted Publisher Config (Keyser)
+
+Write standalone Playwright TypeScript script (`scripts/configure-npm-trusted-publisher.ts`) that automates npmjs.com UI interaction to configure GitHub Actions as trusted publisher (OIDC) on each package.
+
+### Implementation choices
+
+- **Headless: false** — keeps browser visible for intervention if npmjs UI changes.
+- **Text/role/label selectors** — npmjs markup changes; CSS classes would break.
+- **Defensive fallbacks** — if primary button selector fails, tries broader alternatives.
+- **Screenshots at every step** — saved alongside script for debugging.
+- **OTP support** — reads `NPM_OTP` env var if 2FA enabled.
+- **Playwright from packages/e2e** — already installed at `^1.49.0`.
+- **ESM-compatible `__dirname`** — monorepo has `"type": "module"` so uses `import.meta.url`.
+
+**Files changed:** `scripts/configure-npm-trusted-publisher.ts`, `scripts/README.md`, `package.json`.
+
+---
+
+## 2026-05-21T09:48:51-07:00 — Single Connect to Squadboard CTA + Reconciliation Status (Keyser)
+
+Replace multiple targeted setup/repair actions with one `Connect to Squadboard` CTA backed by backend-provided reconciliation signal.
+
+### UX Behavior
+
+- Shows **"Squadboard is connected"** when project is connected and in sync.
+- Shows **"Configuration drift detected"** with specific missing items when connected but out of sync.
+- Shows prominent **Connect to Squadboard** CTA only when not connected.
+- Shows **Re-run setup** plus muted **Disconnect** action when connected but drifted.
+- Shows only muted **Disconnect** action when connected and healthy.
+- Includes compact, collapsible **Sync Diagnostics** checklist for `.mcp.json`, ceremonies, `squad.agent.md`.
+
+### Rationale
+
+- **One obvious action** removes setup ambiguity.
+- **Backend-owned reconciliation** lets UI speak in user terms.
+- **Drift-specific guidance** makes recovery obvious.
+- **Separate disconnect control** acknowledges users may want to remove MCP linkage without deleting ceremonies.
+
+**Files changed:** `packages/client/src/api/squad.ts`, `packages/client/src/components/settings/SquadSyncStatusPanel.tsx`, `packages/client/src/components/settings/__tests__/SquadSyncStatusPanel.test.tsx`.
+
+---
+
+## 2026-05-21T00:05:18-07:00 — Show MCP Broker Setup Card in PGlite Mode (Keyser)
+
+Render lighter broker setup card whenever Squad Sync reports non-PostgreSQL mode. Previously `BrokerSetupCard` only rendered for PostgreSQL manual-bridge mode.
+
+### Rationale
+
+- **Mutually exclusive UX** keeps one clear next step on screen at a time.
+- **Lighter fallback for PGlite** avoids PostgreSQL env vars that don't apply to local mode.
+- **Reuse existing repair action** so primary button stays aligned with backend MCP-config generation.
+
+**Files changed:** `packages/client/src/components/settings/SquadSyncStatusPanel.tsx`, `packages/client/src/components/settings/__tests__/SquadSyncStatusPanel.test.tsx`.
+
+---
+
+## 2026-05-21T11:23:00-07:00 — Inject run-status polling guidance into squad.agent.md (Kobayashi)
+
+Extend injected ceremony delegation guidance with explicit polling section that tells coordinator to:
+
+- Capture `run.id` from `squadboard_run_agent`.
+- Poll `squadboard_get_run_status({ runId })` every 5–10 seconds.
+- Continue while status is `pending` or `running`.
+- Stop on `completed` or `failed`.
+- Read `run.output` or `run.errorMessage`.
+- Treat runs exceeding 10 minutes as stalled.
+
+### Implementation details
+
+1. Added reusable `POLLING_BLOCK` template string appended inside `CEREMONY_DELEGATION`.
+2. Updated injection guard to distinguish between:
+   - Fully up-to-date files → skip.
+   - Older injected files → append polling block only.
+   - Files with no Squadboard MCP hint → run normal injection path.
+3. Tightened `hasSquadboardMcpHints()` so drift detection requires both hint and polling guidance.
+
+**Commit:** 932c76d
+
+---
+
+## 2026-05-21T11:23:00-07:00 — Playwright demo recordings for README assets (Kujan)
+
+Add dedicated Playwright spec, `packages/e2e/tests/demo-recording.spec.ts`, that records four marketing-friendly user journeys and enables `video: 'on'` only for that spec via `test.use(...)`.
+
+### Why this shape
+
+- Shared Playwright config already records `retain-on-failure`; demo spec upgrades itself to always-on video.
+- Demo command disables server reuse so onboarding video starts from clean first-run state.
+- Ceremony and live-run clips use deterministic API mocks so visuals are stable for README capture.
+- Key screenshots captured alongside video for fallback if GIF conversion skipped.
+
+**Usage:** `cd packages/e2e && pnpm demo:record`. Artifacts in `packages/e2e/test-results/demo-recording-*/`.
+
+**Commit:** 787cc70
+
+---
+
+## 2026-05-21T03:07:26-07:00 — Ceremony architecture documented (Redfoot)
+
+Created `.squadboard/docs/ceremony-workflow-architecture.md` — reference documentation for ceremony and workflow architecture.
+
+### Coverage
+
+- File ownership split (`.squad/` vs `.squadboard/`)
+- Three ceremony data flows (DB→Disk, Disk→DB, DB→ceremonies.md)
+- Engine execution model (DB-only)
+- Ceremony delegation with MCP coordination (preventing dual execution)
+- Squad CLI awareness pathway
+- MCP configuration (`.mcp.json`)
+- Built-in ceremonies (7 default ceremonies)
+- Project import flow
+- 8 non-negotiable key invariants
+
+**Rationale:** Architecture clarity after designing ceremony/contention model. Enables team and future contributors to understand file ownership, execution delegation, how Squadboard and Squad CLI stay synchronized.
+
+---
+
+## 2026-05-21T11:43:00-07:00 — README & Docs Rewrite: Squad First, npx Quickstart (Redfoot)
+
+Lead with Squad relationship; replace git clone with npx in quickstart; remove all decorative emoji.
+
+### Changes Made
+
+- **README.md**: Headline now "Squadboard — The visual home for your Squad agents"; "Two ways to get started" (desktop app + CLI); replaced git clone with GitHub Releases or `npx @sabbour/squadboard-cli init`; removed emoji; final length 93 lines.
+- **Docs Landing** (`packages/docs-site/docs/intro.md`): Explicit Squad relationship link; removed emoji from section headers.
+- **Installation Guide** (`packages/docs-site/docs/getting-started/installation.md`): Rewritten "Two ways to install" (desktop app first, npm second); removed git clone from quickstart; kept "Running from source" with git clone for developers.
+- **Desktop App Guide** (`packages/docs-site/docs/user-guide/electron-app.mdx`): Restructured "Running from source"; git clone remains in dev-focused section.
+- **How-To Guide** (`packages/docs-site/docs/user-guide/how-to/add-squadboard-to-squad-project.md`): Step 1 updated to recommend desktop app or npx.
+
+**Commit:** 61af9ac
+

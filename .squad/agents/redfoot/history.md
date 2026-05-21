@@ -89,3 +89,34 @@ Works closely with Keyser (UI/UX) on docs that need UI context. Cross-referenced
   - **Coverage:** File ownership split, ceremony data flows (DB→Disk→DB), engine execution model, ceremony delegation with MCP coordination, built-in ceremonies, and Squad CLI project import flow
   - **Purpose:** Enables team and future contributors to understand the contention-prevention design, file system layout, and Squad CLI integration model
   - **Key decision captured:** Invariants around DB as execution source, ceremonies.md as awareness interface, and at-most-one-executor guarantee
+
+---
+
+## W32 Wave 9: README & Docs Rewrite + Ceremony Architecture Docs
+
+**Date:** 2026-05-21T18:43:00Z  
+**Status:** ✅ Complete  
+**Commits:** 61af9ac (marketing), (ceremony architecture)  
+
+### Deliverables
+
+1. **Ceremony Architecture Documentation**
+   - Created `.squadboard/docs/ceremony-workflow-architecture.md`
+   - Documented file ownership split (`.squad/` vs `.squadboard/`), ceremony data flows, engine model, MCP coordination, built-in ceremonies, Squad CLI integration
+   - Captured 8 non-negotiable invariants
+   - Enables team understanding of contention-prevention design
+
+2. **README & Docs Rewrite**
+   - **README.md**: Squad-first headline, two-path quickstart (desktop + npm), removed git clone, stripped emoji, 93 lines
+   - **Docs landing**: Explicit Squad relationship link, removed emoji
+   - **Installation guide**: Two-path structure (desktop first, npm second), git clone moved to dev-only section
+   - **Desktop app guide**: Restructured "Running from source"
+   - **How-To guide**: Updated to recommend desktop app or npx
+
+### Learnings
+
+- Marketing-first positioning must lead with Squad relationship; Squadboard is not standalone
+- Removing friction (git clone → npx) aligns with npm distribution strategy
+- Stripping emoji de-clutters marketing pages and improves professionalism
+- Architecture documentation should capture invariants and design decisions, not just structure
+- Git clone remains acceptable in dev-focused sections; quickstart should never require it
