@@ -321,8 +321,8 @@ test('Scenario A — First run', async ({ page }, testInfo) => {
   // Show the home page — Squadboard and Contoso are already seeded.
   await page.goto('/')
   await expect(page.getByRole('heading', { name: 'Projects', exact: true })).toBeVisible()
-  await expect(page.getByText('Squadboard')).toBeVisible()
-  await expect(page.getByText('Contoso')).toBeVisible()
+  await expect(page.getByText('Squadboard', { exact: true })).toBeVisible()
+  await expect(page.getByText('Contoso', { exact: true })).toBeVisible()
   await pause(page)
   await capture(page, testInfo, 'first-run-00-projects-home')
 
