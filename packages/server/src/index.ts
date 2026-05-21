@@ -242,6 +242,26 @@ async function main(): Promise<void> {
   const app = express();
   app.use(express.json());
 
+  // ── Dev CORS: allow Electron renderer (Vite at :5173) to call the API ────
+  // In production Electron, the renderer is a file:// URL and makes requests
+  // via the preload IPC bridge — no CORS needed. In dev, electron-vite serves
+  // the renderer from localhost:5173 which is a different origin than the
+  // server at :3000, so we need CORS headers.
+  app.use((req: Request, res: Response, next: NextFunction) => {
+    const origin = req.headers.origin;
+    if (origin && /^https?:\/\/localhost(:\d+)?$/.test(origin)) {
+      res.setHeader('Access-Control-Allow-Origin', origin);
+      res.setHeader('Access-Control-Allow-Methods', 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS');
+      res.setHeader('Access-Control-Allow-Headers', 'Content-Type,Authorization');
+      res.setHeader('Access-Control-Allow-Credentials', 'true');
+    }
+    if (req.method === 'OPTIONS') {
+      res.sendStatus(204);
+      return;
+    }
+    next();
+  });
+
   // ── W30: Security middleware — auth before CSRF (order matters) ──────────
   // authMiddleware: no-op when SQUADBOARD_AUTH_TOKEN unset (local dogfood).
   // csrfMiddleware: no-op when SQUADBOARD_DISABLE_CSRF=1 (local escape hatch).

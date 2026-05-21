@@ -53,15 +53,16 @@ app.on('second-instance', () => {
 // ── Window factory ────────────────────────────────────────────────────────────
 async function createWindow(): Promise<BrowserWindow> {
   const win = new BrowserWindow({
-    width: 1280,
-    height: 800,
-    minWidth: 800,
-    minHeight: 600,
+    width: 1440,
+    height: 900,
+    minWidth: 1024,
+    minHeight: 700,
     title: 'Squadboard',
     icon: iconPath,
     show: false, // show after ready-to-show to avoid flash
     webPreferences: {
-      preload: join(__dirname, '../preload/index.js'),
+      // electron-vite with "type":"module" outputs preload as .mjs
+      preload: join(__dirname, '../preload/index.mjs'),
       contextIsolation: true,  // required
       nodeIntegration: false,  // never enable in renderer
       sandbox: true,
@@ -101,7 +102,7 @@ async function main(): Promise<void> {
     const devUrl =
       process.env['ELECTRON_RENDERER_URL'] ?? `http://localhost:5173`;
     await win.loadURL(devUrl);
-    win.webContents.openDevTools();
+    // DevTools can be opened manually via View → Toggle Developer Tools
   } else {
     // In production, load the pre-built client from the renderer dist.
     await win.loadFile(join(__dirname, '../renderer/index.html'));

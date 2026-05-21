@@ -50,14 +50,19 @@ export function csrfMiddleware(req: Request, res: Response, next: NextFunction):
   const origin = req.headers['origin'];
   if (origin) {
     const requestHost = req.headers['host'];
-    let originHost: string;
+    let originUrl: URL;
     try {
-      originHost = new URL(origin).host;
+      originUrl = new URL(origin);
     } catch {
       res.status(403).json({ error: 'Forbidden', message: 'CSRF check failed: malformed Origin header.' });
       return;
     }
-    if (originHost !== requestHost) {
+    // Allow localhost cross-port: Electron dev renderer runs at :5173, server
+    // at :3000. Both are localhost — same trust domain, not a CSRF vector.
+    const requestHostname = requestHost?.split(':')[0];
+    const isSameLocalhost =
+      originUrl.hostname === 'localhost' && requestHostname === 'localhost';
+    if (!isSameLocalhost && originUrl.host !== requestHost) {
       res.status(403).json({ error: 'Forbidden', message: 'CSRF check failed: Origin does not match host.' });
       return;
     }
