@@ -66,6 +66,7 @@ export type SquadSyncRepairAction =
   | 'expose-sync-status-api'
   | 'write-mcp-config'
   | 'onboard-to-squadboard'
+  | 'disconnect-squadboard'
 
 export interface SquadSyncFileCheck {
   path: string
@@ -162,6 +163,15 @@ export interface SquadSyncDriftIssue {
   message: string
 }
 
+export interface SquadSyncOnboardingSync {
+  inSync: boolean
+  connected?: boolean
+  mcpConfigPresent: boolean
+  ceremoniesSeeded: boolean
+  squadAgentPresent: boolean
+  driftedFields: string[]
+}
+
 export interface SquadSyncStatus {
   projectId?: string
   squadPath?: string | null
@@ -235,6 +245,8 @@ export interface SquadSyncStatus {
   }>
   surfaces?: SquadSyncSurfaceContract[]
   repairActions?: SquadSyncOwnershipRepairAction[]
+  onboardingSync?: SquadSyncOnboardingSync
+  connected?: boolean
 }
 
 export interface RepairSquadSyncInput {

@@ -35,6 +35,8 @@
 - Squad Sync manual-bridge UX should keep the primary message low-jargon and put MCP/env details behind a collapsible manual-config section, with copyable init/manual snippets for fast setup
 - When broker setup can be automated, reuse the existing squad-sync repair mutation from the panel and keep manual CLI/JSON steps collapsed as a fallback instead of the primary path
 - First-run settings UX should elevate the composite happy path as a single primary CTA, while leaving granular repair/export controls below for advanced recovery and partial reruns
+- When the backend reports reconciliation state directly, frontend settings UX should collapse setup into one CTA and explain drift in plain language (missing `.mcp.json`, unseeded ceremonies, missing agent instructions) instead of exposing low-level repair operations
+- Treat connection and reconciliation as separate states: a project can stay connected but drifted, so the UI should offer both a repair path (`Re-run setup`) and a muted destructive disconnect action without adding extra polling beyond the normal status refreshes
 
 
 ## W31 Wave 2 — Client Dead Code Cleanup

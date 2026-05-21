@@ -102,6 +102,7 @@ const ACTION_LABELS: Record<string, string> = {
   'project-squad-to-fs': 'Export Squadboard state to .squad files',
   'write-mcp-config': 'Configure MCP broker',
   'onboard-to-squadboard': 'Connect to Squadboard',
+  'disconnect-squadboard': 'Disconnect from Squadboard',
   rescan_drift: 'Rescan drift',
   'rescan-drift': 'Rescan drift',
   'expose-sync-status-api': 'Backend status API work',
@@ -189,6 +190,44 @@ function browserDisabledRepairReason(id: SquadSyncRepairAction): string | undefi
     return 'Use Refresh to rescan; no separate repair mutation is available yet.'
   }
   return undefined
+}
+
+function humanizeDriftField(field: string): string {
+  return field
+    .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
+    .replace(/[_-]+/g, ' ')
+    .trim()
+    .toLowerCase()
+}
+
+function onboardingDriftMessages(sync: SquadSyncStatus['onboardingSync'] | undefined): string[] {
+  if (!sync) return []
+
+  const messages: string[] = []
+  const seen = new Set<string>()
+  const addMessage = (message: string) => {
+    if (seen.has(message)) return
+    seen.add(message)
+    messages.push(message)
+  }
+
+  if (!sync.mcpConfigPresent) addMessage('`.mcp.json` is missing.')
+  if (!sync.ceremoniesSeeded) addMessage('Ceremonies are not seeded.')
+  if (!sync.squadAgentPresent) addMessage('Agent instructions are missing.')
+
+  for (const field of sync.driftedFields ?? []) {
+    if (field === 'mcpConfigPresent' || field === 'mcpConfig' || field === '.mcp.json') {
+      addMessage('`.mcp.json` is missing.')
+    } else if (field === 'ceremoniesSeeded' || field === 'ceremonies') {
+      addMessage('Ceremonies are not seeded.')
+    } else if (field === 'squadAgentPresent' || field === 'squadAgent' || field === 'agentInstructions') {
+      addMessage('Agent instructions are missing.')
+    } else {
+      addMessage(`${humanizeDriftField(field)} needs to be re-synced.`)
+    }
+  }
+
+  return messages
 }
 
 export function normalizeSquadSyncStatus(status: SquadSyncStatus): NormalizedStatus {
@@ -301,7 +340,7 @@ export function normalizeSquadSyncStatus(status: SquadSyncStatus): NormalizedSta
         ? 'Not ready for peer clients'
         : 'Sync status unknown'
   const compatibilityMessage = manualBridge
-    ? 'This project lives in Squadboard. CLI/Copilot can keep working through Squadboard, and Preview Export writes .squad files only when you want a filesystem handoff.'
+    ? 'This project lives in Squadboard. Squadboard keeps MCP config, ceremonies, and agent instructions aligned so CLI/Copilot can reconnect cleanly when needed.'
     : status.summary?.message
       ?? (mode === 'postgresql'
         ? 'Squadboard owns this project state; CLI/Copilot should keep working through Squadboard.'
@@ -773,6 +812,7 @@ export function SquadSyncStatusPanel({ projectId }: SquadSyncStatusPanelProps) {
   const [onboardingMessage, setOnboardingMessage] = useState<string | null>(null)
   const [onboardingError, setOnboardingError] = useState<string | null>(null)
   const [isOnboarding, setIsOnboarding] = useState(false)
+  const [isDisconnecting, setIsDisconnecting] = useState(false)
   const [configureMessage, setConfigureMessage] = useState<string | null>(null)
   const [configureError, setConfigureError] = useState<string | null>(null)
   const [isConfiguringBroker, setIsConfiguringBroker] = useState(false)
@@ -807,8 +847,18 @@ export function SquadSyncStatusPanel({ projectId }: SquadSyncStatusPanelProps) {
   }
 
   const status = normalizeSquadSyncStatus(statusQuery.data)
-  const requiredRepairActions = status.repairActions.filter((action) => action.required)
-  const manualExportActions = status.repairActions.filter((action) => !action.required)
+  const onboardingSync = statusQuery.data.onboardingSync
+  const onboardingIssues = onboardingDriftMessages(onboardingSync)
+  const isConnected = statusQuery.data.connected ?? onboardingSync?.connected ?? false
+  const isInSync = onboardingSync?.inSync === true
+  const onboardingTone: Tone = !isConnected ? 'neutral' : isInSync ? 'success' : 'warning'
+  const onboardingTitle = !isConnected
+    ? 'Connect to Squadboard'
+    : isInSync
+      ? 'Squadboard is connected'
+      : 'Configuration drift detected'
+  const onboardingButtonLabel = isConnected ? 'Re-run setup' : 'Connect to Squadboard'
+  const onboardingButtonProgressLabel = isConnected ? 'Re-running…' : 'Connecting…'
 
   async function handlePreviewRepair(action: NormalizedRepairAction) {
     setApplyMessage(null)
@@ -873,7 +923,26 @@ export function SquadSyncStatusPanel({ projectId }: SquadSyncStatusPanelProps) {
     }
   }
 
-  const isPreviewPending = repair.isPending && !previewModal && !isConfiguringBroker && !isOnboarding
+  async function handleDisconnectFromSquadboard() {
+    setApplyMessage(null)
+    setApplyError(null)
+    setConfigureMessage(null)
+    setConfigureError(null)
+    setOnboardingMessage(null)
+    setOnboardingError(null)
+    setIsDisconnecting(true)
+    try {
+      await repair.mutateAsync({ actions: ['disconnect-squadboard'], dryRun: false })
+      setOnboardingMessage('Disconnected. MCP config removed. Ceremonies and history are preserved.')
+      void statusQuery.refetch()
+    } catch (error) {
+      setOnboardingError(error instanceof Error ? error.message : 'Failed to disconnect from Squadboard')
+    } finally {
+      setIsDisconnecting(false)
+    }
+  }
+
+  const isPreviewPending = repair.isPending && !previewModal && !isConfiguringBroker && !isOnboarding && !isDisconnecting
   const showOnboardingCta = Boolean(statusQuery.data.projection?.projectRoot ?? statusQuery.data.squadPath ?? projectId)
 
   return (
@@ -994,34 +1063,73 @@ export function SquadSyncStatusPanel({ projectId }: SquadSyncStatusPanelProps) {
                 display: 'flex',
                 flexDirection: 'column',
                 gap: '12px',
-                border: `1px solid ${tokens.colorBrandStroke1}`,
-                background: tokens.colorBrandBackground2,
+                border: `1px solid ${TONE_STYLES[onboardingTone].border}`,
+                background: TONE_STYLES[onboardingTone].background,
               }}
             >
+              {isConnected && <StatusPill tone={onboardingTone}>{onboardingTitle}</StatusPill>}
               <div style={{ display: 'flex', gap: '10px', alignItems: 'flex-start' }}>
-                <PlugConnected20Regular style={{ color: tokens.colorBrandForeground1, flexShrink: 0 }} />
+                <PlugConnected20Regular style={{ color: TONE_STYLES[onboardingTone].color, flexShrink: 0 }} />
                 <div style={{ minWidth: 0 }}>
                   <Subtitle2 as="h3" style={{ display: 'block', marginBottom: '4px' }}>
-                    ⚡ Connect to Squadboard
+                    {!isConnected ? '⚡ Connect to Squadboard' : onboardingTitle}
                   </Subtitle2>
                   <Caption1 style={{ display: 'block', color: tokens.colorNeutralForeground2 }}>
-                    Sets up MCP config, seeds ceremonies, and imports your existing Squad CLI workflows — everything needed to get started.
+                    Squadboard keeps your MCP config, ceremonies, and agent instructions in sync. If you see a warning here, click the button to restore the connection.
                   </Caption1>
                 </div>
               </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap', alignItems: 'center' }}>
-                <Caption1 style={{ display: 'block', color: tokens.colorNeutralForeground2, flex: '1 1 320px' }}>
-                  Use this first for the fastest setup. Advanced repair and export actions stay available below for targeted fixes.
+              {!isConnected && (
+                <Caption1 style={{ color: tokens.colorNeutralForeground2 }}>
+                  Connect once to set up MCP config, seed ceremonies, and import your Squadboard instructions.
                 </Caption1>
-                <Button
-                  appearance="primary"
-                  icon={isOnboarding ? <Spinner size="tiny" /> : <PlugConnected20Regular />}
-                  disabled={isOnboarding || repair.isPending}
-                  data-testid="connect-to-squadboard-button"
-                  onClick={() => void handleOnboardToSquadboard()}
-                >
-                  {isOnboarding ? 'Connecting…' : 'Connect to Squadboard'}
-                </Button>
+              )}
+              {isConnected && isInSync && (
+                <Caption1 style={{ color: tokens.colorNeutralForeground2 }}>
+                  MCP config, ceremonies, and agent instructions are currently aligned with Squadboard.
+                </Caption1>
+              )}
+              {isConnected && !isInSync && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                  <Caption1 style={{ color: tokens.colorNeutralForeground2 }}>
+                    {onboardingIssues.length > 0
+                      ? 'Configuration drift detected — restore the missing setup below.'
+                      : 'Configuration drift detected — re-run setup to restore the connection.'}
+                  </Caption1>
+                  {onboardingIssues.length > 0 && (
+                    <ul data-testid="onboarding-drift-list" style={{ margin: 0, paddingLeft: '18px' }}>
+                      {onboardingIssues.map((issue) => (
+                        <li key={issue}>
+                          <Caption1>{issue}</Caption1>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              )}
+              <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', alignItems: 'center' }}>
+                {(!isConnected || !isInSync) && (
+                  <Button
+                    appearance="primary"
+                    icon={isOnboarding ? <Spinner size="tiny" /> : <PlugConnected20Regular />}
+                    disabled={isOnboarding || isDisconnecting || repair.isPending}
+                    data-testid="connect-to-squadboard-button"
+                    onClick={() => void handleOnboardToSquadboard()}
+                  >
+                    {isOnboarding ? onboardingButtonProgressLabel : onboardingButtonLabel}
+                  </Button>
+                )}
+                {isConnected && (
+                  <Button
+                    appearance="subtle"
+                    disabled={isOnboarding || isDisconnecting || repair.isPending}
+                    data-testid="disconnect-from-squadboard-button"
+                    onClick={() => void handleDisconnectFromSquadboard()}
+                    style={{ color: tokens.colorPaletteRedForeground1 }}
+                  >
+                    {isDisconnecting ? 'Disconnecting…' : 'Disconnect from Squadboard'}
+                  </Button>
+                )}
               </div>
               {onboardingMessage && (
                 <Caption1 style={{ color: tokens.colorPaletteGreenForeground1 }}>{onboardingMessage}</Caption1>
@@ -1031,97 +1139,6 @@ export function SquadSyncStatusPanel({ projectId }: SquadSyncStatusPanelProps) {
               )}
             </div>
           )}
-
-          <div style={{ ...cardStyle, display: 'flex', flexDirection: 'column', gap: '12px' }}>
-            <Subtitle2 as="h3" style={{ display: 'block', marginBottom: '4px' }}>
-              {requiredRepairActions.length > 0
-                ? 'Repair needed'
-                : manualExportActions.length > 0
-                  ? 'Sync to CLI/Copilot'
-                  : 'Sync status'}
-            </Subtitle2>
-            {requiredRepairActions.length === 0 && manualExportActions.length > 0 && (
-              <Caption1 style={{ display: 'block', color: tokens.colorNeutralForeground3, marginBottom: '6px' }}>
-                Use Preview Export only when you want CLI/Copilot file-based tools to receive a .squad handoff. It does not turn on automatic two-way sync.
-              </Caption1>
-            )}
-            {status.repairActions.length > 0 && (
-              <Caption1 style={{ display: 'block', color: tokens.colorNeutralForeground3, marginBottom: '10px' }}>
-                Previews are safe: Preview Repair or Preview Export runs a dry run and opens a modal showing proposed file changes before anything is written.
-              </Caption1>
-            )}
-            {status.repairActions.length === 0 ? (
-              <Caption1 style={{ color: tokens.colorNeutralForeground3 }}>
-                No sync actions needed right now.
-              </Caption1>
-            ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                {[...requiredRepairActions, ...manualExportActions].map((action) => {
-                  const disabledReason = action.disabledReason
-                    ?? (!status.dryRunSupported
-                      ? 'Preview is not available for this backend response yet.'
-                      : undefined)
-                    ?? (!status.repairAvailable
-                      ? status.repairDisabledReason ?? 'Automatic repair is not available for this status.'
-                      : undefined)
-                  return (
-                    <div
-                      key={action.id}
-                      style={{
-                        display: 'flex',
-                        justifyContent: 'space-between',
-                        gap: '12px',
-                        alignItems: 'center',
-                        flexWrap: 'wrap',
-                      }}
-                    >
-                      <div style={{ minWidth: 0, flex: '1 1 320px' }}>
-                        <Body1 style={{ display: 'block', fontWeight: tokens.fontWeightSemibold }}>
-                          {action.label}
-                        </Body1>
-                        <Caption1 style={{ display: 'block', color: tokens.colorNeutralForeground3 }}>
-                          {disabledReason ?? action.reason}
-                        </Caption1>
-                      </div>
-                      <Button
-                        appearance="secondary"
-                        icon={isPreviewPending ? <Spinner size="tiny" /> : <Wrench20Regular />}
-                        disabled={isPreviewPending || Boolean(disabledReason)}
-                        data-testid={`repair-action-${action.id}`}
-                        onClick={() => void handlePreviewRepair(action)}
-                      >
-                        {isPreviewPending ? 'Previewing…' : action.required ? 'Preview Repair' : 'Preview Export'}
-                      </Button>
-                    </div>
-                  )
-                })}
-              </div>
-            )}
-
-            {applyMessage && (
-              <Caption1 style={{ color: tokens.colorPaletteGreenForeground1 }}>{applyMessage}</Caption1>
-            )}
-            {applyError && (
-              <Caption1 style={{ color: tokens.colorPaletteRedForeground1 }}>{applyError}</Caption1>
-            )}
-          </div>
-          {status.manualBridge ? (
-            <BrokerSetupCard
-              variant="postgresql"
-              isConfiguring={isConfiguringBroker}
-              configureMessage={configureMessage}
-              configureError={configureError}
-              onConfigure={handleConfigureBroker}
-            />
-          ) : status.pgliteBroker ? (
-            <BrokerSetupCard
-              variant="pglite"
-              isConfiguring={isConfiguringBroker}
-              configureMessage={configureMessage}
-              configureError={configureError}
-              onConfigure={handleConfigureBroker}
-            />
-          ) : null}
         </div>
 
         <details>

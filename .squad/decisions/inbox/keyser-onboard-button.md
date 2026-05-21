@@ -1,4 +1,4 @@
-# Decision: Promote Onboarding to a Single Primary CTA
+# Decision: Single Connect to Squadboard CTA + Reconciliation Status
 
 **Date:** 2026-05-21T09:48:51-07:00  
 **Author:** Keyser (Frontend Dev)  
@@ -6,18 +6,26 @@
 
 ## Context
 
-`SquadSyncStatusPanel` already exposed granular repair actions such as MCP broker setup, ceremony seeding, and workflow import/export. That made first-time setup feel procedural even though the intended happy path is a single composite onboarding action.
+`SquadSyncStatusPanel` originally exposed multiple targeted setup/repair actions. The desired UX is now a single onboarding path backed by a backend-provided reconciliation signal that tells users whether MCP config, ceremonies, and agent instructions are still in sync.
 
 ## Decision
 
-Add a prominent primary `Connect to Squadboard` CTA above the targeted repair list. It calls the new `onboard-to-squadboard` repair action directly, shows inline loading/success/error feedback, and keeps the existing broker card plus individual repair buttons available below for advanced troubleshooting.
+Replace the visible repair-action UI with one `Connect to Squadboard` CTA that always calls `onboard-to-squadboard`. Pair it with a reconciliation status card that:
+
+- shows **“Squadboard is connected”** when the project is connected and in sync,
+- shows **“Configuration drift detected”** with specific missing items when the project is connected but out of sync,
+- shows a prominent **Connect to Squadboard** CTA only when the project is not connected,
+- shows **Re-run setup** plus a muted **Disconnect from Squadboard** action when the project is connected but drifted,
+- shows only the muted **Disconnect from Squadboard** action when the project is connected and healthy,
+- relies on the existing status refresh path instead of adding a dedicated polling loop.
 
 ## Rationale
 
-- **Primary-first onboarding** gives users one obvious next step instead of three separate setup clicks.
-- **Idempotent placement** lets the CTA stay visible for per-project setup without waiting on a richer backend readiness signal.
-- **Advanced actions remain discoverable** so targeted repair/export flows are still available when onboarding only partially succeeds or a user wants manual control.
-- **Shared mutation path** keeps the CTA aligned with the existing repair endpoint contract.
+- **One obvious action** removes setup ambiguity and avoids making users choose among low-level repairs.
+- **Backend-owned reconciliation** lets the UI speak in user terms instead of inferring state from scattered artifacts.
+- **Drift-specific guidance** makes recovery obvious: users see exactly what is missing, then click one button to restore it.
+- **Separate disconnect control** acknowledges that users may want to remove MCP linkage without deleting ceremonies or history.
+- **No extra polling logic** keeps the frontend aligned with the backend-owned status lifecycle.
 
 ## Files changed
 
