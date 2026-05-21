@@ -17,6 +17,7 @@ Replace the visible repair-action UI with one `Connect to Squadboard` CTA that a
 - shows a prominent **Connect to Squadboard** CTA only when the project is not connected,
 - shows **Re-run setup** plus a muted **Disconnect from Squadboard** action when the project is connected but drifted,
 - shows only the muted **Disconnect from Squadboard** action when the project is connected and healthy,
+- adds a compact, collapsible **Sync Diagnostics** checklist for `.mcp.json`, built-in ceremonies, and `squad.agent.md`,
 - relies on the existing status refresh path instead of adding a dedicated polling loop.
 
 ## Rationale
@@ -25,6 +26,8 @@ Replace the visible repair-action UI with one `Connect to Squadboard` CTA that a
 - **Backend-owned reconciliation** lets the UI speak in user terms instead of inferring state from scattered artifacts.
 - **Drift-specific guidance** makes recovery obvious: users see exactly what is missing, then click one button to restore it.
 - **Separate disconnect control** acknowledges that users may want to remove MCP linkage without deleting ceremonies or history.
+- **Compact diagnostics** gives users a lightweight health check instead of a heavyweight troubleshooting panel.
+- **Relative freshness** helps users trust that the displayed health signal is current.
 - **No extra polling logic** keeps the frontend aligned with the backend-owned status lifecycle.
 
 ## Files changed

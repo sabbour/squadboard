@@ -230,6 +230,26 @@ function onboardingDriftMessages(sync: SquadSyncStatus['onboardingSync'] | undef
   return messages
 }
 
+function formatRelativeCheckedAt(value: string | undefined): string {
+  if (!value) return 'unknown'
+  const checkedAt = new Date(value)
+  if (Number.isNaN(checkedAt.getTime())) return 'unknown'
+
+  const diffMs = Date.now() - checkedAt.getTime()
+  const diffSeconds = Math.max(0, Math.round(diffMs / 1000))
+  if (diffSeconds < 45) return 'just now'
+  if (diffSeconds < 90) return '1 min ago'
+
+  const diffMinutes = Math.round(diffSeconds / 60)
+  if (diffMinutes < 60) return `${diffMinutes} min ago`
+
+  const diffHours = Math.round(diffMinutes / 60)
+  if (diffHours < 24) return diffHours === 1 ? '1 hour ago' : `${diffHours} hours ago`
+
+  const diffDays = Math.round(diffHours / 24)
+  return diffDays === 1 ? '1 day ago' : `${diffDays} days ago`
+}
+
 export function normalizeSquadSyncStatus(status: SquadSyncStatus): NormalizedStatus {
   const serverArtifacts = status.projection?.artifacts ?? []
   const governanceFiles = status.governance?.files ?? []
@@ -859,6 +879,33 @@ export function SquadSyncStatusPanel({ projectId }: SquadSyncStatusPanelProps) {
       : 'Configuration drift detected'
   const onboardingButtonLabel = isConnected ? 'Re-run setup' : 'Connect to Squadboard'
   const onboardingButtonProgressLabel = isConnected ? 'Re-running…' : 'Connecting…'
+  const diagnosticsCheckedAtLabel = formatRelativeCheckedAt(status.checkedAt)
+  const driftedFields = new Set(onboardingSync?.driftedFields ?? [])
+  const diagnosticsRows = [
+    {
+      id: 'mcpConfigPresent',
+      label: '.mcp.json',
+      ok: onboardingSync?.mcpConfigPresent === true,
+      detail: onboardingSync?.mcpConfigPresent === true ? 'present' : 'missing',
+      drifted: driftedFields.has('mcpConfigPresent') || driftedFields.has('mcpConfig') || driftedFields.has('.mcp.json'),
+    },
+    {
+      id: 'ceremoniesSeeded',
+      label: 'Built-in ceremonies',
+      ok: onboardingSync?.ceremoniesSeeded === true,
+      detail: onboardingSync?.ceremoniesSeeded === true
+        ? `seeded${statusQuery.data.ceremonies?.count != null ? ` (${statusQuery.data.ceremonies.count})` : ''}`
+        : 'not seeded',
+      drifted: driftedFields.has('ceremoniesSeeded') || driftedFields.has('ceremonies'),
+    },
+    {
+      id: 'squadAgentPresent',
+      label: 'squad.agent.md',
+      ok: onboardingSync?.squadAgentPresent === true,
+      detail: onboardingSync?.squadAgentPresent === true ? 'present' : 'missing',
+      drifted: driftedFields.has('squadAgentPresent') || driftedFields.has('squadAgent') || driftedFields.has('agentInstructions'),
+    },
+  ]
 
   async function handlePreviewRepair(action: NormalizedRepairAction) {
     setApplyMessage(null)
@@ -1141,7 +1188,7 @@ export function SquadSyncStatusPanel({ projectId }: SquadSyncStatusPanelProps) {
           )}
         </div>
 
-        <details>
+        <details open={!isInSync} data-testid="sync-diagnostics">
           <summary
             style={{
               cursor: 'pointer',
@@ -1150,32 +1197,56 @@ export function SquadSyncStatusPanel({ projectId }: SquadSyncStatusPanelProps) {
               userSelect: 'none',
             }}
           >
-            Diagnostics
+            Sync Diagnostics
           </summary>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginTop: '12px' }}>
-            <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
-              <ArtifactList
-                title="Required .squad files"
-                artifacts={status.requiredArtifacts}
-                empty="No required files reported."
-              />
-              <ArtifactList
-                title="Optional client files"
-                artifacts={status.recommendedArtifacts}
-                empty="No optional client files reported."
-              />
-            </div>
-            <div style={{ ...cardStyle, display: 'flex', flexDirection: 'column', gap: '8px' }}>
-              <div style={{ display: 'flex', alignItems: 'flex-start', gap: '10px' }}>
-                <ToneIcon tone={status.driftTone} />
-                <div>
-                  <Subtitle2 as="h3" style={{ display: 'block' }}>{status.driftTitle}</Subtitle2>
-                  <Caption1 style={{ display: 'block', color: tokens.colorNeutralForeground3, marginTop: '4px' }}>
-                    {status.driftMessage}
+          <div
+            style={{
+              ...cardStyle,
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '6px',
+              marginTop: '12px',
+              padding: '12px 14px',
+            }}
+          >
+            <Caption1 style={{ color: tokens.colorNeutralForeground2, marginBottom: '2px' }}>
+              Lightweight health check for the files and setup Squadboard keeps aligned.
+            </Caption1>
+            {diagnosticsRows.map((row) => {
+              const tone: Tone = row.ok ? 'success' : 'warning'
+              const rowStyle = row.drifted ? TONE_STYLES.warning : TONE_STYLES[tone]
+              return (
+                <div
+                  key={row.id}
+                  data-testid={`sync-diagnostic-${row.id}`}
+                  style={{
+                    display: 'grid',
+                    gridTemplateColumns: 'auto minmax(0, 1fr) auto',
+                    alignItems: 'center',
+                    gap: '10px',
+                    padding: '8px 10px',
+                    borderRadius: '6px',
+                    border: `1px solid ${rowStyle.border}`,
+                    background: row.drifted ? rowStyle.background : 'var(--bg)',
+                  }}
+                >
+                  {row.ok ? (
+                    <CheckmarkCircle20Regular style={{ color: TONE_STYLES.success.color, flexShrink: 0 }} />
+                  ) : (
+                    <Warning20Regular style={{ color: TONE_STYLES.warning.color, flexShrink: 0 }} />
+                  )}
+                  <Body1 style={{ display: 'block', fontWeight: row.drifted ? tokens.fontWeightSemibold : tokens.fontWeightRegular }}>
+                    {row.label}
+                  </Body1>
+                  <Caption1 style={{ color: row.drifted ? TONE_STYLES.warning.color : tokens.colorNeutralForeground3 }}>
+                    {row.detail}
                   </Caption1>
                 </div>
-              </div>
-            </div>
+              )
+            })}
+            <Caption1 style={{ color: tokens.colorNeutralForeground3, marginTop: '4px' }}>
+              Last checked: {diagnosticsCheckedAtLabel}
+            </Caption1>
           </div>
         </details>
       </div>

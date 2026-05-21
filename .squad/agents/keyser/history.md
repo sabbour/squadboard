@@ -37,6 +37,7 @@
 - First-run settings UX should elevate the composite happy path as a single primary CTA, while leaving granular repair/export controls below for advanced recovery and partial reruns
 - When the backend reports reconciliation state directly, frontend settings UX should collapse setup into one CTA and explain drift in plain language (missing `.mcp.json`, unseeded ceremonies, missing agent instructions) instead of exposing low-level repair operations
 - Treat connection and reconciliation as separate states: a project can stay connected but drifted, so the UI should offer both a repair path (`Re-run setup`) and a muted destructive disconnect action without adding extra polling beyond the normal status refreshes
+- A compact diagnostics checklist works better than a large diagnostics dump for setup health: keep it collapsible, default it open only on drift, and show relative freshness (`Last checked: just now`) so users trust the health signal
 
 
 ## W31 Wave 2 — Client Dead Code Cleanup

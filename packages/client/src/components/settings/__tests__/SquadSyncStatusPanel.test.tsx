@@ -50,6 +50,13 @@ function serverStatus(overrides: Partial<SquadSyncStatus> = {}): SquadSyncStatus
       missingRequired: [],
       missingRecommended: [],
     },
+    ceremonies: {
+      status: 'ok',
+      defaultsPresent: true,
+      defaultsMissing: [],
+      count: 7,
+      filePath: '.squad/ceremonies.md',
+    },
     projection: {
       projectRoot: '/workspace/app',
       squadPath: '/workspace/app/.squad',
@@ -90,6 +97,7 @@ function serverStatus(overrides: Partial<SquadSyncStatus> = {}): SquadSyncStatus
         reason: 'Export Squadboard state to .squad files.',
       }],
     },
+    checkedAt: new Date().toISOString(),
     connected: true,
     onboardingSync: {
       inSync: true,
@@ -124,6 +132,19 @@ describe('SquadSyncStatusPanel', () => {
     expect(screen.getByText(/Squadboard keeps your MCP config, ceremonies, and agent instructions in sync/i)).toBeInTheDocument()
     expect(screen.getByText(/currently aligned with Squadboard/i)).toBeInTheDocument()
     expect(screen.queryByTestId('onboarding-drift-list')).not.toBeInTheDocument()
+    expect(screen.getByTestId('sync-diagnostics')).not.toHaveAttribute('open')
+  })
+
+  it('shows compact sync diagnostics with relative last-checked status', () => {
+    render(<SquadSyncStatusPanel projectId="project-1" />)
+
+    expect(screen.getByText('Sync Diagnostics')).toBeInTheDocument()
+    expect(screen.getByTestId('sync-diagnostic-mcpConfigPresent')).toHaveTextContent('.mcp.json')
+    expect(screen.getByTestId('sync-diagnostic-mcpConfigPresent')).toHaveTextContent('present')
+    expect(screen.getByTestId('sync-diagnostic-ceremoniesSeeded')).toHaveTextContent('Built-in ceremonies')
+    expect(screen.getByTestId('sync-diagnostic-ceremoniesSeeded')).toHaveTextContent('seeded (7)')
+    expect(screen.getByTestId('sync-diagnostic-squadAgentPresent')).toHaveTextContent('squad.agent.md')
+    expect(screen.getByText(/Last checked: just now/i)).toBeInTheDocument()
   })
 
   it('shows the primary connect CTA when not connected', () => {
@@ -167,6 +188,9 @@ describe('SquadSyncStatusPanel', () => {
     const driftList = screen.getByTestId('onboarding-drift-list')
     expect(driftList).toHaveTextContent('`.mcp.json` is missing.')
     expect(driftList).toHaveTextContent('Ceremonies are not seeded.')
+    expect(screen.getByTestId('sync-diagnostics')).toHaveAttribute('open')
+    expect(screen.getByTestId('sync-diagnostic-mcpConfigPresent')).toHaveTextContent('missing')
+    expect(screen.getByTestId('sync-diagnostic-ceremoniesSeeded')).toHaveTextContent('not seeded')
   })
 
   it('removes granular repair buttons and broker setup actions from the panel', () => {
