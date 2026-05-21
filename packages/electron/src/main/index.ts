@@ -17,7 +17,7 @@
  *   - MCP child process management (L5)
  */
 import { app, BrowserWindow, shell } from 'electron';
-import { join, dirname } from 'node:path';
+import { join, dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { startServer, stopServer } from './server-launcher.js';
 import { registerIpcHandlers } from './ipc.js';
@@ -27,6 +27,10 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
 const isDev = !app.isPackaged;
+
+const iconPath = isDev
+  ? resolve(__dirname, '../../resources/icon.png')
+  : join(process.resourcesPath, 'icon.png');
 
 // ── Single-instance lock ──────────────────────────────────────────────────────
 const gotLock = app.requestSingleInstanceLock();
@@ -54,6 +58,7 @@ async function createWindow(): Promise<BrowserWindow> {
     minWidth: 800,
     minHeight: 600,
     title: 'Squadboard',
+    icon: iconPath,
     show: false, // show after ready-to-show to avoid flash
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),

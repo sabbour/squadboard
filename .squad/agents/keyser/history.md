@@ -103,3 +103,21 @@ Client-side dead code cleanup: 4 UI components removed
 
 ### Status
 ✓ Complete — build verified, per-page chunks emitted, tests pass
+
+---
+
+## 2026-05-20 — Electron HashRouter + Window Icon
+
+### Router Fix
+- Electron loads the app via `file://` in production; the History API (`pushState`) doesn't work with `file://` URLs, causing `<Outlet>` to render nothing.
+- Fix: detect Electron via `window.navigator.userAgent.toLowerCase().includes('electron')` and use `HashRouter` instead of `BrowserRouter`. `BrowserRouter` is kept for web.
+- `HashRouter` uses `#/` prefix (e.g. `file:///app/index.html#/projects/123/board`) — transparent in Electron since there's no address bar.
+
+### Icon Path Resolution
+- Icon file created at `packages/electron/resources/icon.png` (copied from `packages/client/src/assets/squadboard-horizontal.png`).
+- In dev (`isDev = true`): `__dirname` = `dist/main/`, so icon resolves via `resolve(__dirname, '../../resources/icon.png')` → `packages/electron/resources/icon.png`.
+- In packaged builds: `process.resourcesPath` points to the `resources/` dir in the asar; icon loaded via `join(process.resourcesPath, 'icon.png')`.
+- `electron-builder.yml` updated: `icon: resources/icon.png` and `resources/**/*` added to `files` array.
+
+### Commit
+fix: electron blank content (HashRouter) + window icon from logo
