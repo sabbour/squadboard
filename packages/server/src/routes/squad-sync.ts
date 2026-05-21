@@ -13,10 +13,16 @@ import { fileURLToPath } from 'node:url';
 import { isDeepStrictEqual } from 'node:util';
 import { eq } from 'drizzle-orm';
 import { getDb, getPool, schema } from '../db/index.js';
+import { BUILT_IN_CEREMONIES } from '../ceremonies/built-in/index.js';
+import { parseWorkflowYaml } from '../ceremonies/yaml-canonicalize.js';
+import { seedBuiltInCeremonies } from '../ceremonies/seed-built-in.js';
+import { importCeremonyFromYaml } from '../services/ceremony-yaml-import.js';
+import { runFormulator } from '../services/formulator.js';
 import {
   getProjectSyncOwnershipStatus,
   ProjectNotFoundError,
 } from '../services/sdk-state.js';
+import { syncCeremoniesFromDisk } from '../services/squad-writeback.js';
 import type {
   SquadSyncOwnershipStatus,
   SquadSyncProjectionArtifact,
@@ -26,6 +32,7 @@ import type {
 type RepairActionId =
   | 'repair-scaffold-squad'
   | 'seed-ceremony-defaults'
+  | 'import-ceremonies-from-md'
   | 'project-copilot-agent-file'
   | 'generate-client-artifact'
   | 'generate-github-agent'
@@ -34,7 +41,7 @@ type RepairActionId =
   | 'write-mcp-config';
 
 type RepairActionStatus = 'applied' | 'dry-run' | 'skipped' | 'failed';
-type RepairChangeStatus = 'applied' | 'would-apply' | 'unchanged' | 'skipped' | 'failed';
+type RepairChangeStatus = 'applied' | 'would-apply' | 'dry-run' | 'unchanged' | 'up-to-date' | 'skipped' | 'failed';
 
 interface ProjectContext {
   id: string;
@@ -110,7 +117,7 @@ interface ApiRepairAction {
 
 interface RepairChange {
   path: string;
-  operation: 'create-dir' | 'write-file' | 'export-db-file';
+  operation: 'create-dir' | 'write-file' | 'export-db-file' | 'seed-db';
   status: RepairChangeStatus;
   reason?: string;
   message?: string;
@@ -227,10 +234,22 @@ If any of those files are missing, ask the user to run Squadboard sync repair fo
 `;
 
 const MCP_CONFIG_RELATIVE_PATH = '.mcp.json';
+const CEREMONY_GENERATOR_SYSTEM_MESSAGE = 'You are a workflow YAML generator for Squadboard. Given a ceremony description in markdown, generate a valid apiVersion: squad.io/v1 / kind: Ceremony YAML. Return only the YAML — no markdown fences, no prose.';
+const SPRINT_PLANNING_YAML_EXAMPLE = BUILT_IN_CEREMONIES.find((entry) => entry.slug === 'sprint-planning')?.yamlContent ?? '';
+const BUILT_IN_CEREMONY_NAMES = new Set(
+  BUILT_IN_CEREMONIES
+    .flatMap((entry) => {
+      const metadata = parseWorkflowYaml(entry.yamlContent).metadata;
+      return [entry.name, metadata.name, metadata.displayName ?? ''];
+    })
+    .map((value) => value.trim().toLowerCase())
+    .filter(Boolean),
+);
 
 const ACTION_ALIASES: Record<RepairActionId, RepairActionId> = {
   'repair-scaffold-squad': 'repair-scaffold-squad',
   'seed-ceremony-defaults': 'seed-ceremony-defaults',
+  'import-ceremonies-from-md': 'import-ceremonies-from-md',
   'project-copilot-agent-file': 'generate-github-agent',
   'generate-client-artifact': 'generate-github-agent',
   'generate-github-agent': 'generate-github-agent',
@@ -256,6 +275,106 @@ function toErrorMessage(err: unknown): string {
 
 function isJsonObject(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function normalizeCeremonyName(value: string): string {
+  return value.trim().toLowerCase();
+}
+
+function parseCeremonyMarkdownSections(markdown: string): Array<{ heading: string; markdown: string }> {
+  return markdown
+    .split(/^## /m)
+    .slice(1)
+    .map((section) => section.trim())
+    .filter(Boolean)
+    .map((section) => {
+      const [headingLine, ...rest] = section.split('\n');
+      return {
+        heading: headingLine.trim(),
+        markdown: `## ${[headingLine, ...rest].join('\n').trim()}`,
+      };
+    })
+    .filter((section) => section.heading.length > 0);
+}
+
+function stripMarkdownFences(raw: string): string {
+  const trimmed = raw.trim();
+  const match = trimmed.match(/^```(?:ya?ml)?\s*([\s\S]*?)```$/i);
+  return match?.[1]?.trim() ?? trimmed;
+}
+
+async function countCeremonyYamlFiles(squadPath: string): Promise<number> {
+  const ceremoniesDir = path.join(squadPath, 'ceremonies');
+  try {
+    const entries = await fs.readdir(ceremoniesDir, { withFileTypes: true });
+    return entries.filter((entry) => entry.isFile() && /\.ya?ml$/i.test(entry.name)).length;
+  } catch {
+    return 0;
+  }
+}
+
+function buildCeremonyImportPrompt(sectionMarkdown: string): string {
+  return [
+    'Convert this ceremony markdown into valid Squadboard workflow YAML.',
+    '',
+    'Ceremony markdown:',
+    sectionMarkdown,
+    '',
+    'YAML schema guidance:',
+    '- Use `apiVersion: squad.io/v1` and `kind: Ceremony`.',
+    '- Put a kebab-case slug in `metadata.name` and a human label in `metadata.displayName`.',
+    '- Supported trigger types: `manual`, `auto`, `cron`.',
+    '- Supported step kinds: `agent-task`, `fan_out`.',
+    '- Prefer `manual` when the markdown is ambiguous. Use `cron` only when the ceremony clearly has a schedule.',
+    '- `agent-task` steps should include `id`, `label`, `agent`, `prompt`, and optional `timeout`.',
+    '- `fan_out` steps should include `id`, `label`, `split_by`, `agents`, `mode`, `merge_strategy`, and nested `steps`.',
+    '- Return only YAML. Do not include markdown fences or prose.',
+    '',
+    'Few-shot example:',
+    SPRINT_PLANNING_YAML_EXAMPLE,
+  ].join('\n');
+}
+
+function builtInSeedChangesForDryRun(): RepairChange[] {
+  return BUILT_IN_CEREMONIES.map((ceremony) => ({
+    path: ceremony.name,
+    operation: 'seed-db',
+    status: 'dry-run',
+    reason: 'built_in_ceremony_would_be_seeded',
+    message: 'would seed built-in ceremony into Squadboard DB',
+  }));
+}
+
+function builtInSeedChangesForResult(result: Awaited<ReturnType<typeof seedBuiltInCeremonies>>): RepairChange[] {
+  return [
+    ...result.seeded.map((entry) => ({
+      path: entry.name,
+      operation: 'seed-db' as const,
+      status: entry.created ? 'applied' as const : 'up-to-date' as const,
+      reason: entry.created ? 'built_in_ceremony_seeded' : 'built_in_ceremony_already_seeded',
+    })),
+    ...result.errors.map((entry) => ({
+      path: entry.name,
+      operation: 'seed-db' as const,
+      status: 'failed' as const,
+      reason: 'built_in_ceremony_seed_failed',
+      message: entry.error,
+    })),
+  ];
+}
+
+function ceremonyDiskSyncChange(
+  syncResult: { imported: number; skipped: number; errors: number },
+  status: RepairChangeStatus,
+  reason: string,
+): RepairChange {
+  return {
+    path: '.squad/ceremonies/*.yaml',
+    operation: 'seed-db',
+    status,
+    reason,
+    message: `imported ${syncResult.imported}, skipped ${syncResult.skipped}, errors ${syncResult.errors}`,
+  };
 }
 
 function isErrno(err: unknown, code: string): boolean {
@@ -515,7 +634,13 @@ async function parseRepairRequest(projectId: string, body: unknown): Promise<Rep
     actions = [];
     for (const value of values) {
       if (value === 'all') {
-        actions.push('repair-scaffold-squad', 'seed-ceremony-defaults', 'generate-github-agent', 'project-squad-to-fs');
+        actions.push(
+          'repair-scaffold-squad',
+          'seed-ceremony-defaults',
+          'import-ceremonies-from-md',
+          'generate-github-agent',
+          'project-squad-to-fs',
+        );
         continue;
       }
       const parsed = parseRepairAction(value);
@@ -561,7 +686,7 @@ function resultFor(
   if (applied) {
     return { action, status: 'applied', reason: 'changes_applied', changes };
   }
-  const wouldApply = changes.some((change) => change.status === 'would-apply');
+  const wouldApply = changes.some((change) => change.status === 'would-apply' || change.status === 'dry-run');
   if (wouldApply) {
     return { action, status: 'dry-run', reason: 'dry_run_changes_available', changes };
   }
@@ -930,7 +1055,141 @@ async function seedCeremonyDefaults(project: ProjectContext, dryRun: boolean): P
     'write-file',
     true,
   );
+
+  if (dryRun) {
+    changes.push(...builtInSeedChangesForDryRun());
+    const diskYamlCount = await countCeremonyYamlFiles(project.squadPath);
+    changes.push(ceremonyDiskSyncChange(
+      { imported: diskYamlCount, skipped: 0, errors: 0 },
+      diskYamlCount > 0 ? 'dry-run' : 'up-to-date',
+      diskYamlCount > 0 ? 'disk_ceremonies_would_be_imported' : 'no_ceremony_yaml_files',
+    ));
+    return resultFor('seed-ceremony-defaults', changes);
+  }
+
+  const seedResult = await seedBuiltInCeremonies(project.id);
+  changes.push(...builtInSeedChangesForResult(seedResult));
+
+  try {
+    const diskSyncResult = await syncCeremoniesFromDisk(project.id, project.squadPath);
+    changes.push(ceremonyDiskSyncChange(
+      diskSyncResult,
+      diskSyncResult.errors > 0
+        ? 'failed'
+        : diskSyncResult.imported > 0
+          ? 'applied'
+          : 'up-to-date',
+      diskSyncResult.errors > 0
+        ? 'disk_ceremony_import_failed'
+        : diskSyncResult.imported > 0
+          ? 'disk_ceremonies_imported'
+          : 'disk_ceremonies_already_synced',
+    ));
+  } catch (err) {
+    changes.push({
+      path: '.squad/ceremonies/*.yaml',
+      operation: 'seed-db',
+      status: 'failed',
+      reason: 'disk_ceremony_import_failed',
+      message: toErrorMessage(err),
+    });
+  }
+
   return resultFor('seed-ceremony-defaults', changes);
+}
+
+async function importCeremoniesFromMd(project: ProjectContext, dryRun: boolean): Promise<RepairResult> {
+  const filePath = path.join(project.squadPath, 'ceremonies.md');
+  let content: string;
+  try {
+    content = await fs.readFile(filePath, 'utf-8');
+  } catch (err) {
+    if (isErrno(err, 'ENOENT')) {
+      return {
+        action: 'import-ceremonies-from-md',
+        status: 'skipped',
+        reason: 'ceremonies_md_missing',
+        changes: [{
+          path: filePath,
+          operation: 'seed-db',
+          status: 'skipped',
+          reason: 'ceremonies_md_missing',
+        }],
+      };
+    }
+    return {
+      action: 'import-ceremonies-from-md',
+      status: 'failed',
+      reason: 'read_ceremonies_md_failed',
+      changes: [{
+        path: filePath,
+        operation: 'seed-db',
+        status: 'failed',
+        reason: 'read_ceremonies_md_failed',
+        message: toErrorMessage(err),
+      }],
+    };
+  }
+
+  const customSections = parseCeremonyMarkdownSections(content).filter(
+    (section) => !BUILT_IN_CEREMONY_NAMES.has(normalizeCeremonyName(section.heading)),
+  );
+
+  if (customSections.length === 0) {
+    return {
+      action: 'import-ceremonies-from-md',
+      status: 'skipped',
+      reason: 'no_custom_ceremony_sections',
+      changes: [{
+        path: filePath,
+        operation: 'seed-db',
+        status: 'skipped',
+        reason: 'no_custom_ceremony_sections',
+        message: 'No non-built-in ceremony sections were found in ceremonies.md.',
+      }],
+    };
+  }
+
+  if (dryRun) {
+    return resultFor('import-ceremonies-from-md', customSections.map((section) => ({
+      path: section.heading,
+      operation: 'seed-db',
+      status: 'dry-run',
+      reason: 'ceremony_markdown_would_be_imported',
+      message: 'would convert ceremonies.md section into Squadboard workflow YAML',
+    })));
+  }
+
+  const changes: RepairChange[] = [];
+  for (const section of customSections) {
+    try {
+      const { raw } = await runFormulator({
+        projectId: project.id,
+        systemMessage: CEREMONY_GENERATOR_SYSTEM_MESSAGE,
+        prompt: buildCeremonyImportPrompt(section.markdown),
+      });
+      const yamlText = stripMarkdownFences(raw);
+      const importResult = await importCeremonyFromYaml(yamlText, project.id, {
+        sourceMarker: `markdown:${normalizeCeremonyName(section.heading).replace(/\s+/g, '-')}`,
+      });
+      changes.push({
+        path: section.heading,
+        operation: 'seed-db',
+        status: importResult.created ? 'applied' : 'up-to-date',
+        reason: importResult.created ? 'ceremony_imported_from_markdown' : 'ceremony_already_present',
+      });
+    } catch (err) {
+      changes.push({
+        path: section.heading,
+        operation: 'seed-db',
+        status: 'failed',
+        reason: 'ceremony_markdown_import_failed',
+        message: toErrorMessage(err),
+      });
+    }
+  }
+
+  return resultFor('import-ceremonies-from-md', changes, 'no_custom_ceremony_sections');
 }
 
 async function readGithubAgentTemplate(project: ProjectContext): Promise<{ content: string; source: string }> {
@@ -1224,6 +1483,8 @@ async function runAction(
       return repairScaffold(project, dryRun);
     case 'seed-ceremony-defaults':
       return seedCeremonyDefaults(project, dryRun);
+    case 'import-ceremonies-from-md':
+      return importCeremoniesFromMd(project, dryRun);
     case 'generate-github-agent':
       return generateGithubAgent(project, dryRun);
     case 'project-squad-to-fs':

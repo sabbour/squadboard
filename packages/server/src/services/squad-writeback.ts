@@ -405,15 +405,6 @@ export async function syncCeremoniesFromDisk(
     return { imported: 0, skipped: 0, errors: 0 };
   }
 
-  const db = getDb();
-
-  // Fetch slugs already in DB so we can skip duplicates.
-  const existing = await db
-    .select({ slug: schema.workflows.slug })
-    .from(schema.workflows)
-    .where(eq(schema.workflows.projectId, projectId));
-  const existingSlugs = new Set(existing.map((r) => r.slug));
-
   let imported = 0;
   let skipped = 0;
   let errors = 0;
@@ -421,7 +412,7 @@ export async function syncCeremoniesFromDisk(
   for (const filePath of files) {
     try {
       const yamlText = await fs.readFile(filePath, 'utf-8');
-      const result = await importCeremonyFromYaml(projectId, yamlText, {
+      const result = await importCeremonyFromYaml(yamlText, projectId, {
         sourceMarker: `disk:${path.basename(filePath)}`,
       });
       if (result.created) {

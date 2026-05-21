@@ -594,6 +594,18 @@ function buildRepairActions(
     });
   }
 
+  if (!missingRequired.includes('ceremoniesMd') && missingRequired.includes('ceremoniesDefaultsPresent')) {
+    actions.push({
+      id: 'import-ceremonies-from-md',
+      owner: 'Hockney',
+      reason: 'ceremonies.md contains ceremony definitions that are not yet in Squadboard',
+      severity: 'info',
+      mode: 'user-confirmed',
+      artifactIds: ['ceremoniesMd'],
+      surfaces: ['squadboard', 'filesystem'],
+    });
+  }
+
   if (storageMode === 'postgresql' && missingRecommended.includes('copilotAgentMd')) {
     actions.push({
       id: 'validate-mcp-broker-guidance',

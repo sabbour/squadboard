@@ -9,6 +9,10 @@ const {
   mockFsReadFile,
   mockFsWriteFile,
   mockFsMkdir,
+  mockSeedBuiltInCeremonies,
+  mockSyncCeremoniesFromDisk,
+  mockRunFormulator,
+  mockImportCeremonyFromYaml,
 } = vi.hoisted(() => ({
   handlers: {} as Record<string, Record<string, Function>>,
   mockGetProjectSyncOwnershipStatus: vi.fn(),
@@ -18,6 +22,10 @@ const {
   mockFsReadFile: vi.fn(),
   mockFsWriteFile: vi.fn(),
   mockFsMkdir: vi.fn(),
+  mockSeedBuiltInCeremonies: vi.fn(),
+  mockSyncCeremoniesFromDisk: vi.fn(),
+  mockRunFormulator: vi.fn(),
+  mockImportCeremonyFromYaml: vi.fn(),
 }));
 
 vi.mock('express', () => {
@@ -69,7 +77,24 @@ vi.mock('node:fs/promises', () => ({
     readFile: (...args: unknown[]) => mockFsReadFile(...args),
     writeFile: (...args: unknown[]) => mockFsWriteFile(...args),
     mkdir: (...args: unknown[]) => mockFsMkdir(...args),
+    readdir: vi.fn(),
   },
+}));
+
+vi.mock('../ceremonies/seed-built-in.js', () => ({
+  seedBuiltInCeremonies: (...args: unknown[]) => mockSeedBuiltInCeremonies(...args),
+}));
+
+vi.mock('../services/squad-writeback.js', () => ({
+  syncCeremoniesFromDisk: (...args: unknown[]) => mockSyncCeremoniesFromDisk(...args),
+}));
+
+vi.mock('../services/formulator.js', () => ({
+  runFormulator: (...args: unknown[]) => mockRunFormulator(...args),
+}));
+
+vi.mock('../services/ceremony-yaml-import.js', () => ({
+  importCeremonyFromYaml: (...args: unknown[]) => mockImportCeremonyFromYaml(...args),
 }));
 
 await import('../routes/squad-sync.js');
@@ -161,6 +186,7 @@ function baseStatus(overrides: Record<string, unknown> = {}) {
     surfaces: [],
     repairActions: [
       { id: 'seed-ceremony-defaults', owner: 'Hockney', reason: 'Seed defaults.' },
+      { id: 'import-ceremonies-from-md', owner: 'Hockney', reason: 'Import ceremonies.' },
       { id: 'project-copilot-agent-file', owner: 'Kobayashi', reason: 'Generate Copilot projection.' },
       { id: 'expose-sync-status-api', owner: 'Hockney', reason: 'Historical SDK-facing reminder.' },
     ],
@@ -193,6 +219,20 @@ describe('squad-sync project routes', () => {
     mockFsReadFile.mockResolvedValue('# Ceremonies\n\nProject ceremonies will be listed here.\n');
     mockFsWriteFile.mockResolvedValue(undefined);
     mockFsMkdir.mockResolvedValue(undefined);
+    mockSeedBuiltInCeremonies.mockResolvedValue({
+      projectId: 'project-1',
+      seeded: [
+        { name: 'design-review', ceremonyId: 'wf-1', created: true },
+        { name: 'retrospective', ceremonyId: 'wf-2', created: false },
+      ],
+      errors: [],
+    });
+    mockSyncCeremoniesFromDisk.mockResolvedValue({ imported: 1, skipped: 0, errors: 0 });
+    mockRunFormulator.mockResolvedValue({
+      raw: ['apiVersion: squad.io/v1', 'kind: Ceremony', 'metadata:', '  name: release-review', '  displayName: Release Review', 'spec:', '  trigger:', '    type: manual', '  steps:', '    - id: review-release', '      kind: agent-task', '      label: Review release', '      agent: "@lead"', '      prompt: "Review the release."'].join('\n'),
+      modelUsed: { model: 'claude-haiku-4.5', via: 'fallback' },
+    });
+    mockImportCeremonyFromYaml.mockResolvedValue({ ceremonyId: 'wf-release', created: true });
   });
 
   it('GET /status adapts SDK ownership into a client envelope', async () => {
@@ -221,6 +261,7 @@ describe('squad-sync project routes', () => {
     });
     const actionIds = body.data.repair.actions.map((action: Record<string, unknown>) => action.id);
     expect(actionIds).toContain('seed-ceremony-defaults');
+    expect(actionIds).toContain('import-ceremonies-from-md');
     expect(actionIds).toContain('generate-github-agent');
     expect(actionIds).toContain('write-mcp-config');
     expect(actionIds).not.toContain('expose-sync-status-api');
@@ -255,13 +296,20 @@ describe('squad-sync project routes', () => {
           path: '/workspace/project/.squad/ceremonies.md',
           status: 'would-apply',
         }),
+        expect.objectContaining({
+          path: 'design-review',
+          operation: 'seed-db',
+          status: 'dry-run',
+        }),
       ]),
     );
+    expect(mockSeedBuiltInCeremonies).not.toHaveBeenCalled();
+    expect(mockSyncCeremoniesFromDisk).not.toHaveBeenCalled();
     expect(mockFsWriteFile).not.toHaveBeenCalled();
     expect(body.data.statusAfter).toBeUndefined();
   });
 
-  it('POST /repair skips custom ceremony files instead of overwriting them', async () => {
+  it('POST /repair seeds the DB even when ceremonies.md already has custom content', async () => {
     const handler = handlers['POST']?.['/repair'];
     if (!handler) throw new Error('POST /repair handler not registered');
     mockFsReadFile.mockResolvedValue('# Ceremonies\n\n## Release Review\n\nCustom agenda.\n');
@@ -276,10 +324,110 @@ describe('squad-sync project routes', () => {
     const body = getBody() as Record<string, any>;
     expect(body.data.results[0]).toMatchObject({
       action: 'seed-ceremony-defaults',
-      status: 'skipped',
-      reason: 'custom_ceremonies_present',
+      status: 'applied',
+      reason: 'changes_applied',
     });
+    expect(body.data.results[0].changes).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        path: '/workspace/project/.squad/ceremonies.md',
+        status: 'skipped',
+        reason: 'custom_ceremonies_present',
+      }),
+      expect.objectContaining({
+        path: 'design-review',
+        operation: 'seed-db',
+        status: 'applied',
+      }),
+      expect.objectContaining({
+        path: '.squad/ceremonies/*.yaml',
+        operation: 'seed-db',
+        status: 'applied',
+      }),
+    ]));
+    expect(mockSeedBuiltInCeremonies).toHaveBeenCalledWith('project-1');
+    expect(mockSyncCeremoniesFromDisk).toHaveBeenCalledWith('project-1', '/workspace/project/.squad');
     expect(mockFsWriteFile).not.toHaveBeenCalled();
+  });
+
+  it('POST /repair dry-runs markdown ceremony import for custom sections only', async () => {
+    const handler = handlers['POST']?.['/repair'];
+    if (!handler) throw new Error('POST /repair handler not registered');
+    mockFsReadFile.mockResolvedValue([
+      '# Ceremonies',
+      '',
+      '## Design Review',
+      '',
+      'Built-in section.',
+      '',
+      '## Release Review',
+      '',
+      'Custom release checklist.',
+    ].join('\n'));
+
+    const { req, res, getStatus, getBody } = makeReqRes(
+      { projectId: 'project-1' },
+      { actions: ['import-ceremonies-from-md'], dryRun: true },
+    );
+    await handler(req, res);
+
+    expect(getStatus()).toBe(200);
+    const body = getBody() as Record<string, any>;
+    expect(body.data.results[0]).toMatchObject({
+      action: 'import-ceremonies-from-md',
+      status: 'dry-run',
+    });
+    expect(body.data.results[0].changes).toEqual([
+      expect.objectContaining({
+        path: 'Release Review',
+        operation: 'seed-db',
+        status: 'dry-run',
+      }),
+    ]);
+    expect(mockRunFormulator).not.toHaveBeenCalled();
+    expect(mockImportCeremonyFromYaml).not.toHaveBeenCalled();
+  });
+
+  it('POST /repair converts custom ceremonies.md sections into workflow YAML', async () => {
+    const handler = handlers['POST']?.['/repair'];
+    if (!handler) throw new Error('POST /repair handler not registered');
+    mockFsReadFile.mockResolvedValue([
+      '# Ceremonies',
+      '',
+      '## Design Review',
+      '',
+      'Built-in section.',
+      '',
+      '## Release Review',
+      '',
+      'Custom release checklist.',
+    ].join('\n'));
+
+    const { req, res, getStatus, getBody } = makeReqRes(
+      { projectId: 'project-1' },
+      { actions: ['import-ceremonies-from-md'], dryRun: false },
+    );
+    await handler(req, res);
+
+    expect(getStatus()).toBe(200);
+    const body = getBody() as Record<string, any>;
+    expect(body.data.results[0]).toMatchObject({
+      action: 'import-ceremonies-from-md',
+      status: 'applied',
+      reason: 'changes_applied',
+    });
+    expect(mockRunFormulator).toHaveBeenCalledOnce();
+    expect(mockImportCeremonyFromYaml).toHaveBeenCalledWith(
+      expect.stringContaining('metadata:'),
+      'project-1',
+      expect.objectContaining({ sourceMarker: 'markdown:release-review' }),
+    );
+    expect(body.data.results[0].changes).toEqual([
+      expect.objectContaining({
+        path: 'Release Review',
+        operation: 'seed-db',
+        status: 'applied',
+      }),
+    ]);
   });
 
   it('POST /repair writes .mcp.json for the current project', async () => {

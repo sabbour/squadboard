@@ -185,5 +185,9 @@ describe('squad sync authority status', () => {
       id: 'seed-ceremony-defaults',
       owner: 'Hockney',
     }));
+    expect(status.repairActions).toContainEqual(expect.objectContaining({
+      id: 'import-ceremonies-from-md',
+      owner: 'Hockney',
+    }));
   });
 });

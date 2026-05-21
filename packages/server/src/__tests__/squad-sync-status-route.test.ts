@@ -197,7 +197,7 @@ describe('GET /api/projects/:projectId/squad-sync/status', () => {
       expect.objectContaining({ code: 'recommended_projection_missing' }),
     ]));
     expect(body.data.repair.actions.map((action: Record<string, unknown>) => action.id))
-      .toEqual(expect.arrayContaining(['generate-github-agent', 'seed-ceremony-defaults']));
+      .toEqual(expect.arrayContaining(['generate-github-agent', 'seed-ceremony-defaults', 'import-ceremonies-from-md']));
   });
 
   it('invariant: filesystem-authoritative projects are not labeled as squad_storage backed', async () => {
