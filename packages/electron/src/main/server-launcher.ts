@@ -65,7 +65,8 @@ function resolveServerPath(): string {
     return join(process.resourcesPath, 'server', 'dist', 'index.js');
   }
   // Dev: walk up from packages/electron/dist/main/ → repo root
-  const repoRoot = join(__dirname, '..', '..', '..', '..', '..');
+  // dist/main/ → dist/ → electron/ → packages/ → repo-root (4 levels)
+  const repoRoot = join(__dirname, '..', '..', '..', '..');
   return join(repoRoot, 'packages', 'server', 'dist', 'index.js');
 }
 
