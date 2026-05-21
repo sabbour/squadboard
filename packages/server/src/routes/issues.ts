@@ -12,9 +12,7 @@ import { resolveRoute, createRoutedRun } from '../engine/router.js';
 import { eventBus } from '../realtime/event-bus.js';
 import { pickupReadySweep } from '../engine/sweeps/pickup-ready.js';
 import { readyWorkflowStepsSweep } from '../engine/sweeps/ready-workflow-steps.js';
-import { spawnCeremonyRun } from '../services/ceremony-scheduler.js';
-import { emitSignal } from '../services/ceremony-signal-emitter.js';
-
+import { fireCeremoniesOnColumnEntry } from '../services/ceremony-column-trigger.js';
 const router = Router({ mergeParams: true });
 
 // ---------------------------------------------------------------------------
@@ -59,76 +57,6 @@ function triggerReadyPickup(projectId: string, issueId: string): void {
     await readyWorkflowStepsSweep.run();
   })().catch((err) => {
     console.error(`[issues] ready pickup failed after moving issue ${issueId} in project ${projectId}:`, err);
-  });
-}
-
-/**
- * Fire every active `on_issue_entry` ceremony whose `triggerConfig.column`
- * matches the slug the issue just entered. Also emits `wave.closeout` when
- * the target column is semantically "done" so the built-in Scribe ceremony
- * triggers its clean-up run.
- *
- * Should NOT be called for the `ready` column — that is handled exclusively
- * by `triggerReadyPickup` via the pickup-ready sweep.
- */
-function triggerColumnEntryCeremonies(
-  projectId: string,
-  issueId: string,
-  columnSlug: string,
-  semantic: string,
-): void {
-  void (async () => {
-    const db = getDb();
-
-    const candidates = await db
-      .select({ id: schema.workflows.id, name: schema.workflows.name })
-      .from(schema.workflows)
-      .where(
-        and(
-          eq(schema.workflows.projectId, projectId),
-          eq(schema.workflows.triggerKind, 'on_issue_entry'),
-          eq(schema.workflows.status, 'active'),
-          sql`${schema.workflows.triggerConfig}->>'column' = ${columnSlug}`,
-        ),
-      );
-
-    for (const ceremony of candidates) {
-      try {
-        await spawnCeremonyRun(ceremony.id, {
-          anchorIssueId: issueId,
-          trigger: `on_issue_entry:${columnSlug}`,
-          triggerSource: {
-            kind: 'on_event',
-            eventType: `on_issue_entry:${columnSlug}`,
-            detail: JSON.stringify({ column: columnSlug, issueId }),
-            anchorIssueId: issueId,
-          },
-        });
-      } catch (err) {
-        console.error(
-          `[issues] failed to spawn ceremony "${ceremony.name}" for issue ${issueId} on column "${columnSlug}":`,
-          err,
-        );
-      }
-    }
-
-    // Scribe close-out: emit wave.closeout when work lands in Done so the
-    // built-in Scribe ceremony (agent-signal: wave.closeout) picks it up.
-    if (semantic === 'done') {
-      await emitSignal({
-        projectId,
-        signalName: 'wave.closeout',
-        anchorIssueId: issueId,
-        contextPayload: { issueId, column: columnSlug },
-      });
-    }
-
-    await readyWorkflowStepsSweep.run();
-  })().catch((err) => {
-    console.error(
-      `[issues] triggerColumnEntryCeremonies failed for issue ${issueId} column "${columnSlug}":`,
-      err,
-    );
   });
 }
 
@@ -507,7 +435,7 @@ router.patch('/:id', async (req: Request, res: Response) => {
       if (resolvedSemantic === 'ready') {
         triggerReadyPickup(projectId, id);
       } else if (resolvedSemantic && resolvedStatus) {
-        triggerColumnEntryCeremonies(projectId, id, resolvedStatus, resolvedSemantic);
+        fireCeremoniesOnColumnEntry(projectId, id, resolvedStatus, resolvedSemantic);
       }
       return;
     }
@@ -523,7 +451,7 @@ router.patch('/:id', async (req: Request, res: Response) => {
     if (resolvedSemantic === 'ready') {
       triggerReadyPickup(projectId, id);
     } else if (resolvedSemantic && resolvedStatus) {
-      triggerColumnEntryCeremonies(projectId, id, resolvedStatus, resolvedSemantic);
+      fireCeremoniesOnColumnEntry(projectId, id, resolvedStatus, resolvedSemantic);
     }
   } catch (err) {
     handleError(res, err);
@@ -581,7 +509,7 @@ router.patch('/:id/move', async (req: Request, res: Response) => {
     if (semantic === 'ready') {
       triggerReadyPickup(projectId, id);
     } else {
-      triggerColumnEntryCeremonies(projectId, id, newStatus, semantic);
+      fireCeremoniesOnColumnEntry(projectId, id, newStatus, semantic);
     }
   } catch (err) {
     handleError(res, err);

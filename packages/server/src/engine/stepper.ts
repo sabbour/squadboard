@@ -2,10 +2,9 @@ import { sql, eq } from 'drizzle-orm';
 import { getDb, schema, type DrizzleDb } from '../db/index.js';
 import { resolveWorkspaceLifecycle } from './workspace.js';
 import { executeAgentRun } from '../sdk/bridge.js';
+import { fireCeremoniesOnColumnEntry } from '../services/ceremony-column-trigger.js';
 import { recordRunCompletion } from '../services/output-validator.js';
-import { eventBus } from '../realtime/event-bus.js';
-
-const LEASE_TTL_SECONDS = 90;
+import { eventBus } from '../realtime/event-bus.js';const LEASE_TTL_SECONDS = 90;
 const HEARTBEAT_INTERVAL_MS = 30_000;
 const DEFAULT_AGENT_RUN_TIMEOUT_MS = 10 * 60_000;
 
@@ -347,6 +346,13 @@ async function syncRunIssueColumn(
       column: row.status,
       position: row.position ?? undefined,
     });
+
+    // Fire on_issue_entry ceremonies for the new column (e.g. Simple Review
+    // when the card enters In Review). The ready column is handled separately
+    // by the pickup-ready sweep, so we skip it here.
+    if (semantic !== 'in_progress') {
+      fireCeremoniesOnColumnEntry(row.project_id, row.issue_id, row.status, semantic);
+    }
   } catch (err) {
     console.error(`[stepper] failed to sync issue column for run ${issueRunId} (${semantic}):`, err);
   }

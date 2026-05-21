@@ -6,7 +6,7 @@
     "test": "playwright test",
     "test:ui": "playwright test --ui",
     "test:headed": "playwright test --headed",
-    "demo:record": "lsof -ti tcp:5173 tcp:3000 2>/dev/null | xargs -r kill -9 2>/dev/null; sleep 2; rm -rf .demo-home; playwright test --config=playwright.demo.config.ts --reporter=line"
+    "demo:record": "lsof -ti tcp:5173 tcp:3000 2>/dev/null | xargs -r kill -9 2>/dev/null; sleep 2; rm -rf .demo-home /tmp/squadboard-demo; playwright test --config=playwright.demo.config.ts --reporter=line"
   },
   "devDependencies": {
     "@playwright/test": "^1.49.0"

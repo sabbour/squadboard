@@ -25,6 +25,7 @@ const uiURL = new URL(baseURL)
 const commonEnv: NodeJS.ProcessEnv = {
   ...process.env,
   HOME: demoHome,
+  SQUADBOARD_E2E_WORKSPACE_ROOT: '/tmp/squadboard-demo',
   SQUADBOARD_AUTO_MIGRATE: 'false',
   SQUADBOARD_AUTO_REGISTER_SELF: 'false',
   SQUADBOARD_DISABLE_CSRF: '1',

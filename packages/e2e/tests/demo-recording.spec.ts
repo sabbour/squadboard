@@ -1,66 +1,50 @@
 /**
  * Demo recording scenarios for README and marketing assets.
  *
- * Run:    cd packages/e2e && pnpm demo:record
+ * Run:    pnpm demo:record          (from repo root or packages/e2e)
  * Output: packages/e2e/demo-results/
  *
- * The command kills any stale dev servers, wipes .demo-home for a clean
- * PGLite database, seeds "Squadboard" and "Contoso" projects, then records.
+ * Scenario A.1 — Cast a team and plan the first card
+ *   Home → board with Default Software Project columns → Agents → Cast Team (real LLM)
+ *   → Add card to Backlog
  *
- * Convert a captured video to GIF:
- *   ffmpeg -i video.webm -vf "fps=10,scale=1920:-1:flags=lanczos,split[s0][s1];[s0]palettegen[p];[s1][p]paletteuse" demo.gif
+ * Scenario A.2 — Board in action (end-to-end ceremony chain)
+ *   Card → Ready → Work Pickup auto-fires → agent works → card auto-moves to In Review
+ *   → Simple Review ceremony auto-fires → Lead reviews → Lead approves (peer review run)
+ *   → card moves to Done → Scribe (wave.closeout) fires
  *
- * For higher-quality GIFs, prefer gifski:
- *   gifski --fps 15 --quality 90 -o demo.gif video.webm
+ * Scenario B — Onboard an existing Squad project
+ *   Home → Add Project → Connect existing → settings → MCP Config / Connect Copilot
+ *
+ * No mocks. Every LLM call (Cast Team, Work Pickup coordinator, agent runs,
+ * Review ceremony, Scribe) is real.
  */
 import { test, expect, request, type Page, type TestInfo } from '@playwright/test'
 import {
   API_BASE,
   createE2eProjectParent,
-  createIssueViaApi,
   createProjectViaApiDetails,
 } from './fixtures.ts'
 
 test.describe.configure({ mode: 'serial' })
-// Resolution, video, screenshot, and slowMo are all set in playwright.demo.config.ts.
-// This file only contains test logic.
 
-// Seeded project IDs — populated once in beforeAll and shared across all scenarios.
+// ── Shared state across serial scenarios ────────────────────────────────────
 let squadboardProjectId = ''
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-let contosoProjectId = ''
+let contosoProjectId    = ''
+let newProjectId        = ''   // Default Software Project (A.1 → A.2)
+let demoCardId          = ''   // Card created in A.1, moved to Ready in A.2
 
-interface CeremonyRow {
-  id: string
-  name: string
-  kind: string
-  status: string
-  triggerKind?: string
-}
+const DEMO_CARD_TITLE = 'Draft the product roadmap'
 
-interface MockRunOptions {
-  ceremonyId: string
-  ceremonyName: string
-  issueId: string
-  issueTitle: string
-  runId: string
-  issueRunStatus: 'running' | 'completed' | 'failed' | 'cancelled' | 'pending'
-  workflowStatus: 'running' | 'completed' | 'failed' | 'cancelled' | 'pending'
-}
-
-const DEMO_REPO_URL = 'https://github.com/sabbour/squadboard-apps'
-const DEMO_APP_PATH = 'squad-doc-review'
-const DEMO_ISSUE_TITLE = 'Polish the README demo story'
-
-// Seed the two demo projects before any scenario runs.
-// The demo config starts a fresh PGLite DB, so the board is empty until we do this.
+// ── Seed backdrop projects ───────────────────────────────────────────────────
 test.beforeAll(async () => {
   const sq = await createProjectViaApiDetails('Squadboard')
   const co = await createProjectViaApiDetails('Contoso')
   squadboardProjectId = sq.projectId
-  contosoProjectId = co.projectId
+  contosoProjectId    = co.projectId
 })
 
+// ── Helpers ──────────────────────────────────────────────────────────────────
 async function pause(page: Page, ms = 900) {
   await page.waitForTimeout(ms)
 }
@@ -69,387 +53,253 @@ async function capture(page: Page, testInfo: TestInfo, name: string) {
   await page.screenshot({ path: testInfo.outputPath(`${name}.png`), fullPage: false })
 }
 
-async function createCeremony(
-  projectId: string,
-  name: string,
-  yamlContent = [
-    `name: ${name}`,
-    'trigger: manual',
-    'steps:',
-    '  - type: agent_run',
-    '    agent: Squad',
-    '    prompt: |',
-    '      Review the board and summarise the next best action in one sentence.',
-  ].join('\n'),
-): Promise<CeremonyRow> {
+/** Apply the Default Software Project bundle template via API and return the new projectId. */
+async function createTemplateProject(name: string): Promise<string> {
+  const pathMod  = await import('node:path')
+  const parentPath = await createE2eProjectParent(name)
+  const squadPath  = pathMod.join(parentPath, name, '.squad')
+
   const ctx = await request.newContext({ baseURL: API_BASE })
   try {
-    const res = await ctx.post(`/api/projects/${projectId}/ceremonies`, {
-      data: { name, kind: 'ceremony', triggerKind: 'manual', yamlContent },
+    const res  = await ctx.post('/api/templates/builtin-projects/default-software-project/apply', {
+      data: { squadPath, name },
     })
     const text = await res.text()
-    expect(res.status(), text).toBeLessThan(300)
-    const body = JSON.parse(text) as { ceremony?: CeremonyRow } & CeremonyRow
-    return body.ceremony ?? body
+    if (!res.ok()) throw new Error(`Template apply failed (${res.status()}): ${text}`)
+    const body = JSON.parse(text) as { ok: boolean; data: { project: { id: string } } }
+    return body.data.project.id
   } finally {
     await ctx.dispose()
   }
 }
 
-async function activateCeremony(projectId: string, ceremonyId: string) {
-  const ctx = await request.newContext({ baseURL: API_BASE })
-  try {
-    const res = await ctx.post(`/api/projects/${projectId}/ceremonies/${ceremonyId}/activate`)
-    const text = await res.text()
-    expect(res.status(), text).toBeLessThan(300)
-  } finally {
-    await ctx.dispose()
-  }
-}
+// ── Scenario A.1 — Cast a team and add the first card ───────────────────────
+test('Scenario A.1 — Cast a team and add the first card', async ({ page }, testInfo) => {
+  // Create a fresh project from the Default Software Project template (columns + ceremonies pre-wired)
+  newProjectId = await createTemplateProject('My New Project')
 
-async function mockCeremonyRun(page: Page, projectId: string, options: MockRunOptions) {
-  const now = new Date().toISOString()
-
-  await page.route(`**/api/projects/${projectId}/ceremonies/${options.ceremonyId}/run`, async (route) => {
-    await route.fulfill({
-      status: 200,
-      contentType: 'application/json',
-      body: JSON.stringify({ workflowRunId: options.runId, message: 'Demo run started.' }),
-    })
-  })
-
-  await page.route(`**/api/projects/${projectId}/ceremonies/${options.ceremonyId}/runs**`, async (route) => {
-    await route.fulfill({
-      status: 200,
-      contentType: 'application/json',
-      body: JSON.stringify({
-        ceremony: {
-          id: options.ceremonyId,
-          projectId,
-          name: options.ceremonyName,
-          slug: options.ceremonyName.toLowerCase().replace(/[^a-z0-9]+/g, '-'),
-          triggerKind: 'manual',
-          kind: 'ceremony',
-        },
-        versions: [{ id: 'version-demo-1', version: 1, createdAt: now }],
-        runs: [
-          {
-            id: options.runId,
-            issueId: options.issueId,
-            issueTitle: options.issueTitle,
-            issueStatus: 'in_progress',
-            workflowVersionId: 'version-demo-1',
-            workflowVersionNumber: 1,
-            status: options.workflowStatus,
-            currentStepIndex: options.workflowStatus === 'completed' ? 1 : 0,
-            triggerSource: { kind: 'manual' },
-            premiumRequests: '0',
-            createdAt: now,
-            updatedAt: now,
-            steps: [
-              {
-                id: 'demo-step-1',
-                workflowRunId: options.runId,
-                issueRunId: options.runId,
-                stepIndex: 0,
-                stepType: 'agent_run',
-                status: options.workflowStatus,
-                output: null,
-                reviewDecision: null,
-                reviewComment: null,
-                sessionId: null,
-                startedAt: now,
-                createdAt: now,
-                updatedAt: now,
-                issueRunStatus: options.issueRunStatus,
-                issueRunOutput: options.issueRunStatus === 'completed' ? 'Reviewed backlog and suggested the next action.' : null,
-                issueRunError: null,
-                agentId: 'agent-squad',
-                agentName: 'Squad',
-                events: [],
-              },
-              {
-                id: 'demo-step-2',
-                workflowRunId: options.runId,
-                issueRunId: null,
-                stepIndex: 1,
-                stepType: 'approve',
-                status: options.workflowStatus === 'completed' ? 'completed' : 'pending',
-                output: options.workflowStatus === 'completed' ? 'Approved for landing page use.' : null,
-                reviewDecision: options.workflowStatus === 'completed' ? 'approved' : null,
-                reviewComment: options.workflowStatus === 'completed' ? 'Looks good for the README.' : null,
-                sessionId: null,
-                startedAt: options.workflowStatus === 'completed' ? now : null,
-                createdAt: now,
-                updatedAt: now,
-                issueRunStatus: null,
-                issueRunOutput: null,
-                issueRunError: null,
-                agentId: null,
-                agentName: null,
-                events: [],
-              },
-            ],
-          },
-        ],
-      }),
-    })
-  })
-}
-
-function makeLiveEventsResponse(runId: string, issueId: string, status: 'running' | 'completed') {
-  const startedAt = '2026-05-21T18:00:00.000Z'
-  const finishedAt = '2026-05-21T18:00:12.000Z'
-  const events = [
-    {
-      id: 'evt-1',
-      runId,
-      seq: 0,
-      eventType: 'issue.run.start',
-      payload: { runId, issueId, agentName: 'Squad', model: 'claude-sonnet-4.6' },
-      createdAt: startedAt,
-    },
-    {
-      id: 'evt-2',
-      runId,
-      seq: 1,
-      eventType: 'issue.run.turn',
-      payload: {
-        runId,
-        issueId,
-        role: 'assistant',
-        content: 'Inspecting the board and identifying the highest-impact work item.',
-      },
-      createdAt: '2026-05-21T18:00:03.000Z',
-    },
-    {
-      id: 'evt-3',
-      runId,
-      seq: 2,
-      eventType: 'issue.run.token',
-      payload: { runId, issueId, inputTokens: 182, outputTokens: 94, cost: 0.0123 },
-      createdAt: '2026-05-21T18:00:05.000Z',
-    },
-    {
-      id: 'evt-4',
-      runId,
-      seq: 3,
-      eventType: 'issue.run.tool_call',
-      payload: { runId, issueId, toolName: 'board.summary', command: 'Summarise board state' },
-      createdAt: '2026-05-21T18:00:06.000Z',
-    },
-    {
-      id: 'evt-5',
-      runId,
-      seq: 4,
-      eventType: 'issue.run.tool_result',
-      payload: { runId, issueId, toolName: 'board.summary', output: '1 card ready for review, 2 in backlog.' },
-      createdAt: '2026-05-21T18:00:07.000Z',
-    },
-  ]
-
-  if (status === 'completed') {
-    events.push({
-      id: 'evt-6',
-      runId,
-      seq: 5,
-      eventType: 'issue.run.finish',
-      payload: {
-        runId,
-        issueId,
-        durationMs: 12000,
-        output: 'Recommend starting with the README demo recording follow-up.',
-      },
-      createdAt: finishedAt,
-    })
-  }
-
-  return {
-    run: {
-      id: runId,
-      issueId,
-      agentId: 'agent-squad',
-      kind: 'agent_run',
-      status,
-      workspaceStrategy: 'scratch',
-      workspacePath: null,
-      createdAt: startedAt,
-      updatedAt: status === 'completed' ? finishedAt : '2026-05-21T18:00:08.000Z',
-      startedAt,
-      completedAt: status === 'completed' ? finishedAt : null,
-      finishedAt: status === 'completed' ? finishedAt : null,
-      leaseExpiresAt: null,
-      heartbeatAt: '2026-05-21T18:00:08.000Z',
-      durationMs: status === 'completed' ? 12000 : null,
-      costTokens: 276,
-      inputTokens: 182,
-      outputTokens: 94,
-      cachedInputTokens: 0,
-      costUsd: '0.0123',
-      premiumRequests: '0',
-      output: { available: status === 'completed', length: status === 'completed' ? 58 : 0 },
-      errorMessage: null,
-      staleReason: null,
-      recovery: null,
-    },
-    events,
-    total: events.length,
-    nextSeq: events.length,
-  }
-}
-
-async function mockLiveRunResponses(page: Page, projectId: string, issueId: string, runId: string) {
-  let callCount = 0
-  await page.route(`**/api/projects/${projectId}/issues/${issueId}/runs/${runId}/events**`, async (route) => {
-    callCount += 1
-    const body = callCount === 1
-      ? makeLiveEventsResponse(runId, issueId, 'running')
-      : makeLiveEventsResponse(runId, issueId, 'completed')
-
-    await route.fulfill({
-      status: 200,
-      contentType: 'application/json',
-      body: JSON.stringify(body),
-    })
-  })
-}
-
-test('Scenario A — First run', async ({ page }, testInfo) => {
-  const cardTitle = 'Welcome to Squadboard'
-  const parentPath = await createE2eProjectParent('demo-first-run')
-
-  // Show the home page — Squadboard and Contoso are already seeded.
+  // Home — three projects visible
   await page.goto('/')
   await expect(page.getByRole('heading', { name: 'Projects', exact: true })).toBeVisible()
   await expect(page.getByText('Squadboard', { exact: true })).toBeVisible()
-  await expect(page.getByText('Contoso', { exact: true })).toBeVisible()
+  await expect(page.getByText('Contoso',    { exact: true })).toBeVisible()
+  await expect(page.getByText('My New Project', { exact: true })).toBeVisible()
   await pause(page)
-  await capture(page, testInfo, 'first-run-00-projects-home')
+  await capture(page, testInfo, 'a1-00-home')
 
-  // Create a third project to demonstrate the first-run board experience.
-  await page.getByRole('button', { name: 'Add Project' }).click()
-  const createTab = page.getByRole('button', { name: /Create/i }).first()
-  await expect(createTab).toBeVisible()
-  await createTab.click()
-  await capture(page, testInfo, 'first-run-01-project-picker')
-
-  await page.getByPlaceholder('/absolute/path/to/parent').fill(parentPath)
-  await page.getByPlaceholder('my-new-project').fill('My New Project')
+  // Navigate to board — show all 5 default columns
+  await page.goto(`/projects/${newProjectId}/board`)
+  await expect(page.getByText('Backlog')).toBeVisible({ timeout: 10_000 })
+  await expect(page.getByText('Ready')).toBeVisible()
+  await expect(page.getByText('In Progress')).toBeVisible()
+  await expect(page.getByText('In Review')).toBeVisible()
+  await expect(page.getByText('Done')).toBeVisible()
   await pause(page)
-  await capture(page, testInfo, 'first-run-02-create-project')
+  await capture(page, testInfo, 'a1-01-board-columns')
 
-  await page.getByRole('button', { name: 'Create project' }).click()
-  await page.waitForURL(/\/projects\/[^/]+\/board/, { timeout: 15_000 })
-  await expect(page.getByText('Backlog')).toBeVisible()
+  // Agents page — empty before cast
+  await page.goto(`/projects/${newProjectId}/agents`)
+  await expect(
+    page.getByRole('heading', { name: 'Squad Members' })
+      .or(page.getByRole('heading', { name: 'Agents' }))
+  ).toBeVisible({ timeout: 10_000 })
   await pause(page)
-  await capture(page, testInfo, 'first-run-03-empty-board')
+  await capture(page, testInfo, 'a1-02-agents-empty')
 
-  await page.getByTitle('Create issue').first().click()
-  await page.getByPlaceholder('Issue title').fill(cardTitle)
+  // Open Cast Team modal (page-level button)
+  await page.getByRole('button', { name: /Cast Team/i }).first().click()
+  const modal = page.getByRole('dialog')
+  await expect(modal).toBeVisible({ timeout: 8_000 })
   await pause(page)
-  await capture(page, testInfo, 'first-run-04-new-card')
+  await capture(page, testInfo, 'a1-03-cast-team-modal-open')
 
-  await page.getByRole('button', { name: /Create Issue/i }).click()
-  await expect(page.getByText(cardTitle)).toBeVisible({ timeout: 8_000 })
+  // Submit the cast inside the modal (real LLM — coordinator proposes team)
+  await modal.getByRole('button', { name: /Cast Team/i }).click()
+  await expect(page.getByText('Cast complete', { exact: false })).toBeVisible({ timeout: 90_000 })
+  await pause(page, 1200)
+  await capture(page, testInfo, 'a1-04-cast-review')
+
+  // Confirm the proposed team
+  await modal.getByRole('button', { name: /Cast \d+ Agent/i }).click()
+  await expect(page.getByText(/agents cast successfully/i)).toBeVisible({ timeout: 30_000 })
   await pause(page)
-  await capture(page, testInfo, 'first-run-05-card-on-board')
+  await capture(page, testInfo, 'a1-05-cast-done')
+
+  // Close dialog and show the cast agents
+  const closeBtn = modal.getByRole('button', { name: /Close|Done|Dismiss/i }).first()
+  if (await closeBtn.isVisible({ timeout: 2_000 }).catch(() => false)) await closeBtn.click()
+  await pause(page)
+  await capture(page, testInfo, 'a1-06-agents-cast')
+
+  // Navigate back to board and add the first card to Backlog
+  await page.goto(`/projects/${newProjectId}/board`)
+  await expect(page.getByText('Backlog')).toBeVisible({ timeout: 10_000 })
+
+  // Capture the new issue ID from the API response while clicking Create
+  const [createResponse] = await Promise.all([
+    page.waitForResponse(
+      r => {
+        const url = r.url()
+        return (
+          r.request().method() === 'POST' &&
+          /\/api\/projects\/[^/]+\/issues$/.test(url)
+        )
+      },
+      { timeout: 15_000 },
+    ),
+    (async () => {
+      await page.getByTitle('Create issue').first().click()
+      await page.getByPlaceholder('Issue title').fill(DEMO_CARD_TITLE)
+      await pause(page)
+      await capture(page, testInfo, 'a1-07-new-card')
+      await page.getByRole('button', { name: /^Create Issue$/i }).click()
+    })(),
+  ])
+
+  const createdIssue = await createResponse.json() as { id?: string }
+  if (!createdIssue.id) throw new Error(`Card creation did not return an id: ${JSON.stringify(createdIssue)}`)
+  demoCardId = createdIssue.id
+
+  await expect(page.getByText(DEMO_CARD_TITLE)).toBeVisible({ timeout: 8_000 })
+  await pause(page)
+  await capture(page, testInfo, 'a1-08-card-in-backlog')
 })
 
-test('Scenario B — Connect a repo', async ({ page }, testInfo) => {
-  const projectPath = await createE2eProjectParent('demo-app-install')
-
-  // Current repo-connection UX lives in Apps > Install from GitHub.
-  await page.goto('/apps')
-  await expect(page.getByRole('heading', { name: 'Squadboard Apps' })).toBeVisible({ timeout: 10_000 })
-  await expect(page.getByRole('heading', { name: 'Install from GitHub' })).toBeVisible()
+// ── Scenario A.2 — Board in action ──────────────────────────────────────────
+test('Scenario A.2 — Board in action', async ({ page }, testInfo) => {
+  // Show card in Backlog
+  await page.goto(`/projects/${newProjectId}/board`)
+  await expect(page.getByText(DEMO_CARD_TITLE)).toBeVisible({ timeout: 10_000 })
   await pause(page)
-  await capture(page, testInfo, 'repo-connect-01-apps-home')
+  await capture(page, testInfo, 'a2-00-card-in-backlog')
 
-  await page.getByLabel('GitHub repository URL').fill(DEMO_REPO_URL)
-  await page.getByLabel('App folder').fill(DEMO_APP_PATH)
-  await page.getByLabel('Project name').fill('README Demo App')
-  await page.getByLabel('Absolute project folder or .squad path').fill(projectPath)
-  await pause(page)
-  const installSection = page.locator('section', { has: page.getByRole('heading', { name: 'Install from GitHub' }) })
-  await expect(installSection.getByRole('button', { name: 'Install as project' })).toBeEnabled()
-  await capture(page, testInfo, 'repo-connect-02-filled-form')
-
-  await expect(installSection.getByText(/creates a normal project/i)).toBeVisible()
-  await expect(installSection.getByText(/Only install Squadboard Apps from sources you trust/i)).toBeVisible()
-  await capture(page, testInfo, 'repo-connect-03-install-ready')
-})
-
-test('Scenario C — Run a ceremony', async ({ page }, testInfo) => {
-  // Use the seeded Squadboard project — no random temp projects.
-  const issueId = await createIssueViaApi(squadboardProjectId, {
-    title: DEMO_ISSUE_TITLE,
-    body: 'Create marketing-friendly product proof points for the README.',
-    status: 'ready',
+  // Move card to Ready via API — Work Pickup will auto-fire within 30 s
+  const ctx = await request.newContext({ baseURL: API_BASE })
+  const moveRes = await ctx.patch(`/api/projects/${newProjectId}/issues/${demoCardId}/move`, {
+    data: { status: 'ready' },
   })
-  const ceremony = await createCeremony(squadboardProjectId, 'Demo Code Review')
-  const runId = 'demo-workflow-run-001'
-
-  await activateCeremony(squadboardProjectId, ceremony.id)
-  await mockCeremonyRun(page, squadboardProjectId, {
-    ceremonyId: ceremony.id,
-    ceremonyName: ceremony.name,
-    issueId,
-    issueTitle: DEMO_ISSUE_TITLE,
-    runId,
-    issueRunStatus: 'running',
-    workflowStatus: 'running',
-  })
-  await mockLiveRunResponses(page, squadboardProjectId, issueId, runId)
-
-  await page.goto(`/projects/${squadboardProjectId}/ceremonies`)
-  await expect(page.getByRole('heading', { name: 'Ceremonies' })).toBeVisible({ timeout: 10_000 })
-  await expect(page.getByText(ceremony.name)).toBeVisible()
-  await pause(page)
-  await capture(page, testInfo, 'ceremony-01-list')
-
-  await page.getByText(ceremony.name).click()
-  await expect(page.getByRole('button', { name: 'Run now' })).toBeVisible({ timeout: 10_000 })
-  await pause(page)
-  await capture(page, testInfo, 'ceremony-02-editor')
-
-  await page.getByRole('button', { name: 'Run now' }).click()
-  await page.waitForURL(new RegExp(`/projects/${squadboardProjectId}/ceremonies/${ceremony.id}/runs\\?run=${runId}`), {
-    timeout: 10_000,
-  })
-  await expect(page.getByText('Manual run')).toBeVisible({ timeout: 10_000 })
-  await expect(page.getByText(/Step 1: agent_run/i)).toBeVisible()
-  await expect(page.getByRole('button', { name: 'Open live log' })).toBeVisible()
-  await pause(page)
-  await capture(page, testInfo, 'ceremony-03-runs-view')
-
-  await page.getByRole('button', { name: 'Open live log' }).click()
-  await page.waitForURL(/\/runs\/[^/]+\/live/, { timeout: 10_000 })
-  await expect(page.getByRole('log', { name: 'Run event stream' })).toBeVisible({ timeout: 10_000 })
-  await pause(page)
-  await capture(page, testInfo, 'ceremony-04-live-log')
-})
-
-test('Scenario D — Live run tracking', async ({ page }, testInfo) => {
-  // Use the seeded Squadboard project — no random temp projects.
-  const issueId = await createIssueViaApi(squadboardProjectId, {
-    title: 'Track live README polishing run',
-    body: 'Show a realistic run transcript for README video capture.',
-    status: 'ready',
-  })
-  const runId = 'demo-live-run-001'
-
-  await mockLiveRunResponses(page, squadboardProjectId, issueId, runId)
-
-  await page.goto(`/projects/${squadboardProjectId}/issues/${issueId}/runs/${runId}/live`)
-  await expect(page.getByText('Input tokens')).toBeVisible({ timeout: 10_000 })
-  await expect(page.getByRole('log', { name: 'Run event stream' })).toBeVisible()
-  await expect(page.getByText('Running')).toBeVisible()
-  await pause(page)
-  await capture(page, testInfo, 'live-run-01-running')
+  if (!moveRes.ok()) {
+    const txt = await moveRes.text()
+    throw new Error(`Move to ready failed (${moveRes.status()}): ${txt}`)
+  }
+  await ctx.dispose()
 
   await page.reload()
-  await expect(page.getByText('Completed')).toBeVisible({ timeout: 10_000 })
-  await expect(page.getByText(/Recommend starting with the README demo recording follow-up/i)).toBeVisible()
+  await expect(page.getByText('Ready')).toBeVisible()
   await pause(page)
-  await capture(page, testInfo, 'live-run-02-completed')
+  await capture(page, testInfo, 'a2-01-card-in-ready')
+
+  // Work Pickup assigns an agent — wait for the "Watch run" button (up to 90 s)
+  const watchRunBtn = page.getByTestId('watch-run-button')
+  await expect(watchRunBtn).toBeVisible({ timeout: 90_000 })
+  await pause(page)
+  await capture(page, testInfo, 'a2-02-run-assigned')
+
+  // Follow the live run
+  await watchRunBtn.click()
+  await page.waitForURL(/\/runs\/[^/]+\/live/, { timeout: 15_000 })
+  await expect(page.getByRole('log', { name: 'Run event stream' })).toBeVisible({ timeout: 10_000 })
+  await pause(page)
+  await capture(page, testInfo, 'a2-03-live-run-start')
+
+  // Wait for the agent to finish its work (real LLM — generous timeout)
+  await expect(page.getByText('Completed', { exact: false })).toBeVisible({ timeout: 300_000 })
+  await pause(page, 1500)
+  await capture(page, testInfo, 'a2-04-run-completed')
+
+  // Card auto-moves to In Review after the run — show the board
+  await page.goto(`/projects/${newProjectId}/board`)
+  await expect(page.getByText('In Review')).toBeVisible({ timeout: 10_000 })
+  await pause(page, 1500)
+  await capture(page, testInfo, 'a2-05-board-in-review')
+
+  // Simple Review ceremony auto-triggered on card entry into In Review
+  // Navigate to ceremonies and wait for it to appear as active
+  await page.goto(`/projects/${newProjectId}/ceremonies`)
+  await expect(page.getByRole('heading', { name: 'Ceremonies' })).toBeVisible({ timeout: 10_000 })
+  await expect(page.getByText('Simple Review')).toBeVisible({ timeout: 60_000 })
+  await pause(page)
+  await capture(page, testInfo, 'a2-06-review-ceremony-triggered')
+
+  // Open the Simple Review ceremony
+  await page.getByText('Simple Review').click()
+  await pause(page, 1200)
+  await capture(page, testInfo, 'a2-07-review-ceremony-detail')
+
+  // Wait for the ceremony to complete — Lead's peer review run finishes (real LLM)
+  await expect(page.getByText('Completed', { exact: false })).toBeVisible({ timeout: 300_000 })
+  await pause(page, 1500)
+  await capture(page, testInfo, 'a2-08-review-completed')
+
+  // Move card to Done — triggers Scribe (wave.closeout) automatically
+  const ctx2 = await request.newContext({ baseURL: API_BASE })
+  await ctx2.patch(`/api/projects/${newProjectId}/issues/${demoCardId}/move`, {
+    data: { status: 'done' },
+  })
+  await ctx2.dispose()
+
+  await page.goto(`/projects/${newProjectId}/board`)
+  await expect(page.getByText('Done')).toBeVisible({ timeout: 10_000 })
+  await pause(page, 1500)
+  await capture(page, testInfo, 'a2-09-card-done')
+
+  // Scribe ceremony fires automatically — show it in the ceremonies list
+  await page.goto(`/projects/${newProjectId}/ceremonies`)
+  await expect(
+    page.getByText('Scribe', { exact: false }).or(page.getByText('scribe', { exact: false }))
+  ).toBeVisible({ timeout: 60_000 })
+  await pause(page, 2000)
+  await capture(page, testInfo, 'a2-10-scribe-triggered')
+})
+
+// ── Scenario B — Onboard an existing Squad project ──────────────────────────
+test('Scenario B — Onboard an existing Squad project', async ({ page }, testInfo) => {
+  // Create a local dir to represent an existing project (Connect existing will scaffold .squad/ into it)
+  const parentPath   = await createE2eProjectParent('demo-connect')
+  const projectFolder = `${parentPath}/my-squad-project`
+  const fsMod = await import('node:fs/promises')
+  await fsMod.mkdir(projectFolder, { recursive: true })
+
+  // Show home
+  await page.goto('/')
+  await expect(page.getByRole('heading', { name: 'Projects', exact: true })).toBeVisible()
+  await pause(page)
+  await capture(page, testInfo, 'b-00-home')
+
+  // Add Project → Connect existing tab
+  await page.getByRole('button', { name: 'Add Project' }).click()
+  const connectTab = page.getByRole('button', { name: /Connect existing/i })
+  await expect(connectTab).toBeVisible({ timeout: 8_000 })
+  await connectTab.click()
+  await pause(page)
+  await capture(page, testInfo, 'b-01-connect-tab')
+
+  // Fill the project folder path
+  await page.getByPlaceholder('/absolute/path/to/project').fill(projectFolder)
+  await pause(page)
+  await capture(page, testInfo, 'b-02-path-filled')
+
+  // Connect — scaffolds .squad/ and navigates to the board
+  await page.getByRole('button', { name: /Connect/i }).click()
+  await page.waitForURL(/\/projects\/[^/]+\/board/, { timeout: 30_000 })
+  await expect(page.getByText('Backlog')).toBeVisible({ timeout: 10_000 })
+  await pause(page)
+  await capture(page, testInfo, 'b-03-connected-board')
+
+  // Navigate to Settings → MCP Config
+  const connectedProjectId = page.url().match(/\/projects\/([^/]+)\//)?.[1] ?? ''
+  await page.goto(`/projects/${connectedProjectId}/settings`)
+  await expect(
+    page.getByText(/MCP Config/i).first()
+  ).toBeVisible({ timeout: 10_000 })
+  await pause(page)
+  await capture(page, testInfo, 'b-04-settings')
+
+  // Show the "Connect Copilot CLI" button
+  await expect(
+    page.getByRole('button', { name: /Connect Copilot CLI/i })
+      .or(page.getByText(/Connect Copilot CLI/i))
+  ).toBeVisible({ timeout: 10_000 })
+  await pause(page)
+  await capture(page, testInfo, 'b-05-connect-copilot')
 })
