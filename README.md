@@ -17,44 +17,85 @@
 
 ## What is it?
 
-[Squad](https://github.com/bradygaster/squad) gives you AI agents. Squadboard gives those agents a board, ceremonies, and live run tracking. Without Squad, Squadboard is empty. With Squad, it's a durable home for your agent workflows.
+[Squad](https://github.com/bradygaster/squad) gives you AI agents. Squadboard gives those agents:
 
-## Two ways to get started
+- **Durable workflows** — workflows that survive, are tracked, and can be resumed across sessions
+- **Live visualization** — see all your agent work in one place, with real-time run tracking and board state
+- **Project templates** — Squadboard apps and project templates that give agents structure and context
+- **App extensibility** — apps that run on top of Squadboard to extend capabilities
 
-### Option A — Desktop app (recommended)
+Squad integration (bidirectional sync, MCP broker) is the foundation that powers it all. Without Squad, Squadboard is empty. With Squad, it's the operational home for your agent work.
 
-Download the pre-built installer for your platform from [GitHub Releases](https://github.com/sabbour/squadboard/releases). Extract, install, and run. The app bundles everything — no Node.js, no Postgres, no external services needed.
+## Quickstart
 
-| Platform | Download |
-|----------|----------|
-| macOS | `Squadboard-*.dmg` |
-| Windows | `Squadboard-Setup-*.exe` |
-| Linux | `Squadboard-*.AppImage` |
+### Fork 1 — Already running Squad?
 
-### Option B — CLI
+If you have Squad agents running, connect them to Squadboard:
 
-```bash
-npx @sabbour/squadboard-cli init
-```
+1. **Install Squadboard** — Download from [GitHub Releases](https://github.com/sabbour/squadboard/releases), or via CLI:
+   ```bash
+   npx @sabbour/squadboard-cli init
+   ```
 
-This scaffolds a local Squadboard project and starts the dev server on `http://localhost:5173`.
+2. **Connect to the board** — Wire up MCP so Copilot CLI can talk to Squadboard:
+   ```bash
+   squadboard connect
+   ```
 
-**Requires:** Node.js ≥ 20, pnpm ≥ 8
+3. **Launch the UI** — Open Squadboard at `http://localhost:5173`:
+   ```bash
+   squadboard start
+   ```
+   (or use the desktop app if you downloaded it)
 
-## First run
+4. **Run an agent from the CLI and watch it on the board:**
+   ```bash
+   squad run --workflow my-workflow
+   ```
+   The run will stream to Squadboard in real-time.
 
-1. Create or link an existing Squad project (point to a folder with `.squad/`)
-2. Squadboard imports your agents and workflows
-3. Create a card → move it to Ready → watch your agent pick it up and run
-4. After the run completes, close it with a ceremony to capture decisions
+5. **From the UI**, drag cards through columns to manage work, and click into runs to see live output.
+
+### Fork 2 — Starting fresh?
+
+1. **Download Squadboard** — Grab the desktop app from [GitHub Releases](https://github.com/sabbour/squadboard/releases) for your platform:
+   - macOS: `Squadboard-*.dmg`
+   - Windows: `Squadboard-Setup-*.exe`
+   - Linux: `Squadboard-*.AppImage`
+
+   Or use CLI:
+   ```bash
+   npx @sabbour/squadboard-cli init
+   ```
+
+2. **Launch** — The desktop app or web UI opens automatically at `http://localhost:5173`.
+
+3. **Create your first project and board** — Use the UI to set up a new board.
+
+4. **Install Squad CLI** to unlock agent execution:
+   ```bash
+   npx @bradygaster/squad-cli init
+   ```
+
+5. **Connect Squadboard and Squad**:
+   ```bash
+   squadboard connect
+   ```
+
+6. **Run your first agent** from the CLI and watch it flow onto the board:
+   ```bash
+   squad run --workflow my-workflow
+   ```
 
 ## Key capabilities
 
 | Capability | What it does |
 |---|---|
-| Board-first UI | Drag cards through columns, see all agent work in one place |
-| Ceremonies | Versioned, auditable workflow automations (code review, bug fix, RFC) |
+| Durable workflows | Workflows survive across sessions, tracked and resumable |
+| Live visualization | Board view with real-time agent output, all work in one place |
+| Project templates | Squadboard apps and templates that structure agent work |
 | Live run viewer | Stream agent output in real-time, step by step |
+| Ceremonies | Optional versioned, auditable workflow automations (code review, bug fix, RFC) |
 | Squad sync | State flows bidirectionally between board and `.squad/` files |
 | MCP broker | Connect Copilot CLI, VS Code, or any MCP client — agents can read/write the board |
 | Zero setup | Embedded PGlite (WASM Postgres) — no Docker, no cloud account |
