@@ -33,6 +33,7 @@
     "@changesets/changelog-github": "^0.7.0",
     "@changesets/cli": "^2.31.0",
     "@playwright/test": "^1.49.0",
+    "@resvg/resvg-js": "^2.6.2",
     "playwright": "^1.60.0",
     "ts-node": "^10.9.2",
     "typescript": "^6.0.3"

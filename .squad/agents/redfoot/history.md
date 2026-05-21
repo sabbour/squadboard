@@ -79,3 +79,13 @@ Redfoot delivered on schedule with zero quality issues. All pages include URL ro
 ## Team Collaboration
 
 Works closely with Keyser (UI/UX) on docs that need UI context. Cross-referenced in orchestration logs when docs changes align with feature work.
+
+## Learnings
+
+- **W32 Wave 8: Ceremony Architecture Documentation**
+  - **Date:** 2026-05-21
+  - **Status:** ✅ Complete
+  - **Outcome:** Created `.squadboard/docs/ceremony-workflow-architecture.md` — comprehensive reference documenting the ceremony/workflow architecture
+  - **Coverage:** File ownership split, ceremony data flows (DB→Disk→DB), engine execution model, ceremony delegation with MCP coordination, built-in ceremonies, and Squad CLI project import flow
+  - **Purpose:** Enables team and future contributors to understand the contention-prevention design, file system layout, and Squad CLI integration model
+  - **Key decision captured:** Invariants around DB as execution source, ceremonies.md as awareness interface, and at-most-one-executor guarantee
