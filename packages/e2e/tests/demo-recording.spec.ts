@@ -89,11 +89,11 @@ test('Scenario A.1 — Cast a team and add the first card', async ({ page }, tes
 
   // Navigate to board — show all 5 default columns
   await page.goto(`/projects/${newProjectId}/board`)
-  await expect(page.getByText('Backlog')).toBeVisible({ timeout: 10_000 })
-  await expect(page.getByText('Ready')).toBeVisible()
-  await expect(page.getByText('In Progress')).toBeVisible()
-  await expect(page.getByText('In Review')).toBeVisible()
-  await expect(page.getByText('Done')).toBeVisible()
+  await expect(page.getByText('Backlog').first()).toBeVisible({ timeout: 10_000 })
+  await expect(page.getByText('Ready').first()).toBeVisible()
+  await expect(page.getByText('In Progress').first()).toBeVisible()
+  await expect(page.getByText('In Review').first()).toBeVisible()
+  await expect(page.getByText('Done').first()).toBeVisible()
   await pause(page)
   await capture(page, testInfo, 'a1-01-board-columns')
 
@@ -133,7 +133,7 @@ test('Scenario A.1 — Cast a team and add the first card', async ({ page }, tes
 
   // Navigate back to board and add the first card to Backlog
   await page.goto(`/projects/${newProjectId}/board`)
-  await expect(page.getByText('Backlog')).toBeVisible({ timeout: 10_000 })
+  await expect(page.getByText('Backlog').first()).toBeVisible({ timeout: 10_000 })
 
   // Capture the new issue ID from the API response while clicking Create
   const [createResponse] = await Promise.all([
@@ -185,7 +185,7 @@ test('Scenario A.2 — Board in action', async ({ page }, testInfo) => {
   await ctx.dispose()
 
   await page.reload()
-  await expect(page.getByText('Ready')).toBeVisible()
+  await expect(page.getByText('Ready').first()).toBeVisible()
   await pause(page)
   await capture(page, testInfo, 'a2-01-card-in-ready')
 
@@ -209,7 +209,7 @@ test('Scenario A.2 — Board in action', async ({ page }, testInfo) => {
 
   // Card auto-moves to In Review after the run — show the board
   await page.goto(`/projects/${newProjectId}/board`)
-  await expect(page.getByText('In Review')).toBeVisible({ timeout: 10_000 })
+  await expect(page.getByText('In Review').first()).toBeVisible({ timeout: 10_000 })
   await pause(page, 1500)
   await capture(page, testInfo, 'a2-05-board-in-review')
 
@@ -239,7 +239,7 @@ test('Scenario A.2 — Board in action', async ({ page }, testInfo) => {
   await ctx2.dispose()
 
   await page.goto(`/projects/${newProjectId}/board`)
-  await expect(page.getByText('Done')).toBeVisible({ timeout: 10_000 })
+  await expect(page.getByText('Done').first()).toBeVisible({ timeout: 10_000 })
   await pause(page, 1500)
   await capture(page, testInfo, 'a2-09-card-done')
 
@@ -282,7 +282,7 @@ test('Scenario B — Onboard an existing Squad project', async ({ page }, testIn
   // Connect — scaffolds .squad/ and navigates to the board
   await page.getByRole('button', { name: /Connect/i }).click()
   await page.waitForURL(/\/projects\/[^/]+\/board/, { timeout: 30_000 })
-  await expect(page.getByText('Backlog')).toBeVisible({ timeout: 10_000 })
+  await expect(page.getByText('Backlog').first()).toBeVisible({ timeout: 10_000 })
   await pause(page)
   await capture(page, testInfo, 'b-03-connected-board')
 

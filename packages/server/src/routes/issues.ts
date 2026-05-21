@@ -209,7 +209,7 @@ router.post('/', async (req: Request, res: Response) => {
       });
 
       if (match) {
-        // Look up the agent by name within this project
+        // Look up the agent by name within this project — only active agents
         const [agent] = await getDb()
           .select()
           .from(schema.agents)
@@ -217,6 +217,7 @@ router.post('/', async (req: Request, res: Response) => {
             and(
               eq(schema.agents.projectId, projectId),
               eq(schema.agents.name, match.agentName),
+              eq(schema.agents.status, 'active'),
             ),
           );
 

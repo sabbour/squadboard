@@ -13,8 +13,12 @@
  */
 import { defineConfig } from '@playwright/test'
 
-const baseURL = process.env.SQUADBOARD_E2E_BASE_URL ?? 'http://localhost:5173'
-const apiBaseURL = process.env.SQUADBOARD_E2E_API_BASE ?? 'http://localhost:3000'
+const baseURL = process.env.SQUADBOARD_E2E_BASE_URL ?? 'http://localhost:5174'
+const apiBaseURL = process.env.SQUADBOARD_E2E_API_BASE ?? 'http://localhost:3001'
+
+// Make these available to test workers so fixtures.ts reads the correct ports
+process.env.SQUADBOARD_E2E_BASE_URL = baseURL
+process.env.SQUADBOARD_E2E_API_BASE = apiBaseURL
 const runningFromE2ePackage = process.cwd().endsWith('/packages/e2e')
 const repoRoot = runningFromE2ePackage ? '../..' : '.'
 const e2eRoot = runningFromE2ePackage ? process.cwd() : `${process.cwd()}/packages/e2e`

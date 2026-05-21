@@ -19,7 +19,7 @@
  * further operations (e.g. re-casting agents via Init Mode).
  */
 
-import { readFile } from 'node:fs/promises';
+import { readFile, mkdir, writeFile } from 'node:fs/promises';
 import { resolve, dirname, isAbsolute } from 'node:path';
 import { eq, and } from 'drizzle-orm';
 import { getDb, getPool, schema } from '../db/index.js';
@@ -352,6 +352,15 @@ async function applyTeam(
     if (opts.dryRun) {
       result.applied.push(`team: would create agent "${member.name}" (role=${member.role})`);
       continue;
+    }
+
+    // Write charter to disk so agent-sync doesn't retire the agent on first visit.
+    const agentDir = resolve(squadPath, 'agents', agentSlug || 'member');
+    try {
+      await mkdir(agentDir, { recursive: true });
+      await writeFile(charterPath, charterBody, 'utf-8');
+    } catch (diskErr) {
+      result.warnings.push(`team: could not write disk charter for "${member.name}": ${str(diskErr)}`);
     }
 
     if (existingByName.has(key) && opts.overwriteExisting) {
