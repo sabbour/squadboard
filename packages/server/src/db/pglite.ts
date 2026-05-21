@@ -29,7 +29,7 @@
  */
 
 import { PGlite } from '@electric-sql/pglite';
-import { mkdirSync } from 'node:fs';
+import { existsSync, mkdirSync, renameSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 
@@ -147,7 +147,34 @@ export async function startPglite(): Promise<string> {
     // on a half-aborted WASM instance and potentially corrupt the data dir.
     _pglite = null;
     _startedSuccessfully = false;
-    throw err;
+
+    const isWasmAbort =
+      err instanceof Error &&
+      (err.name === 'RuntimeError' || err.message.includes('Aborted'));
+
+    if (!isWasmAbort) throw err;
+
+    // Back up the corrupted data directory and retry once with a fresh one.
+    const backupPath = `${PGLITE_DATA_DIR}.corrupted.${Date.now()}`;
+    if (existsSync(PGLITE_DATA_DIR)) {
+      renameSync(PGLITE_DATA_DIR, backupPath);
+      console.warn(
+        `[pglite] ⚠️  WASM boot failed — data directory backed up to ${backupPath} and reset. ` +
+          `Server starting with empty database. To restore, copy files back from the backup.`,
+      );
+    }
+    mkdirSync(PGLITE_DATA_DIR, { recursive: true });
+
+    try {
+      _pglite = new PGlite(PGLITE_DATA_DIR);
+      await _pglite.waitReady;
+      console.log('[pglite] ✅ Recovery successful — started with fresh database.');
+    } catch (retryErr) {
+      _pglite = null;
+      _startedSuccessfully = false;
+      console.error('[pglite] ❌ Recovery failed — could not start PGlite even with a fresh directory.');
+      throw retryErr;
+    }
   }
 
   _startedSuccessfully = true;
