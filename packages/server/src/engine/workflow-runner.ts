@@ -31,6 +31,7 @@ import type { RequestChangesPolicy } from './peer-reviewer.js';
 import { materializeAndSpawnFanOut, checkFanOutCompletion } from './fan-out.js';
 import { appendSystemComment } from '../services/issues.js';
 import { eventBus } from '../realtime/event-bus.js';
+import { fireCeremoniesOnColumnEntry } from '../services/ceremony-column-trigger.js';
 
 type DbExecutor = DrizzleDb | Parameters<Parameters<DrizzleDb['transaction']>[0]>[0];
 
@@ -1184,13 +1185,76 @@ async function advanceToNextStep(
     const pid = await getProjectIdForWorkflowRun(workflowRunId);
     if (pid) {
       eventBus.emitFlowEvent('flow.instance.ended', pid, { instanceId: workflowRunId, status: 'completed' });
+      // When an in-review ceremony (e.g. Simple Review) finishes, auto-advance
+      // the issue to Done so the user doesn't have to click "Move to Done" manually.
+      void autoMoveReviewedIssueToDone(workflowRunId, pid);
     }
   }
 }
 
-// ---------------------------------------------------------------------------
-// tickWorkflowAdvancement — called by dispatcher on every tick (Demo 10)
-// ---------------------------------------------------------------------------
+/**
+ * If the completed workflow_run was triggered by an `on_issue_entry:in-review`
+ * ceremony, move the anchored issue to the project's first 'done' column.
+ * This implements the "Once satisfied → move to Completed" flow without requiring
+ * any manual user action after the review ceremony completes.
+ */
+async function autoMoveReviewedIssueToDone(
+  workflowRunId: string,
+  projectId: string,
+): Promise<void> {
+  try {
+    const db = getDb();
+    const { workflowRuns: wfTable } = schema;
+    const [run] = await db
+      .select({ triggerSource: wfTable.triggerSource, issueId: wfTable.issueId })
+      .from(wfTable)
+      .where(eq(wfTable.id, workflowRunId))
+      .limit(1);
+
+    if (!run) return;
+    const ts = run.triggerSource as { eventType?: string; anchorIssueId?: string } | null;
+    if (!ts || ts.eventType !== 'on_issue_entry:in-review') return;
+
+    const issueId = ts.anchorIssueId ?? run.issueId;
+    if (!issueId) return;
+
+    const result = await db.execute(sql`
+      WITH target AS (
+        SELECT column_id
+        FROM   column_meta
+        WHERE  project_id = ${projectId}
+          AND  semantic = 'done'
+        ORDER  BY position ASC
+        LIMIT  1
+      )
+      UPDATE issues
+      SET    status = target.column_id, updated_at = NOW()
+      FROM   target
+      WHERE  issues.id = ${issueId}::uuid
+        AND  issues.status <> target.column_id
+      RETURNING issues.id, issues.project_id, issues.status, issues.position
+    `);
+    const [row] = result.rows as Array<{
+      id: string;
+      project_id: string;
+      status: string;
+      position: number | null;
+    }>;
+    if (!row) return;
+
+    eventBus.emitIssueEvent('issue.moved', row.project_id, {
+      issueId: row.id,
+      column: row.status,
+      position: row.position ?? undefined,
+    });
+    console.log(`[workflow-runner] auto-moved issue ${row.id} to done column after review ceremony completed`);
+
+    // Fire on_issue_entry ceremonies for 'done' — this emits wave.closeout → Scribe
+    fireCeremoniesOnColumnEntry(row.project_id, row.id, row.status, 'done');
+  } catch (err) {
+    console.error(`[workflow-runner] autoMoveReviewedIssueToDone failed for run ${workflowRunId}:`, err);
+  }
+}
 
 /**
  * Advance all non-terminal workflow_runs by one step.

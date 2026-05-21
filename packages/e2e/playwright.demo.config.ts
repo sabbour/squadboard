@@ -46,6 +46,8 @@ export default defineConfig({
   workers: 1,
   reporter: [['list']],
   globalTeardown: './tests/global-teardown.ts',
+  // Real LLM calls + multi-agent ceremonies can take many minutes.
+  timeout: 600_000,
 
   use: {
     baseURL,
@@ -55,6 +57,8 @@ export default defineConfig({
     launchOptions: {
       slowMo: 300,
     },
+    actionTimeout: 30_000,
+    navigationTimeout: 30_000,
   },
 
   projects: [

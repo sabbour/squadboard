@@ -10,7 +10,7 @@
 
 import { Router } from 'express';
 import type { Request, Response } from 'express';
-import { eq, and } from 'drizzle-orm';
+import { eq, and, desc } from 'drizzle-orm';
 import { getDb, schema } from '../db/index.js';
 import { parseWorkflowYaml, validateWorkflowYaml } from '../services/workflow-parser.js';
 import { createWorkflowRun } from '../engine/workflow-runner.js';
@@ -280,6 +280,34 @@ issueWorkflowRouter.delete('/', async (req: Request, res: Response) => {
       .where(eq(schema.issueWorkflows.issueId, issueId));
 
     res.json({ message: 'Workflow detached', issueId });
+  } catch (err) {
+    handleError(res, err);
+  }
+});
+
+// GET /run   — return the most recent non-terminal workflow_run for this issue.
+// Used by CardDetail to show the ReviewPanel when an approve step is waiting.
+issueWorkflowRouter.get('/run', async (req: Request, res: Response) => {
+  try {
+    const { issueId } = req.params as Record<string, string>;
+    const db = getDb();
+    const { workflowRuns } = schema;
+
+    // Prefer an active run (pending/running) over a completed one so the
+    // approve panel appears while the ceremony is in flight.
+    const [active] = await db
+      .select()
+      .from(workflowRuns)
+      .where(
+        and(
+          eq(workflowRuns.issueId, issueId),
+          // match any non-terminal status
+        ),
+      )
+      .orderBy(desc(workflowRuns.createdAt))
+      .limit(1);
+
+    res.json(active ?? null);
   } catch (err) {
     handleError(res, err);
   }

@@ -213,37 +213,32 @@ test('Scenario A.2 — Board in action', async ({ page }, testInfo) => {
   await pause(page, 1500)
   await capture(page, testInfo, 'a2-05-board-in-review')
 
-  // Simple Review ceremony auto-triggered on card entry into In Review
-  // Navigate to ceremonies and wait for it to appear as active
-  await page.goto(`/projects/${newProjectId}/ceremonies`)
-  await expect(page.getByRole('heading', { name: 'Ceremonies' })).toBeVisible({ timeout: 10_000 })
-  await expect(page.getByText('Simple Review')).toBeVisible({ timeout: 60_000 })
-  await pause(page)
-  await capture(page, testInfo, 'a2-06-review-ceremony-triggered')
+  // Simple Review ceremony auto-triggered on card entry into In Review.
+  // Open the card detail and wait for the reviewer agent to finish, then approve.
+  await page.getByText(DEMO_CARD_TITLE).click()
+  await expect(page.getByRole('dialog')).toBeVisible({ timeout: 10_000 })
+  await pause(page, 1000)
+  await capture(page, testInfo, 'a2-06-card-detail-in-review')
 
-  // Open the Simple Review ceremony
-  await page.getByText('Simple Review').click()
-  await pause(page, 1200)
-  await capture(page, testInfo, 'a2-07-review-ceremony-detail')
-
-  // Wait for the ceremony to complete — Lead's peer review run finishes (real LLM)
-  await expect(page.getByText('Completed', { exact: false })).toBeVisible({ timeout: 300_000 })
+  // Wait for the reviewer agent_run step to complete — Approve button appears
+  const approveBtn = page.getByRole('button', { name: 'Approve' })
+  await expect(approveBtn).toBeVisible({ timeout: 300_000 })
   await pause(page, 1500)
-  await capture(page, testInfo, 'a2-08-review-completed')
+  await capture(page, testInfo, 'a2-07-review-approve-gate')
 
-  // Move card to Done — triggers Scribe (wave.closeout) automatically
-  const ctx2 = await request.newContext({ baseURL: API_BASE })
-  await ctx2.patch(`/api/projects/${newProjectId}/issues/${demoCardId}/move`, {
-    data: { status: 'done' },
-  })
-  await ctx2.dispose()
+  // Human approval — Lead approves the work
+  await approveBtn.click()
+  await pause(page, 2000)
+  await capture(page, testInfo, 'a2-08-review-approved')
 
+  // Card auto-moves to Done after review ceremony completes — show the board
+  await page.keyboard.press('Escape')
   await page.goto(`/projects/${newProjectId}/board`)
-  await expect(page.getByText('Done').first()).toBeVisible({ timeout: 10_000 })
+  await expect(page.getByText('Done').first()).toBeVisible({ timeout: 30_000 })
   await pause(page, 1500)
   await capture(page, testInfo, 'a2-09-card-done')
 
-  // Scribe ceremony fires automatically — show it in the ceremonies list
+  // Scribe ceremony fires automatically (wave.closeout on Done entry)
   await page.goto(`/projects/${newProjectId}/ceremonies`)
   await expect(
     page.getByText('Scribe', { exact: false }).or(page.getByText('scribe', { exact: false }))
