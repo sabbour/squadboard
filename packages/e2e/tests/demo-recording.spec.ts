@@ -384,7 +384,7 @@ test('Scenario C — Run a ceremony', async ({ page }, testInfo) => {
   const issueId = await createIssueViaApi(squadboardProjectId, {
     title: DEMO_ISSUE_TITLE,
     body: 'Create marketing-friendly product proof points for the README.',
-    status: 'in_progress',
+    status: 'ready',
   })
   const ceremony = await createCeremony(squadboardProjectId, 'Demo Code Review')
   const runId = 'demo-workflow-run-001'
@@ -434,7 +434,7 @@ test('Scenario D — Live run tracking', async ({ page }, testInfo) => {
   const issueId = await createIssueViaApi(squadboardProjectId, {
     title: 'Track live README polishing run',
     body: 'Show a realistic run transcript for README video capture.',
-    status: 'in_progress',
+    status: 'ready',
   })
   const runId = 'demo-live-run-001'
 
