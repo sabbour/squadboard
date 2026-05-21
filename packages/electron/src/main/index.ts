@@ -61,6 +61,7 @@ async function createWindow(): Promise<BrowserWindow> {
     height: 900,
     minWidth: 1024,
     minHeight: 700,
+    center: true,  // open centered on the primary display
     title: 'Squadboard',
     icon: iconPath,
     show: false, // show after ready-to-show to avoid flash
