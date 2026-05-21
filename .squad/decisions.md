@@ -1,3 +1,252 @@
+## 2026-05-20T16:46:17-07:00 — L3 Electron Full-Client Renderer Wiring (McManus)
+
+# Decision: L3 Electron Full-Client Renderer Wiring
+
+**Date:** 2026-05-20T16:46:17-07:00  
+**Owner:** McManus (Lead Architect)  
+**Status:** DECISION — awaiting Keyser implementation  
+**Scope:** `packages/electron` renderer wiring for production build
+
+---
+
+## Decision 1: Build Integration → **Option A (electron-vite inline)**
+
+Update the `renderer` section of `electron-vite.config.ts` to use `packages/client` as its Vite root, adding the React and TailwindCSS v4 plugins, baking in `VITE_API_URL`, and setting the `@/` alias. One `electron-vite build` command builds main, preload, and the full React client in one pass.
+
+**Why not Option B (copy step):**
+- Copy steps are fragile cross-platform (shell cp vs. node scripts vs. @nrwl/copyfiles)
+- Option B keeps the client's own `tsc -b && vite build` separate — but that typecheck is redundant with what the client CI already does
+- Option A keeps build artifacts co-located in `packages/electron/dist/` — exactly what electron-vite and electron-builder expect
+- No timing dependency to manage: electron-vite orchestrates all three sections atomically
+
+**Why Option A works here:**
+- TailwindCSS v4 uses `@import "tailwindcss"` in `globals.css` — no `tailwind.config.js` required; the `@tailwindcss/vite` plugin auto-discovers it when root is set to `../../client`
+- The `@/*` alias is a single `resolve.alias` entry — not complex
+- Client's `vite.config.ts` proxy config is irrelevant to the renderer *build* (only active during `vite dev`); we don't inherit it
+- Three plugins needed in electron's devDeps — minor cost
+
+---
+
+## Decision 2: API URL
+
+**`VITE_API_URL = "http://localhost:3000"`** baked into the renderer build via `define` in the electron-vite renderer config.
+
+This covers both surfaces that read it:
+- `src/api/client.ts`: `BASE = import.meta.env.VITE_API_URL ?? ''` → becomes `http://localhost:3000`
+- `src/realtime/ws-client.ts`: `import.meta.env.VITE_API_URL ?? window.location.protocol//host` → becomes `http://localhost:3000`; the WS client will translate `http://` → `ws://` at connection time (verify this in ws-client.ts — if not, Keyser needs to ensure the URL scheme is right)
+
+---
+
+## Decision 3: Dev Mode
+
+**No change.** Dev mode (`electron:dev`) loads `ELECTRON_RENDERER_URL ?? http://localhost:5173` (the standalone Vite dev server in `packages/client`), which already has the `/api` and `/api/ws` proxy to localhost:3000. The renderer section of electron-vite is not used in dev — it runs a separate dev server that is never loaded. This is correct behavior.
+
+---
+
+## Decision 4: Build Order
+
+**Root `electron:build` chains:**
+```
+pnpm --filter @sabbour/squadboard build && pnpm --filter @sabbour/squadboard-electron build
+```
+
+- Server must build first (electron main reads `packages/server/dist/index.js` via server-launcher)
+- Client is built *by* the electron-vite renderer section — no separate step needed
+- Do NOT add a `prebuild` to `packages/electron/package.json`; keep build orchestration at the root level
+
+---
+
+## Exact File Changes (Keyser implements)
+
+### 1. `packages/electron/electron-vite.config.ts`
+- Import `react` from `@vitejs/plugin-react` and `tailwindcss` from `@tailwindcss/vite`
+- Replace renderer section:
+  - `root: resolve(__dirname, '../../client')`
+  - `plugins: [react(), tailwindcss()]`
+  - `define: { 'import.meta.env.VITE_API_URL': JSON.stringify('http://localhost:3000') }`
+  - `resolve: { alias: { '@': resolve(__dirname, '../../client/src') } }`
+  - `rollupOptions.input.index: resolve(__dirname, '../../client/index.html')`
+  - `outDir: 'dist/renderer'` (unchanged)
+
+### 2. `packages/electron/package.json`
+- **Fix `"main"` field:** `out/main/index.js` → `dist/main/index.js` ← **this is the A1 bug from the deep review; L3 won't run without this fix**
+- Add to `devDependencies`:
+  - `@vitejs/plugin-react` (match version in packages/client)
+  - `@tailwindcss/vite` (match version in packages/client)
+  - `tailwindcss` (match version in packages/client)
+
+### 3. `package.json` (repo root)
+- Update `electron:build`:
+  ```
+  "electron:build": "pnpm --filter @sabbour/squadboard build && pnpm --filter @sabbour/squadboard-electron build"
+  ```
+
+### 4. `packages/electron/tsconfig.renderer.json`
+- Update `include` to `["../../client/src"]` so the renderer typecheck covers the real client source
+- Consider referencing `"references": [{ "path": "../../client/tsconfig.json" }]` if composite builds are set up
+
+### 5. `packages/electron/src/renderer/` (L2 stub)
+- Can be left in place — it will no longer be the renderer root and won't be built
+- Recommend deleting `src/renderer/index.ts` and `src/renderer/index.html` to avoid confusion; keep `global.d.ts` if it declares Electron IPC types that are still needed
+
+---
+
+## Risks & Gotchas for Keyser
+
+### 🔴 Critical
+
+1. **`"main"` field is wrong** (`out/main/index.js` vs `dist/main/index.js`) — Electron can't find the entry point. Fix this in the same PR; without it, even L2 never ran.
+
+2. **WebSocket URL scheme** — `ws-client.ts` uses `import.meta.env.VITE_API_URL` which will be `http://localhost:3000`. Verify the WS client converts this to `ws://localhost:3000` correctly. If it does string-replace or uses `URL` constructor with `ws:` override, it's fine. If it assumes `ws://` prefix and gets `http://`, it will fail. Inspect `ws-client.ts` line 5 and the connection call.
+
+### 🟡 Medium
+
+3. **pnpm doesn't hoist plugins** — No `.npmrc` with `shamefully-hoist` means `@vitejs/plugin-react` and `@tailwindcss/vite` from `packages/client/node_modules` are NOT on electron's resolution path. Must add them explicitly to electron's `devDependencies` and run `pnpm install`.
+
+4. **`BrowserRouter` under `file://`** — The client uses `react-router` v7's `BrowserRouter`. Under Electron's `file://` protocol, `pushState` works for in-session navigation. However, if the window is ever reloaded (not expected in L3), or if `loadFile` is called again on `app.activate` after navigation, it resets to route `/`. This is acceptable for L3 but must be revisited before shipping a production release. If hard-reload support is needed, switch `BrowserRouter` → `HashRouter` in `packages/client/src/main.tsx` (or conditionalize on `window.location.protocol === 'file:'`).
+
+5. **TailwindCSS v4 CSS scanning** — The `@tailwindcss/vite` plugin scans for utility class usage. With root at `../../client`, it should pick up all `*.tsx` files under that root automatically. No additional configuration needed, but verify the build output includes the expected CSS.
+
+### �� Low
+
+6. **`tsconfig.renderer.json` lint step** — The `lint` and `typecheck` scripts in electron's `package.json` run `tsc --noEmit -p tsconfig.renderer.json`, which currently includes `src/renderer`. After updating the include path to `../../client/src`, this now type-checks the real renderer. The client's existing TS errors (if any) will surface here. Run `pnpm --filter @sabbour/squadboard-electron lint` after the change to verify clean.
+
+7. **electron-builder `files` glob** — `electron-builder.yml` currently bundles `dist/**/*`. After L3, `dist/renderer/` contains the full React app. No change needed to `electron-builder.yml` for L3. (L7 handles packaging, installers, and signing.)
+
+8. **Server `ready in` detection** — `server-launcher.ts` waits for `line.includes('ready in')` to resolve startup. Confirm the server still emits this banner after the server dead-code cleanup (W31). If the banner changed, update the match string.
+
+---
+
+## What is NOT in scope for L3
+
+- Packaging (electron-builder DMG/NSIS/AppImage) — L7
+- Auto-update — L8
+- Code signing — L9
+- MCP child processes — L5
+- Embedded PG — L4
+- HashRouter migration (acceptable to defer)
+
+---
+
+## 2026-05-20T16:46:17-07:00 — User Directive: MCP Endpoints from Electron App
+
+### 2026-05-20T16:46:17-07:00: User directive
+**By:** Ahmed Sabbour (via Copilot)
+**What:** MCP endpoints must also be exposed by the Electron app process — not just available via the standalone `squadboard mcp` CLI.
+**Why:** User request — the Electron app should advertise and wire MCP HTTP transport so external clients (Claude Desktop, VS Code, Cursor) can discover and connect to it while the app is running.
+
+---
+
+## 2026-05-20 — Expose MCP Endpoints from Electron App Process (Hockney)
+
+# Decision: Expose MCP Endpoints from Electron App Process
+
+**Date:** 2026-05-20  
+**Owner:** Hockney  
+**Status:** ✅ IMPLEMENTED (L3/L5 pull-forward)  
+**Commit:** 6bbeafc61
+
+---
+
+## Summary
+
+The MCP HTTP transport was already mounted at `/mcp` on the Express server (port 3000), but the Electron shell did not wire or advertise it. This decision implements the Electron-side integration.
+
+---
+
+## What Was Implemented
+
+### IPC Channels (3 new)
+
+| Channel | Purpose |
+|---|---|
+| `mcp.getConnectionInfo` | Returns `{ url, transport, port }` + optional live tool list from `/mcp/health` |
+| `mcp.setDefaultProject` | Persists a default project ID to `{userData}/squadboard-mcp-config.json` |
+| `mcp.getDefaultProject` | Reads back the default project ID (null if unset) |
+
+### Server Launcher
+
+On startup, reads `{userData}/squadboard-mcp-config.json` and, if a `defaultProjectId` is stored, injects `SQUADBOARD_DEFAULT_PROJECT_ID` into the server child process environment. This allows the MCP server to serve a pre-configured default project without user intervention each session.
+
+### Menu
+
+Added **"Copy MCP URL"** under Help menu. Copies `http://localhost:3000/mcp` to the clipboard and shows a modal dialog confirming the URL was copied.
+
+### Preload
+
+`ALLOWED_CHANNELS` extended with the three MCP channels; stale L5/L6 forward-looking comments removed.
+
+---
+
+## Design Decisions
+
+### Why userData for MCP config?
+`app.getPath('userData')` survives app updates and is per-user per-installation, making it the correct store for Electron-side preferences like the default project selection.
+
+### Why not restart the server after `mcp.setDefaultProject`?
+Restarting the server would drop all active connections and is disruptive. The persisted config takes effect on next Electron launch. If live switching is needed in future, the server's `setDefaultProjectId()` export can be called via HTTP (e.g., a new API endpoint), but that is out of scope.
+
+### Why Copy MCP URL instead of a proper Integrations panel?
+Minimal surface area for L3. The MCP URL is static (`http://localhost:3000/mcp`) and doesn't change. A full "Integrations" UI is planned for a later layer once multi-project MCP config is needed.
+
+### Why no stdio MCP changes?
+The `squadboard mcp` CLI command (stdio transport) is already correct and used by Claude Desktop / Cursor in process-mode. No changes needed there.
+
+---
+
+## What Was NOT Changed
+
+- `.copilot/mcp-config.json` — dev tooling only, not touched
+- `packages/server/src/mcp/*` — MCP server implementation is correct as-is
+- Stdio MCP transport (`squadboard mcp` command)
+
+---
+
+## MCP Endpoint Reference
+
+| Route | Method | Purpose |
+|---|---|---|
+| `/mcp` | POST | JSON-RPC (initialize, tools/list, tools/call) |
+| `/mcp` | GET | SSE stream |
+| `/mcp` | DELETE | Explicit session close |
+| `/mcp/health` | GET | Health probe; returns tool list |
+
+---
+
+## 2026-05-20T16:05:49Z — Starter Apps: Model Upgrade to claude-sonnet-4.6 (McManus)
+
+## 2026-05-20T16:05:49Z — Starter Apps: Model Upgrade to claude-sonnet-4.6
+
+**Owner:** McManus  
+**Status:** ✅ IMPLEMENTED  
+**Commit:** 2b04aa968
+
+## Decision
+
+Upgrade all 21 Squadboard starter apps from `claude-sonnet-4.5` to `claude-sonnet-4.6` and version from `0.8.0` to `0.9.0`. Fix a silent bug in `pickModelString` that dropped all model preferences.
+
+## Rationale
+
+- `claude-sonnet-4.6` is the current recommended model — starters should showcase the best available.
+- `pickModelString` ignored `{ preferred }` format used by `defineDefaults`, meaning installed projects got no model preference. Users saw default fallback models instead of what the starter specified.
+- `index.json` blurbs for 4 starters were truncated mid-sentence by the generator, giving a poor first impression in the app browser.
+
+## Changes Made
+
+1. **`irl-mapper.ts`** — Added `obj.preferred` check before `obj.id` in `pickModelString`.
+2. **21 `source.ts` files** — `claude-sonnet-4.5` → `claude-sonnet-4.6`, `version: '0.8.0'` → `version: '0.9.0'`.
+3. **21 `meta.json` files** — `"defaultModel": null` → `"defaultModel": "claude-sonnet-4.6"`.
+4. **21 `plan.json` files** — `defaultModel` and each agent's `model` set to `claude-sonnet-4.6`.
+5. **`index.json`** — Fixed 4 truncated blurbs, updated `generatedAt`, set `source.origin` to `local`.
+
+## Impact
+
+- All new projects created from starters will use claude-sonnet-4.6 by default.
+- Model preferences from `defineDefaults` in source code now propagate correctly through the IRL mapper.
+- All 1,297 tests pass (121 test files, 1 skipped).
+
+---
+
 ## 2026-05-20T21:13:00Z — Wave 6: Comprehensive App Reference Documentation (Redfoot)
 
 # Decision: Comprehensive App Reference Documentation

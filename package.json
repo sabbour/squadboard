@@ -20,7 +20,8 @@
     "cli:start": "pnpm --filter @sabbour/squadboard-cli start",
     "test:e2e": "pnpm --filter @sabbour/squadboard-e2e test",
     "electron:dev": "pnpm --filter @sabbour/squadboard-electron dev",
-    "electron:build": "pnpm --filter @sabbour/squadboard-electron build"
+    "electron:build": "pnpm --filter @sabbour/squadboard build && pnpm --filter @sabbour/squadboard-electron build",
+    "npm:configure-trusted-publisher": "npx ts-node scripts/configure-npm-trusted-publisher.ts"
   },
   "engines": {
     "node": ">=20.0.0",
