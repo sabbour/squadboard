@@ -16,7 +16,7 @@
  *   - First-run UX (L6)
  *   - MCP child process management (L5)
  */
-import { app, BrowserWindow, shell } from 'electron';
+import { app, BrowserWindow, shell, screen } from 'electron';
 import { join, dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { startServer, stopServer } from './server-launcher.js';
@@ -52,6 +52,10 @@ app.on('second-instance', () => {
 
 // ── Window factory ────────────────────────────────────────────────────────────
 async function createWindow(): Promise<BrowserWindow> {
+  // Match the OS device-pixel-ratio so fonts render at the correct size on
+  // high-DPI displays (e.g. 4K monitors, Retina screens, HiDPI on Linux).
+  const scaleFactor = screen.getPrimaryDisplay().scaleFactor;
+
   const win = new BrowserWindow({
     width: 1440,
     height: 900,
@@ -66,6 +70,9 @@ async function createWindow(): Promise<BrowserWindow> {
       contextIsolation: true,  // required
       nodeIntegration: false,  // never enable in renderer
       sandbox: true,
+      // Apply the display scale factor so content isn't rendered too small
+      // on high-DPI screens where the OS doesn't inject the scale automatically.
+      zoomFactor: scaleFactor,
     },
   });
 
@@ -134,14 +141,27 @@ app.on('before-quit', (event) => {
   event.preventDefault();
 
   console.log('[main] before-quit — stopping server...');
+
+  // Safety valve: force-exit after 6 s in case stopServer hangs.
+  // .unref() ensures this timer doesn't keep the process alive on its own.
+  const quitTimeout = setTimeout(() => {
+    console.warn('[main] quit timeout — forcing exit');
+    app.exit(0);
+  }, 6_000);
+  quitTimeout.unref();
+
   stopServer()
     .then(() => {
-      console.log('[main] server stopped — quitting');
-      app.quit();
+      clearTimeout(quitTimeout);
+      console.log('[main] server stopped — exiting');
+      // Use app.exit() rather than app.quit() so we bypass the event loop
+      // and any dev-server sockets that might keep the process alive.
+      app.exit(0);
     })
     .catch((err) => {
+      clearTimeout(quitTimeout);
       console.error('[main] error stopping server:', err);
-      app.quit();
+      app.exit(1);
     });
 });
 

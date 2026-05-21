@@ -78,11 +78,17 @@ function resolveServerPath(): string {
  */
 export function startServer(): Promise<void> {
   return new Promise((resolve, reject) => {
+    // In dev mode the server is managed externally by the pnpm dev script.
+    // Never spawn a second instance here — it would fail to bind the port and
+    // crash on missing dist/db/migrations assets.
+    if (!app.isPackaged) {
+      resolve();
+      return;
+    }
+
     const serverPath = resolveServerPath();
 
     if (!existsSync(serverPath)) {
-      // In dev, the server may not be built yet. Log a warning and resolve
-      // immediately; the renderer will show an error when it can't reach /api.
       console.warn(
         `[server-launcher] server not built at ${serverPath} — skipping launch.\n` +
           `Run: pnpm --filter @sabbour/squadboard build`,
