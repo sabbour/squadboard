@@ -1,7 +1,4 @@
-import { fileURLToPath } from 'node:url';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-
-const expectedMcpEntry = fileURLToPath(new URL('../../dist/mcp/index.js', import.meta.url));
 
 const {
   handlers,
@@ -229,7 +226,7 @@ describe('squad-sync project routes', () => {
     expect(actionIds).not.toContain('expose-sync-status-api');
     expect(body.data.repair.actions).toContainEqual(expect.objectContaining({
       id: 'write-mcp-config',
-      reason: 'Write the MCP broker config to .copilot/mcp-config.json so Copilot CLI can connect to this Squadboard instance.',
+      reason: 'Write the MCP broker config to .mcp.json so Copilot CLI can connect to this Squadboard instance.',
       required: false,
       mode: 'manual',
     }));
@@ -285,7 +282,7 @@ describe('squad-sync project routes', () => {
     expect(mockFsWriteFile).not.toHaveBeenCalled();
   });
 
-  it('POST /repair writes .copilot/mcp-config.json for the current project', async () => {
+  it('POST /repair writes .mcp.json for the current project', async () => {
     const handler = handlers['POST']?.['/repair'];
     if (!handler) throw new Error('POST /repair handler not registered');
 
@@ -303,29 +300,19 @@ describe('squad-sync project routes', () => {
     });
     expect(body.data.results[0].changes).toEqual(expect.arrayContaining([
       expect.objectContaining({
-        path: '.copilot',
-        operation: 'create-dir',
-        status: 'applied',
-      }),
-      expect.objectContaining({
-        path: '.copilot/mcp-config.json',
+        path: '.mcp.json',
         operation: 'write-file',
         status: 'applied',
         message: 'wrote squadboard MCP server entry',
       }),
     ]));
-    expect(mockFsMkdir).toHaveBeenCalledWith('/workspace/project/.copilot', { recursive: true });
+    expect(mockFsMkdir).not.toHaveBeenCalled();
     expect(mockFsWriteFile).toHaveBeenCalledWith(
-      '/workspace/project/.copilot/mcp-config.json',
+      '/workspace/project/.mcp.json',
       `${JSON.stringify({
         mcpServers: {
           squadboard: {
-            command: 'node',
-            args: [expectedMcpEntry],
-            env: {
-              SQUADBOARD_SQUAD_STORAGE_PROVIDER: 'postgresql',
-              SQUADBOARD_DEFAULT_PROJECT_ID: 'project-1',
-            },
+            url: 'http://localhost:3000/mcp',
           },
         },
       }, null, 2)}\n`,
@@ -340,20 +327,19 @@ describe('squad-sync project routes', () => {
       if (
         targetPath === '/workspace/project'
         || targetPath === '/workspace/project/.squad'
-        || targetPath === '/workspace/project/.copilot'
       ) {
         return dirStat();
       }
       if (
         targetPath.endsWith('ceremonies.md')
-        || targetPath === '/workspace/project/.copilot/mcp-config.json'
+        || targetPath === '/workspace/project/.mcp.json'
       ) {
         return fileStat();
       }
       throw enoent();
     });
     mockFsReadFile.mockImplementation(async (targetPath: string) => {
-      if (targetPath === '/workspace/project/.copilot/mcp-config.json') {
+      if (targetPath === '/workspace/project/.mcp.json') {
         return JSON.stringify({
           theme: 'dark',
           mcpServers: {
@@ -383,7 +369,7 @@ describe('squad-sync project routes', () => {
 
     expect(getStatus()).toBe(200);
     expect(mockFsWriteFile).toHaveBeenCalledWith(
-      '/workspace/project/.copilot/mcp-config.json',
+      '/workspace/project/.mcp.json',
       `${JSON.stringify({
         theme: 'dark',
         mcpServers: {
@@ -392,12 +378,7 @@ describe('squad-sync project routes', () => {
             args: ['serve'],
           },
           squadboard: {
-            command: 'node',
-            args: [expectedMcpEntry],
-            env: {
-              SQUADBOARD_SQUAD_STORAGE_PROVIDER: 'postgresql',
-              SQUADBOARD_DEFAULT_PROJECT_ID: 'project-1',
-            },
+            url: 'http://localhost:3000/mcp',
           },
         },
       }, null, 2)}\n`,

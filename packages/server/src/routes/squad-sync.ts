@@ -226,8 +226,7 @@ Before starting work:
 If any of those files are missing, ask the user to run Squadboard sync repair for this project before continuing.
 `;
 
-const MCP_CONFIG_RELATIVE_PATH = '.copilot/mcp-config.json';
-const MCP_CONFIG_DIRNAME = '.copilot';
+const MCP_CONFIG_RELATIVE_PATH = '.mcp.json';
 
 const ACTION_ALIASES: Record<RepairActionId, RepairActionId> = {
   'repair-scaffold-squad': 'repair-scaffold-squad',
@@ -446,7 +445,7 @@ function adaptRepairActions(status: SquadSyncOwnershipStatus): ApiRepairAction[]
       id: 'write-mcp-config',
       aliases: [],
       owner: 'Hockney',
-      reason: 'Write the MCP broker config to .copilot/mcp-config.json so Copilot CLI can connect to this Squadboard instance.',
+      reason: 'Write the MCP broker config to .mcp.json so Copilot CLI can connect to this Squadboard instance.',
       mode: 'manual',
       available: true,
       required: false,
@@ -1011,7 +1010,6 @@ function buildSquadboardMcpServerConfig(): Record<string, unknown> {
 
 async function writeMcpConfig(project: ProjectContext, status: SquadSyncOwnershipStatus, dryRun: boolean): Promise<RepairResult> {
   const targetPath = path.join(project.projectRoot, MCP_CONFIG_RELATIVE_PATH);
-  const configDir = path.join(project.projectRoot, MCP_CONFIG_DIRNAME);
   const changes: RepairChange[] = [];
 
   if (status.storage.mode !== 'postgresql') {
@@ -1026,17 +1024,6 @@ async function writeMcpConfig(project: ProjectContext, status: SquadSyncOwnershi
         reason: 'write_mcp_config_requires_postgresql',
       }],
     };
-  }
-
-  const dirChange = await ensureDirIfSafe(project.projectRoot, configDir, dryRun);
-  if (dirChange.status !== 'unchanged') {
-    changes.push({
-      ...dirChange,
-      path: dirChange.path === configDir ? MCP_CONFIG_DIRNAME : dirChange.path,
-    });
-  }
-  if (dirChange.status === 'skipped' || dirChange.status === 'failed') {
-    return resultFor('write-mcp-config', changes);
   }
 
   const desiredServerConfig = buildSquadboardMcpServerConfig();

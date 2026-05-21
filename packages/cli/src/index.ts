@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import { spawn } from 'node:child_process';
 import { existsSync } from 'node:fs';
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { readFile, writeFile } from 'node:fs/promises';
 import { createConnection } from 'node:net';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
@@ -49,7 +49,7 @@ Storage:
 
 Config:
   --print-mcp-config  Print a Copilot CLI MCP config block and exit.
-  --write-mcp-config  Merge a squadboard entry into .copilot/mcp-config.json.
+  --write-mcp-config  Merge a squadboard entry into .mcp.json.
 
 `.trim();
 
@@ -115,8 +115,7 @@ function isJsonObject(value: unknown): value is Record<string, unknown> {
 }
 
 async function writeMcpConfigFile(squadStorageProvider: string): Promise<void> {
-  const configDir = join(process.cwd(), '.copilot');
-  const configPath = join(configDir, 'mcp-config.json');
+  const configPath = join(process.cwd(), '.mcp.json');
   let config: Record<string, unknown> = {};
 
   if (existsSync(configPath)) {
@@ -134,7 +133,6 @@ async function writeMcpConfigFile(squadStorageProvider: string): Promise<void> {
     squadboard: buildMcpServerConfig(squadStorageProvider),
   };
 
-  await mkdir(configDir, { recursive: true });
   await writeFile(configPath, `${JSON.stringify(config, null, 2)}\n`, 'utf8');
   console.log(`[cli] wrote ${configPath}`);
 }
