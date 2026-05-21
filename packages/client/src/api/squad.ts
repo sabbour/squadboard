@@ -65,6 +65,7 @@ export type SquadSyncRepairAction =
   | 'rescan-drift'
   | 'expose-sync-status-api'
   | 'write-mcp-config'
+  | 'onboard-to-squadboard'
 
 export interface SquadSyncFileCheck {
   path: string

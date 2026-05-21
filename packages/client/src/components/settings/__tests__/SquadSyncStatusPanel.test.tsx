@@ -215,6 +215,57 @@ describe('SquadSyncStatusPanel', () => {
     expect(screen.getByText(/http:\/\/localhost:3000\/mcp/)).toBeInTheDocument()
   })
 
+  it('renders the primary Connect to Squadboard CTA ahead of targeted repair actions', () => {
+    apiMock.statusQuery.data = serverStatus({
+      authority: databaseAuthorityWithoutMirror(),
+      repair: manualExportRepair(),
+    })
+
+    render(<SquadSyncStatusPanel projectId="project-1" />)
+
+    const cta = screen.getByTestId('connect-to-squadboard-card')
+    const repairButton = screen.getByTestId('repair-action-project-squad-to-fs')
+
+    expect(cta).toHaveTextContent('⚡ Connect to Squadboard')
+    expect(cta).toHaveTextContent(/Sets up MCP config, seeds ceremonies, and imports your existing Squad CLI workflows/i)
+    expect(screen.getByTestId('connect-to-squadboard-button')).toBeInTheDocument()
+    expect(cta.compareDocumentPosition(repairButton) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+  })
+
+  it('runs onboarding from the primary CTA and shows loading + success feedback', async () => {
+    const user = userEvent.setup()
+    let resolveMutation: ((value: unknown) => void) | null = null
+    apiMock.repairMutation.mutateAsync.mockImplementation(() => new Promise((resolve) => {
+      resolveMutation = resolve
+    }))
+
+    render(<SquadSyncStatusPanel projectId="project-1" />)
+
+    await user.click(screen.getByTestId('connect-to-squadboard-button'))
+
+    expect(apiMock.repairMutation.mutateAsync).toHaveBeenCalledWith({
+      actions: ['onboard-to-squadboard'],
+      dryRun: false,
+    })
+    expect(screen.getByRole('button', { name: 'Connecting…' })).toBeDisabled()
+
+    resolveMutation?.({ repaired: ['onboard-to-squadboard'] })
+
+    expect(await screen.findByText('Squadboard connected: Connect to Squadboard.')).toBeInTheDocument()
+    expect(apiMock.statusQuery.refetch).toHaveBeenCalled()
+  })
+
+  it('shows onboarding errors from the primary CTA', async () => {
+    const user = userEvent.setup()
+    apiMock.repairMutation.mutateAsync.mockRejectedValue(new Error('Composite onboarding action not available yet'))
+
+    render(<SquadSyncStatusPanel projectId="project-1" />)
+
+    await user.click(screen.getByTestId('connect-to-squadboard-button'))
+
+    expect(await screen.findByText('Composite onboarding action not available yet')).toBeInTheDocument()
+  })
+
   it('configures the MCP broker from the card and shows success feedback', async () => {
     const user = userEvent.setup()
     apiMock.statusQuery.data = serverStatus({

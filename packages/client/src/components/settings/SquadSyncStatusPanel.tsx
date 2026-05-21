@@ -101,6 +101,7 @@ const ACTION_LABELS: Record<string, string> = {
   'generate-client-artifact': 'Generate CLI/Copilot agent file',
   'project-squad-to-fs': 'Export Squadboard state to .squad files',
   'write-mcp-config': 'Configure MCP broker',
+  'onboard-to-squadboard': 'Connect to Squadboard',
   rescan_drift: 'Rescan drift',
   'rescan-drift': 'Rescan drift',
   'expose-sync-status-api': 'Backend status API work',
@@ -671,6 +672,18 @@ function completedActionLabel(action: NormalizedRepairAction): string {
   return action.required ? 'Repair applied' : 'Export completed'
 }
 
+function repairOutcomeSummary(result: RepairSquadSyncResult, fallback: string): string {
+  if (result.repaired?.length) {
+    return result.repaired.map((action) => ACTION_LABELS[action] ?? action).join(', ')
+  }
+  if (result.results?.length) {
+    return result.results
+      .map((item) => `${ACTION_LABELS[item.action] ?? item.action}: ${item.status}`)
+      .join(', ')
+  }
+  return fallback
+}
+
 function pluralize(count: number, singular: string, plural = `${singular}s`): string {
   return `${count} ${count === 1 ? singular : plural}`
 }
@@ -757,6 +770,9 @@ export function SquadSyncStatusPanel({ projectId }: SquadSyncStatusPanelProps) {
   const [applyMessage, setApplyMessage] = useState<string | null>(null)
   const [applyError, setApplyError] = useState<string | null>(null)
   const [isApplying, setIsApplying] = useState(false)
+  const [onboardingMessage, setOnboardingMessage] = useState<string | null>(null)
+  const [onboardingError, setOnboardingError] = useState<string | null>(null)
+  const [isOnboarding, setIsOnboarding] = useState(false)
   const [configureMessage, setConfigureMessage] = useState<string | null>(null)
   const [configureError, setConfigureError] = useState<string | null>(null)
   const [isConfiguringBroker, setIsConfiguringBroker] = useState(false)
@@ -810,11 +826,7 @@ export function SquadSyncStatusPanel({ projectId }: SquadSyncStatusPanelProps) {
     setIsApplying(true)
     try {
       const result = await repair.mutateAsync({ actions: [previewModal.action.requestId], dryRun: false })
-      const repaired = result.repaired?.length
-        ? result.repaired.join(', ')
-        : result.results?.length
-          ? result.results.map((item) => `${ACTION_LABELS[item.action] ?? item.action}: ${item.status}`).join(', ')
-          : previewModal.action.label
+      const repaired = repairOutcomeSummary(result, previewModal.action.label)
       setPreviewModal(null)
       setApplyMessage(`${completedActionLabel(previewModal.action)}: ${repaired}.`)
       void statusQuery.refetch()
@@ -841,7 +853,28 @@ export function SquadSyncStatusPanel({ projectId }: SquadSyncStatusPanelProps) {
     }
   }
 
-  const isPreviewPending = repair.isPending && !previewModal && !isConfiguringBroker
+  async function handleOnboardToSquadboard() {
+    setApplyMessage(null)
+    setApplyError(null)
+    setConfigureMessage(null)
+    setConfigureError(null)
+    setOnboardingMessage(null)
+    setOnboardingError(null)
+    setIsOnboarding(true)
+    try {
+      const result = await repair.mutateAsync({ actions: ['onboard-to-squadboard'], dryRun: false })
+      const summary = repairOutcomeSummary(result, 'Connected to Squadboard')
+      setOnboardingMessage(`Squadboard connected: ${summary}.`)
+      void statusQuery.refetch()
+    } catch (error) {
+      setOnboardingError(error instanceof Error ? error.message : 'Failed to connect to Squadboard')
+    } finally {
+      setIsOnboarding(false)
+    }
+  }
+
+  const isPreviewPending = repair.isPending && !previewModal && !isConfiguringBroker && !isOnboarding
+  const showOnboardingCta = Boolean(statusQuery.data.projection?.projectRoot ?? statusQuery.data.squadPath ?? projectId)
 
   return (
     <>
@@ -952,6 +985,52 @@ export function SquadSyncStatusPanel({ projectId }: SquadSyncStatusPanelProps) {
             <FactCard label="Storage mode" value={status.storageMode} detail={status.storageDetail} />
             <FactCard label="Ceremonies" value={status.ceremoniesTitle} detail={status.ceremoniesMessage} />
           </div>
+
+          {showOnboardingCta && (
+            <div
+              data-testid="connect-to-squadboard-card"
+              style={{
+                ...cardStyle,
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '12px',
+                border: `1px solid ${tokens.colorBrandStroke1}`,
+                background: tokens.colorBrandBackground2,
+              }}
+            >
+              <div style={{ display: 'flex', gap: '10px', alignItems: 'flex-start' }}>
+                <PlugConnected20Regular style={{ color: tokens.colorBrandForeground1, flexShrink: 0 }} />
+                <div style={{ minWidth: 0 }}>
+                  <Subtitle2 as="h3" style={{ display: 'block', marginBottom: '4px' }}>
+                    ⚡ Connect to Squadboard
+                  </Subtitle2>
+                  <Caption1 style={{ display: 'block', color: tokens.colorNeutralForeground2 }}>
+                    Sets up MCP config, seeds ceremonies, and imports your existing Squad CLI workflows — everything needed to get started.
+                  </Caption1>
+                </div>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap', alignItems: 'center' }}>
+                <Caption1 style={{ display: 'block', color: tokens.colorNeutralForeground2, flex: '1 1 320px' }}>
+                  Use this first for the fastest setup. Advanced repair and export actions stay available below for targeted fixes.
+                </Caption1>
+                <Button
+                  appearance="primary"
+                  icon={isOnboarding ? <Spinner size="tiny" /> : <PlugConnected20Regular />}
+                  disabled={isOnboarding || repair.isPending}
+                  data-testid="connect-to-squadboard-button"
+                  onClick={() => void handleOnboardToSquadboard()}
+                >
+                  {isOnboarding ? 'Connecting…' : 'Connect to Squadboard'}
+                </Button>
+              </div>
+              {onboardingMessage && (
+                <Caption1 style={{ color: tokens.colorPaletteGreenForeground1 }}>{onboardingMessage}</Caption1>
+              )}
+              {onboardingError && (
+                <Caption1 style={{ color: tokens.colorPaletteRedForeground1 }}>{onboardingError}</Caption1>
+              )}
+            </div>
+          )}
 
           <div style={{ ...cardStyle, display: 'flex', flexDirection: 'column', gap: '12px' }}>
             <Subtitle2 as="h3" style={{ display: 'block', marginBottom: '4px' }}>
