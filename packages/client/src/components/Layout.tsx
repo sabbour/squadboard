@@ -556,7 +556,7 @@ function LayoutInner() {
             <Button
               appearance="subtle"
               icon={<DocumentBulletList24Regular />}
-              onClick={() => window.open('https://sabbour.me/squadboard/docs', '_blank', 'noopener,noreferrer')}
+              onClick={() => window.open('https://sabbour.me/squadboard/', '_blank', 'noopener,noreferrer')}
               title="Open Squadboard docs"
             >
               Docs

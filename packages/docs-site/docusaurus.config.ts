@@ -7,7 +7,7 @@ const config: Config = {
   favicon: 'img/squadboard.svg',
 
   url: 'https://sabbour.me',
-  baseUrl: '/squadboard/docs/',
+  baseUrl: '/squadboard/',
 
   organizationName: 'sabbour',
   projectName: 'squadboard',
