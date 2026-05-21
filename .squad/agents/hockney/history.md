@@ -77,4 +77,6 @@ Added a single onboarding repair action that runs MCP config write, built-in cer
 - Keeping the composite action first in the status payload gives Settings a stable primary onboarding button without removing the lower-level repair actions.
 - The onboarding drift check belongs on the existing sync status envelope so the UI can poll one read-only endpoint for both repair availability and reconciliation state.
 - Filesystem-authoritative projects must skip the built-in ceremony DB query; their onboarding drift should report `ceremoniesSeeded: false` without implying `squad_storage` usage.
+- A `.squadboard/.connected` marker cleanly separates "connected" lifecycle state from drift state; the status route can gate reconciliation on the marker while still preserving ceremonies as durable data.
+- Disconnect must remove config only: strip the `squadboard` MCP entry and delete the connection marker, but leave ceremonies and regenerated `.squad/ceremonies.md` untouched.
 

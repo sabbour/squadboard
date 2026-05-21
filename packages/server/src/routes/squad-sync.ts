@@ -31,6 +31,7 @@ import type {
 
 type RepairActionId =
   | 'onboard-to-squadboard'
+  | 'disconnect-squadboard'
   | 'repair-scaffold-squad'
   | 'seed-ceremony-defaults'
   | 'import-ceremonies-from-md'
@@ -92,6 +93,7 @@ interface StatusEnvelope {
     storage: {
       squadStorage: SquadStorageMetadata | null;
     };
+    connected: boolean;
     onboardingSync: OnboardingSyncStatus;
     bootstrap: SquadSyncOwnershipStatus['bootstrap'];
     projection: SquadSyncOwnershipStatus['projection'];
@@ -128,7 +130,7 @@ interface ApiRepairAction {
 
 interface RepairChange {
   path: string;
-  operation: 'create-dir' | 'write-file' | 'export-db-file' | 'seed-db';
+  operation: 'create-dir' | 'write-file' | 'delete-file' | 'export-db-file' | 'seed-db';
   status: RepairChangeStatus;
   reason?: string;
   message?: string;
@@ -245,6 +247,7 @@ If any of those files are missing, ask the user to run Squadboard sync repair fo
 `;
 
 const MCP_CONFIG_RELATIVE_PATH = '.mcp.json';
+const CONNECTED_MARKER_RELATIVE_PATH = path.join('.squadboard', '.connected');
 const CEREMONY_GENERATOR_SYSTEM_MESSAGE = 'You are a workflow YAML generator for Squadboard. Given a ceremony description in markdown, generate a valid apiVersion: squad.io/v1 / kind: Ceremony YAML. Return only the YAML — no markdown fences, no prose.';
 const SPRINT_PLANNING_YAML_EXAMPLE = BUILT_IN_CEREMONIES.find((entry) => entry.slug === 'sprint-planning')?.yamlContent ?? '';
 const BUILT_IN_CEREMONY_NAMES = new Set(
@@ -259,6 +262,7 @@ const BUILT_IN_CEREMONY_NAMES = new Set(
 
 const ACTION_ALIASES: Record<RepairActionId, RepairActionId> = {
   'onboard-to-squadboard': 'onboard-to-squadboard',
+  'disconnect-squadboard': 'disconnect-squadboard',
   'repair-scaffold-squad': 'repair-scaffold-squad',
   'seed-ceremony-defaults': 'seed-ceremony-defaults',
   'import-ceremonies-from-md': 'import-ceremonies-from-md',
@@ -532,14 +536,14 @@ function buildDrift(
   };
 }
 
-const REPAIR_ACTION_PRIORITY: RepairActionId[] = ['onboard-to-squadboard'];
+const REPAIR_ACTION_PRIORITY: RepairActionId[] = ['onboard-to-squadboard', 'disconnect-squadboard'];
 const HIDDEN_REPAIR_ACTIONS = new Set<RepairActionId>([
   'write-mcp-config',
   'seed-ceremony-defaults',
   'import-ceremonies-from-md',
 ]);
 
-function adaptRepairActions(status: SquadSyncOwnershipStatus): ApiRepairAction[] {
+function adaptRepairActions(status: SquadSyncOwnershipStatus, connected = false): ApiRepairAction[] {
   const fromSdk = status.repairActions
     .filter((action) => action.id !== 'expose-sync-status-api')
     .map((action): ApiRepairAction => {
@@ -576,6 +580,17 @@ function adaptRepairActions(status: SquadSyncOwnershipStatus): ApiRepairAction[]
     destructive: false,
     endpoint: 'POST /api/projects/:projectId/squad-sync/repair',
   });
+  byId.set('disconnect-squadboard', {
+    id: 'disconnect-squadboard',
+    aliases: [],
+    owner: 'Hockney',
+    reason: 'Remove Squadboard connection config by deleting the .connected marker and removing the squadboard MCP entry.',
+    mode: 'manual',
+    available: connected,
+    required: false,
+    destructive: false,
+    endpoint: 'POST /api/projects/:projectId/squad-sync/repair',
+  });
 
   for (const action of fromSdk) {
     byId.set(action.id, action);
@@ -605,6 +620,93 @@ function adaptRepairActions(status: SquadSyncOwnershipStatus): ApiRepairAction[]
     }
     return a.id.localeCompare(b.id);
   });
+}
+
+function connectedMarkerPath(projectRoot: string): string {
+  return path.join(projectRoot, CONNECTED_MARKER_RELATIVE_PATH);
+}
+
+async function hasConnectedMarker(projectRoot: string): Promise<boolean> {
+  return await statKind(connectedMarkerPath(projectRoot)) === 'file';
+}
+
+function disconnectedOnboardingSync(): OnboardingSyncStatus {
+  return {
+    mcpConfigPresent: false,
+    ceremoniesSeeded: false,
+    squadAgentPresent: false,
+    inSync: false,
+    driftedFields: ['mcpConfigPresent', 'ceremoniesSeeded', 'squadAgentPresent'],
+  };
+}
+
+function connectedMarkerContent(): string {
+  return `${JSON.stringify({ connectedAt: new Date().toISOString(), version: 1 }, null, 2)}\n`;
+}
+
+async function writeConnectedMarker(project: ProjectContext, dryRun: boolean): Promise<RepairChange[]> {
+  const markerPath = connectedMarkerPath(project.projectRoot);
+  const rootCheck = await rootIsWritable(project.projectRoot);
+  if (!rootCheck.ok) {
+    return [{
+      path: project.projectRoot,
+      operation: 'write-file',
+      status: 'skipped',
+      reason: rootCheck.reason,
+      message: rootCheck.message,
+    }];
+  }
+
+  const changes: RepairChange[] = [];
+  const parentChange = await ensureParentDirs(project.projectRoot, markerPath, dryRun);
+  if (parentChange) {
+    changes.push(parentChange);
+    if (parentChange.status === 'skipped' || parentChange.status === 'failed') {
+      return changes;
+    }
+  }
+
+  const kind = await statKind(markerPath);
+  if (kind === 'symlink' || kind === 'directory' || kind === 'other' || kind === 'inaccessible') {
+    changes.push({
+      path: markerPath,
+      operation: 'write-file',
+      status: 'skipped',
+      reason: kind === 'symlink' ? 'target_is_symlink' : `target_${kind}`,
+    });
+    return changes;
+  }
+
+  if (dryRun) {
+    changes.push({
+      path: markerPath,
+      operation: 'write-file',
+      status: 'would-apply',
+      reason: kind === 'file' ? 'connected_marker_would_be_updated' : 'file_missing',
+      message: 'would write Squadboard connected marker',
+    });
+    return changes;
+  }
+
+  try {
+    await fs.writeFile(markerPath, connectedMarkerContent(), 'utf-8');
+    changes.push({
+      path: markerPath,
+      operation: 'write-file',
+      status: 'applied',
+      reason: kind === 'file' ? 'connected_marker_updated' : 'file_created',
+      message: 'wrote Squadboard connected marker',
+    });
+  } catch (err) {
+    changes.push({
+      path: markerPath,
+      operation: 'write-file',
+      status: 'failed',
+      reason: 'write_failed',
+      message: toErrorMessage(err),
+    });
+  }
+  return changes;
 }
 
 async function hasSquadboardMcpConfig(projectRoot: string): Promise<boolean> {
@@ -691,14 +793,17 @@ export async function buildSquadSyncStatusEnvelope(projectId: string): Promise<S
   const squadPath = status.projection.squadPath?.trim()
     ? normalizeSquadPath(status.projection.squadPath)
     : path.join(projectRoot, '.squad');
-  const onboardingSync = await checkOnboardingSync(
-    {
-      projectId,
-      projectRoot,
-      squadPath,
-    },
-    status.storage.mode,
-  );
+  const connected = await hasConnectedMarker(projectRoot);
+  const onboardingSync = connected
+    ? await checkOnboardingSync(
+      {
+        projectId,
+        projectRoot,
+        squadPath,
+      },
+      status.storage.mode,
+    )
+    : disconnectedOnboardingSync();
 
   return {
     ok: true,
@@ -718,13 +823,14 @@ export async function buildSquadSyncStatusEnvelope(projectId: string): Promise<S
       storage: {
         squadStorage: metadata,
       },
+      connected,
       onboardingSync,
       bootstrap: status.bootstrap,
       projection: status.projection,
       drift: buildDrift(status, metadata),
       repair: {
         dryRunSupported: true,
-        actions: adaptRepairActions(status),
+        actions: adaptRepairActions(status, connected),
       },
     },
   };
@@ -738,7 +844,11 @@ function parseRepairAction(value: unknown): RepairActionId | null {
 
 async function defaultRepairActions(projectId: string): Promise<RepairActionId[]> {
   const status = await getProjectSyncOwnershipStatus(projectId);
-  const actions = adaptRepairActions(status)
+  const projectRoot = status.projection.projectRoot?.trim()
+    ? path.resolve(status.projection.projectRoot)
+    : process.cwd();
+  const connected = await hasConnectedMarker(projectRoot);
+  const actions = adaptRepairActions(status, connected)
     .filter((action) => action.required)
     .map((action) => action.id);
   return [...new Set(actions)];
@@ -1387,6 +1497,156 @@ function buildSquadboardMcpServerConfig(): Record<string, unknown> {
   };
 }
 
+async function deleteFileIfSafe(
+  projectRoot: string,
+  filePath: string,
+  dryRun: boolean,
+  reasonWhenDeleted: string,
+  reasonWhenMissing = 'already_absent',
+): Promise<RepairChange> {
+  const rootCheck = await rootIsWritable(projectRoot);
+  if (!rootCheck.ok) {
+    return {
+      path: projectRoot,
+      operation: 'delete-file',
+      status: 'skipped',
+      reason: rootCheck.reason,
+      message: rootCheck.message,
+    };
+  }
+
+  if (!isPathInside(projectRoot, filePath)) {
+    return {
+      path: filePath,
+      operation: 'delete-file',
+      status: 'skipped',
+      reason: 'target_outside_project_root',
+    };
+  }
+
+  const kind = await statKind(filePath);
+  if (kind === 'missing') {
+    return {
+      path: filePath,
+      operation: 'delete-file',
+      status: 'skipped',
+      reason: reasonWhenMissing,
+    };
+  }
+  if (kind !== 'file') {
+    return {
+      path: filePath,
+      operation: 'delete-file',
+      status: 'skipped',
+      reason: kind === 'symlink' ? 'target_is_symlink' : `target_${kind}`,
+    };
+  }
+
+  if (dryRun) {
+    return {
+      path: filePath,
+      operation: 'delete-file',
+      status: 'would-apply',
+      reason: reasonWhenDeleted,
+    };
+  }
+
+  try {
+    await fs.unlink(filePath);
+    return {
+      path: filePath,
+      operation: 'delete-file',
+      status: 'applied',
+      reason: reasonWhenDeleted,
+    };
+  } catch (err) {
+    return {
+      path: filePath,
+      operation: 'delete-file',
+      status: 'failed',
+      reason: 'delete_failed',
+      message: toErrorMessage(err),
+    };
+  }
+}
+
+async function disconnectSquadboard(project: ProjectContext, dryRun: boolean): Promise<RepairResult> {
+  const changes: RepairChange[] = [];
+  const mcpPath = path.join(project.projectRoot, MCP_CONFIG_RELATIVE_PATH);
+  const markerPath = connectedMarkerPath(project.projectRoot);
+  const kind = await statKind(mcpPath);
+
+  if (kind === 'missing') {
+    changes.push({
+      path: MCP_CONFIG_RELATIVE_PATH,
+      operation: 'delete-file',
+      status: 'skipped',
+      reason: 'already_absent',
+    });
+  } else if (kind !== 'file') {
+    changes.push({
+      path: MCP_CONFIG_RELATIVE_PATH,
+      operation: 'delete-file',
+      status: 'skipped',
+      reason: kind === 'symlink' ? 'target_is_symlink' : `target_${kind}`,
+    });
+  } else {
+    try {
+      const raw = await fs.readFile(mcpPath, 'utf-8');
+      const parsed = JSON.parse(raw) as unknown;
+      if (!isJsonObject(parsed)) {
+        throw new Error(`${MCP_CONFIG_RELATIVE_PATH} must contain a JSON object.`);
+      }
+      const servers = isJsonObject(parsed['mcpServers']) ? { ...parsed['mcpServers'] } : {};
+      if (!('squadboard' in servers)) {
+        changes.push({
+          path: MCP_CONFIG_RELATIVE_PATH,
+          operation: 'delete-file',
+          status: 'skipped',
+          reason: 'squadboard_mcp_entry_missing',
+        });
+      } else {
+        delete servers['squadboard'];
+        if (Object.keys(servers).length === 0) {
+          changes.push(await deleteFileIfSafe(project.projectRoot, mcpPath, dryRun, 'mcp_config_removed'));
+        } else {
+          const nextConfig = { ...parsed, mcpServers: servers };
+          if (dryRun) {
+            changes.push({
+              path: MCP_CONFIG_RELATIVE_PATH,
+              operation: 'write-file',
+              status: 'would-apply',
+              reason: 'mcp_config_would_be_updated',
+              message: 'would remove squadboard MCP server entry',
+            });
+          } else {
+            await fs.writeFile(mcpPath, `${JSON.stringify(nextConfig, null, 2)}\n`, 'utf-8');
+            changes.push({
+              path: MCP_CONFIG_RELATIVE_PATH,
+              operation: 'write-file',
+              status: 'applied',
+              reason: 'mcp_config_updated',
+              message: 'removed squadboard MCP server entry',
+            });
+          }
+        }
+      }
+    } catch (err) {
+      changes.push({
+        path: MCP_CONFIG_RELATIVE_PATH,
+        operation: 'delete-file',
+        status: 'failed',
+        reason: 'disconnect_mcp_failed',
+        message: toErrorMessage(err),
+      });
+    }
+  }
+
+  changes.push(await deleteFileIfSafe(project.projectRoot, markerPath, dryRun, 'connected_marker_removed'));
+
+  return resultFor('disconnect-squadboard', changes, 'already_disconnected');
+}
+
 async function onboardToSquadboard(project: ProjectContext, dryRun: boolean): Promise<RepairResult> {
   const status = await getProjectSyncOwnershipStatus(project.projectId);
   const changes: RepairChange[] = [];
@@ -1420,7 +1680,13 @@ async function onboardToSquadboard(project: ProjectContext, dryRun: boolean): Pr
     });
   }
 
-  return resultFor('onboard-to-squadboard', changes);
+  const result = resultFor('onboard-to-squadboard', changes);
+  if (result.status !== 'failed') {
+    result.changes.push(...await writeConnectedMarker(project, dryRun));
+    return resultFor('onboard-to-squadboard', result.changes);
+  }
+
+  return result;
 }
 
 async function writeMcpConfig(project: ProjectContext, status: SquadSyncOwnershipStatus, dryRun: boolean): Promise<RepairResult> {
@@ -1637,6 +1903,8 @@ async function runAction(
   switch (ACTION_ALIASES[action]) {
     case 'onboard-to-squadboard':
       return onboardToSquadboard(project, dryRun);
+    case 'disconnect-squadboard':
+      return disconnectSquadboard(project, dryRun);
     case 'repair-scaffold-squad':
       return repairScaffold(project, dryRun);
     case 'seed-ceremony-defaults':

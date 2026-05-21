@@ -133,6 +133,7 @@ describe('GET /api/projects/:projectId/squad-sync/status', () => {
         storageMode: 'postgresql',
         continuousSync: false,
       },
+      connected: false,
       onboardingSync: {
         mcpConfigPresent: false,
         ceremoniesSeeded: false,
@@ -159,7 +160,7 @@ describe('GET /api/projects/:projectId/squad-sync/status', () => {
       },
     });
     expect(body.data.repair.actions.map((action: Record<string, unknown>) => action.id))
-      .toEqual(expect.arrayContaining(['onboard-to-squadboard', 'generate-github-agent']));
+      .toEqual(expect.arrayContaining(['onboard-to-squadboard', 'disconnect-squadboard', 'generate-github-agent']));
     expect(body.data.repair.actions.map((action: Record<string, unknown>) => action.id))
       .not.toEqual(expect.arrayContaining(['seed-ceremony-defaults', 'import-ceremonies-from-md', 'write-mcp-config']));
   });
@@ -205,6 +206,7 @@ describe('GET /api/projects/:projectId/squad-sync/status', () => {
       expect.objectContaining({ code: 'ceremony_defaults_missing' }),
       expect.objectContaining({ code: 'recommended_projection_missing' }),
     ]));
+    expect(body.data.connected).toBe(false);
     expect(body.data.onboardingSync).toEqual({
       mcpConfigPresent: false,
       ceremoniesSeeded: false,
@@ -213,7 +215,7 @@ describe('GET /api/projects/:projectId/squad-sync/status', () => {
       driftedFields: ['mcpConfigPresent', 'ceremoniesSeeded', 'squadAgentPresent'],
     });
     expect(body.data.repair.actions.map((action: Record<string, unknown>) => action.id))
-      .toEqual(expect.arrayContaining(['onboard-to-squadboard', 'generate-github-agent']));
+      .toEqual(expect.arrayContaining(['onboard-to-squadboard', 'disconnect-squadboard', 'generate-github-agent']));
     expect(body.data.repair.actions.map((action: Record<string, unknown>) => action.id))
       .not.toEqual(expect.arrayContaining(['seed-ceremony-defaults', 'import-ceremonies-from-md', 'write-mcp-config']));
   });
@@ -248,6 +250,7 @@ describe('GET /api/projects/:projectId/squad-sync/status', () => {
       storageMode: 'filesystem',
     });
     expect(body.data.storage.squadStorage).toBeNull();
+    expect(body.data.connected).toBe(false);
     expect(poolQueryMock).not.toHaveBeenCalled();
   });
 });

@@ -34,3 +34,7 @@ Settings needed one obvious onboarding button instead of three separate backend 
    - Settings can treat it as the primary onboarding CTA while still exposing unrelated repairs underneath.
 7. **Reconciliation rides on the existing status endpoint.**
    - `GET /squad-sync/status` now returns `onboardingSync` with `mcpConfigPresent`, `ceremoniesSeeded`, `squadAgentPresent`, `inSync`, and `driftedFields`, so the frontend can poll one read-only surface for drift.
+8. **Connected state is explicit and filesystem-backed.**
+   - Successful onboarding writes `.squadboard/.connected` with `{ connectedAt, version }`; status derives `connected` from that marker and only runs live reconciliation when the marker exists.
+9. **Disconnect removes config, not ceremony data.**
+   - `disconnect-squadboard` deletes the marker and removes the `squadboard` MCP entry (or `.mcp.json` if it was the only entry) but leaves DB ceremonies and `.squad/ceremonies.md` intact.

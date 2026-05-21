@@ -9,6 +9,7 @@ const {
   mockFsReadFile,
   mockFsWriteFile,
   mockFsMkdir,
+  mockFsUnlink,
   mockSeedBuiltInCeremonies,
   mockSyncCeremoniesFromDisk,
   mockRunFormulator,
@@ -23,6 +24,7 @@ const {
   mockFsReadFile: vi.fn(),
   mockFsWriteFile: vi.fn(),
   mockFsMkdir: vi.fn(),
+  mockFsUnlink: vi.fn(),
   mockSeedBuiltInCeremonies: vi.fn(),
   mockSyncCeremoniesFromDisk: vi.fn(),
   mockRunFormulator: vi.fn(),
@@ -79,6 +81,7 @@ vi.mock('node:fs/promises', () => ({
     readFile: (...args: unknown[]) => mockFsReadFile(...args),
     writeFile: (...args: unknown[]) => mockFsWriteFile(...args),
     mkdir: (...args: unknown[]) => mockFsMkdir(...args),
+    unlink: (...args: unknown[]) => mockFsUnlink(...args),
     readdir: vi.fn(),
   },
 }));
@@ -222,6 +225,7 @@ describe('squad-sync project routes', () => {
     mockFsReadFile.mockResolvedValue('# Ceremonies\n\nProject ceremonies will be listed here.\n');
     mockFsWriteFile.mockResolvedValue(undefined);
     mockFsMkdir.mockResolvedValue(undefined);
+    mockFsUnlink.mockResolvedValue(undefined);
     mockSeedBuiltInCeremonies.mockResolvedValue({
       projectId: 'project-1',
       seeded: [
@@ -248,6 +252,7 @@ describe('squad-sync project routes', () => {
         || targetPath === '/workspace/project/.squad'
         || targetPath === '/workspace/project/.mcp.json'
         || targetPath === '/workspace/project/.copilot/squad.agent.md'
+        || targetPath === '/workspace/project/.squadboard/.connected'
         || targetPath.endsWith('ceremonies.md')
       ) {
         return targetPath === '/workspace/project' || targetPath === '/workspace/project/.squad'
@@ -284,6 +289,7 @@ describe('squad-sync project routes', () => {
       available: true,
       rowCount: 3,
     });
+    expect(body.data.connected).toBe(true);
     expect(body.data.onboardingSync).toEqual({
       mcpConfigPresent: true,
       ceremoniesSeeded: true,
@@ -299,6 +305,7 @@ describe('squad-sync project routes', () => {
     const actionIds = body.data.repair.actions.map((action: Record<string, unknown>) => action.id);
     expect(actionIds[0]).toBe('onboard-to-squadboard');
     expect(actionIds).toContain('generate-github-agent');
+    expect(actionIds).toContain('disconnect-squadboard');
     expect(actionIds).not.toContain('seed-ceremony-defaults');
     expect(actionIds).not.toContain('import-ceremonies-from-md');
     expect(actionIds).not.toContain('write-mcp-config');
@@ -307,6 +314,11 @@ describe('squad-sync project routes', () => {
       id: 'onboard-to-squadboard',
       reason: 'Write .mcp.json, seed built-in ceremonies, import custom ceremonies.md entries, then rebuild ceremonies.md once.',
       required: false,
+      mode: 'manual',
+    }));
+    expect(body.data.repair.actions).toContainEqual(expect.objectContaining({
+      id: 'disconnect-squadboard',
+      available: true,
       mode: 'manual',
     }));
   });
@@ -506,6 +518,47 @@ describe('squad-sync project routes', () => {
     );
   });
 
+  it('POST /repair onboard-to-squadboard writes the connected marker on success', async () => {
+    const handler = handlers['POST']?.['/repair'];
+    if (!handler) throw new Error('POST /repair handler not registered');
+    mockFsReadFile.mockResolvedValue([
+      '# Ceremonies',
+      '',
+      '## Design Review',
+      '',
+      'Built-in section.',
+      '',
+      '## Release Review',
+      '',
+      'Custom release checklist.',
+    ].join('\n'));
+
+    const { req, res, getStatus, getBody } = makeReqRes(
+      { projectId: 'project-1' },
+      { actions: ['onboard-to-squadboard'], dryRun: false },
+    );
+    await handler(req, res);
+
+    expect(getStatus()).toBe(200);
+    const body = getBody() as Record<string, any>;
+    expect(body.data.results[0]).toMatchObject({
+      action: 'onboard-to-squadboard',
+      status: 'applied',
+    });
+    expect(body.data.results[0].changes).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        path: '/workspace/project/.squadboard/.connected',
+        operation: 'write-file',
+        status: 'applied',
+      }),
+    ]));
+    expect(mockFsWriteFile).toHaveBeenCalledWith(
+      '/workspace/project/.squadboard/.connected',
+      expect.stringContaining('"version": 1'),
+      'utf-8',
+    );
+  });
+
   it('POST /repair onboard-to-squadboard continues after a sub-step failure and rebuilds once', async () => {
     const handler = handlers['POST']?.['/repair'];
     if (!handler) throw new Error('POST /repair handler not registered');
@@ -553,9 +606,74 @@ describe('squad-sync project routes', () => {
         reason: 'ceremonies_md_rebuilt',
       }),
     ]));
+    expect(body.data.results[0].changes).not.toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        path: '/workspace/project/.squadboard/.connected',
+      }),
+    ]));
     expect(mockSeedBuiltInCeremonies).toHaveBeenCalledWith('project-1');
     expect(mockSyncCeremoniesFromDisk).toHaveBeenCalledWith('project-1', '/workspace/project/.squadboard');
     expect(mockRebuildCeremoniesMd).toHaveBeenCalledWith('project-1', '/workspace/project/.squad');
+  });
+
+  it('POST /repair disconnect-squadboard removes the connected marker and only the squadboard MCP entry', async () => {
+    const handler = handlers['POST']?.['/repair'];
+    if (!handler) throw new Error('POST /repair handler not registered');
+    mockFsLstat.mockImplementation(async (targetPath: string) => {
+      if (
+        targetPath === '/workspace/project'
+        || targetPath === '/workspace/project/.squad'
+        || targetPath === '/workspace/project/.mcp.json'
+        || targetPath === '/workspace/project/.squadboard/.connected'
+      ) {
+        return targetPath === '/workspace/project' || targetPath === '/workspace/project/.squad'
+          ? dirStat()
+          : fileStat();
+      }
+      throw enoent();
+    });
+    mockFsReadFile.mockImplementation(async (targetPath: string) => {
+      if (targetPath === '/workspace/project/.mcp.json') {
+        return JSON.stringify({
+          theme: 'dark',
+          mcpServers: {
+            squadboard: {
+              url: 'http://localhost:3000/mcp',
+            },
+            other: {
+              command: 'other-mcp',
+            },
+          },
+        });
+      }
+      return '# Ceremonies\n\nProject ceremonies will be listed here.\n';
+    });
+
+    const { req, res, getStatus, getBody } = makeReqRes(
+      { projectId: 'project-1' },
+      { actions: ['disconnect-squadboard'], dryRun: false },
+    );
+    await handler(req, res);
+
+    expect(getStatus()).toBe(200);
+    const body = getBody() as Record<string, any>;
+    expect(body.data.results[0]).toMatchObject({
+      action: 'disconnect-squadboard',
+      status: 'applied',
+    });
+    expect(mockFsWriteFile).toHaveBeenCalledWith(
+      '/workspace/project/.mcp.json',
+      `${JSON.stringify({
+        theme: 'dark',
+        mcpServers: {
+          other: {
+            command: 'other-mcp',
+          },
+        },
+      }, null, 2)}\n`,
+      'utf-8',
+    );
+    expect(mockFsUnlink).toHaveBeenCalledWith('/workspace/project/.squadboard/.connected');
   });
 
   it('POST /repair merges write-mcp-config with existing MCP servers', async () => {
