@@ -370,11 +370,12 @@ test('Scenario B — Connect a repo', async ({ page }, testInfo) => {
   await page.getByLabel('Project name').fill('README Demo App')
   await page.getByLabel('Absolute project folder or .squad path').fill(projectPath)
   await pause(page)
-  await expect(page.getByRole('button', { name: 'Install as project' })).toBeEnabled()
+  const installSection = page.locator('section', { has: page.getByRole('heading', { name: 'Install from GitHub' }) })
+  await expect(installSection.getByRole('button', { name: 'Install as project' })).toBeEnabled()
   await capture(page, testInfo, 'repo-connect-02-filled-form')
 
-  await expect(page.getByText(/creates a normal project/i)).toBeVisible()
-  await expect(page.getByText(/Only install Squadboard Apps from sources you trust/i)).toBeVisible()
+  await expect(installSection.getByText(/creates a normal project/i)).toBeVisible()
+  await expect(installSection.getByText(/Only install Squadboard Apps from sources you trust/i)).toBeVisible()
   await capture(page, testInfo, 'repo-connect-03-install-ready')
 })
 
