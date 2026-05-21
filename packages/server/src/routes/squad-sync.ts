@@ -38,6 +38,7 @@ type RepairActionId =
   | 'project-copilot-agent-file'
   | 'generate-client-artifact'
   | 'generate-github-agent'
+  | 'inject-squadboard-mcp'
   | 'project-squad-to-fs'
   | 'validate-mcp-broker-guidance'
   | 'write-mcp-config';
@@ -65,8 +66,8 @@ interface SquadStorageMetadata {
 }
 
 interface OnboardingSyncCheckedFile {
-  label: 'MCP config' | 'Built-in ceremonies' | 'Squad agent instructions';
-  path: '.mcp.json' | '.squadboard/ceremonies/' | '.squad/squad.agent.md';
+  label: 'MCP config' | 'Built-in ceremonies' | 'Squad agent instructions' | 'Squadboard MCP hints';
+  path: '.mcp.json' | '.squadboard/ceremonies/' | '.github/agents/squad.agent.md';
   present: boolean;
   count?: number;
 }
@@ -75,8 +76,9 @@ interface OnboardingSyncStatus {
   mcpConfigPresent: boolean;
   ceremoniesSeeded: boolean;
   squadAgentPresent: boolean;
+  squadboardMcpPresent: boolean;
   inSync: boolean;
-  driftedFields: Array<'mcpConfigPresent' | 'ceremoniesSeeded' | 'squadAgentPresent'>;
+  driftedFields: Array<'mcpConfigPresent' | 'ceremoniesSeeded' | 'squadAgentPresent' | 'squadboardMcpPresent'>;
   checkedFiles: OnboardingSyncCheckedFile[];
   lastCheckedAt: string;
 }
@@ -139,7 +141,7 @@ interface ApiRepairAction {
 
 interface RepairChange {
   path: string;
-  operation: 'create-dir' | 'write-file' | 'delete-file' | 'export-db-file' | 'seed-db';
+  operation: 'create-dir' | 'write-file' | 'patch-file' | 'delete-file' | 'export-db-file' | 'seed-db';
   status: RepairChangeStatus;
   reason?: string;
   message?: string;
@@ -278,6 +280,7 @@ const ACTION_ALIASES: Record<RepairActionId, RepairActionId> = {
   'project-copilot-agent-file': 'generate-github-agent',
   'generate-client-artifact': 'generate-github-agent',
   'generate-github-agent': 'generate-github-agent',
+  'inject-squadboard-mcp': 'inject-squadboard-mcp',
   'project-squad-to-fs': 'project-squad-to-fs',
   'validate-mcp-broker-guidance': 'validate-mcp-broker-guidance',
   'write-mcp-config': 'write-mcp-config',
@@ -600,6 +603,17 @@ function adaptRepairActions(status: SquadSyncOwnershipStatus, connected = false)
     destructive: false,
     endpoint: 'POST /api/projects/:projectId/squad-sync/repair',
   });
+  byId.set('inject-squadboard-mcp', {
+    id: 'inject-squadboard-mcp',
+    aliases: [],
+    owner: 'Hockney',
+    reason: 'Inject squadboard_* MCP detection hints and ceremony delegation guidance into .github/agents/squad.agent.md.',
+    mode: 'manual',
+    available: connected,
+    required: false,
+    destructive: false,
+    endpoint: 'POST /api/projects/:projectId/squad-sync/repair',
+  });
 
   for (const action of fromSdk) {
     byId.set(action.id, action);
@@ -643,6 +657,7 @@ function buildCheckedFiles(
   mcpConfigPresent: boolean,
   ceremonyYamlCount: number,
   squadAgentPresent: boolean,
+  squadboardMcpPresent: boolean,
 ): OnboardingSyncCheckedFile[] {
   return [
     { label: 'MCP config', path: '.mcp.json', present: mcpConfigPresent },
@@ -652,7 +667,8 @@ function buildCheckedFiles(
       present: ceremonyYamlCount > 0,
       count: ceremonyYamlCount,
     },
-    { label: 'Squad agent instructions', path: '.squad/squad.agent.md', present: squadAgentPresent },
+    { label: 'Squad agent instructions', path: '.github/agents/squad.agent.md', present: squadAgentPresent },
+    { label: 'Squadboard MCP hints', path: '.github/agents/squad.agent.md', present: squadboardMcpPresent },
   ];
 }
 
@@ -661,9 +677,10 @@ function disconnectedOnboardingSync(): OnboardingSyncStatus {
     mcpConfigPresent: false,
     ceremoniesSeeded: false,
     squadAgentPresent: false,
+    squadboardMcpPresent: false,
     inSync: false,
-    driftedFields: ['mcpConfigPresent', 'ceremoniesSeeded', 'squadAgentPresent'],
-    checkedFiles: buildCheckedFiles(false, 0, false),
+    driftedFields: ['mcpConfigPresent', 'ceremoniesSeeded', 'squadAgentPresent', 'squadboardMcpPresent'],
+    checkedFiles: buildCheckedFiles(false, 0, false, false),
     lastCheckedAt: new Date().toISOString(),
   };
 }
@@ -754,6 +771,7 @@ async function hasSquadboardMcpConfig(projectRoot: string): Promise<boolean> {
 
 async function hasSquadAgentProjection(project: Pick<ProjectContext, 'projectRoot' | 'squadPath'>): Promise<boolean> {
   const candidatePaths = [
+    path.join(project.projectRoot, '.github', 'agents', 'squad.agent.md'),
     path.join(project.squadPath, 'squad.agent.md'),
     path.join(project.projectRoot, '.copilot', 'squad.agent.md'),
   ];
@@ -765,6 +783,74 @@ async function hasSquadAgentProjection(project: Pick<ProjectContext, 'projectRoo
   }
 
   return false;
+}
+
+/** Check whether the agent file already contains the squadboard_* MCP detection hint. */
+async function hasSquadboardMcpHints(projectRoot: string): Promise<boolean> {
+  const agentFile = path.join(projectRoot, '.github', 'agents', 'squad.agent.md');
+  try {
+    const content = await fs.readFile(agentFile, 'utf-8');
+    return content.includes('squadboard_*');
+  } catch {
+    return false;
+  }
+}
+
+/** Inject the squadboard_* MCP detection hint into squad.agent.md.
+ *
+ * Strategy (in priority order):
+ *  1. If a known MCP detection list exists (looks for `github-mcp-server-*`), prepend the
+ *     squadboard line immediately before it so Squadboard appears first.
+ *  2. If a `#### Detection` heading exists (no known list), append after the heading.
+ *  3. Append a standalone `#### Squadboard MCP` section at the end of the file.
+ */
+async function injectSquadboardMcpHints(projectRoot: string, dryRun: boolean): Promise<RepairChange[]> {
+  const agentFile = path.join(projectRoot, '.github', 'agents', 'squad.agent.md');
+  const HINT_LINE = '- `squadboard_*` → Squadboard (ceremonies, workflows, issues, agents, durable state)';
+  const CEREMONY_DELEGATION = `
+#### Squadboard Ceremony Delegation
+
+When \`.squad/ceremonies.md\` lists a ceremony with a Squadboard workflow hint, prefer delegation over local execution:
+
+1. **Squadboard MCP available + ceremony has a workflow slug** → call \`squadboard_run_agent("<slug>")\` — Squadboard owns the run (tracked in DB, visible in UI, resumable).
+2. **No Squadboard MCP or no slug** → spawn a local facilitator agent as normal (Squad CLI native fallback).
+
+Never run a ceremony both locally AND via \`squadboard_run_agent\` for the same trigger event. The delegation check is the gate — at most one executor.
+`.trim();
+
+  let content: string;
+  try {
+    content = await fs.readFile(agentFile, 'utf-8');
+  } catch (err) {
+    if (!isErrno(err, 'ENOENT')) throw err;
+    return [{ path: agentFile, operation: 'patch-file', status: 'skipped', reason: 'agent_file_missing' }];
+  }
+
+  if (content.includes('squadboard_*')) {
+    return [{ path: agentFile, operation: 'patch-file', status: 'skipped', reason: 'already_present' }];
+  }
+
+  let patched: string;
+  const githubMcpLine = '- `github-mcp-server-*`';
+  const detectionHeading = '#### Detection';
+
+  if (content.includes(githubMcpLine)) {
+    // Prepend before the first known detection list entry
+    patched = content.replace(githubMcpLine, `${HINT_LINE}\n${githubMcpLine}`);
+  } else if (content.includes(detectionHeading)) {
+    // Append after the Detection heading line
+    patched = content.replace(detectionHeading, `${detectionHeading}\n\n${HINT_LINE}`);
+  } else {
+    // Append a standalone section at the end
+    patched = `${content.trimEnd()}\n\n#### Squadboard MCP\n\n${HINT_LINE}\n\n${CEREMONY_DELEGATION}\n`;
+  }
+
+  // Also inject ceremony delegation if missing
+  if (!patched.includes('squadboard_run_agent') && !patched.includes('Squadboard Ceremony Delegation')) {
+    patched = `${patched.trimEnd()}\n\n${CEREMONY_DELEGATION}\n`;
+  }
+
+  return writeFileIfSafe(projectRoot, agentFile, patched, dryRun, 'patch-file');
 }
 
 async function hasSeededBuiltInCeremonies(projectId: string): Promise<boolean> {
@@ -789,28 +875,32 @@ export async function checkOnboardingSync(
   project: Pick<ProjectContext, 'projectId' | 'projectRoot' | 'squadPath' | 'squadboardPath'>,
   storageMode: SquadSyncOwnershipStatus['storage']['mode'] = 'postgresql',
 ): Promise<OnboardingSyncStatus> {
-  const [mcpConfigPresent, ceremoniesSeeded, squadAgentPresent, ceremonyYamlCount] = await Promise.all([
+  const [mcpConfigPresent, ceremoniesSeeded, squadAgentPresent, ceremonyYamlCount, squadboardMcpPresent] = await Promise.all([
     hasSquadboardMcpConfig(project.projectRoot),
     storageMode === 'postgresql'
       ? hasSeededBuiltInCeremonies(project.projectId)
       : Promise.resolve(false),
     hasSquadAgentProjection(project),
     countCeremonyYamlFiles(project.squadboardPath),
+    hasSquadboardMcpHints(project.projectRoot),
   ]);
 
   const driftedFields = [
     !mcpConfigPresent ? 'mcpConfigPresent' : null,
     !ceremoniesSeeded ? 'ceremoniesSeeded' : null,
     !squadAgentPresent ? 'squadAgentPresent' : null,
+    // Only flag MCP hints as drifted when the agent file exists but lacks the hints
+    (squadAgentPresent && !squadboardMcpPresent) ? 'squadboardMcpPresent' : null,
   ].filter((value): value is OnboardingSyncStatus['driftedFields'][number] => value !== null);
 
   return {
     mcpConfigPresent,
     ceremoniesSeeded,
     squadAgentPresent,
+    squadboardMcpPresent,
     inSync: driftedFields.length === 0,
     driftedFields,
-    checkedFiles: buildCheckedFiles(mcpConfigPresent, ceremonyYamlCount, squadAgentPresent),
+    checkedFiles: buildCheckedFiles(mcpConfigPresent, ceremonyYamlCount, squadAgentPresent, squadboardMcpPresent),
     lastCheckedAt: new Date().toISOString(),
   };
 }
@@ -1686,6 +1776,8 @@ async function onboardToSquadboard(project: ProjectContext, dryRun: boolean): Pr
     await writeMcpConfig(project, status, dryRun),
     await seedCeremonyDefaults(project, dryRun),
     await importCeremoniesFromMd(project, dryRun),
+    await generateGithubAgent(project, dryRun),
+    { changes: await injectSquadboardMcpHints(project.projectRoot, dryRun) },
   ];
 
   for (const result of results) {
@@ -1945,6 +2037,10 @@ async function runAction(
       return importCeremoniesFromMd(project, dryRun);
     case 'generate-github-agent':
       return generateGithubAgent(project, dryRun);
+    case 'inject-squadboard-mcp': {
+      const changes = await injectSquadboardMcpHints(project.projectRoot, dryRun);
+      return resultFor('inject-squadboard-mcp', changes);
+    }
     case 'project-squad-to-fs':
       return projectSquadToFs(project, status, dryRun);
     case 'write-mcp-config':

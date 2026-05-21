@@ -21,6 +21,14 @@ describe('deriveOrigin', () => {
     expect(deriveOrigin({ templateId: 'design-review' })).toBe('built-in');
   });
 
+  it('returns core when templateId is "core"', () => {
+    expect(deriveOrigin({ templateId: 'core' })).toBe('core');
+  });
+
+  it('core takes precedence over yaml-import', () => {
+    expect(deriveOrigin({ templateId: 'core', sourceYamlPath: 'foo.yaml' })).toBe('core');
+  });
+
   it('returns yaml-import when sourceYamlPath is present (reserved for yaml-import feature)', () => {
     expect(deriveOrigin({ sourceYamlPath: '.squad/ceremonies/retrospective.workflow.yaml' })).toBe('yaml-import');
   });
@@ -44,11 +52,12 @@ describe('deriveOrigin', () => {
   });
 
   it('result is a valid CeremonyOrigin', () => {
-    const validOrigins: CeremonyOrigin[] = ['built-in', 'yaml-import', 'conjure-llm', 'user-created'];
+    const validOrigins: CeremonyOrigin[] = ['core', 'built-in', 'yaml-import', 'conjure-llm', 'user-created'];
     const fixtures = [
       {},
       { parentNarrativeId: 'abc' },
       { templateId: 'design-review' },
+      { templateId: 'core' },
       { sourceYamlPath: 'foo.yaml' },
     ];
     for (const fixture of fixtures) {
@@ -59,7 +68,7 @@ describe('deriveOrigin', () => {
 
 describe('ORIGIN_LABELS', () => {
   it('has a label for every origin value', () => {
-    const origins: CeremonyOrigin[] = ['built-in', 'yaml-import', 'conjure-llm', 'user-created'];
+    const origins: CeremonyOrigin[] = ['core', 'built-in', 'yaml-import', 'conjure-llm', 'user-created'];
     for (const origin of origins) {
       expect(ORIGIN_LABELS[origin]).toBeTruthy();
     }

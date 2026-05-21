@@ -24,6 +24,7 @@ vi.mock('../../api/projects', () => ({
 const mockAudit: CeremonyAuditReport = {
   total: 5,
   byOrigin: {
+    'core': 0,
     'built-in': 0,
     'yaml-import': 0,
     'conjure-llm': 2,

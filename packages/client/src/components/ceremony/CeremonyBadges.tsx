@@ -78,6 +78,7 @@ export function ScopeBadge({
  * CER-1: OriginBadge — shows where a ceremony came from.
  *
  * Color mapping (Fluent2 tokens via color prop):
+ *   core         → "important"   (colorPaletteRedBackground2 family — distinct from built-in)
  *   built-in     → "brand"       (colorBrandBackground2 family)
  *   yaml-import  → "informative" (colorPaletteBlueBackground2 family)
  *   conjure-llm  → "success"     (closest to colorPaletteRoyalBlueBackground2 in Fluent2 Badge API)
@@ -85,6 +86,8 @@ export function ScopeBadge({
  */
 export function OriginBadge({ origin }: { origin: CeremonyOrigin | undefined | null }) {
   switch (origin) {
+    case 'core':
+      return <Badge appearance="filled" color="important">Core</Badge>
     case 'built-in':
       return <Badge appearance="filled" color="brand">Built-in</Badge>
     case 'yaml-import':

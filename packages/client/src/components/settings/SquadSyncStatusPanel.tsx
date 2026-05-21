@@ -905,6 +905,13 @@ export function SquadSyncStatusPanel({ projectId }: SquadSyncStatusPanelProps) {
       detail: onboardingSync?.squadAgentPresent === true ? 'present' : 'missing',
       drifted: driftedFields.has('squadAgentPresent') || driftedFields.has('squadAgent') || driftedFields.has('agentInstructions'),
     },
+    {
+      id: 'squadboardMcpPresent',
+      label: 'Squadboard MCP hints',
+      ok: onboardingSync?.squadboardMcpPresent === true,
+      detail: onboardingSync?.squadboardMcpPresent === true ? 'injected' : 'not injected',
+      drifted: driftedFields.has('squadboardMcpPresent'),
+    },
   ]
 
   async function handlePreviewRepair(action: NormalizedRepairAction) {
