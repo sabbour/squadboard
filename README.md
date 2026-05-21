@@ -17,14 +17,14 @@
 
 ## What is it?
 
-[Squad](https://github.com/bradygaster/squad) gives you AI agents. Squadboard gives those agents:
+Squadboard is the visual command center for [Squad](https://github.com/bradygaster/squad) AI agents — built on top of Squad, not instead of it.
 
 - **Durable workflows** — workflows that survive, are tracked, and can be resumed across sessions
 - **Live visualization** — see all your agent work in one place, with real-time run tracking and board state
 - **Project templates** — Squadboard apps and project templates that give agents structure and context
 - **App extensibility** — apps that run on top of Squadboard to extend capabilities
 
-Squad integration (bidirectional sync, MCP broker) is the foundation that powers it all. Without Squad, Squadboard is empty. With Squad, it's the operational home for your agent work.
+Squad handles agent orchestration. Squadboard gives it a home — a live board where every run, workflow, and project is visible, trackable, and resumable. Without Squad, Squadboard is empty. With Squad, it's where your agent work lives.
 
 ## Quickstart
 
