@@ -37,3 +37,24 @@ Landed 3 critical backend fixes:
 
 **Follow-up:** Pre-existing red suites are now CI blockers thanks to Kujan's vitest/typecheck gates. Hockney has no red signals from these fixes.
 
+## 2026-05-20: Full Release Infrastructure — changesets + GitHub workflows — commit f0d228450
+
+Implemented end-to-end release infrastructure for `sabbour/squadboard`:
+
+- **Changesets installed**: `@changesets/cli` + `@changesets/changelog-github` added to devDependencies.
+- **`.changeset/config.json`**: `linked` array ties all 4 public packages to same version; `baseBranch: dev`; `access: public`; private packages in `ignore` list.
+- **Version bump**: All 4 public packages bumped `0.0.0 → 0.0.1` via `pnpm changeset version`; CHANGELOGs generated per package.
+- **Root package.json**: Bumped to `0.0.1`; `npm:publish` scripts updated (removed `--tag prealpha`).
+- **`release.yml`**: Replaces old `npm-publish.yml` — changesets action on push-to-main, OIDC provenance, opens Version Packages PR automatically.
+- **`npm-publish-manual.yml`**: Old manual workflow preserved as emergency fallback.
+- **`electron-release.yml`**: Builds DMG/NSIS/AppImage on tag push (matrix: macOS/Windows/Linux), uploads to GitHub Releases via `softprops/action-gh-release`.
+- **`publishConfig`**: `prealpha` tag removed from all 4 public packages.
+- **Git remote**: `origin` added → `https://github.com/sabbour/squadboard.git`.
+- **Tag `v0.0.1`**: Created locally (push pending repo creation).
+
+**Learnings:**
+- `pnpm changeset init` validation rejects `ignore` entries that don't match any workspace package — root `package.json` with `private: true` is NOT a workspace package and should NOT be in the ignore list.
+- EMU (Enterprise Managed User) accounts cannot create public GitHub repos or delete repos via `gh` CLI/API. Repo creation must happen via the `sabbour` personal account on github.com.
+- The pnpm `virtualStoreDir` in `node_modules/.modules.yaml` is resolved relative to the `node_modules/` directory, not the project root. Value `.pnpm` (not `node_modules/.pnpm`) is correct.
+- `pnpm changeset version` consumes the `.changeset/*.md` files and updates package versions + CHANGELOGs in one shot — no manual version edits needed after changeset is written.
+
