@@ -16,6 +16,7 @@ import {
 import {
   ArrowSync20Regular,
   CheckmarkCircle20Regular,
+  Copy20Regular,
   ErrorCircle20Regular,
   Warning20Regular,
   Wrench20Regular,
@@ -474,6 +475,118 @@ function ArtifactList({ title, artifacts, empty }: {
   )
 }
 
+function BrokerSetupCard({ projectId }: { projectId: string }) {
+  const [copiedItem, setCopiedItem] = useState<'command' | 'manual' | null>(null)
+  const [manualConfigOpen, setManualConfigOpen] = useState(false)
+  const initCommand = 'squadboard init --write-mcp-config'
+  const manualConfig = JSON.stringify({
+    mcpServers: {
+      squadboard: {
+        command: 'node',
+        args: ['<path-to-squadboard>/packages/server/dist/mcp/index.js'],
+        env: {
+          SQUADBOARD_SQUAD_STORAGE_PROVIDER: 'postgresql',
+          SQUADBOARD_DEFAULT_PROJECT_ID: projectId,
+        },
+      },
+    },
+  }, null, 2)
+
+  async function handleCopy(value: string, item: 'command' | 'manual') {
+    await navigator.clipboard.writeText(value)
+    setCopiedItem(item)
+    window.setTimeout(() => {
+      setCopiedItem((current) => (current === item ? null : current))
+    }, 2000)
+  }
+
+  return (
+    <div data-testid="broker-setup-card" style={{ ...cardStyle, display: 'flex', flexDirection: 'column', gap: '12px' }}>
+      <div>
+        <Subtitle2 as="h3" style={{ display: 'block', marginBottom: '4px' }}>
+          Connect Copilot CLI via MCP broker
+        </Subtitle2>
+        <Caption1 style={{ display: 'block', color: tokens.colorNeutralForeground3 }}>
+          Use squadboard init --write-mcp-config to wire Copilot CLI to this Squadboard instance.
+        </Caption1>
+      </div>
+
+      <div
+        style={{
+          display: 'flex',
+          gap: '12px',
+          alignItems: 'flex-start',
+          justifyContent: 'space-between',
+          flexWrap: 'wrap',
+        }}
+      >
+        <pre
+          style={{
+            margin: 0,
+            flex: '1 1 320px',
+            border: '1px solid var(--border)',
+            borderRadius: '6px',
+            padding: '12px',
+            background: 'var(--bg)',
+            fontFamily: tokens.fontFamilyMonospace,
+            whiteSpace: 'pre-wrap',
+            wordBreak: 'break-word',
+          }}
+        >
+          <code>{initCommand}</code>
+        </pre>
+        <Button
+          appearance="secondary"
+          icon={<Copy20Regular />}
+          onClick={() => void handleCopy(initCommand, 'command')}
+        >
+          {copiedItem === 'command' ? 'Copied!' : 'Copy'}
+        </Button>
+      </div>
+
+      <details onToggle={(event) => setManualConfigOpen(event.currentTarget.open)}>
+        <summary
+          style={{
+            cursor: 'pointer',
+            color: tokens.colorNeutralForeground3,
+            fontSize: '12px',
+            userSelect: 'none',
+          }}
+        >
+          Manual config (for .copilot/mcp-config.json)
+        </summary>
+        {manualConfigOpen && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginTop: '12px' }}>
+            <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+              <Button
+                appearance="secondary"
+                icon={<Copy20Regular />}
+                onClick={() => void handleCopy(manualConfig, 'manual')}
+              >
+                {copiedItem === 'manual' ? 'Copied!' : 'Copy'}
+              </Button>
+            </div>
+            <pre
+              style={{
+                margin: 0,
+                border: '1px solid var(--border)',
+                borderRadius: '6px',
+                padding: '12px',
+                background: 'var(--bg)',
+                fontFamily: tokens.fontFamilyMonospace,
+                fontSize: '12px',
+                overflowX: 'auto',
+              }}
+            >
+              <code>{manualConfig}</code>
+            </pre>
+          </div>
+        )}
+      </details>
+    </div>
+  )
+}
+
 interface SquadSyncStatusPanelProps {
   projectId: string
 }
@@ -839,6 +952,7 @@ export function SquadSyncStatusPanel({ projectId }: SquadSyncStatusPanelProps) {
               <Caption1 style={{ color: tokens.colorPaletteRedForeground1 }}>{applyError}</Caption1>
             )}
           </div>
+          {status.manualBridge && <BrokerSetupCard projectId={projectId} />}
         </div>
 
         <details>

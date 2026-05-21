@@ -32,6 +32,7 @@
 - npmjs.com trusted publisher UI can be reached at `/package/{pkg}/access` — use text-based selectors as their markup changes frequently
 - Always use `waitFor: networkidle` when navigating npmjs pages; they are SPA-heavy
 - `ts-node` scripts in a pnpm monorepo need `import.meta.url`-based `__dirname` since `"type": "module"` is set in root package.json
+- Squad Sync manual-bridge UX should keep the primary message low-jargon and put MCP/env details behind a collapsible manual-config section, with copyable init/manual snippets for fast setup
 
 
 ## W31 Wave 2 — Client Dead Code Cleanup

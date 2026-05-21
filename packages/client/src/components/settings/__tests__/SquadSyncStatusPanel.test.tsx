@@ -156,6 +156,32 @@ describe('SquadSyncStatusPanel', () => {
     expect(screen.getByText('CLI/Copilot agent file')).toBeInTheDocument()
   })
 
+  it('shows the broker setup card when manual bridge mode is active', () => {
+    apiMock.statusQuery.data = serverStatus({
+      authority: databaseAuthorityWithoutMirror(),
+      repair: manualExportRepair(),
+    })
+
+    render(<SquadSyncStatusPanel projectId="project-1" />)
+
+    expect(screen.getByTestId('broker-setup-card')).toBeInTheDocument()
+    expect(screen.getByText('Connect Copilot CLI via MCP broker')).toBeInTheDocument()
+    expect(screen.getByText('squadboard init --write-mcp-config')).toBeInTheDocument()
+  })
+
+  it('hides the broker setup card when manual bridge mode is off', () => {
+    apiMock.statusQuery.data = serverStatus({
+      authority: {
+        ...databaseAuthorityWithoutMirror(),
+        continuousSync: true,
+      },
+    })
+
+    render(<SquadSyncStatusPanel projectId="project-1" />)
+
+    expect(screen.queryByTestId('broker-setup-card')).not.toBeInTheDocument()
+  })
+
   it('when Preview Export reports only unchanged files, summarizes the no-op instead of dumping every unchanged path', async () => {
     const user = userEvent.setup()
     const unchangedPaths = [
