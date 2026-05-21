@@ -785,12 +785,13 @@ async function hasSquadAgentProjection(project: Pick<ProjectContext, 'projectRoo
   return false;
 }
 
-/** Check whether the agent file already contains the squadboard_* MCP detection hint. */
+/** Check whether the agent file already contains the Squadboard MCP hint and polling guidance. */
 async function hasSquadboardMcpHints(projectRoot: string): Promise<boolean> {
   const agentFile = path.join(projectRoot, '.github', 'agents', 'squad.agent.md');
   try {
     const content = await fs.readFile(agentFile, 'utf-8');
-    return content.includes('squadboard_*');
+    return content.includes('squadboard_*')
+      && (content.includes('get_run_status') || content.includes('Polling for run completion'));
   } catch {
     return false;
   }
@@ -807,6 +808,28 @@ async function hasSquadboardMcpHints(projectRoot: string): Promise<boolean> {
 async function injectSquadboardMcpHints(projectRoot: string, dryRun: boolean): Promise<RepairChange[]> {
   const agentFile = path.join(projectRoot, '.github', 'agents', 'squad.agent.md');
   const HINT_LINE = '- `squadboard_*` → Squadboard (ceremonies, workflows, issues, agents, durable state)';
+  const POLLING_BLOCK = `
+#### Polling for run completion
+
+After calling \`squadboard_run_agent\`, the tool returns \`{ run: { id, status } }\`.
+Poll \`squadboard_get_run_status({ runId: run.id })\` until \`status\` is \`"completed"\` or \`"failed"\`:
+
+- Poll interval: 5–10 seconds
+- Terminal states: \`"completed"\` (read \`run.output\`) or \`"failed"\` (read \`run.errorMessage\`)
+- Non-terminal states: \`"pending"\` (queued), \`"running"\` (in progress) — keep polling
+- Timeout: stop after 10 minutes; treat as stalled and report to user
+
+Example pattern:
+\`\`\`
+const { run } = await squadboard_run_agent({ issueId });
+let result = await squadboard_get_run_status({ runId: run.id });
+while (result.run.status !== 'completed' && result.run.status !== 'failed') {
+  await sleep(5000);
+  result = await squadboard_get_run_status({ runId: run.id });
+}
+// result.run.output contains the final output
+\`\`\`
+`.trim();
   const CEREMONY_DELEGATION = `
 #### Squadboard Ceremony Delegation
 
@@ -816,6 +839,8 @@ When \`.squad/ceremonies.md\` lists a ceremony with a Squadboard workflow hint, 
 2. **No Squadboard MCP or no slug** → spawn a local facilitator agent as normal (Squad CLI native fallback).
 
 Never run a ceremony both locally AND via \`squadboard_run_agent\` for the same trigger event. The delegation check is the gate — at most one executor.
+
+${POLLING_BLOCK}
 `.trim();
 
   let content: string;
@@ -826,11 +851,19 @@ Never run a ceremony both locally AND via \`squadboard_run_agent\` for the same 
     return [{ path: agentFile, operation: 'patch-file', status: 'skipped', reason: 'agent_file_missing' }];
   }
 
-  if (content.includes('squadboard_*')) {
+  const hasDetectionHint = content.includes('squadboard_*');
+  const hasPollingBlock = content.includes('get_run_status') || content.includes('Polling for run completion');
+
+  if (hasDetectionHint && hasPollingBlock) {
     return [{ path: agentFile, operation: 'patch-file', status: 'skipped', reason: 'already_present' }];
   }
 
   let patched: string;
+
+  if (hasDetectionHint && !hasPollingBlock) {
+    patched = `${content.trimEnd()}\n\n${POLLING_BLOCK}\n`;
+    return writeFileIfSafe(projectRoot, agentFile, patched, dryRun, 'patch-file');
+  }
   const githubMcpLine = '- `github-mcp-server-*`';
   const detectionHeading = '#### Detection';
 
@@ -848,6 +881,10 @@ Never run a ceremony both locally AND via \`squadboard_run_agent\` for the same 
   // Also inject ceremony delegation if missing
   if (!patched.includes('squadboard_run_agent') && !patched.includes('Squadboard Ceremony Delegation')) {
     patched = `${patched.trimEnd()}\n\n${CEREMONY_DELEGATION}\n`;
+  }
+
+  if (!patched.includes('get_run_status') && !patched.includes('Polling for run completion')) {
+    patched = `${patched.trimEnd()}\n\n${POLLING_BLOCK}\n`;
   }
 
   return writeFileIfSafe(projectRoot, agentFile, patched, dryRun, 'patch-file');
