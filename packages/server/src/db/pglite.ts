@@ -29,11 +29,12 @@
  */
 
 import { PGlite } from '@electric-sql/pglite';
-import { existsSync, mkdirSync, renameSync } from 'node:fs';
+import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, statSync } from 'node:fs';
 import { homedir } from 'node:os';
-import { join } from 'node:path';
+import { basename, join } from 'node:path';
 
 const PGLITE_DATA_DIR = join(homedir(), '.squadboard', 'data', 'pglite');
+const BACKUP_DIR = join(homedir(), '.squadboard', 'backups');
 
 // Sentinel string returned when PGlite is the active driver.
 // db/index.ts uses this to distinguish "boot PGlite" from "connect to real PG".
@@ -42,6 +43,37 @@ export const PGLITE_SENTINEL = 'pglite://local';
 let _pglite: PGlite | null = null;
 /** True only after startPglite() resolves without error. */
 let _startedSuccessfully = false;
+/** Set when auto-recovery moved a corrupted data dir; exposed via health endpoint. */
+let _recoveryWarning: string | null = null;
+
+/** Returns the auto-recovery warning message, or null if no recovery occurred. */
+export function getRecoveryWarning(): string | null {
+  return _recoveryWarning;
+}
+
+/**
+ * Find the most recent clean backup in ~/.squadboard/backups/.
+ * Returns the absolute path, or null if no backups exist.
+ */
+function findLatestBackup(): string | null {
+  if (!existsSync(BACKUP_DIR)) return null;
+  const files = readdirSync(BACKUP_DIR)
+    .filter((f) => f.startsWith('squadboard-') && (f.endsWith('.tar.gz') || f.endsWith('.tar')))
+    .map((f) => ({ path: join(BACKUP_DIR, f), mtime: statSync(join(BACKUP_DIR, f)).mtimeMs }))
+    .sort((a, b) => b.mtime - a.mtime);
+  return files[0]?.path ?? null;
+}
+
+/**
+ * Load a PGlite backup tarball into PGLITE_DATA_DIR via PGlite.create({ loadDataDir }).
+ * The caller is responsible for ensuring PGLITE_DATA_DIR does not exist beforehand.
+ */
+async function loadBackupIntoDataDir(backupFile: string): Promise<void> {
+  const bytes = readFileSync(backupFile);
+  const blob = new Blob([bytes]);
+  const db = await PGlite.create({ dataDir: PGLITE_DATA_DIR, loadDataDir: blob });
+  await db.close();
+}
 
 // ─── Pool-compatible adapter types ──────────────────────────────────────────
 
@@ -154,21 +186,44 @@ export async function startPglite(): Promise<string> {
 
     if (!isWasmAbort) throw err;
 
-    // Back up the corrupted data directory and retry once with a fresh one.
-    const backupPath = `${PGLITE_DATA_DIR}.corrupted.${Date.now()}`;
+    // Back up the corrupted data directory.
+    const corruptedPath = `${PGLITE_DATA_DIR}.corrupted.${Date.now()}`;
     if (existsSync(PGLITE_DATA_DIR)) {
-      renameSync(PGLITE_DATA_DIR, backupPath);
-      console.warn(
-        `[pglite] ⚠️  WASM boot failed — data directory backed up to ${backupPath} and reset. ` +
-          `Server starting with empty database. To restore, copy files back from the backup.`,
-      );
+      renameSync(PGLITE_DATA_DIR, corruptedPath);
+      console.warn(`[pglite] ⚠️  WASM boot failed — corrupted data dir moved to ${corruptedPath}`);
     }
-    mkdirSync(PGLITE_DATA_DIR, { recursive: true });
+
+    // Try to restore from the most recent clean backup before falling back to a fresh DB.
+    const latestBackup = findLatestBackup();
+    if (latestBackup) {
+      console.warn(`[pglite] 🔄 Found backup — attempting restore from ${basename(latestBackup)}...`);
+      try {
+        await loadBackupIntoDataDir(latestBackup);
+        _recoveryWarning =
+          `Database was corrupted and automatically restored from backup: ${basename(latestBackup)}. ` +
+          `Your data is intact. The corrupted files were preserved at: ${corruptedPath}`;
+        console.log(`[pglite] ✅ Restored from backup ${basename(latestBackup)} — your data is intact.`);
+      } catch (restoreErr) {
+        const restoreMsg = restoreErr instanceof Error ? restoreErr.message : String(restoreErr);
+        console.error(`[pglite] ❌ Backup restore failed (${restoreMsg}) — starting with empty database.`);
+        mkdirSync(PGLITE_DATA_DIR, { recursive: true });
+        _recoveryWarning =
+          `Database was corrupted. Auto-restore from ${basename(latestBackup)} also failed. ` +
+          `Started with an empty database. Corrupted files: ${corruptedPath} · Backup: ${latestBackup}`;
+      }
+    } else {
+      console.warn(`[pglite] ⚠️  No backup found — starting with empty database. Run 'squadboard backup' regularly to avoid data loss.`);
+      mkdirSync(PGLITE_DATA_DIR, { recursive: true });
+      _recoveryWarning =
+        `Database was corrupted and no backup was found. Started with an empty database. ` +
+        `Corrupted files preserved at: ${corruptedPath}. ` +
+        `Run 'squadboard backup' regularly to enable automatic recovery.`;
+    }
 
     try {
       _pglite = new PGlite(PGLITE_DATA_DIR);
       await _pglite.waitReady;
-      console.log('[pglite] ✅ Recovery successful — started with fresh database.');
+      console.log(`[pglite] ✅ Recovery boot successful${latestBackup ? ' (restored from backup)' : ' (fresh database)'}.`);
     } catch (retryErr) {
       _pglite = null;
       _startedSuccessfully = false;
