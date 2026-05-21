@@ -13,6 +13,7 @@ const {
   mockSyncCeremoniesFromDisk,
   mockRunFormulator,
   mockImportCeremonyFromYaml,
+  mockRebuildCeremoniesMd,
 } = vi.hoisted(() => ({
   handlers: {} as Record<string, Record<string, Function>>,
   mockGetProjectSyncOwnershipStatus: vi.fn(),
@@ -26,6 +27,7 @@ const {
   mockSyncCeremoniesFromDisk: vi.fn(),
   mockRunFormulator: vi.fn(),
   mockImportCeremonyFromYaml: vi.fn(),
+  mockRebuildCeremoniesMd: vi.fn(),
 }));
 
 vi.mock('express', () => {
@@ -87,6 +89,7 @@ vi.mock('../ceremonies/seed-built-in.js', () => ({
 
 vi.mock('../services/squad-writeback.js', () => ({
   syncCeremoniesFromDisk: (...args: unknown[]) => mockSyncCeremoniesFromDisk(...args),
+  rebuildCeremoniesMd: (...args: unknown[]) => mockRebuildCeremoniesMd(...args),
 }));
 
 vi.mock('../services/formulator.js', () => ({
@@ -233,6 +236,7 @@ describe('squad-sync project routes', () => {
       modelUsed: { model: 'claude-haiku-4.5', via: 'fallback' },
     });
     mockImportCeremonyFromYaml.mockResolvedValue({ ceremonyId: 'wf-release', created: true });
+    mockRebuildCeremoniesMd.mockResolvedValue(undefined);
   });
 
   it('GET /status adapts SDK ownership into a client envelope', async () => {
@@ -260,6 +264,7 @@ describe('squad-sync project routes', () => {
       continuousSync: false,
     });
     const actionIds = body.data.repair.actions.map((action: Record<string, unknown>) => action.id);
+    expect(actionIds[0]).toBe('onboard-to-squadboard');
     expect(actionIds).toContain('seed-ceremony-defaults');
     expect(actionIds).toContain('import-ceremonies-from-md');
     expect(actionIds).toContain('generate-github-agent');
@@ -466,6 +471,58 @@ describe('squad-sync project routes', () => {
       }, null, 2)}\n`,
       'utf-8',
     );
+  });
+
+  it('POST /repair onboard-to-squadboard continues after a sub-step failure and rebuilds once', async () => {
+    const handler = handlers['POST']?.['/repair'];
+    if (!handler) throw new Error('POST /repair handler not registered');
+    mockFsReadFile.mockResolvedValue([
+      '# Ceremonies',
+      '',
+      '## Design Review',
+      '',
+      'Built-in section.',
+      '',
+      '## Release Review',
+      '',
+      'Custom release checklist.',
+    ].join('\n'));
+    mockRunFormulator.mockRejectedValue(new Error('formulator boom'));
+
+    const { req, res, getStatus, getBody } = makeReqRes(
+      { projectId: 'project-1' },
+      { actions: ['onboard-to-squadboard'], dryRun: false },
+    );
+    await handler(req, res);
+
+    expect(getStatus()).toBe(200);
+    const body = getBody() as Record<string, any>;
+    expect(body.data.results[0]).toMatchObject({
+      action: 'onboard-to-squadboard',
+      status: 'failed',
+    });
+    expect(body.data.results[0].changes).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        path: '.mcp.json',
+        operation: 'write-file',
+        status: 'applied',
+      }),
+      expect.objectContaining({
+        path: 'Release Review',
+        operation: 'seed-db',
+        status: 'failed',
+        reason: 'ceremony_markdown_import_failed',
+      }),
+      expect.objectContaining({
+        path: '/workspace/project/.squad/ceremonies.md',
+        operation: 'write-file',
+        status: 'applied',
+        reason: 'ceremonies_md_rebuilt',
+      }),
+    ]));
+    expect(mockSeedBuiltInCeremonies).toHaveBeenCalledWith('project-1');
+    expect(mockSyncCeremoniesFromDisk).toHaveBeenCalledWith('project-1', '/workspace/project/.squadboard');
+    expect(mockRebuildCeremoniesMd).toHaveBeenCalledWith('project-1', '/workspace/project/.squad');
   });
 
   it('POST /repair merges write-mcp-config with existing MCP servers', async () => {

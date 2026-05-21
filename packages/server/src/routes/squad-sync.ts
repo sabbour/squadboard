@@ -22,7 +22,7 @@ import {
   getProjectSyncOwnershipStatus,
   ProjectNotFoundError,
 } from '../services/sdk-state.js';
-import { syncCeremoniesFromDisk } from '../services/squad-writeback.js';
+import { rebuildCeremoniesMd, syncCeremoniesFromDisk } from '../services/squad-writeback.js';
 import type {
   SquadSyncOwnershipStatus,
   SquadSyncProjectionArtifact,
@@ -30,6 +30,7 @@ import type {
 } from '../sdk/sync-ownership.js';
 
 type RepairActionId =
+  | 'onboard-to-squadboard'
   | 'repair-scaffold-squad'
   | 'seed-ceremony-defaults'
   | 'import-ceremonies-from-md'
@@ -248,6 +249,7 @@ const BUILT_IN_CEREMONY_NAMES = new Set(
 );
 
 const ACTION_ALIASES: Record<RepairActionId, RepairActionId> = {
+  'onboard-to-squadboard': 'onboard-to-squadboard',
   'repair-scaffold-squad': 'repair-scaffold-squad',
   'seed-ceremony-defaults': 'seed-ceremony-defaults',
   'import-ceremonies-from-md': 'import-ceremonies-from-md',
@@ -521,6 +523,8 @@ function buildDrift(
   };
 }
 
+const REPAIR_ACTION_PRIORITY: RepairActionId[] = ['onboard-to-squadboard'];
+
 function adaptRepairActions(status: SquadSyncOwnershipStatus): ApiRepairAction[] {
   const fromSdk = status.repairActions
     .filter((action) => action.id !== 'expose-sync-status-api')
@@ -546,6 +550,18 @@ function adaptRepairActions(status: SquadSyncOwnershipStatus): ApiRepairAction[]
     });
 
   const byId = new Map<RepairActionId, ApiRepairAction>();
+  byId.set('onboard-to-squadboard', {
+    id: 'onboard-to-squadboard',
+    aliases: [],
+    owner: 'Hockney',
+    reason: 'Write .mcp.json, seed built-in ceremonies, import custom ceremonies.md entries, then rebuild ceremonies.md once.',
+    mode: 'manual',
+    available: true,
+    required: false,
+    destructive: false,
+    endpoint: 'POST /api/projects/:projectId/squad-sync/repair',
+  });
+
   for (const action of fromSdk) {
     byId.set(action.id, action);
   }
@@ -576,7 +592,15 @@ function adaptRepairActions(status: SquadSyncOwnershipStatus): ApiRepairAction[]
     });
   }
 
-  return [...byId.values()].sort((a, b) => a.id.localeCompare(b.id));
+  return [...byId.values()].sort((a, b) => {
+    const aPriority = REPAIR_ACTION_PRIORITY.indexOf(a.id);
+    const bPriority = REPAIR_ACTION_PRIORITY.indexOf(b.id);
+    if (aPriority !== bPriority) {
+      return (aPriority === -1 ? Number.MAX_SAFE_INTEGER : aPriority)
+        - (bPriority === -1 ? Number.MAX_SAFE_INTEGER : bPriority);
+    }
+    return a.id.localeCompare(b.id);
+  });
 }
 
 export async function buildSquadSyncStatusEnvelope(projectId: string): Promise<StatusEnvelope> {
@@ -1270,6 +1294,42 @@ function buildSquadboardMcpServerConfig(): Record<string, unknown> {
   };
 }
 
+async function onboardToSquadboard(project: ProjectContext, dryRun: boolean): Promise<RepairResult> {
+  const status = await getProjectSyncOwnershipStatus(project.projectId);
+  const changes: RepairChange[] = [];
+  const results = [
+    await writeMcpConfig(project, status, dryRun),
+    await seedCeremonyDefaults(project, dryRun),
+    await importCeremoniesFromMd(project, dryRun),
+  ];
+
+  for (const result of results) {
+    changes.push(...result.changes);
+  }
+
+  const ceremoniesMdPath = path.join(project.squadPath, 'ceremonies.md');
+  if (dryRun) {
+    changes.push({
+      path: ceremoniesMdPath,
+      operation: 'write-file',
+      status: 'dry-run',
+      reason: 'ceremonies_md_would_be_rebuilt',
+      message: 'would rebuild ceremonies.md with Squadboard delegation hints after onboarding',
+    });
+  } else {
+    await rebuildCeremoniesMd(project.projectId, project.squadPath);
+    changes.push({
+      path: ceremoniesMdPath,
+      operation: 'write-file',
+      status: 'applied',
+      reason: 'ceremonies_md_rebuilt',
+      message: 'rebuilt ceremonies.md with Squadboard delegation hints',
+    });
+  }
+
+  return resultFor('onboard-to-squadboard', changes);
+}
+
 async function writeMcpConfig(project: ProjectContext, status: SquadSyncOwnershipStatus, dryRun: boolean): Promise<RepairResult> {
   const targetPath = path.join(project.projectRoot, MCP_CONFIG_RELATIVE_PATH);
   const changes: RepairChange[] = [];
@@ -1482,6 +1542,8 @@ async function runAction(
   dryRun: boolean,
 ): Promise<RepairResult> {
   switch (ACTION_ALIASES[action]) {
+    case 'onboard-to-squadboard':
+      return onboardToSquadboard(project, dryRun);
     case 'repair-scaffold-squad':
       return repairScaffold(project, dryRun);
     case 'seed-ceremony-defaults':

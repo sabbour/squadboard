@@ -58,3 +58,21 @@ Implemented end-to-end release infrastructure for `sabbour/squadboard`:
 - The pnpm `virtualStoreDir` in `node_modules/.modules.yaml` is resolved relative to the `node_modules/` directory, not the project root. Value `.pnpm` (not `node_modules/.pnpm`) is correct.
 - `pnpm changeset version` consumes the `.changeset/*.md` files and updates package versions + CHANGELOGs in one shot — no manual version edits needed after changeset is written.
 
+## 2026-05-20: squad-sync write-mcp-config repair action
+
+Added a new manual squad-sync repair action that writes `{projectRoot}/.copilot/mcp-config.json` for PostgreSQL-backed projects.
+
+**Learnings:**
+- To resolve `packages/server/dist/mcp/index.js` from a route module in both source and built layouts, anchor from the route directory and re-enter `dist/` explicitly (`path.resolve(__dirname, '..', '..', 'dist', 'mcp', 'index.js')`).
+- The repair endpoint can safely merge `.copilot/mcp-config.json` by updating only `mcpServers.squadboard`, preserving sibling MCP servers and unrelated top-level keys.
+- The requested `vitest --testPathPattern` invocation is stale on Vitest 4; use `vitest run <file...>` as the working equivalent for targeted squad-sync tests.
+
+## 2026-05-21: squad-sync onboard-to-squadboard composite repair action
+
+Added a single onboarding repair action that runs MCP config write, built-in ceremony seeding, markdown ceremony import, and one final `.squad/ceremonies.md` rebuild in sequence.
+
+**Learnings:**
+- The composite repair must reuse the existing named repair functions so the individual actions stay independently callable and behavior stays aligned.
+- `rebuildCeremoniesMd(projectId, squadPath)` already emits delegation hints, so the composite path should call it once at the end instead of rebuilding after each sub-step.
+- Keeping the composite action first in the status payload gives Settings a stable primary onboarding button without removing the lower-level repair actions.
+
