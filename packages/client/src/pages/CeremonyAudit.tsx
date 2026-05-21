@@ -201,8 +201,9 @@ export default function CeremonyAudit() {
     )
   }
 
-  const origins: CeremonyOrigin[] = ['built-in', 'yaml-import', 'conjure-llm', 'user-created']
+  const origins: CeremonyOrigin[] = ['core', 'built-in', 'yaml-import', 'conjure-llm', 'user-created']
   const originLabels: Record<CeremonyOrigin, string> = {
+    'core': 'Core',
     'built-in': 'Built-in',
     'yaml-import': 'YAML',
     'conjure-llm': 'Conjure',

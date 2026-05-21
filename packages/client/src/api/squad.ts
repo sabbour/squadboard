@@ -169,6 +169,7 @@ export interface SquadSyncOnboardingSync {
   mcpConfigPresent: boolean
   ceremoniesSeeded: boolean
   squadAgentPresent: boolean
+  squadboardMcpPresent: boolean
   driftedFields: string[]
 }
 

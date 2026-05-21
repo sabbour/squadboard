@@ -19,7 +19,7 @@ export type CeremonyKind = 'workflow' | 'ceremony' | 'review_policy' | 'narrativ
 export type CeremonyStatus = 'active' | 'draft' | 'paused' | 'archived'
 
 // CER-1: origin/provenance of a ceremony (computed server-side from existing columns)
-export type CeremonyOrigin = 'built-in' | 'yaml-import' | 'conjure-llm' | 'user-created'
+export type CeremonyOrigin = 'core' | 'built-in' | 'yaml-import' | 'conjure-llm' | 'user-created'
 
 export type LifecycleRunState = 'idle' | 'pending' | 'running' | 'completed' | 'failed' | 'cancelled' | 'unknown'
 export type LifecycleCleanupStatus = 'not_applicable' | 'not_ready' | 'pending' | 'cleaned' | 'unknown'

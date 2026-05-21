@@ -256,11 +256,16 @@ function sourceYamlPath(row: { triggerConfig: unknown }): string | null {
   return typeof value === 'string' ? value : null;
 }
 
-function ceremonyOrigin(row: { parentNarrativeId?: string | null; triggerConfig: unknown }): CeremonyOrigin {
+function ceremonyOrigin(row: { slug: string; parentNarrativeId?: string | null; triggerConfig: unknown }): CeremonyOrigin {
+  const yamlPath = sourceYamlPath(row);
+  const isBuiltIn = yamlPath?.startsWith('import:built-in/') ?? false;
+  const templateId = isBuiltIn
+    ? (isProtectedBuiltInCeremony(row) ? 'core' : 'built-in')
+    : null;
   return deriveOrigin({
     parentNarrativeId: row.parentNarrativeId,
-    sourceYamlPath: sourceYamlPath(row),
-    templateId: sourceYamlPath(row)?.startsWith('import:built-in/') ? 'built-in' : null,
+    sourceYamlPath: yamlPath,
+    templateId,
   });
 }
 
@@ -1226,6 +1231,7 @@ async function getCeremonyAudit(req: Request, res: Response): Promise<void> {
 
     // Accumulate aggregates
     const byOrigin: Record<CeremonyOrigin, number> = {
+      'core': 0,
       'built-in': 0,
       'yaml-import': 0,
       'conjure-llm': 0,

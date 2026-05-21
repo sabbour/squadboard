@@ -105,6 +105,7 @@ function serverStatus(overrides: Partial<SquadSyncStatus> = {}): SquadSyncStatus
       mcpConfigPresent: true,
       ceremoniesSeeded: true,
       squadAgentPresent: true,
+      squadboardMcpPresent: true,
       driftedFields: [],
     },
     ...overrides,
@@ -156,6 +157,7 @@ describe('SquadSyncStatusPanel', () => {
         mcpConfigPresent: false,
         ceremoniesSeeded: false,
         squadAgentPresent: false,
+        squadboardMcpPresent: false,
         driftedFields: [],
       },
     })
@@ -176,6 +178,7 @@ describe('SquadSyncStatusPanel', () => {
         mcpConfigPresent: false,
         ceremoniesSeeded: false,
         squadAgentPresent: true,
+        squadboardMcpPresent: false,
         driftedFields: ['mcpConfigPresent', 'ceremoniesSeeded'],
       },
     })
@@ -213,6 +216,7 @@ describe('SquadSyncStatusPanel', () => {
         mcpConfigPresent: false,
         ceremoniesSeeded: false,
         squadAgentPresent: false,
+        squadboardMcpPresent: false,
         driftedFields: ['mcpConfigPresent', 'ceremoniesSeeded', 'squadAgentPresent'],
       },
     })
@@ -248,6 +252,7 @@ describe('SquadSyncStatusPanel', () => {
         mcpConfigPresent: false,
         ceremoniesSeeded: true,
         squadAgentPresent: true,
+        squadboardMcpPresent: false,
         driftedFields: ['mcpConfigPresent'],
       },
     })
