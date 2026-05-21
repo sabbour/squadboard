@@ -1,6 +1,6 @@
 {
   "name": "@sabbour/squadboard-sdk",
-  "version": "0.1.0-prealpha.0",
+  "version": "0.0.1",
   "description": "Pre-alpha library-first SDK for Squadboard ceremonies and agent primitives. Separate from the @sabbour/squadboard MCP distribution package.",
   "type": "module",
   "license": "MIT",
@@ -30,8 +30,7 @@
   },
   "homepage": "https://github.com/sabbour/squadboard#readme",
   "publishConfig": {
-    "access": "public",
-    "tag": "prealpha"
+    "access": "public"
   },
   "scripts": {
     "clean": "node -e \"require('node:fs').rmSync('dist', { recursive: true, force: true })\"",

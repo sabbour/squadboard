@@ -1,6 +1,6 @@
 {
   "name": "@sabbour/squadboard-cli",
-  "version": "0.1.0-prealpha.0",
+  "version": "0.0.1",
   "description": "Pre-alpha CLI for Squadboard — `npx @sabbour/squadboard-cli init`",
   "license": "MIT",
   "private": false,
@@ -18,8 +18,7 @@
   },
   "homepage": "https://github.com/sabbour/squadboard#readme",
   "publishConfig": {
-    "access": "public",
-    "tag": "prealpha"
+    "access": "public"
   },
   "scripts": {
     "clean": "node -e \"require('node:fs').rmSync('dist', { recursive: true, force: true })\"",

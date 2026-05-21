@@ -190,3 +190,21 @@ Server-side dead code cleanup: 7 artifacts removed
 ### Notes
 
 All deletions verified by full import/reference scan. Work coordinated with parallel Keyser/Kujan/Redfoot cleanup waves.
+
+## Learnings — 2026-05-20: L3 Electron Renderer Architecture
+
+- **Option A (electron-vite inline) is superior to Option B (copy step)** for Electron renderer wiring in this monorepo. Keeps all build artifacts co-located in `packages/electron/dist/`, no cross-platform copy fragility, and electron-vite orchestrates main+preload+renderer atomically.
+- **Three dependencies must be added to electron's devDependencies** to use Option A: `@vitejs/plugin-react`, `@tailwindcss/vite`, `tailwindcss`. pnpm doesn't hoist by default — they're in client's node_modules, not electron's.
+- **TailwindCSS v4** (`@import "tailwindcss"` in CSS, no config file) works cleanly when the Vite root is pointed at `../../client`. The plugin auto-discovers utility usage by scanning the root.
+- **The `"main"` field bug (A1 from deep review)** — `out/main/index.js` instead of `dist/main/index.js` — is a hard blocker that must be fixed in the same L3 PR. Without it, `electron .` never finds the entry point.
+- **`VITE_API_URL` via `define`** is the right mechanism for baking the localhost API URL into the file:// renderer. Covers both the HTTP client and WS client in one shot. Verify WS client converts `http://` → `ws://` correctly.
+- **`BrowserRouter` under file://** works for in-session navigation but reloads break it. Acceptable for L3; flag for pre-ship review.
+- **Build order:** root `electron:build` must chain server build first, then electron build. Client build is subsumed by the electron-vite renderer section.
+- **Decision artifact:** `.squad/decisions/inbox/mcmanus-l3-electron-renderer.md`
+
+## Learnings — 2026-05-20: Starter App Model Updates
+
+- `pickModelString` in `irl-mapper.ts` silently dropped `{ preferred, rationale, fallback }` objects from `defineDefaults`. Always check `.preferred` first.
+- 21 starters updated in one pass: `sed` is safe for TypeScript string literals; use Python's `json` module for JSON edits (never `sed` on JSON).
+- `index.json` blurbs must be manually validated — generator truncates at ~100 chars. READMEs are the source of truth for blurb rewrites.
+- ✅ Commit: 2b04aa968

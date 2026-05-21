@@ -1,5 +1,7 @@
 import { defineConfig, externalizeDepsPlugin } from 'electron-vite';
 import { resolve } from 'path';
+import react from '@vitejs/plugin-react';
+import tailwindcss from '@tailwindcss/vite';
 
 export default defineConfig({
   main: {
@@ -25,20 +27,27 @@ export default defineConfig({
     },
   },
   renderer: {
-    // L2 scaffold: a minimal renderer that verifies IPC + server connectivity.
-    // L3 will replace this with the real React client (packages/client).
-    //
-    // In dev, the main process loads ELECTRON_RENDERER_URL (Vite dev server).
-    // In prod, the main process loads packages/client/dist/index.html via file://.
-    // The renderer dist built here is only used if loading from within dist/.
-    root: resolve(__dirname, 'src/renderer'),
+    // L3: full React client (packages/client) built as Electron renderer.
+    // In dev, the main process loads ELECTRON_RENDERER_URL (Vite dev server at localhost:5173).
+    // In prod, main process loads dist/renderer/index.html via file://.
+    // VITE_API_URL is baked in so file:// renderer can reach the local Express server.
+    root: resolve(__dirname, '../client'),
     build: {
       outDir: 'dist/renderer',
       rollupOptions: {
         input: {
-          index: resolve(__dirname, 'src/renderer/index.html'),
+          index: resolve(__dirname, '../client/index.html'),
         },
       },
+    },
+    plugins: [react(), tailwindcss()],
+    resolve: {
+      alias: {
+        '@': resolve(__dirname, '../client/src'),
+      },
+    },
+    define: {
+      'import.meta.env.VITE_API_URL': JSON.stringify('http://localhost:3000'),
     },
   },
 });

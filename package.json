@@ -1,6 +1,6 @@
 {
   "name": "@sabbour/squadboard-monorepo",
-  "version": "0.1.0-prealpha.0",
+  "version": "0.0.1",
   "description": "Pre-alpha local-first kanban + workflow board for Squad agents",
   "license": "MIT",
   "private": true,
@@ -9,7 +9,7 @@
   "scripts": {
     "build": "pnpm -r build",
     "npm:build": "pnpm --filter @sabbour/squadboard-sdk run build && pnpm --filter @sabbour/squadboard-cli run build && pnpm --filter @sabbour/squadboard run build",
-    "npm:publish:dry-run": "pnpm --filter @sabbour/squadboard-sdk publish --dry-run --no-git-checks --access public --tag prealpha && pnpm --filter @sabbour/squadboard-cli publish --dry-run --no-git-checks --access public --tag prealpha && pnpm --filter @sabbour/squadboard publish --dry-run --no-git-checks --access public --tag prealpha",
+    "npm:publish:dry-run": "pnpm --filter @sabbour/squadboard-sdk publish --dry-run --no-git-checks --access public && pnpm --filter @sabbour/squadboard-cli publish --dry-run --no-git-checks --access public && pnpm --filter @sabbour/squadboard publish --dry-run --no-git-checks --access public",
     "dev": "pnpm --parallel --filter @sabbour/squadboard --filter @sabbour/squadboard-client run dev",
     "dev:postgresql": "pnpm --parallel --filter @sabbour/squadboard --filter @sabbour/squadboard-client run dev:postgresql",
     "dev:fs": "pnpm --parallel --filter @sabbour/squadboard --filter @sabbour/squadboard-client run dev:fs",
@@ -21,10 +21,15 @@
     "test:e2e": "pnpm --filter @sabbour/squadboard-e2e test",
     "electron:dev": "pnpm --filter @sabbour/squadboard-electron dev",
     "electron:build": "pnpm --filter @sabbour/squadboard build && pnpm --filter @sabbour/squadboard-electron build",
-    "npm:configure-trusted-publisher": "npx ts-node scripts/configure-npm-trusted-publisher.ts"
+    "npm:configure-trusted-publisher": "npx ts-node scripts/configure-npm-trusted-publisher.ts",
+    "npm:publish": "pnpm --filter @sabbour/squadboard-sdk publish --no-git-checks --access public && pnpm --filter @sabbour/squadboard-cli publish --no-git-checks --access public && pnpm --filter @sabbour/squadboard publish --no-git-checks --access public"
   },
   "engines": {
     "node": ">=20.0.0",
     "pnpm": ">=8.0.0"
+  },
+  "devDependencies": {
+    "@changesets/changelog-github": "^0.7.0",
+    "@changesets/cli": "^2.31.0"
   }
 }

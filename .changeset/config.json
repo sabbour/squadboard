@@ -1,0 +1,18 @@
+{
+  "$schema": "https://unpkg.com/@changesets/config@3.0.0/schema.json",
+  "changelog": ["@changesets/changelog-github", { "repo": "sabbour/squadboard" }],
+  "commit": false,
+  "fixed": [],
+  "linked": [
+    ["@sabbour/squadboard", "@sabbour/squadboard-cli", "@sabbour/squadboard-sdk", "@sabbour/squadboard-electron"]
+  ],
+  "access": "public",
+  "baseBranch": "dev",
+  "updateInternalDependencies": "patch",
+  "ignore": [
+    "@sabbour/squadboard-client",
+    "@sabbour/squadboard-coordinator-fragment",
+    "@sabbour/squadboard-docs",
+    "@sabbour/squadboard-e2e"
+  ]
+}
