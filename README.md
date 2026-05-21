@@ -47,11 +47,11 @@ The intended split is:
 
 Pick your starting point:
 
-- **🚀 [Getting Started](packages/docs-site/docs/getting-started/)** — Clone, install, and run Squadboard locally in 5 minutes.
-- **📦 [Create a Squad App](packages/docs-site/docs/user-guide/squad-apps.mdx)** — Build, test, and publish a reusable workflow template.
+- **🚀 [Getting Started](https://sabbour.me/squadboard/getting-started/)** — Clone, install, and run Squadboard locally in 5 minutes.
+- **📦 [Create a Squad App](https://sabbour.me/squadboard/user-guide/squad-apps)** — Build, test, and publish a reusable workflow template.
 - **📤 [Publishing & Release Checklist](docs/RELEASE-READINESS.md)** — Pre-flight validation before shipping to npm or GitHub.
 
-For more details, see the **[full documentation](packages/docs-site/docs/)**.
+For more details, see the **[full documentation](https://sabbour.me/squadboard/)**.
 
 ---
 
@@ -148,7 +148,7 @@ If you need to share Squad state across machines (multi-process, multi-agent), p
 DATABASE_URL=postgresql://user:password@host:port/squadboard pnpm run dev
 ```
 
-See [Storage provider — Configuration recipes](packages/docs-site/docs/user-guide/storage-provider.mdx#configuration-recipes-for-shared-storage) for more scenarios and external agent compatibility guidance.
+See [Storage provider — Configuration recipes](https://sabbour.me/squadboard/user-guide/storage-provider#configuration-recipes-for-shared-storage) for more scenarios and external agent compatibility guidance.
 
 **Configure Copilot CLI / `squad.agent.md` to use Squadboard as the broker:**
 
@@ -422,13 +422,13 @@ pnpm run cli:start
 
 Developer documentation for integrating with Squadboard:
 
-- **[REST API Reference](docs/api-reference.md)** — 24+ endpoint groups covering projects, agents, issues, runs, workflows, and more.
-- **[WebSocket Protocol](docs/websocket-protocol.md)** — Real-time event streaming for presence, issues, runs, consult (chat), and comments.
+- **[REST API Reference](https://sabbour.me/squadboard/reference/api/)** — 24+ endpoint groups covering projects, agents, issues, runs, workflows, and more.
+- **[WebSocket Protocol](https://sabbour.me/squadboard/reference/websocket/)** — Real-time event streaming for presence, issues, runs, consult (chat), and comments.
 
 #### Documentation Site
 
-The Docusaurus docs site lives in `packages/docs-site` and is mounted under
-`/docs/` to match the public docs URL shape.
+The Docusaurus docs site lives in `packages/docs-site` and is published to
+**[sabbour.me/squadboard](https://sabbour.me/squadboard/)**.
 
 ```bash
 pnpm docs:dev
