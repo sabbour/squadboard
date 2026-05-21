@@ -68,6 +68,14 @@ async function resolveSquadPath(projectId: string): Promise<string | null> {
   return project?.path ?? null;
 }
 
+function toSquadboardPath(squadPath: string): string {
+  return path.join(path.dirname(squadPath), '.squadboard');
+}
+
+function isInternalSquadboardWorkspacePath(squadboardPath: string): boolean {
+  return isInternalSquadWorkspacePath(path.dirname(squadboardPath));
+}
+
 // ---------------------------------------------------------------------------
 // Agent writeback: DB → Disk
 // ---------------------------------------------------------------------------
@@ -200,17 +208,17 @@ function getRoleBadge(role: string, name: string): string {
 // ---------------------------------------------------------------------------
 
 /** Absolute path for a ceremony YAML file on disk. */
-function ceremonyYamlPath(squadPath: string, slug: string): string {
-  return path.join(squadPath, 'ceremonies', `${slug}.yaml`);
+function ceremonyYamlPath(squadboardPath: string, slug: string): string {
+  return path.join(squadboardPath, 'ceremonies', `${slug}.yaml`);
 }
 
 /**
- * Export a ceremony from DB as a YAML file at `.squad/ceremonies/{slug}.yaml`.
+ * Export a ceremony from DB as a YAML file at `.squadboard/ceremonies/{slug}.yaml`.
  *
  * Called after ceremony CREATE or PATCH.
  */
-export async function writeCeremonyToDisk(ceremonyId: string, squadPath: string): Promise<void> {
-  if (isInternalSquadWorkspacePath(squadPath)) return;
+export async function writeCeremonyToDisk(ceremonyId: string, squadboardPath: string): Promise<void> {
+  if (isInternalSquadboardWorkspacePath(squadboardPath)) return;
 
   try {
     const db = getDb();
@@ -225,7 +233,7 @@ export async function writeCeremonyToDisk(ceremonyId: string, squadPath: string)
     if (row.kind === 'narrative') return;
 
     const yamlText = await exportCeremonyAsYaml(ceremonyId);
-    const filePath = ceremonyYamlPath(squadPath, row.slug);
+    const filePath = ceremonyYamlPath(squadboardPath, row.slug);
     await ensureDir(path.dirname(filePath));
     await fs.writeFile(filePath, yamlText, 'utf-8');
     console.info(`[squad-writeback] wrote ceremony: ${filePath}`);
@@ -237,10 +245,10 @@ export async function writeCeremonyToDisk(ceremonyId: string, squadPath: string)
 /**
  * Remove a ceremony YAML file from disk after DELETE/archive.
  */
-export async function removeCeremonyFromDisk(slug: string, squadPath: string): Promise<void> {
-  if (isInternalSquadWorkspacePath(squadPath)) return;
+export async function removeCeremonyFromDisk(slug: string, squadboardPath: string): Promise<void> {
+  if (isInternalSquadboardWorkspacePath(squadboardPath)) return;
 
-  const filePath = ceremonyYamlPath(squadPath, slug);
+  const filePath = ceremonyYamlPath(squadboardPath, slug);
   try {
     if (await statSafe(filePath)) {
       await fs.unlink(filePath);
@@ -297,7 +305,7 @@ _No ceremonies configured yet. Create a ceremony in Squadboard and it will appea
         const when = resolveCeremonyWhen(c.triggerKind, triggerConfig);
         const condition = resolveCeremonyCondition(c.triggerKind, triggerConfig);
         const desc = c.description?.trim() ? `\n${c.description}\n` : '';
-        const yamlRef = `\`.squad/ceremonies/${c.slug}.yaml\``;
+        const yamlRef = `\`.squadboard/ceremonies/${c.slug}.yaml\``;
 
         return [
           `## ${c.name}`,
@@ -310,6 +318,10 @@ _No ceremonies configured yet. Create a ceremony in Squadboard and it will appea
           `| **Condition** | ${condition} |`,
           `| **Status** | ${c.status} |`,
           `| **Definition** | ${yamlRef} |`,
+          '',
+          `> **Squadboard workflow:** \`${c.slug}\` — use \`run_agent("${c.slug}")\` when Squadboard MCP is available.`,
+          '',
+          '---',
         ].join('\n');
       });
 
@@ -317,7 +329,7 @@ _No ceremonies configured yet. Create a ceremony in Squadboard and it will appea
         '# Ceremonies',
         '',
         '> Team meetings that happen before or after work. Each squad configures their own.',
-        '> Ceremony definitions are in `.squad/ceremonies/*.yaml` — edit them directly or via Squadboard.',
+        '> Ceremony definitions are in `.squadboard/ceremonies/*.yaml` — edit them directly or via Squadboard.',
         '',
         sections.join('\n\n'),
         '',
@@ -377,7 +389,7 @@ function resolveCeremonyCondition(triggerKind: string, triggerConfig: Record<str
 // ---------------------------------------------------------------------------
 
 /**
- * Scan `.squad/ceremonies/*.yaml` and import any files not already in DB.
+ * Scan `.squadboard/ceremonies/*.yaml` and import any files not already in DB.
  *
  * This is the disk→DB direction, analogous to syncAgentsFromDisk for agents.
  * Called on GET /api/projects/:id/ceremonies (best-effort, never throws).
@@ -386,13 +398,13 @@ function resolveCeremonyCondition(triggerKind: string, triggerConfig: Record<str
  */
 export async function syncCeremoniesFromDisk(
   projectId: string,
-  squadPath: string,
+  squadboardPath: string,
 ): Promise<{ imported: number; skipped: number; errors: number }> {
-  if (isInternalSquadWorkspacePath(squadPath)) {
+  if (isInternalSquadboardWorkspacePath(squadboardPath)) {
     return { imported: 0, skipped: 0, errors: 0 };
   }
 
-  const ceremoniesDir = path.join(squadPath, 'ceremonies');
+  const ceremoniesDir = path.join(squadboardPath, 'ceremonies');
   let files: string[];
 
   try {
@@ -455,7 +467,7 @@ export async function syncCeremonyToFs(
   projectId: string,
   squadPath: string,
 ): Promise<void> {
-  await writeCeremonyToDisk(ceremonyId, squadPath);
+  await writeCeremonyToDisk(ceremonyId, toSquadboardPath(squadPath));
   await rebuildCeremoniesMd(projectId, squadPath);
 }
 
@@ -468,7 +480,7 @@ export async function removeCeremonyFromFs(
   projectId: string,
   squadPath: string,
 ): Promise<void> {
-  await removeCeremonyFromDisk(slug, squadPath);
+  await removeCeremonyFromDisk(slug, toSquadboardPath(squadPath));
   await rebuildCeremoniesMd(projectId, squadPath);
 }
 
@@ -485,5 +497,17 @@ export async function withSquadPath(
     if (squadPath) await action(squadPath);
   } catch (err) {
     console.warn('[squad-writeback] withSquadPath failed:', err instanceof Error ? err.message : err);
+  }
+}
+
+export async function withSquadboardPath(
+  projectId: string,
+  action: (squadboardPath: string) => Promise<void>,
+): Promise<void> {
+  try {
+    const squadPath = await resolveSquadPath(projectId);
+    if (squadPath) await action(toSquadboardPath(squadPath));
+  } catch (err) {
+    console.warn('[squad-writeback] withSquadboardPath failed:', err instanceof Error ? err.message : err);
   }
 }

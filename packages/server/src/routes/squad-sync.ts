@@ -43,12 +43,13 @@ type RepairActionId =
 type RepairActionStatus = 'applied' | 'dry-run' | 'skipped' | 'failed';
 type RepairChangeStatus = 'applied' | 'would-apply' | 'dry-run' | 'unchanged' | 'up-to-date' | 'skipped' | 'failed';
 
-interface ProjectContext {
-  id: string;
+export interface ProjectContext {
+  projectId: string;
   name: string;
   description: string | null;
-  squadPath: string;
   projectRoot: string;
+  squadPath: string;
+  squadboardPath: string;
 }
 
 interface SquadStorageMetadata {
@@ -369,7 +370,7 @@ function ceremonyDiskSyncChange(
   reason: string,
 ): RepairChange {
   return {
-    path: '.squad/ceremonies/*.yaml',
+    path: '.squadboard/ceremonies/*.yaml',
     operation: 'seed-db',
     status,
     reason,
@@ -397,12 +398,14 @@ async function fetchProject(projectId: string): Promise<ProjectContext> {
   }
 
   const squadPath = normalizeSquadPath(project.path);
+  const projectRoot = toProjectRoot(squadPath);
   return {
-    id: project.id,
+    projectId: project.id,
     name: project.name,
     description: project.description ?? null,
+    projectRoot,
     squadPath,
-    projectRoot: toProjectRoot(squadPath),
+    squadboardPath: path.join(projectRoot, '.squadboard'),
   };
 }
 
@@ -1058,7 +1061,7 @@ async function seedCeremonyDefaults(project: ProjectContext, dryRun: boolean): P
 
   if (dryRun) {
     changes.push(...builtInSeedChangesForDryRun());
-    const diskYamlCount = await countCeremonyYamlFiles(project.squadPath);
+    const diskYamlCount = await countCeremonyYamlFiles(project.squadboardPath);
     changes.push(ceremonyDiskSyncChange(
       { imported: diskYamlCount, skipped: 0, errors: 0 },
       diskYamlCount > 0 ? 'dry-run' : 'up-to-date',
@@ -1067,11 +1070,11 @@ async function seedCeremonyDefaults(project: ProjectContext, dryRun: boolean): P
     return resultFor('seed-ceremony-defaults', changes);
   }
 
-  const seedResult = await seedBuiltInCeremonies(project.id);
+  const seedResult = await seedBuiltInCeremonies(project.projectId);
   changes.push(...builtInSeedChangesForResult(seedResult));
 
   try {
-    const diskSyncResult = await syncCeremoniesFromDisk(project.id, project.squadPath);
+    const diskSyncResult = await syncCeremoniesFromDisk(project.projectId, project.squadboardPath);
     changes.push(ceremonyDiskSyncChange(
       diskSyncResult,
       diskSyncResult.errors > 0
@@ -1087,7 +1090,7 @@ async function seedCeremonyDefaults(project: ProjectContext, dryRun: boolean): P
     ));
   } catch (err) {
     changes.push({
-      path: '.squad/ceremonies/*.yaml',
+      path: '.squadboard/ceremonies/*.yaml',
       operation: 'seed-db',
       status: 'failed',
       reason: 'disk_ceremony_import_failed',
@@ -1164,12 +1167,12 @@ async function importCeremoniesFromMd(project: ProjectContext, dryRun: boolean):
   for (const section of customSections) {
     try {
       const { raw } = await runFormulator({
-        projectId: project.id,
+        projectId: project.projectId,
         systemMessage: CEREMONY_GENERATOR_SYSTEM_MESSAGE,
         prompt: buildCeremonyImportPrompt(section.markdown),
       });
       const yamlText = stripMarkdownFences(raw);
-      const importResult = await importCeremonyFromYaml(yamlText, project.id, {
+      const importResult = await importCeremonyFromYaml(yamlText, project.projectId, {
         sourceMarker: `markdown:${normalizeCeremonyName(section.heading).replace(/\s+/g, '-')}`,
       });
       changes.push({
@@ -1417,7 +1420,7 @@ async function projectSquadToFs(
 
   let rows: StorageRow[];
   try {
-    rows = await listSquadStorageRows(project.id);
+    rows = await listSquadStorageRows(project.projectId);
   } catch (err) {
     return {
       action: 'project-squad-to-fs',

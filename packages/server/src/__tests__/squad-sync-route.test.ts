@@ -339,13 +339,13 @@ describe('squad-sync project routes', () => {
         status: 'applied',
       }),
       expect.objectContaining({
-        path: '.squad/ceremonies/*.yaml',
+        path: '.squadboard/ceremonies/*.yaml',
         operation: 'seed-db',
         status: 'applied',
       }),
     ]));
     expect(mockSeedBuiltInCeremonies).toHaveBeenCalledWith('project-1');
-    expect(mockSyncCeremoniesFromDisk).toHaveBeenCalledWith('project-1', '/workspace/project/.squad');
+    expect(mockSyncCeremoniesFromDisk).toHaveBeenCalledWith('project-1', '/workspace/project/.squadboard');
     expect(mockFsWriteFile).not.toHaveBeenCalled();
   });
 

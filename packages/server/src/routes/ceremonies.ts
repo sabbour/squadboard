@@ -33,6 +33,7 @@
 
 import { Router } from 'express';
 import type { Request, Response } from 'express';
+import path from 'node:path';
 import { eq, and, sql, gte, count, isNotNull, inArray, desc, asc } from 'drizzle-orm';
 import { getDb, schema } from '../db/index.js';
 import { parseWorkflowYaml, validateWorkflowYaml } from '../services/workflow-parser.js';
@@ -94,6 +95,11 @@ async function resolveProjectSquadPath(projectId: string): Promise<string | null
     .where(eq(schema.projects.id, projectId))
     .limit(1);
   return project?.path ?? null;
+}
+
+async function resolveProjectSquadboardPath(projectId: string): Promise<string | null> {
+  const squadPath = await resolveProjectSquadPath(projectId);
+  return squadPath ? path.join(path.dirname(squadPath), '.squadboard') : null;
 }
 
 function manualRunContext(body: unknown): Record<string, unknown> | undefined {
@@ -327,10 +333,10 @@ ceremoniesRouter.get('/', async (req: Request, res: Response) => {
     const { kind, triggerKind } = req.query as Record<string, string | undefined>;
     const db = getDb();
 
-    // Disk → DB: import any new ceremony YAML files from .squad/ceremonies/
-    const squadPath = await resolveProjectSquadPath(projectId);
-    if (squadPath) {
-      syncCeremoniesFromDisk(projectId, squadPath).catch(() => { /* best-effort */ });
+    // Disk → DB: import any new ceremony YAML files from .squadboard/ceremonies/
+    const squadboardPath = await resolveProjectSquadboardPath(projectId);
+    if (squadboardPath) {
+      syncCeremoniesFromDisk(projectId, squadboardPath).catch(() => { /* best-effort */ });
     }
 
     const conditions = [eq(schema.workflows.projectId, projectId)];
