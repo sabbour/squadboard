@@ -1,7 +1,7 @@
 {
   "name": "@sabbour/squadboard",
   "version": "0.0.1",
-  "description": "Pre-alpha local-first kanban + workflow board for Squad agents — MCP server and CLI",
+  "description": "Pre-alpha local-first kanban + workflow board for Squad agents \u2014 MCP server and CLI",
   "type": "module",
   "license": "MIT",
   "main": "./dist/index.js",
@@ -73,7 +73,7 @@
     "@types/pg": "^8.11.0",
     "drizzle-kit": "^0.28.1",
     "tsx": "^4.19.0",
-    "typescript": "^5.7.0",
+    "typescript": "^6.0.3",
     "vitest": "^4.1.6"
   }
 }

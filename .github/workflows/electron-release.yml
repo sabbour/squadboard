@@ -39,11 +39,11 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Build server
-        run: pnpm --filter @sabbour/squadboard build
+      - name: Build SDK + server
+        run: pnpm run npm:build
 
       - name: Build Electron app
-        run: pnpm electron:build
+        run: pnpm --filter @sabbour/squadboard-electron build
 
       - name: Package Electron app
         run: pnpm --filter @sabbour/squadboard-electron exec electron-builder --publish never

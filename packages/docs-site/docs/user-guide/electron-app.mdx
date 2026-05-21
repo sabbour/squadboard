@@ -1,0 +1,176 @@
+---
+title: Desktop App (Electron)
+description: Download, install, and configure the Squadboard desktop app. Includes MCP endpoint reference for connecting AI agents.
+sidebar_position: 1
+---
+
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+
+# Desktop App
+
+Squadboard ships as a native desktop application built with Electron. The app bundles the full Squadboard server and UI — no external services, no Docker, no cloud account required. Everything runs on your machine.
+
+## Download
+
+Pre-built binaries are attached to every [GitHub Release](https://github.com/sabbour/squadboard/releases).
+
+| Platform | File | Notes |
+|----------|------|-------|
+| macOS | `Squadboard-*.dmg` | Universal (Intel + Apple Silicon) |
+| Windows | `Squadboard-Setup-*.exe` | NSIS installer |
+| Linux | `Squadboard-*.AppImage` | Portable — no install needed |
+
+## Install
+
+<Tabs>
+  <TabItem value="mac" label="macOS">
+
+1. Download the `.dmg` file.
+2. Open it and drag **Squadboard** to your Applications folder.
+3. On first launch, right-click → **Open** to bypass Gatekeeper if prompted.
+
+  </TabItem>
+  <TabItem value="windows" label="Windows">
+
+1. Download the `.exe` installer.
+2. Run it — the installer creates a Start Menu shortcut and auto-updates on subsequent launches.
+
+  </TabItem>
+  <TabItem value="linux" label="Linux">
+
+1. Download the `.AppImage` file.
+2. Make it executable:
+   ```bash
+   chmod +x Squadboard-*.AppImage
+   ```
+3. Run it directly:
+   ```bash
+   ./Squadboard-*.AppImage
+   ```
+
+  </TabItem>
+</Tabs>
+
+## What's inside the app
+
+When Squadboard launches, it starts an **out-of-process server** as a child process alongside the UI window. This means:
+
+- **The REST API and WebSocket server** run on `http://localhost:3000` — exactly as they do in the server-only install.
+- **The MCP endpoint** is available at `http://localhost:3000/mcp`.
+- **The UI** (React) loads from the embedded renderer and connects to the local server automatically.
+
+The server is isolated from Electron's process — if the server crashes it doesn't take down the UI, and the UI can show a reconnect state.
+
+## MCP endpoint
+
+The desktop app exposes the same MCP (Model Context Protocol) server as the standalone install. Connect AI coding agents (GitHub Copilot, Claude, etc.) to `http://localhost:3000/mcp`.
+
+### MCP config for GitHub Copilot
+
+Add this to your `.copilot/mcp-config.json` (or `~/.copilot/mcp-config.json` for global access):
+
+```json
+{
+  "mcpServers": {
+    "squadboard": {
+      "type": "http",
+      "url": "http://localhost:3000/mcp",
+      "env": {
+        "SQUADBOARD_DEFAULT_PROJECT_ID": "<your-project-id>"
+      }
+    }
+  }
+}
+```
+
+Replace `<your-project-id>` with the project ID shown in **Settings → Project** inside the app. You can also set the default project from within the app — go to **Settings → MCP** and select a project; the app writes the config automatically.
+
+### MCP config for Claude Desktop
+
+Add this to your `claude_desktop_config.json`:
+
+```json
+{
+  "mcpServers": {
+    "squadboard": {
+      "command": "npx",
+      "args": ["-y", "mcp-remote", "http://localhost:3000/mcp"]
+    }
+  }
+}
+```
+
+### Verify MCP is running
+
+```bash
+curl http://localhost:3000/mcp/health
+```
+
+A healthy response looks like:
+
+```json
+{ "status": "ok", "transport": "http", "port": 3000 }
+```
+
+## Data location
+
+All data (PGlite database, uploaded files, MCP config) is stored in the OS user-data directory:
+
+| Platform | Path |
+|----------|------|
+| macOS | `~/Library/Application Support/Squadboard/` |
+| Windows | `%APPDATA%\Squadboard\` |
+| Linux | `~/.config/Squadboard/` |
+
+The data directory survives app updates. To reset to a clean state, quit the app and delete the directory.
+
+## Ports used
+
+| Port | Service | Configurable |
+|------|---------|--------------|
+| `3000` | REST API + WebSocket + MCP | Not yet — fixed in v0.0.1 |
+
+The UI communicates with the server over `http://localhost:3000`. If port 3000 is already in use when Squadboard launches, the server process will fail to start and the UI will display a connection error.
+
+## Running from source
+
+If you'd rather build and run the desktop app from source:
+
+```bash
+# 1. Clone and install
+git clone https://github.com/sabbour/squadboard.git
+cd squadboard
+pnpm install
+
+# 2. Build the server
+pnpm run npm:build
+
+# 3. Start in development mode (hot-reload UI + server subprocess)
+pnpm --filter @sabbour/squadboard-electron dev
+```
+
+To produce a distributable package locally:
+
+```bash
+pnpm run npm:build
+pnpm --filter @sabbour/squadboard-electron exec electron-builder
+```
+
+Built artifacts land in `packages/electron/release/`.
+
+## Troubleshooting
+
+**App opens but shows "Cannot connect to server"**
+- The embedded server failed to start. Check that port 3000 is free (`lsof -i :3000` on macOS/Linux).
+- Open the app's **Diagnostics** page (⚙️ → Diagnostics) to see server logs.
+
+**MCP tools return errors after changing projects**
+- The MCP server caches the default project ID. Go to **Settings → MCP**, select the correct project, and reconnect your AI agent session.
+
+**macOS: "Squadboard is damaged and can't be opened"**
+- Run: `xattr -c /Applications/Squadboard.app` then try opening again.
+
+**Linux: AppImage won't launch**
+- Some distributions require FUSE: `sudo apt install fuse libfuse2`
+- Or extract and run directly: `./Squadboard-*.AppImage --appimage-extract && ./squashfs-root/squadboard`

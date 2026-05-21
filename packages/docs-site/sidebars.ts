@@ -48,6 +48,7 @@ const sidebars: SidebarsConfig = {
           type: 'category',
           label: 'Operate Squadboard',
           items: [
+            'user-guide/electron-app',
             'user-guide/configuration',
             'user-guide/copilot-squad-coexistence',
             'user-guide/coordinator-loops',

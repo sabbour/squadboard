@@ -1,7 +1,7 @@
 {
   "name": "@sabbour/squadboard-cli",
   "version": "0.0.1",
-  "description": "Pre-alpha CLI for Squadboard — `npx @sabbour/squadboard-cli init`",
+  "description": "Pre-alpha CLI for Squadboard \u2014 `npx @sabbour/squadboard-cli init`",
   "license": "MIT",
   "private": false,
   "type": "module",
@@ -33,6 +33,6 @@
   "devDependencies": {
     "@types/node": "^22.0.0",
     "tsx": "^4.19.0",
-    "typescript": "^5.7.0"
+    "typescript": "^6.0.3"
   }
 }
