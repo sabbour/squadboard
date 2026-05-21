@@ -347,7 +347,11 @@ async function applyTeam(
     }
 
     const agentSlug = member.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
-    const charterPath = resolve(squadPath, 'agents', agentSlug || 'member', 'charter.md');
+    // Use the original member name as the disk directory name so that agent-sync
+    // can match it case-sensitively against the DB name. Fall back to slug only
+    // for names that cannot be used as path segments (e.g. empty after slug).
+    const agentDirName = member.name || agentSlug || 'member';
+    const charterPath = resolve(squadPath, 'agents', agentDirName, 'charter.md');
 
     if (opts.dryRun) {
       result.applied.push(`team: would create agent "${member.name}" (role=${member.role})`);
@@ -355,7 +359,7 @@ async function applyTeam(
     }
 
     // Write charter to disk so agent-sync doesn't retire the agent on first visit.
-    const agentDir = resolve(squadPath, 'agents', agentSlug || 'member');
+    const agentDir = resolve(squadPath, 'agents', agentDirName);
     try {
       await mkdir(agentDir, { recursive: true });
       await writeFile(charterPath, charterBody, 'utf-8');
