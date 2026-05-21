@@ -20,6 +20,7 @@
     "start": "node scripts/start-dev.mjs",
     "cli:start": "pnpm --filter @sabbour/squadboard-cli start",
     "test:e2e": "pnpm --filter @sabbour/squadboard-e2e test",
+    "demo:record": "pnpm --filter @sabbour/squadboard-e2e demo:record",
     "electron:dev": "pnpm --filter @sabbour/squadboard-electron dev",
     "electron:build": "pnpm --filter @sabbour/squadboard build && pnpm --filter @sabbour/squadboard-electron build",
     "npm:configure-trusted-publisher": "pnpm exec ts-node scripts/configure-npm-trusted-publisher.ts",
