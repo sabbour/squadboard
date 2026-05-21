@@ -124,12 +124,10 @@ pnpm --filter @sabbour/squadboard dev:postgresql
 Stock Copilot CLI and the `squad.agent.md` coordinator prompt do not inject JavaScript `StorageProvider` instances directly. The portable default is to make Squadboard the state broker through MCP:
 
 ```bash
-squadboard init --write-mcp-config
-# or inspect the config first:
-squadboard init --print-mcp-config
+squadboard connect
 ```
 
-`--write-mcp-config` merges a `squadboard` entry into `.copilot/mcp-config.json` with:
+This writes `.copilot/mcp-config.json` and injects `squad.agent.md` hints. Use `squadboard connect --squad-storage fs` if you want filesystem fallback alongside the MCP config.
 
 ```json
 {

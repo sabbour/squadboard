@@ -67,9 +67,25 @@ Serve the built docs:
 pnpm docs:serve
 ```
 
-## Optional MCP setup
+## Wire up MCP (Copilot CLI integration)
 
-If you want Copilot CLI or VS Code to connect to Squadboard:
+To let Copilot CLI and agents use Squadboard tools, wire up the MCP connection:
+
+```bash
+npx @sabbour/squadboard-cli connect
+```
+
+This writes `.copilot/mcp-config.json` into your Squad project and injects `squad.agent.md` hints so agents know how to invoke Squadboard tools. Safe to re-run.
+
+For diagnostics, check that the connection is healthy:
+
+```bash
+npx @sabbour/squadboard-cli diagnose
+```
+
+This prints a table: server reachability, MCP config presence, squad.agent.md injection status, and Electron binary location.
+
+**Manual MCP setup** (if you prefer): Write `.copilot/mcp-config.json` directly:
 
 ```json
 {
@@ -80,12 +96,6 @@ If you want Copilot CLI or VS Code to connect to Squadboard:
     }
   }
 }
-```
-
-To generate the config automatically, run:
-
-```bash
-npx @sabbour/squadboard-cli init --write-mcp-config
 ```
 
 ## Use an external Postgres (optional)

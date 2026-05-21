@@ -1,6 +1,7 @@
 import React, { Suspense, useState, useEffect, useMemo } from 'react'
 import { Outlet, useParams, useNavigate, useLocation } from 'react-router'
 import { apiFetch } from '../api/client.ts'
+import { useQuery } from '@tanstack/react-query'
 import { useProjects } from '../api/projects.ts'
 import { useInboxItems } from '../api/inbox.ts'
 import squadboardLogo from '../assets/squadboard-horizontal.png'
@@ -15,6 +16,10 @@ import {
   Option,
   OptionGroup,
   Tooltip,
+  MessageBar,
+  MessageBarBody,
+  MessageBarTitle,
+  MessageBarActions,
   makeStyles,
   mergeClasses,
   tokens,
@@ -40,6 +45,7 @@ import {
   ChevronDoubleLeftRegular,
   ChevronDoubleRightRegular,
   AppsListDetail24Regular,
+  Dismiss16Regular,
 } from '@fluentui/react-icons'
 import type { OnNavItemSelectData } from '@fluentui/react-components'
 import { ConjureProvider, useConjure } from '../context/ConjureContext.tsx'
@@ -79,6 +85,9 @@ const useStyles = makeStyles({
     width: '56px',
     minWidth: '56px',
     overflow: 'hidden',
+  },
+  recoveryBanner: {
+    flexShrink: 0,
   },
   navCollapseToggle: {
     display: 'flex',
@@ -234,6 +243,14 @@ function LayoutInner() {
   ).length
 
   const [navCollapsed, setNavCollapsed] = useState(() => localStorage.getItem('squadboard.nav.collapsed') === 'true')
+
+  const healthQuery = useQuery<{ status: string; version: string; recoveryWarning: string | null }>({
+    queryKey: ['health'],
+    queryFn: () => apiFetch('/api/health'),
+    staleTime: 60_000,
+    refetchOnWindowFocus: false,
+  })
+  const [recoveryDismissed, setRecoveryDismissed] = useState(false)
 
   function toggleNav() {
     setNavCollapsed(prev => {
@@ -591,6 +608,24 @@ function LayoutInner() {
           </div>
         </div>
         <Suspense fallback={<PageLoading label="Loading page…" />}>
+          {!recoveryDismissed && healthQuery.data?.recoveryWarning && (
+            <MessageBar intent="warning" className={styles.recoveryBanner}>
+              <MessageBarBody>
+                <MessageBarTitle>Database recovered from corruption</MessageBarTitle>
+                {healthQuery.data.recoveryWarning}
+              </MessageBarBody>
+              <MessageBarActions
+                containerAction={
+                  <Button
+                    aria-label="Dismiss"
+                    appearance="transparent"
+                    icon={<Dismiss16Regular />}
+                    onClick={() => setRecoveryDismissed(true)}
+                  />
+                }
+              />
+            </MessageBar>
+          )}
           <Outlet />
         </Suspense>
 

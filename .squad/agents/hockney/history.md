@@ -67,7 +67,24 @@ Added a new manual squad-sync repair action that writes `{projectRoot}/.copilot/
 - The repair endpoint can safely merge `.copilot/mcp-config.json` by updating only `mcpServers.squadboard`, preserving sibling MCP servers and unrelated top-level keys.
 - The requested `vitest --testPathPattern` invocation is stale on Vitest 4; use `vitest run <file...>` as the working equivalent for targeted squad-sync tests.
 
-## 2026-05-21: squad-sync onboard-to-squadboard composite repair action
+## 2026-05-21: PGLite WASM abort auto-recovery — commit 637f2a2
+
+Added auto-recovery logic to `startPglite()` in `packages/server/src/db/pglite.ts`:
+
+- Detects `RuntimeError: Aborted()` WASM boot failures (corrupted or version-mismatched data dir).
+- Backs up the bad directory to `pglite.corrupted.{timestamp}` via `renameSync`.
+- Creates a fresh data dir and retries `new PGlite()` + `waitReady` once.
+- On retry success: sets `_startedSuccessfully = true` and returns `PGLITE_SENTINEL` — server starts with empty DB instead of crashing.
+- On retry failure: throws the new error (lets `main().catch` handle it — no infinite retry).
+- Non-WASM errors (e.g., `EACCES`, `ENOENT`) still throw immediately without recovery.
+
+**Learnings:**
+- `RuntimeError: Aborted()` from WASM is a distinct failure class from OS-level I/O errors; gating recovery on `err.name === 'RuntimeError' || err.message.includes('Aborted')` keeps the recovery path narrow and safe.
+- `renameSync` is atomic on the same filesystem, making the backup step crash-safe with no partial-rename risk.
+- Checking `existsSync` before rename guards against the edge case where the abort happens before the data dir is even written (e.g., WASM init itself fails).
+- Log messages should tell users exactly where backup data lives and how to restore — don't make them grep logs or read code.
+
+
 
 Added a single onboarding repair action that runs MCP config write, built-in ceremony seeding, markdown ceremony import, and one final `.squad/ceremonies.md` rebuild in sequence.
 

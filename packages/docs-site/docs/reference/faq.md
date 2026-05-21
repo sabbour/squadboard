@@ -55,10 +55,10 @@ squadboard start --squad-storage fs
 
 **Configure Copilot CLI / `squad.agent.md` through MCP:**
 ```bash
-squadboard init --write-mcp-config
+squadboard connect
 ```
 
-This writes a `.copilot/mcp-config.json` entry that starts `squadboard mcp` with PostgreSQL-backed Squad state. Stock Copilot CLI and `squad.agent.md` should use the Squadboard MCP bridge for shared state unless the upstream CLI has a documented direct PostgreSQL provider configuration.
+This writes `.copilot/mcp-config.json` and injects `squad.agent.md` hints. Stock Copilot CLI and `squad.agent.md` then use the Squadboard MCP bridge for shared state. No direct PostgreSQL provider configuration needed.
 
 **For shared multi-process setup with external PostgreSQL:**
 ```bash

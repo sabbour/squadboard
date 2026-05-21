@@ -38,10 +38,10 @@ Add Squadboard to `~/.copilot/mcp-config.json`:
 Or let the CLI create a repo-local config:
 
 ```bash
-squadboard init --write-mcp-config
+squadboard connect
 ```
 
-This config makes Copilot CLI and `squad.agent.md` use Squadboard as the broker for PostgreSQL-backed Squad state. Use `squadboard init --squad-storage fs --write-mcp-config` only when you want filesystem `.squad/` fallback.
+This writes `.copilot/mcp-config.json` and injects `squad.agent.md` hints into your project. Copilot CLI and `squad.agent.md` then use Squadboard as the broker for PostgreSQL-backed Squad state. Use `squadboard connect` when you want filesystem `.squad/` fallback configured separately.
 
 ## VS Code
 
