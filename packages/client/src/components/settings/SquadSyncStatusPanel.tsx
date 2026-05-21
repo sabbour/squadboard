@@ -18,6 +18,7 @@ import {
   CheckmarkCircle20Regular,
   Copy20Regular,
   ErrorCircle20Regular,
+  PlugConnected20Regular,
   Warning20Regular,
   Wrench20Regular,
 } from '@fluentui/react-icons'
@@ -71,6 +72,7 @@ interface NormalizedStatus {
   repairDisabledReason?: string
   repairActions: NormalizedRepairAction[]
   manualBridge: boolean
+  pgliteBroker: boolean
   dryRunSupported: boolean
   checkedAt?: string
   contractVersion?: string
@@ -225,6 +227,7 @@ export function normalizeSquadSyncStatus(status: SquadSyncStatus): NormalizedSta
   const mode = status.authority?.storageMode ?? status.storage?.mode ?? status.storageMode ?? 'unknown'
 
   const manualBridge = mode === 'postgresql' && status.authority?.continuousSync === false
+  const pgliteBroker = !manualBridge && mode !== 'postgresql'
   const storageDetail = manualBridge
     ? 'Squadboard manages this project. Export .squad files only for a filesystem handoff.'
     : status.authority?.runtime?.note
@@ -359,6 +362,7 @@ export function normalizeSquadSyncStatus(status: SquadSyncStatus): NormalizedSta
     repairDisabledReason: status.repair?.disabledReason ?? undefined,
     repairActions,
     manualBridge,
+    pgliteBroker,
     dryRunSupported: status.repair?.dryRunSupported !== false,
     checkedAt: status.checkedAt,
     contractVersion: status.contractVersion,
@@ -476,14 +480,18 @@ function ArtifactList({ title, artifacts, empty }: {
   )
 }
 
+type BrokerSetupCardVariant = 'postgresql' | 'pglite'
+
 function BrokerSetupCard({
   projectId,
+  variant,
   isConfiguring,
   configureMessage,
   configureError,
   onConfigure,
 }: {
   projectId: string
+  variant: BrokerSetupCardVariant
   isConfiguring: boolean
   configureMessage: string | null
   configureError: string | null
@@ -492,18 +500,30 @@ function BrokerSetupCard({
   const [copiedItem, setCopiedItem] = useState<'command' | 'manual' | null>(null)
   const [manualSetupOpen, setManualSetupOpen] = useState(false)
   const initCommand = 'squadboard init --write-mcp-config'
-  const manualConfig = JSON.stringify({
-    mcpServers: {
-      squadboard: {
-        command: 'node',
-        args: ['<path-to-squadboard>/packages/server/dist/mcp/index.js'],
-        env: {
-          SQUADBOARD_SQUAD_STORAGE_PROVIDER: 'postgresql',
-          SQUADBOARD_DEFAULT_PROJECT_ID: projectId,
+  const manualConfig = variant === 'postgresql'
+    ? JSON.stringify({
+      mcpServers: {
+        squadboard: {
+          command: 'node',
+          args: ['<path-to-squadboard>/packages/server/dist/mcp/index.js'],
+          env: {
+            SQUADBOARD_SQUAD_STORAGE_PROVIDER: 'postgresql',
+            SQUADBOARD_DEFAULT_PROJECT_ID: projectId,
+          },
         },
       },
-    },
-  }, null, 2)
+    }, null, 2)
+    : null
+  const title = variant === 'postgresql'
+    ? 'Connect Copilot CLI via MCP broker'
+    : 'Connect Copilot CLI to this project'
+  const subtitle = variant === 'postgresql'
+    ? 'Configure Copilot CLI for this Squadboard project now, or use the manual fallback if you prefer to wire it yourself.'
+    : 'Set up the MCP broker so Copilot CLI and agents can read and write to this project.'
+  const descriptionSuffix = variant === 'postgresql'
+    ? ' for the current project.'
+    : ' so Copilot CLI can connect through Squadboard.'
+  const actionIcon = variant === 'pglite' ? <PlugConnected20Regular /> : <Wrench20Regular />
 
   async function handleCopy(value: string, item: 'command' | 'manual') {
     await navigator.clipboard.writeText(value)
@@ -517,20 +537,20 @@ function BrokerSetupCard({
     <div data-testid="broker-setup-card" style={{ ...cardStyle, display: 'flex', flexDirection: 'column', gap: '12px' }}>
       <div>
         <Subtitle2 as="h3" style={{ display: 'block', marginBottom: '4px' }}>
-          Connect Copilot CLI via MCP broker
+          {title}
         </Subtitle2>
         <Caption1 style={{ display: 'block', color: tokens.colorNeutralForeground3 }}>
-          Configure Copilot CLI for this Squadboard project now, or use the manual fallback if you prefer to wire it yourself.
+          {subtitle}
         </Caption1>
       </div>
 
       <div style={{ display: 'flex', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap', alignItems: 'center' }}>
         <Body1 style={{ display: 'block', flex: '1 1 320px' }}>
-          This writes <code style={{ fontFamily: tokens.fontFamilyMonospace }}>.copilot/mcp-config.json</code> for the current project.
+          This writes <code style={{ fontFamily: tokens.fontFamilyMonospace }}>.copilot/mcp-config.json</code>{descriptionSuffix}
         </Body1>
         <Button
           appearance="primary"
-          icon={isConfiguring ? <Spinner size="tiny" /> : <Wrench20Regular />}
+          icon={isConfiguring ? <Spinner size="tiny" /> : actionIcon}
           disabled={isConfiguring}
           data-testid="configure-broker-button"
           onClick={() => void onConfigure()}
@@ -563,7 +583,13 @@ function BrokerSetupCard({
         {manualSetupOpen && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginTop: '12px' }}>
             <Caption1 style={{ display: 'block', color: tokens.colorNeutralForeground3 }}>
-              If you would rather configure Copilot CLI yourself, run the init command or paste this config into <code style={{ fontFamily: tokens.fontFamilyMonospace }}>.copilot/mcp-config.json</code>.
+              {manualConfig ? (
+                <>
+                  If you would rather configure Copilot CLI yourself, run the init command or paste this config into <code style={{ fontFamily: tokens.fontFamilyMonospace }}>.copilot/mcp-config.json</code>.
+                </>
+              ) : (
+                'If you prefer the manual path, run this command from the project root.'
+              )}
             </Caption1>
 
             <div
@@ -599,29 +625,33 @@ function BrokerSetupCard({
               </Button>
             </div>
 
-            <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-              <Button
-                appearance="secondary"
-                icon={<Copy20Regular />}
-                onClick={() => void handleCopy(manualConfig, 'manual')}
-              >
-                {copiedItem === 'manual' ? 'Copied!' : 'Copy'}
-              </Button>
-            </div>
-            <pre
-              style={{
-                margin: 0,
-                border: '1px solid var(--border)',
-                borderRadius: '6px',
-                padding: '12px',
-                background: 'var(--bg)',
-                fontFamily: tokens.fontFamilyMonospace,
-                fontSize: '12px',
-                overflowX: 'auto',
-              }}
-            >
-              <code>{manualConfig}</code>
-            </pre>
+            {manualConfig && (
+              <>
+                <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+                  <Button
+                    appearance="secondary"
+                    icon={<Copy20Regular />}
+                    onClick={() => void handleCopy(manualConfig, 'manual')}
+                  >
+                    {copiedItem === 'manual' ? 'Copied!' : 'Copy'}
+                  </Button>
+                </div>
+                <pre
+                  style={{
+                    margin: 0,
+                    border: '1px solid var(--border)',
+                    borderRadius: '6px',
+                    padding: '12px',
+                    background: 'var(--bg)',
+                    fontFamily: tokens.fontFamilyMonospace,
+                    fontSize: '12px',
+                    overflowX: 'auto',
+                  }}
+                >
+                  <code>{manualConfig}</code>
+                </pre>
+              </>
+            )}
           </div>
         )}
       </details>
@@ -1012,15 +1042,25 @@ export function SquadSyncStatusPanel({ projectId }: SquadSyncStatusPanelProps) {
               <Caption1 style={{ color: tokens.colorPaletteRedForeground1 }}>{applyError}</Caption1>
             )}
           </div>
-          {status.manualBridge && (
+          {status.manualBridge ? (
             <BrokerSetupCard
               projectId={projectId}
+              variant="postgresql"
               isConfiguring={isConfiguringBroker}
               configureMessage={configureMessage}
               configureError={configureError}
               onConfigure={handleConfigureBroker}
             />
-          )}
+          ) : status.pgliteBroker ? (
+            <BrokerSetupCard
+              projectId={projectId}
+              variant="pglite"
+              isConfiguring={isConfiguringBroker}
+              configureMessage={configureMessage}
+              configureError={configureError}
+              onConfigure={handleConfigureBroker}
+            />
+          ) : null}
         </div>
 
         <details>

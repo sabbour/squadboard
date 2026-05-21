@@ -101,6 +101,20 @@ function databaseAuthorityWithoutMirror(): NonNullable<SquadSyncStatus['authorit
   }
 }
 
+function localPgliteAuthority(): NonNullable<SquadSyncStatus['authority']> {
+  return {
+    rawProvider: null,
+    storageMode: 'filesystem',
+    sourceOfTruth: 'filesystem',
+    sharedExternalAccess: 'direct-filesystem-access',
+    continuousSync: false,
+    runtime: {
+      kind: 'local-pglite',
+      note: 'Local PGlite keeps Squadboard data on this machine; MCP lets Copilot CLI talk to it safely.',
+    },
+  }
+}
+
 function manualExportRepair(
   reason = 'Preview Export updates .squad files for CLI/Copilot before file-based tools run.',
 ): NonNullable<SquadSyncStatus['repair']> {
@@ -156,7 +170,7 @@ describe('SquadSyncStatusPanel', () => {
     expect(screen.getByText('CLI/Copilot agent file')).toBeInTheDocument()
   })
 
-  it('shows the broker setup card when manual bridge mode is active', () => {
+  it('still shows the PostgreSQL broker setup card when manual bridge mode is active', () => {
     apiMock.statusQuery.data = serverStatus({
       authority: databaseAuthorityWithoutMirror(),
       repair: manualExportRepair(),
@@ -169,6 +183,36 @@ describe('SquadSyncStatusPanel', () => {
     expect(screen.getByRole('button', { name: 'Configure Now' })).toBeInTheDocument()
     expect(screen.getByText('Manual setup')).toBeInTheDocument()
     expect(screen.queryByText('squadboard init --write-mcp-config')).not.toBeInTheDocument()
+  })
+
+
+  it('renders the Connect Copilot CLI card in PGlite mode', () => {
+    apiMock.statusQuery.data = serverStatus({
+      authority: localPgliteAuthority(),
+    })
+
+    render(<SquadSyncStatusPanel projectId="project-1" />)
+
+    expect(screen.getByTestId('broker-setup-card')).toBeInTheDocument()
+    expect(screen.getByText('Connect Copilot CLI to this project')).toBeInTheDocument()
+    expect(screen.getByText('Set up the MCP broker so Copilot CLI and agents can read and write to this project.')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Configure Now' })).toBeInTheDocument()
+  })
+
+  it('does not render the PostgreSQL broker card in PGlite mode', async () => {
+    const user = userEvent.setup()
+    apiMock.statusQuery.data = serverStatus({
+      authority: localPgliteAuthority(),
+    })
+
+    render(<SquadSyncStatusPanel projectId="project-1" />)
+
+    expect(screen.queryByText('Connect Copilot CLI via MCP broker')).not.toBeInTheDocument()
+
+    await user.click(screen.getByText('Manual setup'))
+
+    expect(await screen.findByText('squadboard init --write-mcp-config')).toBeInTheDocument()
+    expect(screen.queryByText(/SQUADBOARD_DEFAULT_PROJECT_ID/)).not.toBeInTheDocument()
   })
 
   it('configures the MCP broker from the card and shows success feedback', async () => {

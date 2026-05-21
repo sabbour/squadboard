@@ -123,3 +123,14 @@ Client-side dead code cleanup: 4 UI components removed
 
 ### Commit
 fix: electron blank content (HashRouter) + window icon from logo
+
+## 2026-05-21 — PGlite MCP Broker Setup Card
+
+### Delivery
+- Extended `SquadSyncStatusPanel.tsx` so broker setup surfaces in non-PostgreSQL mode with a lighter Copilot CLI connection card.
+- Kept PostgreSQL manual-bridge UX intact, including the richer manual JSON fallback.
+- Added frontend tests for the new PGlite render path and PostgreSQL/PGlite mutual exclusivity.
+
+### Verification
+- ✅ `pnpm --filter @sabbour/squadboard-client exec vitest run src/components/settings/__tests__/SquadSyncStatusPanel.test.tsx`
+- ✅ `pnpm --filter @sabbour/squadboard-client build`
