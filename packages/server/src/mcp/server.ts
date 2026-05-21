@@ -13,8 +13,8 @@
  *     update_issue (NEW), run_agent, get_run_status, list_agents,
  *     slash_command. 7 tools total.
  *   - Project-scoped tools accept `projectId` from args OR fall back to the
- *     `x-project-id` HTTP request header (HTTP transport only — stdio has no
- *     headers, so args are required there).
+ *     `x-project-id` HTTP request header. Each server instance may also carry
+ *     its own default projectId (stdio env bootstrap or HTTP session init).
  */
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import {
@@ -483,16 +483,24 @@ function headerProjectId(extra: { requestInfo?: { headers?: Record<string, strin
  */
 let defaultProjectId: string | undefined;
 
+function normalizeProjectId(id: string | undefined): string | undefined {
+  return id && id.trim() ? id.trim() : undefined;
+}
+
 export function setDefaultProjectId(id: string | undefined): void {
-  defaultProjectId = id && id.trim() ? id.trim() : undefined;
+  defaultProjectId = normalizeProjectId(id);
 }
 
 export function getDefaultProjectId(): string | undefined {
   return defaultProjectId;
 }
 
-function resolveProjectId(args: { projectId?: string }, extra: Parameters<typeof headerProjectId>[0]): string | undefined {
-  return args.projectId ?? headerProjectId(extra) ?? defaultProjectId;
+function resolveProjectId(
+  args: { projectId?: string },
+  extra: Parameters<typeof headerProjectId>[0],
+  serverDefaultProjectId?: string,
+): string | undefined {
+  return args.projectId ?? headerProjectId(extra) ?? serverDefaultProjectId ?? defaultProjectId;
 }
 
 // ---------------------------------------------------------------------------
@@ -502,10 +510,10 @@ function resolveProjectId(args: { projectId?: string }, extra: Parameters<typeof
 type ToolArgs = Record<string, unknown>;
 type Extra = Parameters<typeof headerProjectId>[0];
 
-async function handleListIssues(args: ToolArgs, extra: Extra): Promise<unknown> {
+async function handleListIssues(args: ToolArgs, extra: Extra, serverDefaultProjectId?: string): Promise<unknown> {
   const db = getDb();
   const { status } = args as { status?: string };
-  const projectId = resolveProjectId(args as { projectId?: string }, extra);
+  const projectId = resolveProjectId(args as { projectId?: string }, extra, serverDefaultProjectId);
 
   if (!projectId) {
     return { error: 'missing_project_id', hint: 'Pass projectId in args, or set the x-project-id header.' };
@@ -532,7 +540,7 @@ async function handleListIssues(args: ToolArgs, extra: Extra): Promise<unknown> 
   return { issues: rows, count: rows.length };
 }
 
-async function handleCreateIssue(args: ToolArgs, extra: Extra): Promise<unknown> {
+async function handleCreateIssue(args: ToolArgs, extra: Extra, serverDefaultProjectId?: string): Promise<unknown> {
   const {
     title,
     body = '',
@@ -542,7 +550,7 @@ async function handleCreateIssue(args: ToolArgs, extra: Extra): Promise<unknown>
     body?: string;
     idempotencyKey?: string;
   };
-  const projectId = resolveProjectId(args as { projectId?: string }, extra);
+  const projectId = resolveProjectId(args as { projectId?: string }, extra, serverDefaultProjectId);
 
   if (!projectId) {
     return { error: 'missing_project_id', hint: 'Pass projectId in args, or set the x-project-id header.' };
@@ -733,10 +741,10 @@ async function handleGetRunStatus(args: ToolArgs): Promise<unknown> {
   return { run };
 }
 
-async function handleListAgents(args: ToolArgs, extra: Extra): Promise<unknown> {
+async function handleListAgents(args: ToolArgs, extra: Extra, serverDefaultProjectId?: string): Promise<unknown> {
   const db = getDb();
   const argsTyped = args as { projectId?: string; status?: string };
-  const projectId = resolveProjectId(argsTyped, extra);
+  const projectId = resolveProjectId(argsTyped, extra, serverDefaultProjectId);
 
   if (!projectId) {
     return { error: 'missing_project_id', hint: 'Pass projectId in args, or set the x-project-id header.' };
@@ -818,9 +826,9 @@ async function handleListProjects(): Promise<unknown> {
   return { projects: enriched, count: enriched.length };
 }
 
-async function handleListInbox(args: ToolArgs, extra: Extra): Promise<unknown> {
+async function handleListInbox(args: ToolArgs, extra: Extra, serverDefaultProjectId?: string): Promise<unknown> {
   const { status, limit } = args as { status?: inboxService.InboxStatus; limit?: number };
-  const projectId = resolveProjectId(args as { projectId?: string }, extra);
+  const projectId = resolveProjectId(args as { projectId?: string }, extra, serverDefaultProjectId);
 
   const rows = await inboxService.listInboxItems({
     status,
@@ -847,7 +855,7 @@ async function handleListInbox(args: ToolArgs, extra: Extra): Promise<unknown> {
   return { inbox: summary, count: summary.length };
 }
 
-async function handleCapture(args: ToolArgs, extra: Extra): Promise<unknown> {
+async function handleCapture(args: ToolArgs, extra: Extra, serverDefaultProjectId?: string): Promise<unknown> {
   const db = getDb();
   const { prompt, hint, useLlm, createdBy } = args as {
     prompt?: string;
@@ -857,7 +865,7 @@ async function handleCapture(args: ToolArgs, extra: Extra): Promise<unknown> {
     createdBy?: string;
   };
   let { idempotencyKey } = args as { idempotencyKey?: string };
-  const projectId = resolveProjectId(args as { projectId?: string }, extra);
+  const projectId = resolveProjectId(args as { projectId?: string }, extra, serverDefaultProjectId);
 
   if (!prompt || typeof prompt !== 'string' || !prompt.trim()) {
     return { error: 'missing_prompt', hint: 'Pass a non-empty `prompt` string.' };
@@ -1138,9 +1146,9 @@ async function handleCaptureClose(
   };
 }
 
-async function handleGetRouting(args: ToolArgs, extra: Extra): Promise<unknown> {
+async function handleGetRouting(args: ToolArgs, extra: Extra, serverDefaultProjectId?: string): Promise<unknown> {
   const db = getDb();
-  const projectId = resolveProjectId(args as { projectId?: string }, extra);
+  const projectId = resolveProjectId(args as { projectId?: string }, extra, serverDefaultProjectId);
 
   if (!projectId) {
     return { error: 'missing_project_id', hint: 'Pass projectId in args, or set the x-project-id header.' };
@@ -1366,7 +1374,12 @@ async function handleGithubWhoAmI(): Promise<unknown> {
 // MCP server bootstrap
 // ---------------------------------------------------------------------------
 
-export function createMcpServer(): Server {
+interface CreateMcpServerOptions {
+  defaultProjectId?: string;
+}
+
+export function createMcpServer(options: CreateMcpServerOptions = {}): Server {
+  const serverDefaultProjectId = normalizeProjectId(options.defaultProjectId);
   const server = new Server(
     { name: 'squadboard', version: '0.1.0' },
     { capabilities: { tools: {} } },
@@ -1384,10 +1397,10 @@ export function createMcpServer(): Server {
 
       switch (name) {
         case 'list_issues':
-          result = await handleListIssues(toolArgs as ToolArgs, extra as Extra);
+          result = await handleListIssues(toolArgs as ToolArgs, extra as Extra, serverDefaultProjectId);
           break;
         case 'create_issue':
-          result = await handleCreateIssue(toolArgs as ToolArgs, extra as Extra);
+          result = await handleCreateIssue(toolArgs as ToolArgs, extra as Extra, serverDefaultProjectId);
           break;
         case 'update_issue':
           result = await handleUpdateIssue(toolArgs as ToolArgs);
@@ -1399,7 +1412,7 @@ export function createMcpServer(): Server {
           result = await handleGetRunStatus(toolArgs as ToolArgs);
           break;
         case 'list_agents':
-          result = await handleListAgents(toolArgs as ToolArgs, extra as Extra);
+          result = await handleListAgents(toolArgs as ToolArgs, extra as Extra, serverDefaultProjectId);
           break;
         case 'slash_command':
           result = await handleSlashCommandTool(toolArgs as ToolArgs);
@@ -1408,13 +1421,13 @@ export function createMcpServer(): Server {
           result = await handleListProjects();
           break;
         case 'list_inbox':
-          result = await handleListInbox(toolArgs as ToolArgs, extra as Extra);
+          result = await handleListInbox(toolArgs as ToolArgs, extra as Extra, serverDefaultProjectId);
           break;
         case 'capture':
-          result = await handleCapture(toolArgs as ToolArgs, extra as Extra);
+          result = await handleCapture(toolArgs as ToolArgs, extra as Extra, serverDefaultProjectId);
           break;
         case 'get_routing':
-          result = await handleGetRouting(toolArgs as ToolArgs, extra as Extra);
+          result = await handleGetRouting(toolArgs as ToolArgs, extra as Extra, serverDefaultProjectId);
           break;
         // ── Stream G Phase 2B: GitHub tools ──────────────────────────────
         case 'github_push_branch':

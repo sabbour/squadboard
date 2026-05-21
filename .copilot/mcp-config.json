@@ -1,14 +1,7 @@
 {
   "mcpServers": {
     "squadboard": {
-      "command": "npx",
-      "args": [
-        "tsx",
-        "/home/asabbour/GitWSL/EMU/foo/packages/server/src/mcp/index.ts"
-      ],
-      "env": {
-        "SQUADBOARD_DEFAULT_PROJECT_ID": "${SQUADBOARD_DEFAULT_PROJECT_ID}"
-      }
+      "url": "http://localhost:3000/mcp?projectId=<YOUR_PROJECT_ID>"
     }
   }
 }

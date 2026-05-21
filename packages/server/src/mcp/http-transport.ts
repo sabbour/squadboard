@@ -53,6 +53,7 @@ export function createMcpHttpRouter(): Router {
   router.post('/', async (req: Request, res: Response) => {
     try {
       const sessionId = headerString(req.headers['mcp-session-id']);
+      const projectId = queryString(req.query.projectId);
       let entry = sessionId ? sessions.get(sessionId) : undefined;
 
       if (!entry) {
@@ -89,7 +90,7 @@ export function createMcpHttpRouter(): Router {
           return;
         }
 
-        entry = createSession();
+        entry = createSession(projectId);
       }
 
       await entry.transport.handleRequest(req, res, req.body);
@@ -137,7 +138,7 @@ export function createMcpHttpRouter(): Router {
   return router;
 }
 
-function createSession(): SessionEntry {
+function createSession(projectId?: string): SessionEntry {
   const closeHandlers = new Set<() => void>();
   const transport = new StreamableHTTPServerTransport({
     sessionIdGenerator: () => randomUUID(),
@@ -150,7 +151,7 @@ function createSession(): SessionEntry {
     },
   });
 
-  const server = createMcpServer();
+  const server = createMcpServer({ defaultProjectId: projectId });
   void server.connect(transport);
 
   const entry: SessionEntry = { transport, closeHandlers };
@@ -177,6 +178,15 @@ function handleTransportError(err: unknown, res: Response): void {
 function headerString(v: string | string[] | undefined): string | undefined {
   if (!v) return undefined;
   return Array.isArray(v) ? v[0] : v;
+}
+
+function queryString(value: unknown): string | undefined {
+  if (typeof value === 'string') return value;
+  if (Array.isArray(value)) {
+    const first = value[0];
+    return typeof first === 'string' ? first : undefined;
+  }
+  return undefined;
 }
 
 function readSdkVersion(): string {

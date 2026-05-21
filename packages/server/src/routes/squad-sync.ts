@@ -228,7 +228,6 @@ If any of those files are missing, ask the user to run Squadboard sync repair fo
 
 const MCP_CONFIG_RELATIVE_PATH = '.copilot/mcp-config.json';
 const MCP_CONFIG_DIRNAME = '.copilot';
-const MCP_SERVER_ENTRY = path.resolve(__dirname, '..', '..', 'dist', 'mcp', 'index.js');
 
 const ACTION_ALIASES: Record<RepairActionId, RepairActionId> = {
   'repair-scaffold-squad': 'repair-scaffold-squad',
@@ -1004,13 +1003,9 @@ async function listSquadStorageRows(projectId: string): Promise<StorageRow[]> {
 }
 
 function buildSquadboardMcpServerConfig(projectId: string): Record<string, unknown> {
+  const port = process.env.PORT ?? '3000';
   return {
-    command: 'node',
-    args: [MCP_SERVER_ENTRY],
-    env: {
-      SQUADBOARD_SQUAD_STORAGE_PROVIDER: 'postgresql',
-      SQUADBOARD_DEFAULT_PROJECT_ID: projectId,
-    },
+    url: `http://localhost:${port}/mcp?projectId=${encodeURIComponent(projectId)}`,
   };
 }
 
