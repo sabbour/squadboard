@@ -81,6 +81,11 @@ function getEffectiveZoom(): number {
   const electronScale = screen.getPrimaryDisplay().scaleFactor;
   if (electronScale > 1) return electronScale;
 
+  // 5. Linux HiDPI default — X11/WSLg doesn't expose DPI to Chromium so
+  //    scaleFactor is always 1. Apply 1.25× so text is comfortably readable
+  //    on modern 2K/4K displays. Override with SQUADBOARD_ZOOM if needed.
+  if (process.platform === 'linux') return 1.25;
+
   return 1; // no scaling needed
 }
 
@@ -113,6 +118,10 @@ async function createWindow(): Promise<BrowserWindow> {
   });
 
   win.on('ready-to-show', () => {
+    // Re-center explicitly — on Linux/WSL2, center:true in BrowserWindow
+    // options isn't reliably respected by the X11/WSLg compositor.
+    win.center();
+
     // Apply HiDPI zoom *after* the renderer is loaded so the factor is
     // respected. Setting it in webPreferences.zoomFactor doesn't work on
     // Linux/WSL2 because scaleFactor = 1 there.
