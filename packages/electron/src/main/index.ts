@@ -28,6 +28,13 @@ const __dirname = dirname(__filename);
 
 const isDev = !app.isPackaged;
 
+// On Linux (including WSL2), Chromium doesn't auto-detect HiDPI from the X11
+// server DPI setting. Enable the high-DPI support flag early — before
+// app.whenReady() — so Chromium initialises with awareness of the scale.
+if (process.platform === 'linux') {
+  app.commandLine.appendSwitch('high-dpi-support', '1');
+}
+
 const iconPath = isDev
   ? resolve(__dirname, '../../resources/icon.png')
   : join(process.resourcesPath, 'icon.png');
@@ -50,12 +57,35 @@ app.on('second-instance', () => {
   }
 });
 
+// ── HiDPI zoom detection ──────────────────────────────────────────────────────
+// On Linux/WSL2, screen.getPrimaryDisplay().scaleFactor always returns 1
+// because the X11 server under WSLg doesn't expose DPI to Chromium.
+// We fall back to environment variables set by the desktop session and a
+// manual override so users can tune it without recompiling.
+function getEffectiveZoom(): number {
+  const env = process.env;
+
+  // 1. Manual override (highest priority) — e.g. SQUADBOARD_ZOOM=1.5
+  const manual = parseFloat(env['SQUADBOARD_ZOOM'] ?? '');
+  if (!isNaN(manual) && manual > 0) return manual;
+
+  // 2. GNOME / GTK scale (integer, e.g. GDK_SCALE=2)
+  const gdk = parseFloat(env['GDK_SCALE'] ?? '');
+  if (!isNaN(gdk) && gdk > 1) return gdk;
+
+  // 3. KDE / Qt fractional scale (e.g. QT_SCALE_FACTOR=1.5)
+  const qt = parseFloat(env['QT_SCALE_FACTOR'] ?? '');
+  if (!isNaN(qt) && qt > 1) return qt;
+
+  // 4. Electron/Chromium scale factor (works correctly on macOS/Windows)
+  const electronScale = screen.getPrimaryDisplay().scaleFactor;
+  if (electronScale > 1) return electronScale;
+
+  return 1; // no scaling needed
+}
+
 // ── Window factory ────────────────────────────────────────────────────────────
 async function createWindow(): Promise<BrowserWindow> {
-  // Match the OS device-pixel-ratio so fonts render at the correct size on
-  // high-DPI displays (e.g. 4K monitors, Retina screens, HiDPI on Linux).
-  const scaleFactor = screen.getPrimaryDisplay().scaleFactor;
-
   const win = new BrowserWindow({
     width: 1440,
     height: 900,
@@ -71,9 +101,6 @@ async function createWindow(): Promise<BrowserWindow> {
       contextIsolation: true,  // required
       nodeIntegration: false,  // never enable in renderer
       sandbox: true,
-      // Apply the display scale factor so content isn't rendered too small
-      // on high-DPI screens where the OS doesn't inject the scale automatically.
-      zoomFactor: scaleFactor,
     },
   });
 
@@ -85,7 +112,16 @@ async function createWindow(): Promise<BrowserWindow> {
     return { action: 'deny' };
   });
 
-  win.on('ready-to-show', () => win.show());
+  win.on('ready-to-show', () => {
+    // Apply HiDPI zoom *after* the renderer is loaded so the factor is
+    // respected. Setting it in webPreferences.zoomFactor doesn't work on
+    // Linux/WSL2 because scaleFactor = 1 there.
+    const zoom = getEffectiveZoom();
+    if (zoom !== 1) {
+      win.webContents.setZoomFactor(zoom);
+    }
+    win.show();
+  });
 
   return win;
 }
