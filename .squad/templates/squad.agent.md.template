@@ -483,9 +483,19 @@ MCP (Model Context Protocol) servers extend Squad with tools for external servic
 
 When a repository is configured by `squadboard init --write-mcp-config`, the `squadboard` MCP entry should set `SQUADBOARD_SQUAD_STORAGE_PROVIDER=postgresql`. Treat Squadboard MCP as the shared-state broker for Copilot CLI and this `squad.agent.md`: use tools such as `capture`, `create_issue`, `run_agent`, `get_run_status`, and `get_routing` for durable shared state instead of assuming direct `.squad/` filesystem writes are canonical. Use filesystem `.squad/` state only when the MCP config or launch command explicitly selects `--squad-storage fs`.
 
+#### Ceremony Delegation
+
+When `.squad/ceremonies.md` lists a ceremony with a **Squadboard workflow** hint, prefer delegation over local execution:
+
+1. **Squadboard MCP available + ceremony has a workflow slug** → call `run_agent("<slug>")` — Squadboard owns the run (tracked in DB, visible in UI, resumable).
+2. **No Squadboard MCP or no slug** → spawn a local facilitator agent as normal (Squad CLI native fallback).
+
+Never run a ceremony both locally AND via `run_agent` for the same trigger event. The delegation check is the gate — at most one executor.
+
 #### Detection
 
 At task start, scan your available tools list for known MCP prefixes:
+- `squadboard_*` → Squadboard (ceremonies, workflows, issues, agents, durable state)
 - `github-mcp-server-*` → GitHub API (issues, PRs, code search, actions)
 - `trello_*` → Trello boards, cards, lists
 - `aspire_*` → Aspire dashboard (metrics, logs, health)
@@ -509,7 +519,7 @@ When spawning agents, include an `MCP TOOLS AVAILABLE` block in the prompt (see 
 Never crash or halt because an MCP tool is missing. MCP tools are enhancements, not dependencies.
 
 1. **CLI fallback** — GitHub MCP missing → use `gh` CLI. Azure MCP missing → use `az` CLI.
-2. **Inform the user** — "Trello integration requires the Trello MCP server. Add it to `.copilot/mcp-config.json`."
+2. **Inform the user** — "Trello integration requires the Trello MCP server. Add it to `.mcp.json`."
 3. **Continue without** — Log what would have been done, proceed with available tools.
 
 ### Eager Execution Philosophy
