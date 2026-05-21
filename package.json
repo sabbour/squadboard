@@ -11,7 +11,7 @@
     "npm:build": "pnpm --filter @sabbour/squadboard-sdk run build && pnpm --filter @sabbour/squadboard-cli run build && pnpm --filter @sabbour/squadboard run build",
     "npm:publish:dry-run": "pnpm --filter @sabbour/squadboard-sdk publish --dry-run --no-git-checks --access public && pnpm --filter @sabbour/squadboard-cli publish --dry-run --no-git-checks --access public && pnpm --filter @sabbour/squadboard publish --dry-run --no-git-checks --access public",
     "dev": "pnpm --parallel --filter @sabbour/squadboard --filter @sabbour/squadboard-client run dev",
-    "dev:electron": "pnpm --parallel --filter @sabbour/squadboard --filter @sabbour/squadboard-electron run dev",
+    "dev:electron": "pnpm --filter @sabbour/squadboard run dev & SERVER_PID=$!; pnpm --filter @sabbour/squadboard-electron run dev; kill $SERVER_PID 2>/dev/null; wait $SERVER_PID 2>/dev/null; true",
     "dev:postgresql": "pnpm --parallel --filter @sabbour/squadboard --filter @sabbour/squadboard-client run dev:postgresql",
     "dev:fs": "pnpm --parallel --filter @sabbour/squadboard --filter @sabbour/squadboard-client run dev:fs",
     "docs:build": "pnpm --filter @sabbour/squadboard-docs build",
