@@ -5,7 +5,8 @@
   "scripts": {
     "test": "playwright test",
     "test:ui": "playwright test --ui",
-    "test:headed": "playwright test --headed"
+    "test:headed": "playwright test --headed",
+    "demo:record": "SQUADBOARD_E2E_REUSE_SERVER=0 playwright test demo-recording.spec.ts --reporter=line"
   },
   "devDependencies": {
     "@playwright/test": "^1.49.0"
