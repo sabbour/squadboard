@@ -212,7 +212,7 @@ describe('SquadSyncStatusPanel', () => {
     await user.click(screen.getByText('Manual setup'))
 
     expect(await screen.findByText('squadboard init --write-mcp-config')).toBeInTheDocument()
-    expect(screen.queryByText(/SQUADBOARD_DEFAULT_PROJECT_ID/)).not.toBeInTheDocument()
+    expect(screen.getByText(/http:\/\/localhost:3000\/mcp/)).toBeInTheDocument()
   })
 
   it('configures the MCP broker from the card and shows success feedback', async () => {
@@ -273,7 +273,9 @@ describe('SquadSyncStatusPanel', () => {
     await user.click(screen.getByText('Manual setup'))
 
     expect(await screen.findByText('squadboard init --write-mcp-config')).toBeInTheDocument()
+    expect(screen.getByText(/~\/.copilot\/mcp-config\.json/)).toBeInTheDocument()
     expect(screen.getByText(/SQUADBOARD_DEFAULT_PROJECT_ID/)).toBeInTheDocument()
+    expect(screen.getByText(/http:\/\/localhost:3000\/mcp/)).toBeInTheDocument()
   })
 
   it('when Preview Export reports only unchanged files, summarizes the no-op instead of dumping every unchanged path', async () => {

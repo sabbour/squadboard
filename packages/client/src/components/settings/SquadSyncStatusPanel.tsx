@@ -483,14 +483,12 @@ function ArtifactList({ title, artifacts, empty }: {
 type BrokerSetupCardVariant = 'postgresql' | 'pglite'
 
 function BrokerSetupCard({
-  projectId,
   variant,
   isConfiguring,
   configureMessage,
   configureError,
   onConfigure,
 }: {
-  projectId: string
   variant: BrokerSetupCardVariant
   isConfiguring: boolean
   configureMessage: string | null
@@ -500,20 +498,14 @@ function BrokerSetupCard({
   const [copiedItem, setCopiedItem] = useState<'command' | 'manual' | null>(null)
   const [manualSetupOpen, setManualSetupOpen] = useState(false)
   const initCommand = 'squadboard init --write-mcp-config'
-  const manualConfig = variant === 'postgresql'
-    ? JSON.stringify({
-      mcpServers: {
-        squadboard: {
-          command: 'node',
-          args: ['<path-to-squadboard>/packages/server/dist/mcp/index.js'],
-          env: {
-            SQUADBOARD_SQUAD_STORAGE_PROVIDER: 'postgresql',
-            SQUADBOARD_DEFAULT_PROJECT_ID: projectId,
-          },
-        },
+  const port = 3000
+  const manualConfig = JSON.stringify({
+    mcpServers: {
+      squadboard: {
+        url: `http://localhost:${port}/mcp`,
       },
-    }, null, 2)
-    : null
+    },
+  }, null, 2)
   const title = variant === 'postgresql'
     ? 'Connect Copilot CLI via MCP broker'
     : 'Connect Copilot CLI to this project'
@@ -583,13 +575,7 @@ function BrokerSetupCard({
         {manualSetupOpen && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginTop: '12px' }}>
             <Caption1 style={{ display: 'block', color: tokens.colorNeutralForeground3 }}>
-              {manualConfig ? (
-                <>
-                  If you would rather configure Copilot CLI yourself, run the init command or paste this config into <code style={{ fontFamily: tokens.fontFamilyMonospace }}>.copilot/mcp-config.json</code>.
-                </>
-              ) : (
-                'If you prefer the manual path, run this command from the project root.'
-              )}
+              If you would rather configure Copilot CLI yourself, run the init command or add this config to <code style={{ fontFamily: tokens.fontFamilyMonospace }}>~/.copilot/mcp-config.json</code>. If you have multiple projects, set <code style={{ fontFamily: tokens.fontFamilyMonospace }}>SQUADBOARD_DEFAULT_PROJECT_ID</code> in your environment.
             </Caption1>
 
             <div
@@ -625,33 +611,31 @@ function BrokerSetupCard({
               </Button>
             </div>
 
-            {manualConfig && (
-              <>
-                <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-                  <Button
-                    appearance="secondary"
-                    icon={<Copy20Regular />}
-                    onClick={() => void handleCopy(manualConfig, 'manual')}
-                  >
-                    {copiedItem === 'manual' ? 'Copied!' : 'Copy'}
-                  </Button>
-                </div>
-                <pre
-                  style={{
-                    margin: 0,
-                    border: '1px solid var(--border)',
-                    borderRadius: '6px',
-                    padding: '12px',
-                    background: 'var(--bg)',
-                    fontFamily: tokens.fontFamilyMonospace,
-                    fontSize: '12px',
-                    overflowX: 'auto',
-                  }}
+            <>
+              <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+                <Button
+                  appearance="secondary"
+                  icon={<Copy20Regular />}
+                  onClick={() => void handleCopy(manualConfig, 'manual')}
                 >
-                  <code>{manualConfig}</code>
-                </pre>
-              </>
-            )}
+                  {copiedItem === 'manual' ? 'Copied!' : 'Copy'}
+                </Button>
+              </div>
+              <pre
+                style={{
+                  margin: 0,
+                  border: '1px solid var(--border)',
+                  borderRadius: '6px',
+                  padding: '12px',
+                  background: 'var(--bg)',
+                  fontFamily: tokens.fontFamilyMonospace,
+                  fontSize: '12px',
+                  overflowX: 'auto',
+                }}
+              >
+                <code>{manualConfig}</code>
+              </pre>
+            </>
           </div>
         )}
       </details>
@@ -1044,7 +1028,6 @@ export function SquadSyncStatusPanel({ projectId }: SquadSyncStatusPanelProps) {
           </div>
           {status.manualBridge ? (
             <BrokerSetupCard
-              projectId={projectId}
               variant="postgresql"
               isConfiguring={isConfiguringBroker}
               configureMessage={configureMessage}
@@ -1053,7 +1036,6 @@ export function SquadSyncStatusPanel({ projectId }: SquadSyncStatusPanelProps) {
             />
           ) : status.pgliteBroker ? (
             <BrokerSetupCard
-              projectId={projectId}
               variant="pglite"
               isConfiguring={isConfiguringBroker}
               configureMessage={configureMessage}
