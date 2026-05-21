@@ -13,8 +13,10 @@
  *     update_issue (NEW), run_agent, get_run_status, list_agents,
  *     slash_command. 7 tools total.
  *   - Project-scoped tools accept `projectId` from args OR fall back to the
- *     `x-project-id` HTTP request header. Each server instance may also carry
- *     its own default projectId (stdio env bootstrap or HTTP session init).
+ *     `x-project-id` HTTP request header.
+ *   - If no explicit project is supplied, stdio may use
+ *     `SQUADBOARD_DEFAULT_PROJECT_ID`; otherwise a single existing project is
+ *     auto-detected.
  */
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import {
@@ -475,12 +477,15 @@ function headerProjectId(extra: { requestInfo?: { headers?: Record<string, strin
 /**
  * Wave 10 / A3: process-wide default projectId. Set via
  * `setDefaultProjectId()` from the stdio transport boot path (which reads
- * `SQUADBOARD_DEFAULT_PROJECT_ID`). Used as the last-resort fallback when
- * neither args.projectId nor the x-project-id header is present.
+ * `SQUADBOARD_DEFAULT_PROJECT_ID`). If neither args.projectId nor the
+ * x-project-id header nor a configured default is present, MCP falls back to
+ * auto-detecting a single project from the database.
  *
  * Module-scope state is acceptable here because every MCP server in the
  * process shares the same DB and the env var applies to the whole process.
  */
+const NO_DEFAULT_PROJECT_MESSAGE = 'No default project set. Pass projectId explicitly or set SQUADBOARD_DEFAULT_PROJECT_ID.';
+
 let defaultProjectId: string | undefined;
 
 function normalizeProjectId(id: string | undefined): string | undefined {
@@ -495,12 +500,35 @@ export function getDefaultProjectId(): string | undefined {
   return defaultProjectId;
 }
 
-function resolveProjectId(
+async function autoDetectSingleProjectId(): Promise<string | undefined> {
+  const db = getDb();
+  const rows = await db
+    .select({ id: projects.id })
+    .from(projects)
+    .limit(2);
+
+  return rows.length === 1 ? rows[0].id : undefined;
+}
+
+async function resolveProjectId(
   args: { projectId?: string },
   extra: Parameters<typeof headerProjectId>[0],
   serverDefaultProjectId?: string,
-): string | undefined {
-  return args.projectId ?? headerProjectId(extra) ?? serverDefaultProjectId ?? defaultProjectId;
+): Promise<string | undefined> {
+  const explicitProjectId =
+    normalizeProjectId(args.projectId) ??
+    normalizeProjectId(headerProjectId(extra)) ??
+    serverDefaultProjectId ??
+    defaultProjectId;
+
+  return explicitProjectId ?? autoDetectSingleProjectId();
+}
+
+function missingProjectIdResult(): { error: string; message: string } {
+  return {
+    error: 'missing_project_id',
+    message: NO_DEFAULT_PROJECT_MESSAGE,
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -513,10 +541,10 @@ type Extra = Parameters<typeof headerProjectId>[0];
 async function handleListIssues(args: ToolArgs, extra: Extra, serverDefaultProjectId?: string): Promise<unknown> {
   const db = getDb();
   const { status } = args as { status?: string };
-  const projectId = resolveProjectId(args as { projectId?: string }, extra, serverDefaultProjectId);
+  const projectId = await resolveProjectId(args as { projectId?: string }, extra, serverDefaultProjectId);
 
   if (!projectId) {
-    return { error: 'missing_project_id', hint: 'Pass projectId in args, or set the x-project-id header.' };
+    return missingProjectIdResult();
   }
 
   const conditions = [eq(issues.projectId, projectId), eq(issues.archived, 0)];
@@ -550,10 +578,10 @@ async function handleCreateIssue(args: ToolArgs, extra: Extra, serverDefaultProj
     body?: string;
     idempotencyKey?: string;
   };
-  const projectId = resolveProjectId(args as { projectId?: string }, extra, serverDefaultProjectId);
+  const projectId = await resolveProjectId(args as { projectId?: string }, extra, serverDefaultProjectId);
 
   if (!projectId) {
-    return { error: 'missing_project_id', hint: 'Pass projectId in args, or set the x-project-id header.' };
+    return missingProjectIdResult();
   }
 
   return createIssueService({
@@ -744,10 +772,10 @@ async function handleGetRunStatus(args: ToolArgs): Promise<unknown> {
 async function handleListAgents(args: ToolArgs, extra: Extra, serverDefaultProjectId?: string): Promise<unknown> {
   const db = getDb();
   const argsTyped = args as { projectId?: string; status?: string };
-  const projectId = resolveProjectId(argsTyped, extra, serverDefaultProjectId);
+  const projectId = await resolveProjectId(argsTyped, extra, serverDefaultProjectId);
 
   if (!projectId) {
-    return { error: 'missing_project_id', hint: 'Pass projectId in args, or set the x-project-id header.' };
+    return missingProjectIdResult();
   }
 
   // Wave 10 B9: status defaults to 'active' to keep the LLM picker honest;
@@ -828,7 +856,7 @@ async function handleListProjects(): Promise<unknown> {
 
 async function handleListInbox(args: ToolArgs, extra: Extra, serverDefaultProjectId?: string): Promise<unknown> {
   const { status, limit } = args as { status?: inboxService.InboxStatus; limit?: number };
-  const projectId = resolveProjectId(args as { projectId?: string }, extra, serverDefaultProjectId);
+  const projectId = await resolveProjectId(args as { projectId?: string }, extra, serverDefaultProjectId);
 
   const rows = await inboxService.listInboxItems({
     status,
@@ -865,7 +893,7 @@ async function handleCapture(args: ToolArgs, extra: Extra, serverDefaultProjectI
     createdBy?: string;
   };
   let { idempotencyKey } = args as { idempotencyKey?: string };
-  const projectId = resolveProjectId(args as { projectId?: string }, extra, serverDefaultProjectId);
+  const projectId = await resolveProjectId(args as { projectId?: string }, extra, serverDefaultProjectId);
 
   if (!prompt || typeof prompt !== 'string' || !prompt.trim()) {
     return { error: 'missing_prompt', hint: 'Pass a non-empty `prompt` string.' };
@@ -1006,10 +1034,7 @@ async function handleCaptureClose(
   idempotencyKey?: string,
 ): Promise<unknown> {
   if (!projectId) {
-    return {
-      error: 'missing_project_id',
-      hint: "Pass projectId (or x-project-id header) when using the 'done:' prefix.",
-    };
+    return missingProjectIdResult();
   }
 
   // N2 idempotency: if we've already processed this close, return early.
@@ -1148,10 +1173,10 @@ async function handleCaptureClose(
 
 async function handleGetRouting(args: ToolArgs, extra: Extra, serverDefaultProjectId?: string): Promise<unknown> {
   const db = getDb();
-  const projectId = resolveProjectId(args as { projectId?: string }, extra, serverDefaultProjectId);
+  const projectId = await resolveProjectId(args as { projectId?: string }, extra, serverDefaultProjectId);
 
   if (!projectId) {
-    return { error: 'missing_project_id', hint: 'Pass projectId in args, or set the x-project-id header.' };
+    return missingProjectIdResult();
   }
 
   const [project] = await db

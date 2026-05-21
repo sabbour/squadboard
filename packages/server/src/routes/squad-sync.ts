@@ -1002,10 +1002,10 @@ async function listSquadStorageRows(projectId: string): Promise<StorageRow[]> {
   return rows;
 }
 
-function buildSquadboardMcpServerConfig(projectId: string): Record<string, unknown> {
+function buildSquadboardMcpServerConfig(): Record<string, unknown> {
   const port = process.env.PORT ?? '3000';
   return {
-    url: `http://localhost:${port}/mcp?projectId=${encodeURIComponent(projectId)}`,
+    url: `http://localhost:${port}/mcp`,
   };
 }
 
@@ -1039,7 +1039,7 @@ async function writeMcpConfig(project: ProjectContext, status: SquadSyncOwnershi
     return resultFor('write-mcp-config', changes);
   }
 
-  const desiredServerConfig = buildSquadboardMcpServerConfig(project.id);
+  const desiredServerConfig = buildSquadboardMcpServerConfig();
   const kind = await statKind(targetPath);
   if (kind === 'symlink') {
     changes.push({ path: MCP_CONFIG_RELATIVE_PATH, operation: 'write-file', status: 'skipped', reason: 'target_is_symlink' });
