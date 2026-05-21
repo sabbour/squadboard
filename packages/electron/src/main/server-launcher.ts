@@ -28,9 +28,10 @@
  * (start/stop functions returning a Promise) is stable regardless of choice.
  */
 import { spawn, type ChildProcess } from 'node:child_process';
-import { join, dirname } from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { existsSync, readFileSync } from 'node:fs';
+import { createConnection } from 'node:net';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { app } from 'electron';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -53,107 +54,143 @@ function readElectronMcpConfig(): { defaultProjectId?: string } {
   }
 }
 
-/**
- * Resolve the path to the server entry point.
- *
- * In dev: `packages/server/dist/index.js` relative to the monorepo root.
- * In prod (packaged): `resources/server/dist/index.js` inside the app bundle.
- * (L7 will configure electron-builder to copy the server dist here.)
- */
 function resolveServerPath(): string {
   if (app.isPackaged) {
     return join(process.resourcesPath, 'server', 'dist', 'index.js');
   }
-  // Dev: walk up from packages/electron/dist/main/ → repo root
-  // dist/main/ → dist/ → electron/ → packages/ → repo-root (4 levels)
+
   const repoRoot = join(__dirname, '..', '..', '..', '..');
   return join(repoRoot, 'packages', 'server', 'dist', 'index.js');
 }
 
-/**
- * Start the server child process.
- *
- * Waits until the server emits its "ready" log line before resolving,
- * so the BrowserWindow can safely load the URL without a race condition.
- */
-export function startServer(): Promise<void> {
+function spawnServerProcess(
+  serverPath: string,
+  resolve: () => void,
+  reject: (err: Error) => void,
+): void {
+  if (!existsSync(serverPath)) {
+    console.warn(
+      `[server-launcher] server not built at ${serverPath} — skipping launch.\n` +
+        `Run: pnpm --filter @sabbour/squadboard build`,
+    );
+    resolve();
+    return;
+  }
+
+  console.log(`[server-launcher] spawning server → ${serverPath}`);
+
+  const mcpConfig = readElectronMcpConfig();
+
+  serverProcess = spawn(process.execPath, [serverPath], {
+    stdio: ['ignore', 'pipe', 'pipe'],
+    env: {
+      ...process.env,
+      NODE_ENV: app.isPackaged ? 'production' : 'development',
+      PORT: String(SERVER_PORT),
+      ...(mcpConfig.defaultProjectId
+        ? { SQUADBOARD_DEFAULT_PROJECT_ID: mcpConfig.defaultProjectId }
+        : {}),
+    },
+    detached: false,
+  });
+
+  startResolve = resolve;
+
+  serverProcess.stdout?.on('data', (chunk: Buffer) => {
+    const line = chunk.toString();
+    process.stdout.write(`[server] ${line}`);
+    if (startResolve && line.includes('ready in')) {
+      startResolve();
+      startResolve = null;
+    }
+  });
+
+  serverProcess.stderr?.on('data', (chunk: Buffer) => {
+    process.stderr.write(`[server:err] ${chunk.toString()}`);
+  });
+
+  serverProcess.on('error', (err) => {
+    console.error('[server-launcher] spawn error:', err);
+    reject(err);
+  });
+
+  serverProcess.on('exit', (code, signal) => {
+    console.log(`[server-launcher] server exited code=${code} signal=${signal}`);
+    serverProcess = null;
+    if (startResolve) {
+      startResolve = null;
+      reject(new Error(`server exited before ready: code=${code}`));
+    }
+  });
+
+  setTimeout(() => {
+    if (startResolve) {
+      console.warn('[server-launcher] ready timeout — proceeding anyway');
+      startResolve();
+      startResolve = null;
+    }
+  }, 10_000);
+}
+
+function startDevServer(resolve: () => void, reject: (err: Error) => void): void {
+  const repoRoot = join(__dirname, '..', '..', '..', '..');
+  const serverPath = join(repoRoot, 'packages', 'server', 'dist', 'index.js');
+
+  if (!existsSync(serverPath)) {
+    console.warn(
+      `[server-launcher] dev: server not built at ${serverPath} — UI will try connecting anyway.\n` +
+        `Run: pnpm --filter @sabbour/squadboard build`,
+    );
+    resolve();
+    return;
+  }
+
+  spawnServerProcess(serverPath, resolve, reject);
+}
+
+function tryConnectOrStart(): Promise<void> {
   return new Promise((resolve, reject) => {
-    // In dev mode the server is managed externally by the pnpm dev script.
-    // Never spawn a second instance here — it would fail to bind the port and
-    // crash on missing dist/db/migrations assets.
-    if (!app.isPackaged) {
-      resolve();
-      return;
-    }
+    const socket = createConnection({ port: SERVER_PORT, host: 'localhost' });
+    let settled = false;
 
+    const finish = (callback: () => void) => {
+      if (settled) return;
+      settled = true;
+      socket.destroy();
+      callback();
+    };
+
+    socket.setTimeout(1_000, () => {
+      finish(() => {
+        console.log('[server-launcher] dev: server probe timed out, starting it...');
+        startDevServer(resolve, reject);
+      });
+    });
+
+    socket.once('connect', () => {
+      finish(() => {
+        console.log('[server-launcher] dev: server already running on port', SERVER_PORT);
+        resolve();
+      });
+    });
+
+    socket.once('error', () => {
+      finish(() => {
+        console.log('[server-launcher] dev: server not found, starting it...');
+        startDevServer(resolve, reject);
+      });
+    });
+  });
+}
+
+export function startServer(): Promise<void> {
+  if (!app.isPackaged) {
+    return tryConnectOrStart();
+  }
+
+  return new Promise((resolve, reject) => {
     const serverPath = resolveServerPath();
-
-    if (!existsSync(serverPath)) {
-      console.warn(
-        `[server-launcher] server not built at ${serverPath} — skipping launch.\n` +
-          `Run: pnpm --filter @sabbour/squadboard build`,
-      );
-      resolve();
-      return;
-    }
-
-    console.log(`[server-launcher] spawning server → ${serverPath}`);
-
-    const mcpConfig = readElectronMcpConfig();
-
-    serverProcess = spawn(process.execPath, [serverPath], {
-      stdio: ['ignore', 'pipe', 'pipe'],
-      env: {
-        ...process.env,
-        NODE_ENV: app.isPackaged ? 'production' : 'development',
-        PORT: String(SERVER_PORT),
-        ...(mcpConfig.defaultProjectId
-          ? { SQUADBOARD_DEFAULT_PROJECT_ID: mcpConfig.defaultProjectId }
-          : {}),
-      },
-      // Detach=false: child is tied to Electron's lifetime; we kill it on quit.
-      detached: false,
-    });
-
-    startResolve = resolve;
-
-    serverProcess.stdout?.on('data', (chunk: Buffer) => {
-      const line = chunk.toString();
-      process.stdout.write(`[server] ${line}`);
-      // Resolve once the server prints its ready banner.
-      if (startResolve && line.includes('ready in')) {
-        startResolve();
-        startResolve = null;
-      }
-    });
-
-    serverProcess.stderr?.on('data', (chunk: Buffer) => {
-      process.stderr.write(`[server:err] ${chunk.toString()}`);
-    });
-
-    serverProcess.on('error', (err) => {
-      console.error('[server-launcher] spawn error:', err);
-      reject(err);
-    });
-
-    serverProcess.on('exit', (code, signal) => {
-      console.log(`[server-launcher] server exited code=${code} signal=${signal}`);
-      serverProcess = null;
-      // If we're still waiting for ready, reject.
-      if (startResolve) {
-        startResolve = null;
-        reject(new Error(`server exited before ready: code=${code}`));
-      }
-    });
-
-    // Fallback: resolve after 10 s even if the ready line never appears.
-    setTimeout(() => {
-      if (startResolve) {
-        console.warn('[server-launcher] ready timeout — proceeding anyway');
-        startResolve();
-        startResolve = null;
-      }
-    }, 10_000);
+    spawnServerProcess(serverPath, resolve, reject);
   });
 }
 
