@@ -40,6 +40,8 @@ const PGLITE_DATA_DIR = join(homedir(), '.squadboard', 'data', 'pglite');
 export const PGLITE_SENTINEL = 'pglite://local';
 
 let _pglite: PGlite | null = null;
+/** True only after startPglite() resolves without error. */
+let _startedSuccessfully = false;
 
 // ─── Pool-compatible adapter types ──────────────────────────────────────────
 
@@ -137,9 +139,18 @@ export async function startPglite(): Promise<string> {
   console.log(`[pglite] booting WASM Postgres at ${PGLITE_DATA_DIR}`);
 
   mkdirSync(PGLITE_DATA_DIR, { recursive: true });
-  _pglite = new PGlite(PGLITE_DATA_DIR);
-  await _pglite.waitReady;
+  try {
+    _pglite = new PGlite(PGLITE_DATA_DIR);
+    await _pglite.waitReady;
+  } catch (err) {
+    // Clear the reference so stopPglite() / getPglite() don't try to operate
+    // on a half-aborted WASM instance and potentially corrupt the data dir.
+    _pglite = null;
+    _startedSuccessfully = false;
+    throw err;
+  }
 
+  _startedSuccessfully = true;
   const elapsed = Date.now() - startMs;
   console.log(`[pglite] ready in ${elapsed}ms`);
 
@@ -177,6 +188,7 @@ export async function restartPglite(): Promise<PGlite | null> {
   mkdirSync(PGLITE_DATA_DIR, { recursive: true });
   _pglite = new PGlite(PGLITE_DATA_DIR);
   await _pglite.waitReady;
+  _startedSuccessfully = true;
   return _pglite;
 }
 
@@ -186,9 +198,9 @@ export async function restartPglite(): Promise<PGlite | null> {
  */
 export const startEmbeddedPostgres = startPglite;
 
-/** Returns the live PGlite instance, or null when DATABASE_URL is in use. */
+/** Returns the live PGlite instance, or null when DATABASE_URL is in use or startup failed. */
 export function getPglite(): PGlite | null {
-  return _pglite;
+  return _startedSuccessfully ? _pglite : null;
 }
 
 /**
@@ -206,6 +218,7 @@ export async function stopPglite(): Promise<void> {
   if (_pglite) {
     await _pglite.close();
     _pglite = null;
+    _startedSuccessfully = false;
     console.log('[pglite] closed');
   }
 }
@@ -214,20 +227,3 @@ export async function stopPglite(): Promise<void> {
  * @deprecated kept for backward compatibility. Delegates to stopPglite().
  */
 export const stopEmbeddedPostgres = stopPglite;
-
-function registerShutdownHandlers(): void {
-  const shutdown = (signal: string) => {
-    console.log(`[pglite] received ${signal}, shutting down`);
-    stopPglite()
-      .then(() => process.exit(0))
-      .catch((err: unknown) => {
-        console.error('[pglite] error during shutdown:', err);
-        process.exit(1);
-      });
-  };
-
-  process.on('SIGINT', () => shutdown('SIGINT'));
-  process.on('SIGTERM', () => shutdown('SIGTERM'));
-}
-
-registerShutdownHandlers();
