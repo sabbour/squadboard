@@ -13,12 +13,10 @@ Squadboard is additive. Your `.squad/` folder stays the source of truth. Squadbo
 
 ## Step 1: Install and start Squadboard
 
-Follow [Installation](../../getting-started/installation.md):
+Download the desktop app from [GitHub Releases](https://github.com/sabbour/squadboard/releases), or use npm:
 
 ```bash
-git clone https://github.com/sabbour/squadboard.git
-cd squadboard
-pnpm install
+npx @sabbour/squadboard-cli init
 pnpm run dev
 ```
 

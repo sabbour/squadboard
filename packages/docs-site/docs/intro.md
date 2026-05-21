@@ -7,17 +7,17 @@ description: Run multi-agent work without the chaos.
 
 # Run multi-agent work without the chaos.
 
-Squadboard is a local-first workflow board for Squad-style AI teams. Capture work, delegate to agents, watch runs happen, approve the risky ones — before anything touches GitHub.
+Squadboard is the visual home for your [Squad](https://github.com/bradygaster/squad) agents. Squad gives you AI agents. Squadboard gives those agents a board, ceremonies, and live run tracking.
 
 [**Quickstart →**](./getting-started/quickstart.mdx) · [**What is Squadboard?**](./getting-started/what-is-squadboard.md)
 
-## 🚀 Get Started
+## Get Started
 
 - [Installation](./getting-started/installation.md) — Set up locally in five minutes
 - [Quickstart](./getting-started/quickstart.mdx) — Your first workflow card that an agent picks up automatically
 - [Learning Path](./getting-started/learning-path.md) — Choose your role and pick a path through the docs
 
-## 🧠 User Guide
+## User Guide
 
 - [What is Squadboard?](./getting-started/what-is-squadboard.md) — The 90-second explainer
 - [Key Concepts](./getting-started/key-concepts.md) — Terms you need to understand
@@ -26,20 +26,20 @@ Squadboard is a local-first workflow board for Squad-style AI teams. Capture wor
 - [Configuration](./user-guide/configuration.mdx) — Set up projects and runtime
 - [MCP Integration](./user-guide/mcp.mdx) — Connect Copilot CLI and other clients
 
-## 🔌 Integrations
+## Integrations
 
 - [Copilot CLI + Squad](./user-guide/copilot-squad-coexistence.md) — How Squadboard and Copilot CLI coexist
 - [Squad Integration](./user-guide/squad-integration.mdx) — Upstream Squad workflows and apps
 - [GitHub Integration](./user-guide/github.md) — Sync runs and issues with GitHub
 - [Built-in Tools](./user-guide/built-ins.mdx) — Tools available in every agent spawn
 
-## 📖 Reference
+## Reference
 
 - [Troubleshooting](./reference/troubleshooting.md) — Common issues and fixes
 - [FAQ](./reference/faq.md) — Questions we hear a lot
 - [Security](./user-guide/security.md) — How Squadboard keeps your work safe
 
-## 🏗️ Developer Guide
+## Developer Guide
 
 - [Architecture](./developer-guide/architecture.md) — How Squadboard is built
 - [Contributing Docs](./developer-guide/contributing-docs.md) — Help improve these docs
