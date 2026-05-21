@@ -7,6 +7,6 @@ steps:
     timeout: 30m
   - type: approve
     label: Merge gate
-    approvers: []
+    approvers: [Lead]
     timeout: 2h
     timeoutAction: notify

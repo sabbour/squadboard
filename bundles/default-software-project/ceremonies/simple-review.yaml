@@ -10,6 +10,6 @@ steps:
     timeout: 30m
   - type: approve
     label: Human approval gate
-    approvers: []
+    approvers: [Lead]
     timeout: 2h
     timeoutAction: notify

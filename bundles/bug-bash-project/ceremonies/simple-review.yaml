@@ -7,6 +7,6 @@ steps:
     timeout: 30m
   - type: approve
     label: Ship approval
-    approvers: []
+    approvers: [TriageLead]
     timeout: 2h
     timeoutAction: notify
