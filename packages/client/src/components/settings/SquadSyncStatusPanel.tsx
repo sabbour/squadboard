@@ -538,7 +538,7 @@ function BrokerSetupCard({
 
       <div style={{ display: 'flex', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap', alignItems: 'center' }}>
         <Body1 style={{ display: 'block', flex: '1 1 320px' }}>
-          This writes <code style={{ fontFamily: tokens.fontFamilyMonospace }}>.copilot/mcp-config.json</code>{descriptionSuffix}
+          This writes <code style={{ fontFamily: tokens.fontFamilyMonospace }}>.mcp.json</code>{descriptionSuffix}
         </Body1>
         <Button
           appearance="primary"
