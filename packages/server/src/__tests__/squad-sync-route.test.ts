@@ -1,4 +1,7 @@
+import { fileURLToPath } from 'node:url';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+const expectedMcpEntry = fileURLToPath(new URL('../../dist/mcp/index.js', import.meta.url));
 
 const {
   handlers,
@@ -222,7 +225,14 @@ describe('squad-sync project routes', () => {
     const actionIds = body.data.repair.actions.map((action: Record<string, unknown>) => action.id);
     expect(actionIds).toContain('seed-ceremony-defaults');
     expect(actionIds).toContain('generate-github-agent');
+    expect(actionIds).toContain('write-mcp-config');
     expect(actionIds).not.toContain('expose-sync-status-api');
+    expect(body.data.repair.actions).toContainEqual(expect.objectContaining({
+      id: 'write-mcp-config',
+      reason: 'Write the MCP broker config to .copilot/mcp-config.json so Copilot CLI can connect to this Squadboard instance.',
+      required: false,
+      mode: 'manual',
+    }));
   });
 
   it('POST /repair dry-runs ceremony default seeding without writing files', async () => {
@@ -273,6 +283,126 @@ describe('squad-sync project routes', () => {
       reason: 'custom_ceremonies_present',
     });
     expect(mockFsWriteFile).not.toHaveBeenCalled();
+  });
+
+  it('POST /repair writes .copilot/mcp-config.json for the current project', async () => {
+    const handler = handlers['POST']?.['/repair'];
+    if (!handler) throw new Error('POST /repair handler not registered');
+
+    const { req, res, getStatus, getBody } = makeReqRes(
+      { projectId: 'project-1' },
+      { actions: ['write-mcp-config'], dryRun: false },
+    );
+    await handler(req, res);
+
+    expect(getStatus()).toBe(200);
+    const body = getBody() as Record<string, any>;
+    expect(body.data.results[0]).toMatchObject({
+      action: 'write-mcp-config',
+      status: 'applied',
+    });
+    expect(body.data.results[0].changes).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        path: '.copilot',
+        operation: 'create-dir',
+        status: 'applied',
+      }),
+      expect.objectContaining({
+        path: '.copilot/mcp-config.json',
+        operation: 'write-file',
+        status: 'applied',
+        message: 'wrote squadboard MCP server entry',
+      }),
+    ]));
+    expect(mockFsMkdir).toHaveBeenCalledWith('/workspace/project/.copilot', { recursive: true });
+    expect(mockFsWriteFile).toHaveBeenCalledWith(
+      '/workspace/project/.copilot/mcp-config.json',
+      `${JSON.stringify({
+        mcpServers: {
+          squadboard: {
+            command: 'node',
+            args: [expectedMcpEntry],
+            env: {
+              SQUADBOARD_SQUAD_STORAGE_PROVIDER: 'postgresql',
+              SQUADBOARD_DEFAULT_PROJECT_ID: 'project-1',
+            },
+          },
+        },
+      }, null, 2)}\n`,
+      'utf-8',
+    );
+  });
+
+  it('POST /repair merges write-mcp-config with existing MCP servers', async () => {
+    const handler = handlers['POST']?.['/repair'];
+    if (!handler) throw new Error('POST /repair handler not registered');
+    mockFsLstat.mockImplementation(async (targetPath: string) => {
+      if (
+        targetPath === '/workspace/project'
+        || targetPath === '/workspace/project/.squad'
+        || targetPath === '/workspace/project/.copilot'
+      ) {
+        return dirStat();
+      }
+      if (
+        targetPath.endsWith('ceremonies.md')
+        || targetPath === '/workspace/project/.copilot/mcp-config.json'
+      ) {
+        return fileStat();
+      }
+      throw enoent();
+    });
+    mockFsReadFile.mockImplementation(async (targetPath: string) => {
+      if (targetPath === '/workspace/project/.copilot/mcp-config.json') {
+        return JSON.stringify({
+          theme: 'dark',
+          mcpServers: {
+            other: {
+              command: 'other-mcp',
+              args: ['serve'],
+            },
+            squadboard: {
+              command: 'node',
+              args: ['/stale/path.js'],
+              env: {
+                SQUADBOARD_SQUAD_STORAGE_PROVIDER: 'postgresql',
+                SQUADBOARD_DEFAULT_PROJECT_ID: 'old-project',
+              },
+            },
+          },
+        });
+      }
+      return '# Ceremonies\n\nProject ceremonies will be listed here.\n';
+    });
+
+    const { req, res, getStatus } = makeReqRes(
+      { projectId: 'project-1' },
+      { actions: ['write-mcp-config'], dryRun: false },
+    );
+    await handler(req, res);
+
+    expect(getStatus()).toBe(200);
+    expect(mockFsWriteFile).toHaveBeenCalledWith(
+      '/workspace/project/.copilot/mcp-config.json',
+      `${JSON.stringify({
+        theme: 'dark',
+        mcpServers: {
+          other: {
+            command: 'other-mcp',
+            args: ['serve'],
+          },
+          squadboard: {
+            command: 'node',
+            args: [expectedMcpEntry],
+            env: {
+              SQUADBOARD_SQUAD_STORAGE_PROVIDER: 'postgresql',
+              SQUADBOARD_DEFAULT_PROJECT_ID: 'project-1',
+            },
+          },
+        },
+      }, null, 2)}\n`,
+      'utf-8',
+    );
   });
 
   it('POST /project-squad-to-fs is honest about filesystem-authoritative mode', async () => {

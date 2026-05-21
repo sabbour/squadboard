@@ -9,6 +9,8 @@ import { Router } from 'express';
 import type { Request, Response } from 'express';
 import fs from 'node:fs/promises';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { isDeepStrictEqual } from 'node:util';
 import { eq } from 'drizzle-orm';
 import { getDb, getPool, schema } from '../db/index.js';
 import {
@@ -28,7 +30,8 @@ type RepairActionId =
   | 'generate-client-artifact'
   | 'generate-github-agent'
   | 'project-squad-to-fs'
-  | 'validate-mcp-broker-guidance';
+  | 'validate-mcp-broker-guidance'
+  | 'write-mcp-config';
 
 type RepairActionStatus = 'applied' | 'dry-run' | 'skipped' | 'failed';
 type RepairChangeStatus = 'applied' | 'would-apply' | 'unchanged' | 'skipped' | 'failed';
@@ -98,6 +101,7 @@ interface ApiRepairAction {
   aliases: RepairActionId[];
   owner: SquadSyncRepairAction['owner'];
   reason: string;
+  mode: SquadSyncRepairAction['mode'];
   available: boolean;
   required: boolean;
   destructive: false;
@@ -137,6 +141,9 @@ interface StorageRow extends Record<string, unknown> {
 }
 
 const router = Router({ mergeParams: true });
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
 
 const DEFAULT_CEREMONIES_MD = `# Ceremonies
 
@@ -219,6 +226,10 @@ Before starting work:
 If any of those files are missing, ask the user to run Squadboard sync repair for this project before continuing.
 `;
 
+const MCP_CONFIG_RELATIVE_PATH = '.copilot/mcp-config.json';
+const MCP_CONFIG_DIRNAME = '.copilot';
+const MCP_SERVER_ENTRY = path.resolve(__dirname, '..', '..', 'dist', 'mcp', 'index.js');
+
 const ACTION_ALIASES: Record<RepairActionId, RepairActionId> = {
   'repair-scaffold-squad': 'repair-scaffold-squad',
   'seed-ceremony-defaults': 'seed-ceremony-defaults',
@@ -227,6 +238,7 @@ const ACTION_ALIASES: Record<RepairActionId, RepairActionId> = {
   'generate-github-agent': 'generate-github-agent',
   'project-squad-to-fs': 'project-squad-to-fs',
   'validate-mcp-broker-guidance': 'validate-mcp-broker-guidance',
+  'write-mcp-config': 'write-mcp-config',
 };
 
 function normalizeSquadPath(inputPath: string): string {
@@ -242,6 +254,10 @@ function toProjectRoot(squadPath: string): string {
 
 function toErrorMessage(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
+}
+
+function isJsonObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
 function isErrno(err: unknown, code: string): boolean {
@@ -399,6 +415,7 @@ function adaptRepairActions(status: SquadSyncOwnershipStatus): ApiRepairAction[]
         aliases,
         owner: action.owner,
         reason: action.reason,
+        mode: action.mode,
         available: !isGuidanceOnly,
         required: !isGuidanceOnly,
         destructive: false,
@@ -419,10 +436,23 @@ function adaptRepairActions(status: SquadSyncOwnershipStatus): ApiRepairAction[]
       aliases: [],
       owner: 'Hockney',
       reason: 'Explicitly project missing squad_storage files to the repository .squad/ tree without overwriting divergent files.',
+      mode: 'manual',
       available: true,
       required: false,
       destructive: false,
       endpoint: 'POST /api/projects/:projectId/squad-sync/project-squad-to-fs',
+    });
+
+    byId.set('write-mcp-config', {
+      id: 'write-mcp-config',
+      aliases: [],
+      owner: 'Hockney',
+      reason: 'Write the MCP broker config to .copilot/mcp-config.json so Copilot CLI can connect to this Squadboard instance.',
+      mode: 'manual',
+      available: true,
+      required: false,
+      destructive: false,
+      endpoint: 'POST /api/projects/:projectId/squad-sync/repair',
     });
   }
 
@@ -973,6 +1003,158 @@ async function listSquadStorageRows(projectId: string): Promise<StorageRow[]> {
   return rows;
 }
 
+function buildSquadboardMcpServerConfig(projectId: string): Record<string, unknown> {
+  return {
+    command: 'node',
+    args: [MCP_SERVER_ENTRY],
+    env: {
+      SQUADBOARD_SQUAD_STORAGE_PROVIDER: 'postgresql',
+      SQUADBOARD_DEFAULT_PROJECT_ID: projectId,
+    },
+  };
+}
+
+async function writeMcpConfig(project: ProjectContext, status: SquadSyncOwnershipStatus, dryRun: boolean): Promise<RepairResult> {
+  const targetPath = path.join(project.projectRoot, MCP_CONFIG_RELATIVE_PATH);
+  const configDir = path.join(project.projectRoot, MCP_CONFIG_DIRNAME);
+  const changes: RepairChange[] = [];
+
+  if (status.storage.mode !== 'postgresql') {
+    return {
+      action: 'write-mcp-config',
+      status: 'skipped',
+      reason: 'write_mcp_config_requires_postgresql',
+      changes: [{
+        path: MCP_CONFIG_RELATIVE_PATH,
+        operation: 'write-file',
+        status: 'skipped',
+        reason: 'write_mcp_config_requires_postgresql',
+      }],
+    };
+  }
+
+  const dirChange = await ensureDirIfSafe(project.projectRoot, configDir, dryRun);
+  if (dirChange.status !== 'unchanged') {
+    changes.push({
+      ...dirChange,
+      path: dirChange.path === configDir ? MCP_CONFIG_DIRNAME : dirChange.path,
+    });
+  }
+  if (dirChange.status === 'skipped' || dirChange.status === 'failed') {
+    return resultFor('write-mcp-config', changes);
+  }
+
+  const desiredServerConfig = buildSquadboardMcpServerConfig(project.id);
+  const kind = await statKind(targetPath);
+  if (kind === 'symlink') {
+    changes.push({ path: MCP_CONFIG_RELATIVE_PATH, operation: 'write-file', status: 'skipped', reason: 'target_is_symlink' });
+    return resultFor('write-mcp-config', changes);
+  }
+  if (kind === 'directory' || kind === 'other' || kind === 'inaccessible') {
+    changes.push({ path: MCP_CONFIG_RELATIVE_PATH, operation: 'write-file', status: 'skipped', reason: `target_${kind}` });
+    return resultFor('write-mcp-config', changes);
+  }
+
+  let config: Record<string, unknown> = {};
+  let existingServer: unknown;
+  if (kind === 'file') {
+    let raw: string;
+    try {
+      raw = await fs.readFile(targetPath, 'utf-8');
+    } catch (err) {
+      return {
+        action: 'write-mcp-config',
+        status: 'failed',
+        reason: 'read_existing_failed',
+        changes: [{
+          path: MCP_CONFIG_RELATIVE_PATH,
+          operation: 'write-file',
+          status: 'failed',
+          reason: 'read_existing_failed',
+          message: toErrorMessage(err),
+        }],
+      };
+    }
+
+    try {
+      const parsed = JSON.parse(raw) as unknown;
+      if (!isJsonObject(parsed)) {
+        throw new Error(`${MCP_CONFIG_RELATIVE_PATH} must contain a JSON object.`);
+      }
+      config = parsed;
+      const existingServers = config['mcpServers'];
+      if (isJsonObject(existingServers)) {
+        existingServer = existingServers['squadboard'];
+      }
+    } catch (err) {
+      return {
+        action: 'write-mcp-config',
+        status: 'failed',
+        reason: 'invalid_mcp_config_json',
+        changes: [{
+          path: MCP_CONFIG_RELATIVE_PATH,
+          operation: 'write-file',
+          status: 'failed',
+          reason: 'invalid_mcp_config_json',
+          message: toErrorMessage(err),
+        }],
+      };
+    }
+  }
+
+  if (kind === 'file' && isDeepStrictEqual(existingServer, desiredServerConfig)) {
+    changes.push({
+      path: MCP_CONFIG_RELATIVE_PATH,
+      operation: 'write-file',
+      status: 'skipped',
+      reason: 'already_up_to_date',
+      message: 'already up to date',
+    });
+    return resultFor('write-mcp-config', changes);
+  }
+
+  const existingServers = isJsonObject(config['mcpServers']) ? config['mcpServers'] : {};
+  const mergedConfig = {
+    ...config,
+    mcpServers: {
+      ...existingServers,
+      squadboard: desiredServerConfig,
+    },
+  };
+
+  if (dryRun) {
+    changes.push({
+      path: MCP_CONFIG_RELATIVE_PATH,
+      operation: 'write-file',
+      status: 'would-apply',
+      reason: kind === 'file' ? 'mcp_config_would_be_updated' : 'file_missing',
+      message: 'would write squadboard MCP server entry',
+    });
+    return resultFor('write-mcp-config', changes);
+  }
+
+  try {
+    await fs.writeFile(targetPath, `${JSON.stringify(mergedConfig, null, 2)}\n`, 'utf-8');
+    changes.push({
+      path: MCP_CONFIG_RELATIVE_PATH,
+      operation: 'write-file',
+      status: 'applied',
+      reason: kind === 'file' ? 'mcp_config_updated' : 'file_created',
+      message: 'wrote squadboard MCP server entry',
+    });
+  } catch (err) {
+    changes.push({
+      path: MCP_CONFIG_RELATIVE_PATH,
+      operation: 'write-file',
+      status: 'failed',
+      reason: 'write_failed',
+      message: toErrorMessage(err),
+    });
+  }
+
+  return resultFor('write-mcp-config', changes);
+}
+
 async function projectSquadToFs(
   project: ProjectContext,
   status: SquadSyncOwnershipStatus,
@@ -1064,6 +1246,8 @@ async function runAction(
       return generateGithubAgent(project, dryRun);
     case 'project-squad-to-fs':
       return projectSquadToFs(project, status, dryRun);
+    case 'write-mcp-config':
+      return writeMcpConfig(project, status, dryRun);
     case 'validate-mcp-broker-guidance':
       return {
         action: 'validate-mcp-broker-guidance',
