@@ -133,6 +133,13 @@ describe('GET /api/projects/:projectId/squad-sync/status', () => {
         storageMode: 'postgresql',
         continuousSync: false,
       },
+      onboardingSync: {
+        mcpConfigPresent: false,
+        ceremoniesSeeded: false,
+        squadAgentPresent: false,
+        inSync: false,
+        driftedFields: ['mcpConfigPresent', 'ceremoniesSeeded', 'squadAgentPresent'],
+      },
       bootstrap: {
         status: 'ready',
         missingRequired: [],
@@ -152,7 +159,9 @@ describe('GET /api/projects/:projectId/squad-sync/status', () => {
       },
     });
     expect(body.data.repair.actions.map((action: Record<string, unknown>) => action.id))
-      .toContain('generate-github-agent');
+      .toEqual(expect.arrayContaining(['onboard-to-squadboard', 'generate-github-agent']));
+    expect(body.data.repair.actions.map((action: Record<string, unknown>) => action.id))
+      .not.toEqual(expect.arrayContaining(['seed-ceremony-defaults', 'import-ceremonies-from-md', 'write-mcp-config']));
   });
 
   it('invariant: status endpoint exposes repair guidance for peer-client drift', async () => {
@@ -196,8 +205,17 @@ describe('GET /api/projects/:projectId/squad-sync/status', () => {
       expect.objectContaining({ code: 'ceremony_defaults_missing' }),
       expect.objectContaining({ code: 'recommended_projection_missing' }),
     ]));
+    expect(body.data.onboardingSync).toEqual({
+      mcpConfigPresent: false,
+      ceremoniesSeeded: false,
+      squadAgentPresent: false,
+      inSync: false,
+      driftedFields: ['mcpConfigPresent', 'ceremoniesSeeded', 'squadAgentPresent'],
+    });
     expect(body.data.repair.actions.map((action: Record<string, unknown>) => action.id))
-      .toEqual(expect.arrayContaining(['generate-github-agent', 'seed-ceremony-defaults', 'import-ceremonies-from-md']));
+      .toEqual(expect.arrayContaining(['onboard-to-squadboard', 'generate-github-agent']));
+    expect(body.data.repair.actions.map((action: Record<string, unknown>) => action.id))
+      .not.toEqual(expect.arrayContaining(['seed-ceremony-defaults', 'import-ceremonies-from-md', 'write-mcp-config']));
   });
 
   it('invariant: filesystem-authoritative projects are not labeled as squad_storage backed', async () => {

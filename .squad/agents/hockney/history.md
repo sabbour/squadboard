@@ -75,4 +75,6 @@ Added a single onboarding repair action that runs MCP config write, built-in cer
 - The composite repair must reuse the existing named repair functions so the individual actions stay independently callable and behavior stays aligned.
 - `rebuildCeremoniesMd(projectId, squadPath)` already emits delegation hints, so the composite path should call it once at the end instead of rebuilding after each sub-step.
 - Keeping the composite action first in the status payload gives Settings a stable primary onboarding button without removing the lower-level repair actions.
+- The onboarding drift check belongs on the existing sync status envelope so the UI can poll one read-only endpoint for both repair availability and reconciliation state.
+- Filesystem-authoritative projects must skip the built-in ceremony DB query; their onboarding drift should report `ceremoniesSeeded: false` without implying `squad_storage` usage.
 

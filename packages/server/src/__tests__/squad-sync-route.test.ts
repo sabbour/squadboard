@@ -242,6 +242,32 @@ describe('squad-sync project routes', () => {
   it('GET /status adapts SDK ownership into a client envelope', async () => {
     const handler = handlers['GET']?.['/status'];
     if (!handler) throw new Error('GET /status handler not registered');
+    mockFsLstat.mockImplementation(async (targetPath: string) => {
+      if (
+        targetPath === '/workspace/project'
+        || targetPath === '/workspace/project/.squad'
+        || targetPath === '/workspace/project/.mcp.json'
+        || targetPath === '/workspace/project/.copilot/squad.agent.md'
+        || targetPath.endsWith('ceremonies.md')
+      ) {
+        return targetPath === '/workspace/project' || targetPath === '/workspace/project/.squad'
+          ? dirStat()
+          : fileStat();
+      }
+      throw enoent();
+    });
+    mockFsReadFile.mockImplementation(async (targetPath: string) => {
+      if (targetPath === '/workspace/project/.mcp.json') {
+        return JSON.stringify({
+          mcpServers: {
+            squadboard: {
+              url: 'http://localhost:3000/mcp',
+            },
+          },
+        });
+      }
+      return '# Ceremonies\n\nProject ceremonies will be listed here.\n';
+    });
 
     const { req, res, getStatus, getBody } = makeReqRes({ projectId: 'project-1' });
     await handler(req, res);
@@ -258,6 +284,13 @@ describe('squad-sync project routes', () => {
       available: true,
       rowCount: 3,
     });
+    expect(body.data.onboardingSync).toEqual({
+      mcpConfigPresent: true,
+      ceremoniesSeeded: true,
+      squadAgentPresent: true,
+      inSync: true,
+      driftedFields: [],
+    });
     expect(body.data.drift).toMatchObject({
       detected: true,
       level: 'error',
@@ -265,14 +298,14 @@ describe('squad-sync project routes', () => {
     });
     const actionIds = body.data.repair.actions.map((action: Record<string, unknown>) => action.id);
     expect(actionIds[0]).toBe('onboard-to-squadboard');
-    expect(actionIds).toContain('seed-ceremony-defaults');
-    expect(actionIds).toContain('import-ceremonies-from-md');
     expect(actionIds).toContain('generate-github-agent');
-    expect(actionIds).toContain('write-mcp-config');
+    expect(actionIds).not.toContain('seed-ceremony-defaults');
+    expect(actionIds).not.toContain('import-ceremonies-from-md');
+    expect(actionIds).not.toContain('write-mcp-config');
     expect(actionIds).not.toContain('expose-sync-status-api');
     expect(body.data.repair.actions).toContainEqual(expect.objectContaining({
-      id: 'write-mcp-config',
-      reason: 'Write the MCP broker config to .mcp.json so Copilot CLI can connect to this Squadboard instance.',
+      id: 'onboard-to-squadboard',
+      reason: 'Write .mcp.json, seed built-in ceremonies, import custom ceremonies.md entries, then rebuild ceremonies.md once.',
       required: false,
       mode: 'manual',
     }));

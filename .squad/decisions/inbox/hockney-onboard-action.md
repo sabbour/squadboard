@@ -28,5 +28,9 @@ Settings needed one obvious onboarding button instead of three separate backend 
    - Avoids repeated file churn and ensures the final file reflects the post-import DB state with delegation hints.
 4. **Non-fatal sub-step failures do not short-circuit the run.**
    - The composite result aggregates all child changes so the UI can show partial progress plus the failure reason.
-5. **The composite action is listed first in status.**
-   - Settings can treat it as the primary onboarding CTA while still exposing granular repairs underneath.
+5. **Expose only the composite onboarding action for onboarding repairs.**
+   - `write-mcp-config`, `seed-ceremony-defaults`, and `import-ceremonies-from-md` stay callable on the backend but are hidden from the status action list so Settings shows one onboarding CTA.
+6. **The composite action is listed first in status.**
+   - Settings can treat it as the primary onboarding CTA while still exposing unrelated repairs underneath.
+7. **Reconciliation rides on the existing status endpoint.**
+   - `GET /squad-sync/status` now returns `onboardingSync` with `mcpConfigPresent`, `ceremoniesSeeded`, `squadAgentPresent`, `inSync`, and `driftedFields`, so the frontend can poll one read-only surface for drift.

@@ -63,6 +63,14 @@ interface SquadStorageMetadata {
   };
 }
 
+interface OnboardingSyncStatus {
+  mcpConfigPresent: boolean;
+  ceremoniesSeeded: boolean;
+  squadAgentPresent: boolean;
+  inSync: boolean;
+  driftedFields: Array<'mcpConfigPresent' | 'ceremoniesSeeded' | 'squadAgentPresent'>;
+}
+
 interface StatusEnvelope {
   ok: true;
   data: {
@@ -84,6 +92,7 @@ interface StatusEnvelope {
     storage: {
       squadStorage: SquadStorageMetadata | null;
     };
+    onboardingSync: OnboardingSyncStatus;
     bootstrap: SquadSyncOwnershipStatus['bootstrap'];
     projection: SquadSyncOwnershipStatus['projection'];
     drift: {
@@ -524,6 +533,11 @@ function buildDrift(
 }
 
 const REPAIR_ACTION_PRIORITY: RepairActionId[] = ['onboard-to-squadboard'];
+const HIDDEN_REPAIR_ACTIONS = new Set<RepairActionId>([
+  'write-mcp-config',
+  'seed-ceremony-defaults',
+  'import-ceremonies-from-md',
+]);
 
 function adaptRepairActions(status: SquadSyncOwnershipStatus): ApiRepairAction[] {
   const fromSdk = status.repairActions
@@ -547,7 +561,8 @@ function adaptRepairActions(status: SquadSyncOwnershipStatus): ApiRepairAction[]
           ? 'POST /api/projects/:projectId/squad-sync/generate-github-agent'
           : 'POST /api/projects/:projectId/squad-sync/repair',
       };
-    });
+    })
+    .filter((action) => !HIDDEN_REPAIR_ACTIONS.has(action.id));
 
   const byId = new Map<RepairActionId, ApiRepairAction>();
   byId.set('onboard-to-squadboard', {
@@ -579,17 +594,6 @@ function adaptRepairActions(status: SquadSyncOwnershipStatus): ApiRepairAction[]
       endpoint: 'POST /api/projects/:projectId/squad-sync/project-squad-to-fs',
     });
 
-    byId.set('write-mcp-config', {
-      id: 'write-mcp-config',
-      aliases: [],
-      owner: 'Hockney',
-      reason: 'Write the MCP broker config to .mcp.json so Copilot CLI can connect to this Squadboard instance.',
-      mode: 'manual',
-      available: true,
-      required: false,
-      destructive: false,
-      endpoint: 'POST /api/projects/:projectId/squad-sync/repair',
-    });
   }
 
   return [...byId.values()].sort((a, b) => {
@@ -603,9 +607,98 @@ function adaptRepairActions(status: SquadSyncOwnershipStatus): ApiRepairAction[]
   });
 }
 
+async function hasSquadboardMcpConfig(projectRoot: string): Promise<boolean> {
+  const targetPath = path.join(projectRoot, MCP_CONFIG_RELATIVE_PATH);
+  if (await statKind(targetPath) !== 'file') return false;
+
+  try {
+    const raw = await fs.readFile(targetPath, 'utf-8');
+    const parsed = JSON.parse(raw) as unknown;
+    if (!isJsonObject(parsed)) return false;
+    const servers = parsed['mcpServers'];
+    return isJsonObject(servers) && isJsonObject(servers['squadboard']);
+  } catch {
+    return false;
+  }
+}
+
+async function hasSquadAgentProjection(project: Pick<ProjectContext, 'projectRoot' | 'squadPath'>): Promise<boolean> {
+  const candidatePaths = [
+    path.join(project.squadPath, 'squad.agent.md'),
+    path.join(project.projectRoot, '.copilot', 'squad.agent.md'),
+  ];
+
+  for (const candidate of candidatePaths) {
+    if (await statKind(candidate) === 'file') {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+async function hasSeededBuiltInCeremonies(projectId: string): Promise<boolean> {
+  try {
+    const sourceMarkers = BUILT_IN_CEREMONIES.map((ceremony) => `import:built-in/${ceremony.slug}`);
+    const { rows } = await getPool().query<{ row_count: string | number | null }>(
+      [
+        'SELECT COUNT(*) AS row_count',
+        'FROM workflows',
+        "WHERE project_id = $1 AND kind = 'ceremony'",
+        "  AND trigger_config ->> 'sourceYamlPath' = ANY($2::text[])",
+      ].join(' '),
+      [projectId, sourceMarkers],
+    );
+    return Number(rows[0]?.row_count ?? 0) > 0;
+  } catch {
+    return false;
+  }
+}
+
+export async function checkOnboardingSync(
+  project: Pick<ProjectContext, 'projectId' | 'projectRoot' | 'squadPath'>,
+  storageMode: SquadSyncOwnershipStatus['storage']['mode'] = 'postgresql',
+): Promise<OnboardingSyncStatus> {
+  const [mcpConfigPresent, ceremoniesSeeded, squadAgentPresent] = await Promise.all([
+    hasSquadboardMcpConfig(project.projectRoot),
+    storageMode === 'postgresql'
+      ? hasSeededBuiltInCeremonies(project.projectId)
+      : Promise.resolve(false),
+    hasSquadAgentProjection(project),
+  ]);
+
+  const driftedFields = [
+    !mcpConfigPresent ? 'mcpConfigPresent' : null,
+    !ceremoniesSeeded ? 'ceremoniesSeeded' : null,
+    !squadAgentPresent ? 'squadAgentPresent' : null,
+  ].filter((value): value is OnboardingSyncStatus['driftedFields'][number] => value !== null);
+
+  return {
+    mcpConfigPresent,
+    ceremoniesSeeded,
+    squadAgentPresent,
+    inSync: driftedFields.length === 0,
+    driftedFields,
+  };
+}
+
 export async function buildSquadSyncStatusEnvelope(projectId: string): Promise<StatusEnvelope> {
   const status = await getProjectSyncOwnershipStatus(projectId);
   const metadata = await getSquadStorageMetadata(projectId, status);
+  const projectRoot = status.projection.projectRoot?.trim()
+    ? path.resolve(status.projection.projectRoot)
+    : process.cwd();
+  const squadPath = status.projection.squadPath?.trim()
+    ? normalizeSquadPath(status.projection.squadPath)
+    : path.join(projectRoot, '.squad');
+  const onboardingSync = await checkOnboardingSync(
+    {
+      projectId,
+      projectRoot,
+      squadPath,
+    },
+    status.storage.mode,
+  );
 
   return {
     ok: true,
@@ -625,6 +718,7 @@ export async function buildSquadSyncStatusEnvelope(projectId: string): Promise<S
       storage: {
         squadStorage: metadata,
       },
+      onboardingSync,
       bootstrap: status.bootstrap,
       projection: status.projection,
       drift: buildDrift(status, metadata),
@@ -663,8 +757,7 @@ async function parseRepairRequest(projectId: string, body: unknown): Promise<Rep
       if (value === 'all') {
         actions.push(
           'repair-scaffold-squad',
-          'seed-ceremony-defaults',
-          'import-ceremonies-from-md',
+          'onboard-to-squadboard',
           'generate-github-agent',
           'project-squad-to-fs',
         );
