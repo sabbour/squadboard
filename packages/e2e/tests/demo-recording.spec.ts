@@ -2,12 +2,16 @@
  * Demo recording scenarios for README and marketing assets.
  *
  * Run:    cd packages/e2e && pnpm demo:record
- * Output: packages/e2e/test-results/demo-recording-*/
+ * Output: packages/e2e/demo-results/
+ *
+ * The command kills any stale dev servers, wipes .demo-home for a clean
+ * PGLite database, seeds "Squadboard" and "Contoso" projects, then records.
  *
  * Convert a captured video to GIF:
- *   ffmpeg -i video.webm -vf "fps=10,scale=1280:-1" demo.gif
+ *   ffmpeg -i video.webm -vf "fps=10,scale=1920:-1:flags=lanczos,split[s0][s1];[s0]palettegen[p];[s1][p]paletteuse" demo.gif
  *
- * For higher-quality GIFs, prefer gifski.
+ * For higher-quality GIFs, prefer gifski:
+ *   gifski --fps 15 --quality 90 -o demo.gif video.webm
  */
 import { test, expect, request, type Page, type TestInfo } from '@playwright/test'
 import {
@@ -18,12 +22,13 @@ import {
 } from './fixtures.ts'
 
 test.describe.configure({ mode: 'serial' })
-test.use({
-  launchOptions: { slowMo: 300 },
-  screenshot: 'on',
-  video: 'on',
-  viewport: { width: 1440, height: 960 },
-})
+// Resolution, video, screenshot, and slowMo are all set in playwright.demo.config.ts.
+// This file only contains test logic.
+
+// Seeded project IDs — populated once in beforeAll and shared across all scenarios.
+let squadboardProjectId = ''
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+let contosoProjectId = ''
 
 interface CeremonyRow {
   id: string
@@ -47,22 +52,21 @@ const DEMO_REPO_URL = 'https://github.com/sabbour/squadboard-apps'
 const DEMO_APP_PATH = 'squad-doc-review'
 const DEMO_ISSUE_TITLE = 'Polish the README demo story'
 
+// Seed the two demo projects before any scenario runs.
+// The demo config starts a fresh PGLite DB, so the board is empty until we do this.
+test.beforeAll(async () => {
+  const sq = await createProjectViaApiDetails('Squadboard')
+  const co = await createProjectViaApiDetails('Contoso')
+  squadboardProjectId = sq.projectId
+  contosoProjectId = co.projectId
+})
+
 async function pause(page: Page, ms = 900) {
   await page.waitForTimeout(ms)
 }
 
 async function capture(page: Page, testInfo: TestInfo, name: string) {
   await page.screenshot({ path: testInfo.outputPath(`${name}.png`), fullPage: false })
-}
-
-async function openCreateProjectFlow(page: Page) {
-  await page.goto('/')
-  await expect(page.getByRole('heading', { name: 'Projects', exact: true })).toBeVisible()
-  await page.getByRole('button', { name: 'Add Project' }).click()
-
-  const createTab = page.getByRole('button', { name: /Create/i }).first()
-  await expect(createTab).toBeVisible()
-  await createTab.click()
 }
 
 async function createCeremony(
@@ -311,15 +315,26 @@ async function mockLiveRunResponses(page: Page, projectId: string, issueId: stri
 }
 
 test('Scenario A — First run', async ({ page }, testInfo) => {
-  const projectName = 'My Squad Project'
   const cardTitle = 'Welcome to Squadboard'
   const parentPath = await createE2eProjectParent('demo-first-run')
 
-  await openCreateProjectFlow(page)
+  // Show the home page — Squadboard and Contoso are already seeded.
+  await page.goto('/')
+  await expect(page.getByRole('heading', { name: 'Projects', exact: true })).toBeVisible()
+  await expect(page.getByText('Squadboard')).toBeVisible()
+  await expect(page.getByText('Contoso')).toBeVisible()
+  await pause(page)
+  await capture(page, testInfo, 'first-run-00-projects-home')
+
+  // Create a third project to demonstrate the first-run board experience.
+  await page.getByRole('button', { name: 'Add Project' }).click()
+  const createTab = page.getByRole('button', { name: /Create/i }).first()
+  await expect(createTab).toBeVisible()
+  await createTab.click()
   await capture(page, testInfo, 'first-run-01-project-picker')
 
   await page.getByPlaceholder('/absolute/path/to/parent').fill(parentPath)
-  await page.getByPlaceholder('my-new-project').fill(projectName)
+  await page.getByPlaceholder('my-new-project').fill('My New Project')
   await pause(page)
   await capture(page, testInfo, 'first-run-02-create-project')
 
@@ -364,17 +379,17 @@ test('Scenario B — Connect a repo', async ({ page }, testInfo) => {
 })
 
 test('Scenario C — Run a ceremony', async ({ page }, testInfo) => {
-  const project = await createProjectViaApiDetails(`demo-ceremony-${Date.now()}`)
-  const issueId = await createIssueViaApi(project.projectId, {
+  // Use the seeded Squadboard project — no random temp projects.
+  const issueId = await createIssueViaApi(squadboardProjectId, {
     title: DEMO_ISSUE_TITLE,
     body: 'Create marketing-friendly product proof points for the README.',
     status: 'in_progress',
   })
-  const ceremony = await createCeremony(project.projectId, 'Demo Code Review')
+  const ceremony = await createCeremony(squadboardProjectId, 'Demo Code Review')
   const runId = 'demo-workflow-run-001'
 
-  await activateCeremony(project.projectId, ceremony.id)
-  await mockCeremonyRun(page, project.projectId, {
+  await activateCeremony(squadboardProjectId, ceremony.id)
+  await mockCeremonyRun(page, squadboardProjectId, {
     ceremonyId: ceremony.id,
     ceremonyName: ceremony.name,
     issueId,
@@ -383,9 +398,9 @@ test('Scenario C — Run a ceremony', async ({ page }, testInfo) => {
     issueRunStatus: 'running',
     workflowStatus: 'running',
   })
-  await mockLiveRunResponses(page, project.projectId, issueId, runId)
+  await mockLiveRunResponses(page, squadboardProjectId, issueId, runId)
 
-  await page.goto(`/projects/${project.projectId}/ceremonies`)
+  await page.goto(`/projects/${squadboardProjectId}/ceremonies`)
   await expect(page.getByRole('heading', { name: 'Ceremonies' })).toBeVisible({ timeout: 10_000 })
   await expect(page.getByText(ceremony.name)).toBeVisible()
   await pause(page)
@@ -397,7 +412,7 @@ test('Scenario C — Run a ceremony', async ({ page }, testInfo) => {
   await capture(page, testInfo, 'ceremony-02-editor')
 
   await page.getByRole('button', { name: 'Run now' }).click()
-  await page.waitForURL(new RegExp(`/projects/${project.projectId}/ceremonies/${ceremony.id}/runs\\?run=${runId}`), {
+  await page.waitForURL(new RegExp(`/projects/${squadboardProjectId}/ceremonies/${ceremony.id}/runs\\?run=${runId}`), {
     timeout: 10_000,
   })
   await expect(page.getByText('Manual run')).toBeVisible({ timeout: 10_000 })
@@ -414,17 +429,17 @@ test('Scenario C — Run a ceremony', async ({ page }, testInfo) => {
 })
 
 test('Scenario D — Live run tracking', async ({ page }, testInfo) => {
-  const project = await createProjectViaApiDetails(`demo-live-run-${Date.now()}`)
-  const issueId = await createIssueViaApi(project.projectId, {
+  // Use the seeded Squadboard project — no random temp projects.
+  const issueId = await createIssueViaApi(squadboardProjectId, {
     title: 'Track live README polishing run',
     body: 'Show a realistic run transcript for README video capture.',
     status: 'in_progress',
   })
   const runId = 'demo-live-run-001'
 
-  await mockLiveRunResponses(page, project.projectId, issueId, runId)
+  await mockLiveRunResponses(page, squadboardProjectId, issueId, runId)
 
-  await page.goto(`/projects/${project.projectId}/issues/${issueId}/runs/${runId}/live`)
+  await page.goto(`/projects/${squadboardProjectId}/issues/${issueId}/runs/${runId}/live`)
   await expect(page.getByText('Input tokens')).toBeVisible({ timeout: 10_000 })
   await expect(page.getByRole('log', { name: 'Run event stream' })).toBeVisible()
   await expect(page.getByText('Running')).toBeVisible()

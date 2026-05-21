@@ -36,6 +36,8 @@ out/
 # Playwright test reports
 packages/e2e/playwright-report/
 packages/e2e/test-results/
+packages/e2e/demo-results/
 packages/e2e/.e2e-home/
+packages/e2e/.demo-home/
 packages/e2e/.e2e-workspaces/
 packages/server/.squad/db-snapshots/*.json
