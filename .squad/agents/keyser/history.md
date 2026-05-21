@@ -33,6 +33,7 @@
 - Always use `waitFor: networkidle` when navigating npmjs pages; they are SPA-heavy
 - `ts-node` scripts in a pnpm monorepo need `import.meta.url`-based `__dirname` since `"type": "module"` is set in root package.json
 - Squad Sync manual-bridge UX should keep the primary message low-jargon and put MCP/env details behind a collapsible manual-config section, with copyable init/manual snippets for fast setup
+- When broker setup can be automated, reuse the existing squad-sync repair mutation from the panel and keep manual CLI/JSON steps collapsed as a fallback instead of the primary path
 
 
 ## W31 Wave 2 — Client Dead Code Cleanup

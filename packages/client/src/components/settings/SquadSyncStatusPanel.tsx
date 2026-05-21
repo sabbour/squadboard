@@ -98,6 +98,7 @@ const ACTION_LABELS: Record<string, string> = {
   'generate-github-agent': 'Generate CLI/Copilot agent file',
   'generate-client-artifact': 'Generate CLI/Copilot agent file',
   'project-squad-to-fs': 'Export Squadboard state to .squad files',
+  'write-mcp-config': 'Configure MCP broker',
   rescan_drift: 'Rescan drift',
   'rescan-drift': 'Rescan drift',
   'expose-sync-status-api': 'Backend status API work',
@@ -475,9 +476,21 @@ function ArtifactList({ title, artifacts, empty }: {
   )
 }
 
-function BrokerSetupCard({ projectId }: { projectId: string }) {
+function BrokerSetupCard({
+  projectId,
+  isConfiguring,
+  configureMessage,
+  configureError,
+  onConfigure,
+}: {
+  projectId: string
+  isConfiguring: boolean
+  configureMessage: string | null
+  configureError: string | null
+  onConfigure: () => Promise<void>
+}) {
   const [copiedItem, setCopiedItem] = useState<'command' | 'manual' | null>(null)
-  const [manualConfigOpen, setManualConfigOpen] = useState(false)
+  const [manualSetupOpen, setManualSetupOpen] = useState(false)
   const initCommand = 'squadboard init --write-mcp-config'
   const manualConfig = JSON.stringify({
     mcpServers: {
@@ -507,44 +520,33 @@ function BrokerSetupCard({ projectId }: { projectId: string }) {
           Connect Copilot CLI via MCP broker
         </Subtitle2>
         <Caption1 style={{ display: 'block', color: tokens.colorNeutralForeground3 }}>
-          Use squadboard init --write-mcp-config to wire Copilot CLI to this Squadboard instance.
+          Configure Copilot CLI for this Squadboard project now, or use the manual fallback if you prefer to wire it yourself.
         </Caption1>
       </div>
 
-      <div
-        style={{
-          display: 'flex',
-          gap: '12px',
-          alignItems: 'flex-start',
-          justifyContent: 'space-between',
-          flexWrap: 'wrap',
-        }}
-      >
-        <pre
-          style={{
-            margin: 0,
-            flex: '1 1 320px',
-            border: '1px solid var(--border)',
-            borderRadius: '6px',
-            padding: '12px',
-            background: 'var(--bg)',
-            fontFamily: tokens.fontFamilyMonospace,
-            whiteSpace: 'pre-wrap',
-            wordBreak: 'break-word',
-          }}
-        >
-          <code>{initCommand}</code>
-        </pre>
+      <div style={{ display: 'flex', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap', alignItems: 'center' }}>
+        <Body1 style={{ display: 'block', flex: '1 1 320px' }}>
+          This writes <code style={{ fontFamily: tokens.fontFamilyMonospace }}>.copilot/mcp-config.json</code> for the current project.
+        </Body1>
         <Button
-          appearance="secondary"
-          icon={<Copy20Regular />}
-          onClick={() => void handleCopy(initCommand, 'command')}
+          appearance="primary"
+          icon={isConfiguring ? <Spinner size="tiny" /> : <Wrench20Regular />}
+          disabled={isConfiguring}
+          data-testid="configure-broker-button"
+          onClick={() => void onConfigure()}
         >
-          {copiedItem === 'command' ? 'Copied!' : 'Copy'}
+          {isConfiguring ? 'Configuring…' : 'Configure Now'}
         </Button>
       </div>
 
-      <details onToggle={(event) => setManualConfigOpen(event.currentTarget.open)}>
+      {configureMessage && (
+        <Caption1 style={{ color: tokens.colorPaletteGreenForeground1 }}>{configureMessage}</Caption1>
+      )}
+      {configureError && (
+        <Caption1 style={{ color: tokens.colorPaletteRedForeground1 }}>{configureError}</Caption1>
+      )}
+
+      <details onToggle={(event) => setManualSetupOpen(event.currentTarget.open)}>
         <summary
           style={{
             cursor: 'pointer',
@@ -553,10 +555,50 @@ function BrokerSetupCard({ projectId }: { projectId: string }) {
             userSelect: 'none',
           }}
         >
-          Manual config (for .copilot/mcp-config.json)
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+            <ArrowSync20Regular />
+            Manual setup
+          </span>
         </summary>
-        {manualConfigOpen && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginTop: '12px' }}>
+        {manualSetupOpen && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginTop: '12px' }}>
+            <Caption1 style={{ display: 'block', color: tokens.colorNeutralForeground3 }}>
+              If you would rather configure Copilot CLI yourself, run the init command or paste this config into <code style={{ fontFamily: tokens.fontFamilyMonospace }}>.copilot/mcp-config.json</code>.
+            </Caption1>
+
+            <div
+              style={{
+                display: 'flex',
+                gap: '12px',
+                alignItems: 'flex-start',
+                justifyContent: 'space-between',
+                flexWrap: 'wrap',
+              }}
+            >
+              <pre
+                style={{
+                  margin: 0,
+                  flex: '1 1 320px',
+                  border: '1px solid var(--border)',
+                  borderRadius: '6px',
+                  padding: '12px',
+                  background: 'var(--bg)',
+                  fontFamily: tokens.fontFamilyMonospace,
+                  whiteSpace: 'pre-wrap',
+                  wordBreak: 'break-word',
+                }}
+              >
+                <code>{initCommand}</code>
+              </pre>
+              <Button
+                appearance="secondary"
+                icon={<Copy20Regular />}
+                onClick={() => void handleCopy(initCommand, 'command')}
+              >
+                {copiedItem === 'command' ? 'Copied!' : 'Copy'}
+              </Button>
+            </div>
+
             <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
               <Button
                 appearance="secondary"
@@ -701,6 +743,9 @@ export function SquadSyncStatusPanel({ projectId }: SquadSyncStatusPanelProps) {
   const [applyMessage, setApplyMessage] = useState<string | null>(null)
   const [applyError, setApplyError] = useState<string | null>(null)
   const [isApplying, setIsApplying] = useState(false)
+  const [configureMessage, setConfigureMessage] = useState<string | null>(null)
+  const [configureError, setConfigureError] = useState<string | null>(null)
+  const [isConfiguringBroker, setIsConfiguringBroker] = useState(false)
 
   if (statusQuery.isLoading) {
     return <SectionLoading label="Checking sync status…" />
@@ -767,7 +812,22 @@ export function SquadSyncStatusPanel({ projectId }: SquadSyncStatusPanelProps) {
     }
   }
 
-  const isPreviewPending = repair.isPending && !previewModal
+  async function handleConfigureBroker() {
+    setConfigureMessage(null)
+    setConfigureError(null)
+    setIsConfiguringBroker(true)
+    try {
+      await repair.mutateAsync({ actions: ['write-mcp-config'] })
+      setConfigureMessage('MCP broker configured — restart Copilot CLI to pick it up.')
+      void statusQuery.refetch()
+    } catch (error) {
+      setConfigureError(error instanceof Error ? error.message : 'Failed to configure MCP broker')
+    } finally {
+      setIsConfiguringBroker(false)
+    }
+  }
+
+  const isPreviewPending = repair.isPending && !previewModal && !isConfiguringBroker
 
   return (
     <>
@@ -952,7 +1012,15 @@ export function SquadSyncStatusPanel({ projectId }: SquadSyncStatusPanelProps) {
               <Caption1 style={{ color: tokens.colorPaletteRedForeground1 }}>{applyError}</Caption1>
             )}
           </div>
-          {status.manualBridge && <BrokerSetupCard projectId={projectId} />}
+          {status.manualBridge && (
+            <BrokerSetupCard
+              projectId={projectId}
+              isConfiguring={isConfiguringBroker}
+              configureMessage={configureMessage}
+              configureError={configureError}
+              onConfigure={handleConfigureBroker}
+            />
+          )}
         </div>
 
         <details>

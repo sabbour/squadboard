@@ -166,7 +166,42 @@ describe('SquadSyncStatusPanel', () => {
 
     expect(screen.getByTestId('broker-setup-card')).toBeInTheDocument()
     expect(screen.getByText('Connect Copilot CLI via MCP broker')).toBeInTheDocument()
-    expect(screen.getByText('squadboard init --write-mcp-config')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Configure Now' })).toBeInTheDocument()
+    expect(screen.getByText('Manual setup')).toBeInTheDocument()
+    expect(screen.queryByText('squadboard init --write-mcp-config')).not.toBeInTheDocument()
+  })
+
+  it('configures the MCP broker from the card and shows success feedback', async () => {
+    const user = userEvent.setup()
+    apiMock.statusQuery.data = serverStatus({
+      authority: databaseAuthorityWithoutMirror(),
+      repair: manualExportRepair(),
+    })
+    apiMock.repairMutation.mutateAsync.mockResolvedValue({ repaired: ['write-mcp-config'] })
+
+    render(<SquadSyncStatusPanel projectId="project-1" />)
+
+    await user.click(screen.getByTestId('configure-broker-button'))
+
+    expect(apiMock.repairMutation.mutateAsync).toHaveBeenCalledWith({
+      actions: ['write-mcp-config'],
+    })
+    expect(await screen.findByText('MCP broker configured — restart Copilot CLI to pick it up.')).toBeInTheDocument()
+  })
+
+  it('shows broker configuration errors from the repair endpoint', async () => {
+    const user = userEvent.setup()
+    apiMock.statusQuery.data = serverStatus({
+      authority: databaseAuthorityWithoutMirror(),
+      repair: manualExportRepair(),
+    })
+    apiMock.repairMutation.mutateAsync.mockRejectedValue(new Error('Could not write .copilot/mcp-config.json'))
+
+    render(<SquadSyncStatusPanel projectId="project-1" />)
+
+    await user.click(screen.getByTestId('configure-broker-button'))
+
+    expect(await screen.findByText('Could not write .copilot/mcp-config.json')).toBeInTheDocument()
   })
 
   it('hides the broker setup card when manual bridge mode is off', () => {
@@ -180,6 +215,21 @@ describe('SquadSyncStatusPanel', () => {
     render(<SquadSyncStatusPanel projectId="project-1" />)
 
     expect(screen.queryByTestId('broker-setup-card')).not.toBeInTheDocument()
+  })
+
+  it('reveals the manual setup fallback when expanded', async () => {
+    const user = userEvent.setup()
+    apiMock.statusQuery.data = serverStatus({
+      authority: databaseAuthorityWithoutMirror(),
+      repair: manualExportRepair(),
+    })
+
+    render(<SquadSyncStatusPanel projectId="project-1" />)
+
+    await user.click(screen.getByText('Manual setup'))
+
+    expect(await screen.findByText('squadboard init --write-mcp-config')).toBeInTheDocument()
+    expect(screen.getByText(/SQUADBOARD_DEFAULT_PROJECT_ID/)).toBeInTheDocument()
   })
 
   it('when Preview Export reports only unchanged files, summarizes the no-op instead of dumping every unchanged path', async () => {
