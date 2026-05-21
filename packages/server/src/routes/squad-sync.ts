@@ -64,12 +64,21 @@ interface SquadStorageMetadata {
   };
 }
 
+interface OnboardingSyncCheckedFile {
+  label: 'MCP config' | 'Built-in ceremonies' | 'Squad agent instructions';
+  path: '.mcp.json' | '.squadboard/ceremonies/' | '.squad/squad.agent.md';
+  present: boolean;
+  count?: number;
+}
+
 interface OnboardingSyncStatus {
   mcpConfigPresent: boolean;
   ceremoniesSeeded: boolean;
   squadAgentPresent: boolean;
   inSync: boolean;
   driftedFields: Array<'mcpConfigPresent' | 'ceremoniesSeeded' | 'squadAgentPresent'>;
+  checkedFiles: OnboardingSyncCheckedFile[];
+  lastCheckedAt: string;
 }
 
 interface StatusEnvelope {
@@ -630,6 +639,23 @@ async function hasConnectedMarker(projectRoot: string): Promise<boolean> {
   return await statKind(connectedMarkerPath(projectRoot)) === 'file';
 }
 
+function buildCheckedFiles(
+  mcpConfigPresent: boolean,
+  ceremonyYamlCount: number,
+  squadAgentPresent: boolean,
+): OnboardingSyncCheckedFile[] {
+  return [
+    { label: 'MCP config', path: '.mcp.json', present: mcpConfigPresent },
+    {
+      label: 'Built-in ceremonies',
+      path: '.squadboard/ceremonies/',
+      present: ceremonyYamlCount > 0,
+      count: ceremonyYamlCount,
+    },
+    { label: 'Squad agent instructions', path: '.squad/squad.agent.md', present: squadAgentPresent },
+  ];
+}
+
 function disconnectedOnboardingSync(): OnboardingSyncStatus {
   return {
     mcpConfigPresent: false,
@@ -637,6 +663,8 @@ function disconnectedOnboardingSync(): OnboardingSyncStatus {
     squadAgentPresent: false,
     inSync: false,
     driftedFields: ['mcpConfigPresent', 'ceremoniesSeeded', 'squadAgentPresent'],
+    checkedFiles: buildCheckedFiles(false, 0, false),
+    lastCheckedAt: new Date().toISOString(),
   };
 }
 
@@ -758,15 +786,16 @@ async function hasSeededBuiltInCeremonies(projectId: string): Promise<boolean> {
 }
 
 export async function checkOnboardingSync(
-  project: Pick<ProjectContext, 'projectId' | 'projectRoot' | 'squadPath'>,
+  project: Pick<ProjectContext, 'projectId' | 'projectRoot' | 'squadPath' | 'squadboardPath'>,
   storageMode: SquadSyncOwnershipStatus['storage']['mode'] = 'postgresql',
 ): Promise<OnboardingSyncStatus> {
-  const [mcpConfigPresent, ceremoniesSeeded, squadAgentPresent] = await Promise.all([
+  const [mcpConfigPresent, ceremoniesSeeded, squadAgentPresent, ceremonyYamlCount] = await Promise.all([
     hasSquadboardMcpConfig(project.projectRoot),
     storageMode === 'postgresql'
       ? hasSeededBuiltInCeremonies(project.projectId)
       : Promise.resolve(false),
     hasSquadAgentProjection(project),
+    countCeremonyYamlFiles(project.squadboardPath),
   ]);
 
   const driftedFields = [
@@ -781,6 +810,8 @@ export async function checkOnboardingSync(
     squadAgentPresent,
     inSync: driftedFields.length === 0,
     driftedFields,
+    checkedFiles: buildCheckedFiles(mcpConfigPresent, ceremonyYamlCount, squadAgentPresent),
+    lastCheckedAt: new Date().toISOString(),
   };
 }
 
@@ -800,6 +831,7 @@ export async function buildSquadSyncStatusEnvelope(projectId: string): Promise<S
         projectId,
         projectRoot,
         squadPath,
+        squadboardPath: path.join(projectRoot, '.squadboard'),
       },
       status.storage.mode,
     )

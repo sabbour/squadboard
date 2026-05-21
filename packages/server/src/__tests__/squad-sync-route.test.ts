@@ -10,6 +10,7 @@ const {
   mockFsWriteFile,
   mockFsMkdir,
   mockFsUnlink,
+  mockFsReaddir,
   mockSeedBuiltInCeremonies,
   mockSyncCeremoniesFromDisk,
   mockRunFormulator,
@@ -25,6 +26,7 @@ const {
   mockFsWriteFile: vi.fn(),
   mockFsMkdir: vi.fn(),
   mockFsUnlink: vi.fn(),
+  mockFsReaddir: vi.fn(),
   mockSeedBuiltInCeremonies: vi.fn(),
   mockSyncCeremoniesFromDisk: vi.fn(),
   mockRunFormulator: vi.fn(),
@@ -82,7 +84,7 @@ vi.mock('node:fs/promises', () => ({
     writeFile: (...args: unknown[]) => mockFsWriteFile(...args),
     mkdir: (...args: unknown[]) => mockFsMkdir(...args),
     unlink: (...args: unknown[]) => mockFsUnlink(...args),
-    readdir: vi.fn(),
+    readdir: (...args: unknown[]) => mockFsReaddir(...args),
   },
 }));
 
@@ -226,6 +228,7 @@ describe('squad-sync project routes', () => {
     mockFsWriteFile.mockResolvedValue(undefined);
     mockFsMkdir.mockResolvedValue(undefined);
     mockFsUnlink.mockResolvedValue(undefined);
+    mockFsReaddir.mockResolvedValue([]);
     mockSeedBuiltInCeremonies.mockResolvedValue({
       projectId: 'project-1',
       seeded: [
@@ -273,6 +276,15 @@ describe('squad-sync project routes', () => {
       }
       return '# Ceremonies\n\nProject ceremonies will be listed here.\n';
     });
+    mockFsReaddir.mockResolvedValue([
+      { name: 'design-review.yaml', isFile: () => true },
+      { name: 'retrospective.yaml', isFile: () => true },
+      { name: 'retro-enforcement.yaml', isFile: () => true },
+      { name: 'sprint-planning.yaml', isFile: () => true },
+      { name: 'sprint-retro.yaml', isFile: () => true },
+      { name: 'scribe-close-out.yaml', isFile: () => true },
+      { name: 'work-pickup.yaml', isFile: () => true },
+    ]);
 
     const { req, res, getStatus, getBody } = makeReqRes({ projectId: 'project-1' });
     await handler(req, res);
@@ -290,12 +302,18 @@ describe('squad-sync project routes', () => {
       rowCount: 3,
     });
     expect(body.data.connected).toBe(true);
-    expect(body.data.onboardingSync).toEqual({
+    expect(body.data.onboardingSync).toMatchObject({
       mcpConfigPresent: true,
       ceremoniesSeeded: true,
       squadAgentPresent: true,
       inSync: true,
       driftedFields: [],
+      checkedFiles: [
+        { label: 'MCP config', path: '.mcp.json', present: true },
+        { label: 'Built-in ceremonies', path: '.squadboard/ceremonies/', present: true, count: 7 },
+        { label: 'Squad agent instructions', path: '.squad/squad.agent.md', present: true },
+      ],
+      lastCheckedAt: expect.any(String),
     });
     expect(body.data.drift).toMatchObject({
       detected: true,

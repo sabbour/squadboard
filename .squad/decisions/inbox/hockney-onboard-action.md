@@ -38,3 +38,5 @@ Settings needed one obvious onboarding button instead of three separate backend 
    - Successful onboarding writes `.squadboard/.connected` with `{ connectedAt, version }`; status derives `connected` from that marker and only runs live reconciliation when the marker exists.
 9. **Disconnect removes config, not ceremony data.**
    - `disconnect-squadboard` deletes the marker and removes the `squadboard` MCP entry (or `.mcp.json` if it was the only entry) but leaves DB ceremonies and `.squad/ceremonies.md` intact.
+10. **Status reports probe details, not just booleans.**
+   - `onboardingSync` now includes `checkedFiles` for `.mcp.json`, `.squadboard/ceremonies/`, and `.squad/squad.agent.md`, plus `lastCheckedAt`, so the UI can explain exactly what was checked and show ceremony file counts like `seeded (7)`.

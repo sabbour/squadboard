@@ -79,4 +79,5 @@ Added a single onboarding repair action that runs MCP config write, built-in cer
 - Filesystem-authoritative projects must skip the built-in ceremony DB query; their onboarding drift should report `ceremoniesSeeded: false` without implying `squad_storage` usage.
 - A `.squadboard/.connected` marker cleanly separates "connected" lifecycle state from drift state; the status route can gate reconciliation on the marker while still preserving ceremonies as durable data.
 - Disconnect must remove config only: strip the `squadboard` MCP entry and delete the connection marker, but leave ceremonies and regenerated `.squad/ceremonies.md` untouched.
+- `checkedFiles` should describe the exact filesystem probes the UI cares about; pairing it with `lastCheckedAt` makes the status envelope self-describing without inventing client-side timers or path knowledge.
 

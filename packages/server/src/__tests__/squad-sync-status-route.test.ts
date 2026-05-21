@@ -140,6 +140,12 @@ describe('GET /api/projects/:projectId/squad-sync/status', () => {
         squadAgentPresent: false,
         inSync: false,
         driftedFields: ['mcpConfigPresent', 'ceremoniesSeeded', 'squadAgentPresent'],
+        checkedFiles: [
+          { label: 'MCP config', path: '.mcp.json', present: false },
+          { label: 'Built-in ceremonies', path: '.squadboard/ceremonies/', present: false, count: 0 },
+          { label: 'Squad agent instructions', path: '.squad/squad.agent.md', present: false },
+        ],
+        lastCheckedAt: expect.any(String),
       },
       bootstrap: {
         status: 'ready',
@@ -207,12 +213,18 @@ describe('GET /api/projects/:projectId/squad-sync/status', () => {
       expect.objectContaining({ code: 'recommended_projection_missing' }),
     ]));
     expect(body.data.connected).toBe(false);
-    expect(body.data.onboardingSync).toEqual({
+    expect(body.data.onboardingSync).toMatchObject({
       mcpConfigPresent: false,
       ceremoniesSeeded: false,
       squadAgentPresent: false,
       inSync: false,
       driftedFields: ['mcpConfigPresent', 'ceremoniesSeeded', 'squadAgentPresent'],
+      checkedFiles: [
+        { label: 'MCP config', path: '.mcp.json', present: false },
+        { label: 'Built-in ceremonies', path: '.squadboard/ceremonies/', present: false, count: 0 },
+        { label: 'Squad agent instructions', path: '.squad/squad.agent.md', present: false },
+      ],
+      lastCheckedAt: expect.any(String),
     });
     expect(body.data.repair.actions.map((action: Record<string, unknown>) => action.id))
       .toEqual(expect.arrayContaining(['onboard-to-squadboard', 'disconnect-squadboard', 'generate-github-agent']));
