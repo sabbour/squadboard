@@ -3,7 +3,7 @@
   "version": "0.0.1",
   "private": true,
   "type": "module",
-  "main": "out/main/index.js",
+  "main": "dist/main/index.js",
   "scripts": {
     "dev": "electron-vite dev",
     "build": "electron-vite build",
@@ -28,5 +28,11 @@
   },
   "publishConfig": {
     "access": "public"
+  },
+  "description": "Squadboard desktop app \u2014 local-first AI agent kanban board",
+  "author": "Ahmad Sabbour",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/sabbour/squadboard.git"
   }
 }

@@ -16,7 +16,6 @@ directories:
 
 files:
   - dist/**/*
-  - node_modules/**/*
   - package.json
 
 # Extra resources: the pre-built server dist gets bundled here.
