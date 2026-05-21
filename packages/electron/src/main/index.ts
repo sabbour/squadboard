@@ -57,55 +57,58 @@ app.on('second-instance', () => {
   }
 });
 
-// ── HiDPI zoom detection ──────────────────────────────────────────────────────
-// On Linux/WSL2, screen.getPrimaryDisplay().scaleFactor always returns 1
-// because the X11 server under WSLg doesn't expose DPI to Chromium.
-// We fall back to environment variables set by the desktop session and a
-// manual override so users can tune it without recompiling.
-function getEffectiveZoom(): number {
-  const env = process.env;
-
-  // 1. Manual override (highest priority) — e.g. SQUADBOARD_ZOOM=1.5
-  const manual = parseFloat(env['SQUADBOARD_ZOOM'] ?? '');
-  if (!isNaN(manual) && manual > 0) return manual;
-
-  // 2. GNOME / GTK scale (integer, e.g. GDK_SCALE=2)
-  const gdk = parseFloat(env['GDK_SCALE'] ?? '');
-  if (!isNaN(gdk) && gdk > 1) return gdk;
-
-  // 3. KDE / Qt fractional scale (e.g. QT_SCALE_FACTOR=1.5)
-  const qt = parseFloat(env['QT_SCALE_FACTOR'] ?? '');
-  if (!isNaN(qt) && qt > 1) return qt;
-
-  // 4. Electron/Chromium scale factor (works correctly on macOS/Windows)
-  const electronScale = screen.getPrimaryDisplay().scaleFactor;
-  if (electronScale > 1) return electronScale;
-
-  // 5. Linux HiDPI default — X11/WSLg doesn't expose DPI to Chromium so
-  //    scaleFactor is always 1. Apply 1.25× so text is comfortably readable
-  //    on modern 2K/4K displays. Override with SQUADBOARD_ZOOM if needed.
-  if (process.platform === 'linux') return 1.25;
-
-  return 1; // no scaling needed
-}
-
 // ── Window factory ────────────────────────────────────────────────────────────
+//
+// Size and position the window as a percentage of the display work area rather
+// than using fixed pixel dimensions. This is DPI-agnostic: regardless of
+// whether Electron sees logical pixels (macOS/Windows) or physical pixels
+// (WSLg/X11 with broken scale-factor reporting), the window is always
+// comfortably sized and correctly centred relative to the available screen space.
+//
+// We deliberately avoid:
+//   - Fixed 1440×900 — too small on HiDPI / 4K displays
+//   - setZoomFactor() — zooms page content inside a fixed window, doesn't grow it
+//   - win.center() in ready-to-show — unreliable on Linux/WSLg compositors and
+//     can place the window off-screen or in a corner after the fact
+//
 async function createWindow(): Promise<BrowserWindow> {
+  // Use the display nearest the cursor so multi-monitor users get the window
+  // on the screen they're actively using.
+  const cursorPoint = screen.getCursorScreenPoint();
+  const display = screen.getDisplayNearestPoint(cursorPoint);
+  const { workArea } = display;
+
+  // 85% of available work area, clamped to sensible minimums.
+  const width  = Math.max(Math.round(workArea.width  * 0.85), 1024);
+  const height = Math.max(Math.round(workArea.height * 0.85), 700);
+
+  // Centre explicitly within the work area. workArea.x/y account for taskbars
+  // and dock offsets, so this is always visually centred on the right monitor.
+  const x = Math.round(workArea.x + (workArea.width  - width)  / 2);
+  const y = Math.round(workArea.y + (workArea.height - height) / 2);
+
+  // Honour a manual zoom override (e.g. SQUADBOARD_ZOOM=1.5) without the
+  // side-effects of the old GDK_SCALE / QT_SCALE_FACTOR heuristics.
+  const manualZoom = parseFloat(process.env['SQUADBOARD_ZOOM'] ?? '');
+  const zoomFactor = !isNaN(manualZoom) && manualZoom > 0 ? manualZoom : 1;
+
   const win = new BrowserWindow({
-    width: 1440,
-    height: 900,
+    width,
+    height,
+    x,
+    y,
     minWidth: 1024,
     minHeight: 700,
-    center: true,  // open centered on the primary display
     title: 'Squadboard',
     icon: iconPath,
-    show: false, // show after ready-to-show to avoid flash
+    show: false, // reveal in ready-to-show to avoid white flash
     webPreferences: {
       // electron-vite with "type":"module" outputs preload as .mjs
       preload: join(__dirname, '../preload/index.mjs'),
       contextIsolation: true,  // required
       nodeIntegration: false,  // never enable in renderer
       sandbox: true,
+      zoomFactor,              // applied before first paint; no post-load flash
     },
   });
 
@@ -118,17 +121,6 @@ async function createWindow(): Promise<BrowserWindow> {
   });
 
   win.on('ready-to-show', () => {
-    // Re-center explicitly — on Linux/WSL2, center:true in BrowserWindow
-    // options isn't reliably respected by the X11/WSLg compositor.
-    win.center();
-
-    // Apply HiDPI zoom *after* the renderer is loaded so the factor is
-    // respected. Setting it in webPreferences.zoomFactor doesn't work on
-    // Linux/WSL2 because scaleFactor = 1 there.
-    const zoom = getEffectiveZoom();
-    if (zoom !== 1) {
-      win.webContents.setZoomFactor(zoom);
-    }
     win.show();
   });
 
