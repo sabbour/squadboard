@@ -21,7 +21,7 @@
     "test:e2e": "pnpm --filter @sabbour/squadboard-e2e test",
     "electron:dev": "pnpm --filter @sabbour/squadboard-electron dev",
     "electron:build": "pnpm --filter @sabbour/squadboard build && pnpm --filter @sabbour/squadboard-electron build",
-    "npm:configure-trusted-publisher": "npx ts-node scripts/configure-npm-trusted-publisher.ts",
+    "npm:configure-trusted-publisher": "pnpm exec ts-node scripts/configure-npm-trusted-publisher.ts",
     "npm:publish": "pnpm --filter @sabbour/squadboard-sdk publish --no-git-checks --access public && pnpm --filter @sabbour/squadboard-cli publish --no-git-checks --access public && pnpm --filter @sabbour/squadboard publish --no-git-checks --access public"
   },
   "engines": {
@@ -30,6 +30,10 @@
   },
   "devDependencies": {
     "@changesets/changelog-github": "^0.7.0",
-    "@changesets/cli": "^2.31.0"
+    "@changesets/cli": "^2.31.0",
+    "@playwright/test": "^1.49.0",
+    "playwright": "^1.60.0",
+    "ts-node": "^10.9.2",
+    "typescript": "^6.0.3"
   }
 }
