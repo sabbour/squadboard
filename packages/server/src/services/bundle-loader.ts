@@ -281,9 +281,21 @@ async function applyKanban(
 
   const sorted = [...bundle.kanban.columns].sort((a, b) => a.order - b.order);
 
+  /** Infer semantic from slug when none is explicitly provided. */
+  function inferSemantic(slug: string): string {
+    const s = slug.toLowerCase();
+    if (s === 'backlog') return 'backlog';
+    if (s === 'ready') return 'ready';
+    if (s === 'in-progress' || s === 'in_progress') return 'in_progress';
+    if (s === 'in-review' || s === 'review') return 'review';
+    if (s === 'done') return 'done';
+    return 'custom';
+  }
+
   for (let i = 0; i < sorted.length; i++) {
     const col: BundleKanbanColumn = sorted[i];
     const isDefault = col.slug === bundle.kanban.defaultColumn;
+    const semantic = inferSemantic(col.slug);
 
     if (opts.dryRun) {
       result.applied.push(`kanban: would create column "${col.label}" (slug=${col.slug})`);
@@ -295,9 +307,9 @@ async function applyKanban(
          (project_id, column_id, label, color, position, semantic, is_default)
        VALUES ($1, $2, $3, $4, $5, $6, $7)
        ON CONFLICT (project_id, column_id) DO NOTHING`,
-      [projectId, col.slug, col.label, '#6B6B6B', i, 'custom', isDefault],
+      [projectId, col.slug, col.label, '#6B6B6B', i, semantic, isDefault],
     );
-    result.applied.push(`kanban: column "${col.label}" (slug=${col.slug})`);
+    result.applied.push(`kanban: column "${col.label}" (slug=${col.slug}, semantic=${semantic})`);
   }
 }
 

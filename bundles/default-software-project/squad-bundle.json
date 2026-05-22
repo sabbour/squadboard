@@ -3,7 +3,7 @@
     "bundleId": "default-software-project",
     "name": "Default Software Project",
     "version": "1.0.0",
-    "description": "A balanced starter for software teams: Backlog/Ready/In Progress/In Review/Done kanban, 4 role-skeleton agents, 5 ceremony examples, and routing rules covering the most common issue flows. Required Scribe and Work Pickup ceremonies are added automatically to every project. Agents are cast as generic role skeletons — Init Mode will re-cast them with project-specific names and charters when applied.",
+    "description": "A balanced starter for software teams: Backlog/Ready/In Progress/In Review/Done kanban, 4 role-skeleton agents, 5 ceremony examples, and routing rules covering the most common issue flows. Required Scribe and Work Pickup ceremonies are added automatically to every project. Agents are cast as generic role skeletons \u2014 Init Mode will re-cast them with project-specific names and charters when applied.",
     "author": "Squadboard Team",
     "license": "MIT",
     "schemaVersion": 1
@@ -49,25 +49,25 @@
       "name": "Lead",
       "role": "Lead Architect",
       "persistent": true,
-      "charter": "# Lead\n\n## Role\nLead Architect — owns architecture decisions, reviews, and technical direction.\n\n## Expertise\n- System design\n- Code review\n- Architecture decisions\n- Cross-team coordination\n\n## Style\nDirect and focused. Decides fast, revisits when the data says so.\n"
+      "charter": "# Lead\n\n## Role\nLead Architect \u2014 owns architecture decisions, reviews, and technical direction.\n\n## Expertise\n- System design\n- Code review\n- Architecture decisions\n- Cross-team coordination\n\n## Style\nDirect and focused. Decides fast, revisits when the data says so.\n"
     },
     {
       "name": "Backend",
       "role": "Backend Engineer",
       "persistent": true,
-      "charter": "# Backend\n\n## Role\nBackend Engineer — owns server-side logic, database, and API contracts.\n\n## Expertise\n- API design\n- Database schema\n- Server-side services\n- Performance\n\n## Style\nThorough and systematic. Ships working code with tests.\n"
+      "charter": "# Backend\n\n## Role\nBackend Engineer \u2014 owns server-side logic, database, and API contracts.\n\n## Expertise\n- API design\n- Database schema\n- Server-side services\n- Performance\n\n## Style\nThorough and systematic. Ships working code with tests.\n"
     },
     {
       "name": "Frontend",
       "role": "Frontend Engineer",
       "persistent": true,
-      "charter": "# Frontend\n\n## Role\nFrontend Engineer — owns client-side UI, component library, and user experience.\n\n## Expertise\n- React / component design\n- Accessibility\n- State management\n- CSS / design systems\n\n## Style\nUser-first. Ships polished, accessible interfaces.\n"
+      "charter": "# Frontend\n\n## Role\nFrontend Engineer \u2014 owns client-side UI, component library, and user experience.\n\n## Expertise\n- React / component design\n- Accessibility\n- State management\n- CSS / design systems\n\n## Style\nUser-first. Ships polished, accessible interfaces.\n"
     },
     {
       "name": "Tester",
       "role": "QA Engineer",
       "persistent": true,
-      "charter": "# Tester\n\n## Role\nQA Engineer — owns test coverage, bug reproduction, and quality gates.\n\n## Expertise\n- Test planning\n- Bug reproduction\n- Regression suites\n- End-to-end testing\n\n## Style\nSceptical by design. Finds the edge cases before users do.\n"
+      "charter": "# Tester\n\n## Role\nQA Engineer \u2014 owns test coverage, bug reproduction, and quality gates.\n\n## Expertise\n- Test planning\n- Bug reproduction\n- Regression suites\n- End-to-end testing\n\n## Style\nSceptical by design. Finds the edge cases before users do.\n"
     }
   ],
   "ceremonies": [
@@ -81,7 +81,7 @@
           "column": "in-review"
         }
       },
-      "workflowYaml": "name: Simple Review\nsteps:\n  - type: route\n    label: Route to reviewer\n    agent: \"{{ assignee }}\"\n  - type: agent_run\n    label: Agent reviews the work\n    agent: \"{{ assignee }}\"\n    prompt: \"Review the attached work. Check for correctness, style, and test coverage. Leave clear feedback.\"\n    timeout: 30m\n  - type: approve\n    label: Human approval gate\n    approvers: []\n    timeout: 2h\n    timeoutAction: notify\n"
+      "workflowYaml": "name: Simple Review\nsteps:\n  - type: route\n    label: Route to reviewer\n    agent: \"{{ assignee }}\"\n  - type: agent_run\n    label: Agent reviews the work\n    agent: \"{{ assignee }}\"\n    prompt: \"Review the attached work. Check for correctness, style, and test coverage. Leave clear feedback.\"\n    timeout: 30m\n  - type: approve\n    label: Approval gate\n    approvers: [Lead]\n    exclude_author: true\n    timeout: 30m\n    timeoutAction: notify\n"
     },
     {
       "id": "bug-fix",
@@ -130,6 +130,18 @@
         }
       },
       "workflowYaml": "name: Sprint Retro\ndescription: Summarize the sprint, surface patterns, and capture improvements.\nsteps:\n  - type: fan_out\n    label: Gather team observations\n    split_by: agents\n    agents: [Lead, Backend, Frontend, Tester]\n    merge_strategy: all\n    mode: parallel\n    steps:\n      - type: agent_run\n        label: Review sprint evidence\n        prompt: |\n          Review completed cards, run history, review notes, incidents, and unresolved\n          follow-ups from the sprint from your specialty's point of view. Capture\n          what went well, what slowed the team down, surprises, and concrete\n          improvement ideas for next sprint.\n        timeout: 45m\n  - type: agent_run\n    label: Synthesize retro themes\n    agent: Lead\n    prompt: |\n      Synthesize the team observations into themes: what went well, what slowed\n      the team down, and concrete experiments or process improvements for the\n      next sprint.\n    timeout: 45m\n  - type: approve\n    label: Accept follow-ups\n    approvers: [Lead]\n    request_changes_policy: first\n    timeout: 24h\n    timeoutAction: notify\n"
+    },
+    {
+      "id": "scribe",
+      "name": "Scribe",
+      "scope": "task",
+      "trigger": {
+        "kind": "on_issue_entry",
+        "config": {
+          "column": "done"
+        }
+      },
+      "workflowYaml": "name: Scribe\nsteps:\n  - type: agent_run\n    label: Document completed work\n    agent: Lead\n    prompt: \"A card was just completed and moved to Done. Write a brief completion note: summarize what was accomplished, any key decisions made, and suggested next steps for the team. Keep it concise \u2014 3-5 bullet points.\"\n    timeout: 15m\n"
     }
   ],
   "workflows": [],
@@ -139,14 +151,14 @@
       "name": "Git Workflow",
       "description": "Standard branch-based git workflow: feature branches, atomic commits, PR discipline.",
       "category": "engineering",
-      "promptAddendum": "## Git Workflow\n\nFollow this discipline for all code changes:\n\n1. **Branch naming**: `<type>/<short-description>` — e.g. `fix/login-crash`, `feat/kanban-reorder`.\n2. **Atomic commits**: Each commit is a single logical change. Commit message: `<type>: <what and why>` (≤72 chars).\n3. **Co-authored-by trailer**: Always include `Co-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>` on agent-authored commits.\n4. **PR checklist before merge**: tests pass, no TODO/FIXME left behind, docs updated if public API changed.\n5. **Never force-push shared branches.** Only force-push personal branches after explicit agreement.\n"
+      "promptAddendum": "## Git Workflow\n\nFollow this discipline for all code changes:\n\n1. **Branch naming**: `<type>/<short-description>` \u2014 e.g. `fix/login-crash`, `feat/kanban-reorder`.\n2. **Atomic commits**: Each commit is a single logical change. Commit message: `<type>: <what and why>` (\u226472 chars).\n3. **Co-authored-by trailer**: Always include `Co-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>` on agent-authored commits.\n4. **PR checklist before merge**: tests pass, no TODO/FIXME left behind, docs updated if public API changed.\n5. **Never force-push shared branches.** Only force-push personal branches after explicit agreement.\n"
     },
     {
       "key": "tdd-loop",
       "name": "TDD Loop",
-      "description": "Test-driven development: red → green → refactor cycle with explicit test-first discipline.",
+      "description": "Test-driven development: red \u2192 green \u2192 refactor cycle with explicit test-first discipline.",
       "category": "engineering",
-      "promptAddendum": "## TDD Loop\n\nFollow the red-green-refactor cycle:\n\n1. **Red**: Write a failing test that describes the behaviour you're about to implement. Do not write implementation code yet.\n2. **Green**: Write the minimal implementation to make the test pass. Resist the urge to over-engineer.\n3. **Refactor**: Clean up the code — extract duplication, improve names, simplify logic — while keeping the test green.\n4. **Repeat** for each new behaviour.\n\nRules:\n- Test files live alongside source files or in a `__tests__/` sibling folder.\n- Test names describe intent, not implementation: `'creates an issue in the backlog column'` not `'calls insertRow()'`.\n- Edge cases (empty input, null, concurrent access) get their own test.\n- Integration tests are separate from unit tests; don't conflate them.\n"
+      "promptAddendum": "## TDD Loop\n\nFollow the red-green-refactor cycle:\n\n1. **Red**: Write a failing test that describes the behaviour you're about to implement. Do not write implementation code yet.\n2. **Green**: Write the minimal implementation to make the test pass. Resist the urge to over-engineer.\n3. **Refactor**: Clean up the code \u2014 extract duplication, improve names, simplify logic \u2014 while keeping the test green.\n4. **Repeat** for each new behaviour.\n\nRules:\n- Test files live alongside source files or in a `__tests__/` sibling folder.\n- Test names describe intent, not implementation: `'creates an issue in the backlog column'` not `'calls insertRow()'`.\n- Edge cases (empty input, null, concurrent access) get their own test.\n- Integration tests are separate from unit tests; don't conflate them.\n"
     }
   ],
   "tools": [],

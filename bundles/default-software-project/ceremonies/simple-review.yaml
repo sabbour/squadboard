@@ -9,7 +9,8 @@ steps:
     prompt: "Review the attached work. Check for correctness, style, and test coverage. Leave clear feedback."
     timeout: 30m
   - type: approve
-    label: Human approval gate
+    label: Approval gate
     approvers: [Lead]
-    timeout: 2h
+    exclude_author: true
+    timeout: 30m
     timeoutAction: notify

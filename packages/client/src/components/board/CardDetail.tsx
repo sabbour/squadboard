@@ -129,6 +129,7 @@ export default function CardDetail({ projectId, issue, onClose, initialTab }: Ca
     >
       <div
         ref={panelRef}
+        data-testid="card-detail"
         style={{
           width: '480px',
           maxWidth: '100vw',

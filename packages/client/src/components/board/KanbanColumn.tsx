@@ -35,6 +35,7 @@ export default function KanbanColumn({
 
   return (
     <div
+      data-column-semantic={semantic ?? 'custom'}
       style={{
         display: 'flex',
         flexDirection: 'column',

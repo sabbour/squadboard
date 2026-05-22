@@ -34,6 +34,8 @@ const commonEnv: NodeJS.ProcessEnv = {
   SQUADBOARD_AUTO_REGISTER_SELF: 'false',
   SQUADBOARD_DISABLE_CSRF: '1',
   SQUADBOARD_SQUAD_STORAGE_PROVIDER: 'postgresql',
+  // Real LLM calls can take >10 min — give each agent run up to 30 minutes.
+  SQUADBOARD_AGENT_RUN_TIMEOUT_MS: '1800000',
 }
 
 export default defineConfig({
@@ -47,8 +49,8 @@ export default defineConfig({
   reporter: [['list']],
   globalTeardown: './tests/global-teardown.ts',
   // Real LLM calls + multi-agent ceremonies can take many minutes.
-  // A.2 alone needs: ~90s pickup + ~600s work + ~600s review + ~300s approve = ~1590s minimum.
-  timeout: 2_700_000, // 45 minutes per test
+  // A.2 alone needs: ~90s pickup + ~600s work + ~1800s review + ~300s approve + ~300s scribe = ~3090s minimum.
+  timeout: 5_400_000, // 90 minutes per test
 
   use: {
     baseURL,
@@ -75,7 +77,8 @@ export default defineConfig({
 
   webServer: [
     {
-      command: `pnpm --filter @sabbour/squadboard dev:postgresql`,
+      // Use `tsx` (no watch) so the server never restarts mid-test due to file-system events.
+      command: `pnpm --filter @sabbour/squadboard exec tsx src/cli/index.ts start --squad-storage postgresql`,
       url: `${apiURL.origin}/api/health`,
       cwd: repoRoot,
       env: {

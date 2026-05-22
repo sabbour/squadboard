@@ -76,7 +76,13 @@ export async function createPeerReviewRuns(
     return [];
   }
 
-  const reviewContext = buildReviewContext(priorOutput);
+  // Truncate priorOutput to avoid PGLite WASM memory pressure on very large LLM outputs.
+  const MAX_PRIOR_OUTPUT = 20_000;
+  const truncatedOutput =
+    priorOutput.length > MAX_PRIOR_OUTPUT
+      ? priorOutput.slice(0, MAX_PRIOR_OUTPUT) + '\n\n[... output truncated for review ...]'
+      : priorOutput;
+  const reviewContext = buildReviewContext(truncatedOutput);
 
   const inserted = await db
     .insert(issueRuns)

@@ -191,8 +191,12 @@ export class Heartbeat {
   private _schedule(state: SweepState): void {
     if (!state.sweep.enabled) return;
     state.nextRunAt = new Date(Date.now() + state.sweep.intervalMs);
-    state.intervalHandle = setInterval(async () => {
-      await this._runSweep(state);
+    state.intervalHandle = setInterval(() => {
+      // Absorb any unexpected rejection so it never becomes an unhandledRejection
+      // that kills the server process.
+      void this._runSweep(state).catch((err) =>
+        console.error(`[heartbeat] _runSweep unhandled for ${state.sweep.id}:`, err),
+      );
     }, state.sweep.intervalMs);
   }
 

@@ -1,0 +1,7 @@
+name: Scribe
+steps:
+  - type: agent_run
+    label: Document completed work
+    agent: Lead
+    prompt: "A card was just completed and moved to Done. Write a brief completion note: summarize what was accomplished, any key decisions made, and suggested next steps for the team. Keep it concise — 3-5 bullet points."
+    timeout: 15m

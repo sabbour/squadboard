@@ -575,6 +575,13 @@ export const pickupReadySweep: Sweep = {
               routingReasoning,
             }).returning({ id: issueRuns.id });
 
+            // Set the issue assignee so {{ assignee }} resolves in downstream
+            // ceremony steps (e.g. Simple Review's route/agent_run steps).
+            await db
+              .update(schema.issues)
+              .set({ assigneeId: targetAgentId, updatedAt: new Date() })
+              .where(eq(schema.issues.id, issue.id));
+
             if (!decisionLogged) {
               await logPickupRoutingDecision({
                 projectId,

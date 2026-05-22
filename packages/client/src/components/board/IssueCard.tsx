@@ -147,6 +147,8 @@ export default function IssueCard({ issue, index, projectId, columnSemantic, isS
           ref={provided.innerRef}
           {...provided.draggableProps}
           {...provided.dragHandleProps}
+          data-testid="issue-card"
+          data-issue-id={issue.id}
           onMouseEnter={() => setHovered(true)}
           onMouseLeave={() => setHovered(false)}
           style={{
@@ -183,6 +185,7 @@ export default function IssueCard({ issue, index, projectId, columnSemantic, isS
 
           {/* Title + labels + badges — clickable area that opens the detail panel */}
           <div
+            data-testid="issue-card-title"
             onClick={() => onOpen(issue)}
             style={{ cursor: 'pointer', paddingRight: '20px' }}
           >

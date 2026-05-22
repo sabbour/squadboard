@@ -205,17 +205,37 @@ test('Scenario A.2 — Board in action', async ({ page }, testInfo) => {
   await pause(page)
   await capture(page, testInfo, 'a2-03-live-run-start')
 
-  // Wait for the agent to finish its work (real LLM — up to 10 min)
-  await expect(page.getByText('Completed', { exact: false })).toBeVisible({ timeout: 600_000 })
+  // Wait for the agent to finish its work (real LLM — up to 30 min)
+  await expect(page.getByText('Completed', { exact: false })).toBeVisible({ timeout: 1_800_000 })
   await pause(page, 1500)
   await capture(page, testInfo, 'a2-04-run-completed')
 
-  // Card auto-moves to In Review after the run — show the board
+  // Card auto-moves to In Review after the run — verify via API first, then show the board.
+  // The GET /issues/:id endpoint returns a flat object { id, status, column, ... }
+  {
+    const ctx2 = await request.newContext({ baseURL: API_BASE })
+    await expect.poll(async () => {
+      try {
+        const r = await ctx2.get(`/api/projects/${newProjectId}/issues/${demoCardId}`)
+        if (!r.ok()) return null
+        const body = await r.json() as { status?: string; column?: string }
+        // column is the human-readable slug (e.g. 'in-review'); status is the column_id
+        return body.status ?? body.column ?? null
+      } catch {
+        return null
+      }
+    }, { timeout: 60_000, intervals: [500, 1000, 2000, 3000] }).toBe('in-review')
+    await ctx2.dispose()
+  }
   await page.goto(`/projects/${newProjectId}/board`)
-  // Wait for the card to appear in the "In Review" column specifically
-  await expect(
-    page.locator(`[data-column-semantic="review"] [data-issue-id="${demoCardId}"]`)
-  ).toBeVisible({ timeout: 30_000 })
+  // Wait up to 60 s for the card to render in the In-Review column.
+  // If columns don't load on first try, reload once and wait again.
+  const reviewCardLocator = page.locator(`[data-column-semantic="review"] [data-issue-id="${demoCardId}"]`)
+  const appeared = await reviewCardLocator.isVisible({ timeout: 20_000 }).catch(() => false)
+  if (!appeared) {
+    await page.reload()
+    await expect(reviewCardLocator).toBeVisible({ timeout: 60_000 })
+  }
   await pause(page, 1500)
   await capture(page, testInfo, 'a2-05-board-in-review')
 
@@ -233,11 +253,11 @@ test('Scenario A.2 — Board in action', async ({ page }, testInfo) => {
   await capture(page, testInfo, 'a2-07-review-ceremony-detail')
 
   // Card auto-moves to Done after review ceremony completes — show the board.
-  // Simple Review has an agent_run step (up to 10 min) + approve (instant if auto).
+  // Simple Review has an agent_run step (up to 30 min) + approve (instant if auto).
   await page.goto(`/projects/${newProjectId}/board`)
   await expect(
     page.locator(`[data-column-semantic="done"] [data-issue-id="${demoCardId}"]`)
-  ).toBeVisible({ timeout: 900_000 })
+  ).toBeVisible({ timeout: 2_700_000 })
   await pause(page, 1500)
   await capture(page, testInfo, 'a2-08-card-done')
 
@@ -278,26 +298,26 @@ test('Scenario B — Onboard an existing Squad project', async ({ page }, testIn
   await capture(page, testInfo, 'b-02-path-filled')
 
   // Connect — scaffolds .squad/ and navigates to the board
-  await page.getByRole('button', { name: /Connect/i }).click()
+  // Use exact match to avoid matching the "Connect existing" tab button
+  await page.getByRole('button', { name: 'Connect', exact: true }).click()
   await page.waitForURL(/\/projects\/[^/]+\/board/, { timeout: 30_000 })
   await expect(page.getByText('Backlog').first()).toBeVisible({ timeout: 10_000 })
   await pause(page)
   await capture(page, testInfo, 'b-03-connected-board')
 
-  // Navigate to Settings → MCP Config
+  // Navigate to Settings → Squad Sync tab (where SquadSyncStatusPanel lives)
   const connectedProjectId = page.url().match(/\/projects\/([^/]+)\//)?.[1] ?? ''
   await page.goto(`/projects/${connectedProjectId}/settings`)
-  await expect(
-    page.getByText(/MCP Config/i).first()
-  ).toBeVisible({ timeout: 10_000 })
+  await expect(page.getByRole('heading', { name: 'Settings', exact: true })).toBeVisible({ timeout: 10_000 })
+  // Click the Squad Sync tab
+  await page.getByRole('button', { name: 'Squad Sync', exact: true }).click()
+  // Wait for sync status panel to finish loading
+  await expect(page.getByTestId('squad-sync-status-panel')).toBeVisible({ timeout: 15_000 })
   await pause(page)
   await capture(page, testInfo, 'b-04-settings')
 
-  // Show the "Connect Copilot CLI" button
-  await expect(
-    page.getByRole('button', { name: /Connect Copilot CLI/i })
-      .or(page.getByText(/Connect Copilot CLI/i))
-  ).toBeVisible({ timeout: 10_000 })
+  // Show the "Connect to Squadboard" CTA — this is the onboarding step for Copilot CLI
+  await expect(page.getByTestId('connect-to-squadboard-button')).toBeVisible({ timeout: 15_000 })
   await pause(page)
   await capture(page, testInfo, 'b-05-connect-copilot')
 })

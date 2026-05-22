@@ -92,6 +92,8 @@ export function useIssues(projectId: string, filters?: { search?: string; labelI
     queryKey: ['issues', projectId, filters],
     queryFn: () => apiFetch<Issue[]>(`/api/projects/${projectId}/issues${qs}`),
     enabled: Boolean(projectId),
+    // Poll every 5 s so the board stays live when agents/ceremonies move cards automatically.
+    refetchInterval: 5_000,
   })
 }
 

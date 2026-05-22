@@ -14,7 +14,7 @@
  * pinnedAgentRevisions: snapshotted per step at step start (open question #1 resolution).
  */
 
-import { eq, and, sql } from 'drizzle-orm';
+import { eq, and, sql, desc } from 'drizzle-orm';
 import { getDb, schema, type DrizzleDb } from '../db/index.js';
 import { resolveRoute } from './router.js';
 import { parseWorkflowYaml } from '../services/workflow-parser.js';
@@ -38,8 +38,10 @@ type DbExecutor = DrizzleDb | Parameters<Parameters<DrizzleDb['transaction']>[0]
 // ---------------------------------------------------------------------------
 // Internal helper — look up projectId for a workflow_run (for flow events)
 // ---------------------------------------------------------------------------
-async function getProjectIdForWorkflowRun(workflowRunId: string): Promise<string | null> {
-  const db = getDb();
+async function getProjectIdForWorkflowRun(
+  workflowRunId: string,
+  db: DbExecutor = getDb(),
+): Promise<string | null> {
   const rows = await db.execute(sql`
     SELECT i.project_id
     FROM   workflow_runs wr
@@ -270,13 +272,51 @@ export async function advanceWorkflowRun(workflowRunId: string): Promise<void> {
 async function handleRouteStep(
   wfRun: typeof schema.workflowRuns.$inferSelect,
   stepRun: typeof schema.stepRuns.$inferSelect,
-  _stepDef: { type: string } | undefined,
+  stepDef: { type: string; agent?: string } | undefined,
 ): Promise<void> {
   const db = getDb();
-  const { stepRuns, issueRuns, agents, issues, projects } = schema;
+  const { stepRuns, issueRuns, agents, issues } = schema;
 
   if (stepRun.status === 'completed') {
     await advanceToNextStep(wfRun.id, wfRun.currentStepIndex ?? 0);
+    return;
+  }
+
+  // If an issue_run is already linked, check its status — don't re-route.
+  // Without this guard, the heartbeat would call resolveRoute() and create a
+  // fresh issue_run on every 15-second tick, flooding the system with duplicate
+  // LLM calls and leaving the route step permanently stuck in 'running'.
+  if (stepRun.issueRunId) {
+    const [run] = await db
+      .select({ status: issueRuns.status })
+      .from(issueRuns)
+      .where(eq(issueRuns.id, stepRun.issueRunId))
+      .limit(1);
+
+    if (!run) return;
+
+    if (run.status === 'completed') {
+      await db.transaction(async (tx) => {
+        await tx
+          .update(stepRuns)
+          .set({ status: 'completed', updatedAt: new Date() })
+          .where(eq(stepRuns.id, stepRun.id));
+        await advanceToNextStep(wfRun.id, wfRun.currentStepIndex ?? 0, tx);
+      });
+    } else if (run.status === 'failed' || run.status === 'cancelled' || run.status === 'timed_out') {
+      await db.transaction(async (tx) => {
+        await tx
+          .update(stepRuns)
+          .set({ status: run.status, updatedAt: new Date() })
+          .where(eq(stepRuns.id, stepRun.id));
+        await tx
+          .update(schema.workflowRuns)
+          .set({ status: 'failed', updatedAt: new Date() })
+          .where(eq(schema.workflowRuns.id, wfRun.id));
+      });
+      console.warn(`[workflow-runner] route step issue_run ${stepRun.issueRunId} ended with status '${run.status}' — workflow_run ${wfRun.id} failed`);
+    }
+    // else: still running/pending — wait for next tick
     return;
   }
 
@@ -292,7 +332,10 @@ async function handleRouteStep(
     if (a.charterHash) pinnedRevisions[a.name] = a.charterHash;
   }
 
-  // Resolve route
+  // Resolve route — priority order:
+  // 1. stepDef.agent is "{{ assignee }}" → use issue.assigneeId
+  // 2. stepDef.agent is a literal name  → find that agent directly
+  // 3. No stepDef.agent                 → use routing rules (resolveRoute)
   const [issue] = await db.select().from(issues).where(eq(issues.id, wfRun.issueId)).limit(1);
   if (!issue) {
     console.error(`[workflow-runner] issue ${wfRun.issueId} not found`);
@@ -306,36 +349,100 @@ async function handleRouteStep(
     .limit(1);
   if (!project) return;
 
-  const routeResult = await resolveRoute(issue.projectId, {
-    title: issue.title,
-    body: issue.body ?? '',
-    labels: [],
-  });
+  let agent: typeof agents.$inferSelect | undefined;
 
-  if (!routeResult) {
-    console.warn(`[workflow-runner] route step: no matching rule for issue ${wfRun.issueId} — staying pending`);
-    return;
-  }
+  const stepAgentTemplate = stepDef?.agent?.trim();
 
-  // Find the agent record
-  const [agent] = await db
-    .select()
-    .from(agents)
-    .where(and(eq(agents.projectId, issue.projectId), eq(agents.name, routeResult.agentName)))
-    .limit(1);
+  if (stepAgentTemplate === '{{ assignee }}') {
+    // Route to the issue's current assignee.
+    // Fallback: if assigneeId is unset (e.g. the Work Pickup sweep created the
+    // issue_run before this assigneeId fix was deployed), use the most recent
+    // completed agent_run for this issue so the review ceremony can still proceed.
+    let assigneeId = issue.assigneeId;
+    if (!assigneeId) {
+      const [lastRun] = await db
+        .select({ agentId: issueRuns.agentId })
+        .from(issueRuns)
+        .where(and(eq(issueRuns.issueId, wfRun.issueId), eq(issueRuns.kind, 'agent_run'), eq(issueRuns.status, 'completed')))
+        .orderBy(desc(issueRuns.updatedAt))
+        .limit(1);
+      if (!lastRun) {
+        console.warn(`[workflow-runner] route step: agent="{{ assignee }}" but issue ${wfRun.issueId} has no assignee or completed runs — staying pending`);
+        return;
+      }
+      assigneeId = lastRun.agentId;
+      console.log(`[workflow-runner] route step: {{ assignee }} fallback — using agent from last completed run`);
+    }
+    const [a] = await db.select().from(agents).where(eq(agents.id, assigneeId)).limit(1);
+    agent = a;
+    if (!agent) {
+      console.warn(`[workflow-runner] route step: assignee agent id '${assigneeId}' not found`);
+      return;
+    }
+  } else if (stepAgentTemplate && stepAgentTemplate !== '') {
+    // Route to a specific named agent
+    const [a] = await db
+      .select()
+      .from(agents)
+      .where(and(eq(agents.projectId, issue.projectId), eq(agents.name, stepAgentTemplate)))
+      .limit(1);
+    agent = a;
+    if (!agent) {
+      console.warn(`[workflow-runner] route step: named agent '${stepAgentTemplate}' not found`);
+      return;
+    }
+  } else {
+    // Fall back to routing rules (Tier 1)
+    const routeResult = await resolveRoute(issue.projectId, {
+      title: issue.title,
+      body: issue.body ?? '',
+      labels: [],
+    });
 
-  if (!agent) {
-    console.warn(`[workflow-runner] route step: agent '${routeResult.agentName}' not found`);
-    return;
+    if (!routeResult) {
+      console.warn(`[workflow-runner] route step: no matching rule for issue ${wfRun.issueId} — staying pending`);
+      return;
+    }
+
+    const [a] = await db
+      .select()
+      .from(agents)
+      .where(and(eq(agents.projectId, issue.projectId), eq(agents.name, routeResult.agentName)))
+      .limit(1);
+    agent = a;
+    if (!agent) {
+      console.warn(`[workflow-runner] route step: agent '${routeResult.agentName}' not found`);
+      return;
+    }
   }
 
   const newRunId = await db.transaction(async (tx) => {
-    // Create issue_run (Invariant 1: routing desugars to agent_run)
+    // Update issue assignee so {{ assignee }} template in subsequent steps resolves correctly.
+    await tx
+      .update(issues)
+      .set({ assigneeId: agent!.id, updatedAt: new Date() })
+      .where(eq(issues.id, wfRun.issueId));
+
+    // When the agent is resolved via template/name (not LLM routing rules), the route
+    // step is complete immediately — no LLM session needed. Mark it completed and advance.
+    if (stepAgentTemplate) {
+      await tx
+        .update(stepRuns)
+        .set({ status: 'completed', updatedAt: new Date() })
+        .where(eq(stepRuns.id, stepRun.id));
+      await tx
+        .update(schema.workflowRuns)
+        .set({ status: 'running', updatedAt: new Date() })
+        .where(eq(schema.workflowRuns.id, wfRun.id));
+      return null; // no issue_run needed
+    }
+
+    // Routing-rules case: create an issue_run for the stepper to pick up.
     const [newRun] = await tx
       .insert(issueRuns)
       .values({
         issueId: wfRun.issueId,
-        agentId: agent.id,
+        agentId: agent!.id,
         kind: 'agent_run',
         status: 'pending',
       })
@@ -360,7 +467,14 @@ async function handleRouteStep(
     return newRun.id;
   });
 
-  console.log(`[workflow-runner] route step created issue_run ${newRunId} → agent ${agent.name}`);
+  if (!newRunId) {
+    // Template/named agent path: step completed inline — advance now
+    console.log(`[workflow-runner] route step completed inline → agent ${agent!.name}`);
+    await advanceToNextStep(wfRun.id, wfRun.currentStepIndex ?? 0);
+    return;
+  }
+
+  console.log(`[workflow-runner] route step created issue_run ${newRunId} → agent ${agent!.name}`);
 }
 
 async function handleAgentRunStep(
@@ -411,7 +525,7 @@ async function handleAgentRunStep(
       );
     } else if (stepDef?.type === 'agent_run' && stepDef.agent) {
       const [issue] = await db
-        .select({ projectId: issues.projectId })
+        .select({ projectId: issues.projectId, assigneeId: issues.assigneeId })
         .from(issues)
         .where(eq(issues.id, wfRun.issueId))
         .limit(1);
@@ -420,13 +534,32 @@ async function handleAgentRunStep(
         return;
       }
 
+      // Resolve {{ assignee }} template variable to the issue's current assignee.
+      let agentName = stepDef.agent;
+      if (agentName === '{{ assignee }}') {
+        if (!issue.assigneeId) {
+          console.warn(`[workflow-runner] agent_run step: {{ assignee }} unresolvable — issue has no assignee yet`);
+          return;
+        }
+        const [assigneeAgent] = await db
+          .select({ name: agents.name })
+          .from(agents)
+          .where(eq(agents.id, issue.assigneeId))
+          .limit(1);
+        if (!assigneeAgent) {
+          console.warn(`[workflow-runner] agent_run step: assignee agent ${issue.assigneeId} not found`);
+          return;
+        }
+        agentName = assigneeAgent.name;
+      }
+
       const [agent] = await db
         .select()
         .from(agents)
-        .where(and(eq(agents.projectId, issue.projectId), eq(agents.name, stepDef.agent)))
+        .where(and(eq(agents.projectId, issue.projectId), eq(agents.name, agentName)))
         .limit(1);
       if (!agent) {
-        console.warn(`[workflow-runner] agent_run step: agent '${stepDef.agent}' not found`);
+        console.warn(`[workflow-runner] agent_run step: agent '${agentName}' not found`);
         return;
       }
 
@@ -1170,7 +1303,7 @@ async function advanceToNextStep(
       .where(eq(workflowRuns.id, workflowRunId));
     console.log(`[workflow-runner] workflow_run ${workflowRunId} advanced to step ${nextIndex}`);
     // ── Flow event: heartbeat on step advancement ────────────────────────────
-    const pid = await getProjectIdForWorkflowRun(workflowRunId);
+    const pid = await getProjectIdForWorkflowRun(workflowRunId, db);
     if (pid) {
       eventBus.emitFlowHeartbeat(pid, workflowRunId, { instanceId: workflowRunId, status: 'active' });
     }
@@ -1182,7 +1315,7 @@ async function advanceToNextStep(
       .where(eq(workflowRuns.id, workflowRunId));
     console.log(`[workflow-runner] workflow_run ${workflowRunId} completed`);
     // ── Flow event: instance ended ───────────────────────────────────────────
-    const pid = await getProjectIdForWorkflowRun(workflowRunId);
+    const pid = await getProjectIdForWorkflowRun(workflowRunId, db);
     if (pid) {
       eventBus.emitFlowEvent('flow.instance.ended', pid, { instanceId: workflowRunId, status: 'completed' });
       // When an in-review ceremony (e.g. Simple Review) finishes, auto-advance
@@ -1213,7 +1346,10 @@ async function autoMoveReviewedIssueToDone(
 
     if (!run) return;
     const ts = run.triggerSource as { eventType?: string; anchorIssueId?: string } | null;
-    if (!ts || ts.eventType !== 'on_issue_entry:in-review') return;
+    // Accept both 'on_issue_entry:review' (new semantic form) and 'on_issue_entry:in-review' (legacy slug form)
+    const eventType = ts?.eventType ?? '';
+    const isReviewTrigger = eventType === 'on_issue_entry:review' || eventType === 'on_issue_entry:in-review';
+    if (!ts || !isReviewTrigger) return;
 
     const issueId = ts.anchorIssueId ?? run.issueId;
     if (!issueId) return;

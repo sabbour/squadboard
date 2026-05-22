@@ -166,14 +166,19 @@ async function sendAndWaitWithTimeout<TSession>(
   onTimeout?: () => Promise<void>,
 ): Promise<unknown> {
   let timeoutHandle: ReturnType<typeof setTimeout> | undefined;
+  // Capture the SDK promise reference so we can attach a .catch() after the
+  // race resolves. Without this, an orphaned rejection from the SDK after the
+  // timeout wins the race would become an unhandledRejection → process crash.
+  const sdkPromise = client.sendAndWait(session, { prompt }, timeoutMs);
   try {
     return await Promise.race([
-      client.sendAndWait(session, { prompt }, timeoutMs),
+      sdkPromise,
       new Promise<never>((_, reject) => {
         timeoutHandle = setTimeout(() => {
           // Reject the race FIRST so the caller unblocks immediately.
           // Then fire cleanup as a best-effort background task — if
           // client.disconnect() hangs it no longer blocks the timeout.
+          console.warn(`[squad-client] sendAndWait timeout after ${timeoutMs / 1000}s — rejecting race`);
           reject(new AgentRunTimeoutError(`sendAndWait timeout after ${timeoutMs / 1000}s`));
           void onTimeout?.().catch(() => {});
         }, timeoutMs);
@@ -181,6 +186,9 @@ async function sendAndWaitWithTimeout<TSession>(
     ]);
   } finally {
     if (timeoutHandle) clearTimeout(timeoutHandle);
+    // Suppress any eventual rejection from the orphaned SDK promise so it
+    // cannot become an unhandledRejection after the timeout already won.
+    void sdkPromise.catch(() => {});
   }
 }
 

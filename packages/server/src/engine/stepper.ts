@@ -188,11 +188,31 @@ export async function runWorker(issueRunId: string): Promise<void> {
     stopHeartbeat();
 
     if (result.timedOut) {
-      if (run.kind === 'peer_review') {
+      // Determine if this run is part of a review ceremony so we can soft-pass it.
+      // A review agent_run is one whose parent workflow_run was triggered by a
+      // card entering the 'in-review' (review-semantic) column.
+      const isReviewAgentRun = run.kind === 'agent_run' && await (async () => {
+        try {
+          const r = await db.execute(sql`
+            SELECT wf.id
+            FROM step_runs sr
+            JOIN workflow_runs wf ON wf.id = sr.workflow_run_id
+            WHERE sr.issue_run_id = ${issueRunId}
+              AND wf.trigger_source->>'eventType' LIKE 'on_issue_entry:review%'
+            LIMIT 1
+          `);
+          return r.rows.length > 0;
+        } catch {
+          return false;
+        }
+      })();
+
+      if (run.kind === 'peer_review' || isReviewAgentRun) {
         // A timed-out reviewer is treated as a soft pass: mark the issue_run
         // completed so advanceWorkflowRun can advance the workflow_run to
         // 'completed', which triggers autoMoveReviewedIssueToDone.
-        console.warn(`[stepper] peer_review run ${issueRunId} timed out — treating as soft pass`);
+        const label = run.kind === 'peer_review' ? 'peer_review' : 'review agent_run';
+        console.warn(`[stepper] ${label} run ${issueRunId} timed out — treating as soft pass`);
         await recordRunCompletion(issueRunId, '(reviewer timed out — auto-passed)', workflowVersionId);
       } else {
         await markTimedOut(db, issueRunId, result.errorMessage ?? 'Agent run timed out');
@@ -342,14 +362,27 @@ async function syncRunIssueColumn(
         UPDATE issues
         SET status = target.column_id,
             updated_at = NOW()
-        FROM target, run_issue, current_semantic
+        FROM target, run_issue
+        -- LEFT JOIN so the UPDATE proceeds even when current status isn't in
+        -- column_meta (e.g. legacy or custom columns). Without LEFT JOIN, the
+        -- implicit cross-join produces 0 rows and the UPDATE silently skips.
+        LEFT JOIN current_semantic ON true
         WHERE issues.id = run_issue.issue_id
           AND issues.status <> target.column_id
           -- Never pull a card BACK from a downstream column.
           -- In-progress sync only applies when the card is still upstream.
           AND (
             ${semantic} <> 'in_progress'
-            OR current_semantic.sem NOT IN ('review', 'done')
+            OR COALESCE(current_semantic.sem, '') NOT IN ('review', 'done')
+          )
+          -- Review sync must never pull a card back from Done to In-Review.
+          -- Without this guard, review-ceremony agent_runs (which also call
+          -- syncRunIssueColumn 'review' on success) would undo the card move
+          -- made by autoMoveReviewedIssueToDone, causing an infinite loop of
+          -- new review ceremonies.
+          AND NOT (
+            ${semantic} = 'review'
+            AND COALESCE(current_semantic.sem, '') = 'done'
           )
         RETURNING issues.id AS issue_id, issues.project_id, issues.status, issues.position
       )

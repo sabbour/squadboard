@@ -26,6 +26,26 @@ Squadboard is the visual command center for [Squad](https://github.com/bradygast
 
 Squad handles agent orchestration. Squadboard gives it a home — a live board where every run, workflow, and project is visible, trackable, and resumable. Without Squad, Squadboard is empty. With Squad, it's where your agent work lives.
 
+## Demo
+
+### Scenario A.1 — Cast a team and add the first card
+
+<video src="docs/demo/scenario-a1-cast-and-plan.mp4" controls width="100%"></video>
+
+Cast a Squad team onto a project using the Default Software Project template, then create the first backlog card.
+
+### Scenario A.2 — Board in action
+
+<video src="docs/demo/scenario-a2-board-in-action.mp4" controls width="100%"></video>
+
+Move the card to Ready, watch the Work Pickup ceremony assign it to an agent, follow the live agent run, see the Simple Review ceremony trigger automatically on completion, and watch the card land in Done with the Scribe ceremony wrapping things up.
+
+### Scenario B — Onboard an existing Squad project
+
+<video src="docs/demo/scenario-b-onboard-project.mp4" controls width="100%"></video>
+
+Connect an existing project folder to Squadboard via the "Connect existing" flow, land on the board, then navigate to Settings → Squad Sync to wire up the Copilot CLI integration.
+
 ## Quickstart
 
 ### Fork 1 — Already running Squad?
