@@ -55,7 +55,11 @@ export async function initDb(connectionOrSentinel: string): Promise<void> {
 
   if (connectionOrSentinel === PGLITE_SENTINEL) {
     await repairPgliteIssueRunEventsIndexCatalog(_pool);
-    await repairPgliteWorkflowVersionIndexes(_pool);
+    // NOTE: repairPgliteWorkflowVersionIndexes is intentionally NOT called here.
+    // Running REINDEX INDEX unconditionally on every startup causes PGlite's WASM
+    // to hang indefinitely when the index is in a non-corrupted but large state.
+    // The repair is instead invoked lazily from reopenPgliteConnection() when a
+    // stale-OID error is actually detected at runtime.
   }
 
   // Ensure the current inline base schema exists before historical SQL migrations run.
@@ -456,6 +460,10 @@ async function reopenPgliteConnection(): Promise<boolean> {
   _db = drizzlePglite(pglite, { schema });
   _pool = createPoolAdapter(pglite);
   await repairPgliteIssueRunEventsFkCatalog(_pool);
+  // Reactively reindex workflow_versions indexes on stale-OID recovery.
+  // This is the only safe place to call REINDEX — after a connection restart
+  // triggered by an actual corruption error, not on every cold start.
+  await repairPgliteWorkflowVersionIndexes(_pool);
   return true;
 }
 
